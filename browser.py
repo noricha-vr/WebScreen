@@ -24,7 +24,7 @@ class HeadlessDriverGenerator:
 
 
 class Browser:
-    def __init__(self, width: int = 1026, height: int = 768):
+    def __init__(self, width: int = 1280, height: int = 720):
         self.height = height
         self.driver = HeadlessDriverGenerator.get_headless_chromedriver(width, height)
 
