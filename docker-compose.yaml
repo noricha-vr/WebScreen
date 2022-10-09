@@ -1,8 +1,8 @@
 version: '3'
 services:
-  solonium:
-    container_name: 'solonium'
-    image: 'solonium'
+  screen_capture:
+    container_name: 'screen_capture'
+    image: 'screen_capture'
     volumes:
       - .:/app
       - ./drivers:/root/.wdm/drivers/
