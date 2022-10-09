@@ -1,2 +1,5 @@
 *.png
+*.mp4
 /drivers/*
+.env
+credentials.json
