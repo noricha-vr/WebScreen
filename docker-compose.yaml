@@ -1,0 +1,13 @@
+version: '3'
+services:
+  solonium:
+    container_name: 'solonium'
+    image: 'solonium'
+    volumes:
+      - .:/app
+      - ./drivers:/root/.wdm/drivers/
+    ports:
+      - 8080:8080
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
