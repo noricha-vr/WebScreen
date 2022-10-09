@@ -1,3 +1,4 @@
+import time
 from typing import List
 
 from selenium import webdriver
@@ -30,7 +31,7 @@ class Browser:
         1. Open the URL
         2. Get the height of the page
         3. Scroll down each px
-        4. Save the screenshot
+        4. Save the screenshot (file name is timestamp and scroll position)
         5. Repeat 2-4 until the height of the page
         :param url:
         :param each_px:
@@ -39,10 +40,11 @@ class Browser:
         """
         self.driver.get(url)
         height = self.driver.execute_script("return document.body.scrollHeight")
+        print(f"Height: {height} px URL: {url}")
         file_paths = []
-        for i in range(0, height, each_px):
-            self.driver.execute_script(f"window.scrollTo(0, {i * each_px})")
-            file_path = f"image/screenshot_{i}.png"
+        for px in range(0, height, each_px):
+            self.driver.execute_script(f"window.scrollTo(0, {px})")
+            file_path = f"image/{time.time()}-{px}.png"
             self.driver.save_screenshot(file_path)
             file_paths.append(file_path)
         return file_paths
