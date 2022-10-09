@@ -12,6 +12,6 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [ 'push', 'gcr.io/$PROJECT_ID/screen-capture:$BRANCH_NAME' ]
   - name: 'gcr.io/cloud-builders/gcloud'
-    args: [ 'beta', 'run', 'deploy',  'screen-capture', '--allow-unauthenticated','--region', 'us-central1', '--memory', '1024Mi' ,'--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
+    args: [ 'beta', 'run', 'deploy',  'screen-capture', '--allow-unauthenticated','--region', 'asia-northeast1', '--memory', '1024Mi' ,'--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
 images:
   - 'gcr.io/$PROJECT_ID/screen-capture'
