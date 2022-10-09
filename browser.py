@@ -6,6 +6,12 @@ from typing import List
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 
+from gcs import BucketManager
+
+bucket_name = "vrchat"
+
+print(f'environ: {os.environ}')
+
 
 class HeadlessDriverGenerator:
     @staticmethod
@@ -71,4 +77,5 @@ class Browser:
             file_paths.append(file_path)  # Add the same file twice to make it 2 seconds
         movie_path = f"{folder_path}/movie.mp4"
         self.create_movie(file_paths, movie_path)
-        return movie_path
+        gcs_file_url = BucketManager(bucket_name).upload_file(movie_path, f'{folder_path.name}.mp4')
+        return gcs_file_url
