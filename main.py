@@ -1,17 +1,17 @@
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
-from browser import HeadlessDriverGenerator
+
+from browser import Browser
 
 app = FastAPI()
+
 
 @app.get("/")
 async def index():
     return {'message': 'Please set parameter. It is like "/?url=https://example.com"'}
 
-@app.get("/screenshot")
+
+@app.get("/screenshot/")
 def screenshot(url: str):
-    driver = HeadlessDriverGenerator.get_headless_chromedriver()
-    driver.get(url)
-    driver.save_screenshot('screenshot.png')
-    driver.quit()
-    return FileResponse('screenshot.png')
+    browser = Browser()
+    file_paths = browser.take_screenshot(url)
+    return {'urls': file_paths}
