@@ -1,17 +1,11 @@
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/screen-capture:$SHORT_SHA', '.' ]
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'tag', 'gcr.io/$PROJECT_ID/screen-capture:$SHORT_SHA', 'gcr.io/$PROJECT_ID/screen-capture:latest' ]
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'tag', 'gcr.io/$PROJECT_ID/screen-capture:$SHORT_SHA', 'gcr.io/$PROJECT_ID/screen-capture:$BRANCH_NAME' ]
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'push', 'gcr.io/$PROJECT_ID/screen-capture:$SHORT_SHA' ]
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'push', 'gcr.io/$PROJECT_ID/screen-capture:latest' ]
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'push', 'gcr.io/$PROJECT_ID/screen-capture:$BRANCH_NAME' ]
+  - name: 'gcr.io/kaniko-project/executor'
+    args:
+      - --destination=gcr.io/$PROJECT_ID/screen-capture:$SHORT_SHA
+      - --destination=gcr.io/$PROJECT_ID/screen-capture:$BRANCH_NAME
+      - --destination=gcr.io/$PROJECT_ID/screen-capture:latest
+      - --cache=true
+      - --cache-ttl=72h
+      - --dockerfile=./Dockerfile
   - name: 'gcr.io/cloud-builders/gcloud'
-    args: [ 'beta', 'run', 'deploy',  'screen-capture', '--allow-unauthenticated','--region', 'asia-northeast1', '--memory', '1024Mi' ,'--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
-images:
-  - 'gcr.io/$PROJECT_ID/screen-capture'
+    args: [ 'run', 'deploy',  'screen-capture', '--allow-unauthenticated','--region', 'asia-northeast1', '--memory', '1024Mi' ,'--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
