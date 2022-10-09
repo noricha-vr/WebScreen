@@ -1,10 +1,5 @@
 # screen_capture
 
-## Setup
-
-1. Replace screen_capture with your project name at cloudbuild.yml and docker-compose.yml, README.md.
-1. Build docker file. Use Docker commands. 
-
 ## Docker commands
 docker build . -t screen_capture
 docker exec -it screen_capture bash
