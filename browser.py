@@ -67,7 +67,9 @@ class Browser:
         print(f"Height: {height} px URL: {url}")
         file_paths = []
         scroll_height = height - self.height
-        if scroll_height == 0: scroll_height = each_px
+        if scroll_height > max_height:  # Limit scroll height
+            scroll_height = max_height
+        if scroll_height == 0: scroll_height = each_px  # Set minimum scroll height, for run forloop once.
         print(f"Scroll height: {scroll_height}")
         folder_path = self.create_folder()
         for px in range(0, scroll_height, each_px):
