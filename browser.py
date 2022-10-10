@@ -49,6 +49,7 @@ class Browser:
         :param movie_path:
         :return:
         """
+        # TODO remove first blank image
         from moviepy.editor import ImageSequenceClip
         clip = ImageSequenceClip(file_paths, fps=1)
         clip.write_videofile(movie_path, fps=1)
@@ -72,7 +73,6 @@ class Browser:
         """
         Take a screenshot of the given URL and scroll each px then save it to a movie.
         :param url:
-        :param file_name:
         :param each_px:
         :param max_height:
         :return: List of file absolute paths
