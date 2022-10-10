@@ -36,18 +36,22 @@ class Browser:
 
     @staticmethod
     def create_folder() -> Path:
+        """
+        Create folder named by timestamp
+        :return: Path object
+        """
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         folder_path = f"image/{timestamp}"
         os.makedirs(folder_path)
         return Path(folder_path)
 
     @staticmethod
-    def create_movie(file_paths: List[str], movie_path: str):
+    def create_movie(file_paths: List[str], movie_path: str) -> None:
         """
         Create a movie from the given file paths. Each file is 2 seconds.
         :param file_paths:
         :param movie_path:
-        :return:
+        :return None:
         """
         # TODO remove first blank image
         from moviepy.editor import ImageSequenceClip
@@ -59,7 +63,7 @@ class Browser:
         Calculate scroll height.
         :param max_height:
         :param each_px:
-        :return:
+        :return scroll_height:
         """
         page_height = self.driver.execute_script("return document.body.scrollHeight")
         scroll_height = page_height - self.height
