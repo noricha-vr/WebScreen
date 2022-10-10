@@ -18,4 +18,5 @@ class BucketManager:
         """Uploads a file to the bucket. Return authenticated url"""
         blob = self.bucket.blob(file_name)
         blob.upload_from_filename(file_path)
+        blob = self.bucket.get_blob(file_name)
         return blob.generate_signed_url(expiration=300, version="v4")
