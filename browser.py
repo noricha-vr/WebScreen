@@ -97,7 +97,9 @@ class Browser:
         # Create a movie
         movie_path = f"{folder_path}/movie.mp4"
         self.create_movie(file_paths, movie_path)
-        # Upload to GCS
+        # Upload to GCS, and return GCS file URL
         file_name = f'{folder_path.name}.mp4'
-        gcs_file_url = BucketManager(bucket_name).upload_file(movie_path, file_name)
+        bucket_manager = BucketManager(bucket_name)
+        bucket_manager.upload_file(movie_path, file_name)
+        gcs_file_url = bucket_manager.get_file_url(file_name)
         return gcs_file_url
