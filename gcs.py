@@ -18,14 +18,4 @@ class BucketManager:
         """Uploads a file to the bucket. Return authenticated url"""
         blob = self.bucket.blob(file_name)
         blob.upload_from_filename(file_path)
-        return self.get_file_url(file_name)
-
-    def delete_file(self, file_name: str) -> bool:
-        """Deletes a file from the bucket."""
-        blob = self.bucket.blob(file_name)
-        return blob.delete()
-
-    def get_file_url(self, file_name: str) -> str:
-        """Get a file url from the bucket."""
-        blob = self.bucket.blob(file_name)
         return blob.generate_signed_url(expiration=300, version="v4")
