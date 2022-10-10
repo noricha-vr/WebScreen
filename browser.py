@@ -77,5 +77,6 @@ class Browser:
             file_paths.append(file_path)  # Add the same file twice to make it 2 seconds
         movie_path = f"{folder_path}/movie.mp4"
         self.create_movie(file_paths, movie_path)
-        gcs_file_url = BucketManager(bucket_name).upload_file(movie_path, f'{folder_path.name}.mp4')
+        file_name = f'{folder_path.name}.mp4' if file_name is None else file_name
+        gcs_file_url = BucketManager(bucket_name).upload_file(movie_path, file_name)
         return gcs_file_url
