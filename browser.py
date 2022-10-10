@@ -66,20 +66,24 @@ class Browser:
         height = self.driver.execute_script("return document.body.scrollHeight")
         print(f"Height: {height} px URL: {url}")
         file_paths = []
+        # set scroll height
         scroll_height = height - self.height
         if scroll_height > max_height:  # Limit scroll height
             scroll_height = max_height
         if scroll_height == 0: scroll_height = each_px  # Set minimum scroll height, for run forloop once.
         print(f"Scroll height: {scroll_height}")
         folder_path = self.create_folder()
+        # Take screenshots
         for px in range(0, scroll_height, each_px):
             self.driver.execute_script(f"window.scrollTo(0, {px})")
             file_path = f"{folder_path}/{px}.png"
             self.driver.save_screenshot(file_path)
             file_paths.append(file_path)
             file_paths.append(file_path)  # Add the same file twice to make it 2 seconds
+        # Create a movie
         movie_path = f"{folder_path}/movie.mp4"
         self.create_movie(file_paths, movie_path)
-        file_name = f'{folder_path.name}.mp4' if file_name is None else file_name
+        # Upload to GCS
+        file_name = f'{folder_path.name}.mp4'
         gcs_file_url = BucketManager(bucket_name).upload_file(movie_path, file_name)
         return gcs_file_url
