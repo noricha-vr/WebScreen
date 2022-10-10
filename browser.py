@@ -53,6 +53,21 @@ class Browser:
         clip = ImageSequenceClip(file_paths, fps=1)
         clip.write_videofile(movie_path, fps=1)
 
+    def to_scroll_height(self, max_height: int, each_px: int) -> int:
+        """
+        Calculate scroll height.
+        :param max_height:
+        :param each_px:
+        :return:
+        """
+        page_height = self.driver.execute_script("return document.body.scrollHeight")
+        scroll_height = page_height - self.height
+        if scroll_height > max_height:  # Limit scroll height
+            scroll_height = max_height
+        if scroll_height == 0: scroll_height = each_px  # Set minimum scroll height, for run forloop once.
+        print(f"Scroll height: {scroll_height}")
+        return scroll_height
+
     def take_screenshot(self, url: str, file_name: str = None, each_px: int = 300, max_height: int = 5000) -> str:
         """
         Take a screenshot of the given URL and scroll each px then save it to a movie.
@@ -63,15 +78,9 @@ class Browser:
         :return: List of file absolute paths
         """
         self.driver.get(url)
-        height = self.driver.execute_script("return document.body.scrollHeight")
-        print(f"Height: {height} px URL: {url}")
+        print(f"URL: {url}")
         file_paths = []
-        # set scroll height
-        scroll_height = height - self.height
-        if scroll_height > max_height:  # Limit scroll height
-            scroll_height = max_height
-        if scroll_height == 0: scroll_height = each_px  # Set minimum scroll height, for run forloop once.
-        print(f"Scroll height: {scroll_height}")
+        scroll_height = self.to_scroll_height(max_height, each_px)
         folder_path = self.create_folder()
         # Take screenshots
         for px in range(0, scroll_height, each_px):
