@@ -53,10 +53,11 @@ class Browser:
         clip = ImageSequenceClip(file_paths, fps=1)
         clip.write_videofile(movie_path, fps=1)
 
-    def take_screenshot(self, url: str, each_px: int = 300, max_height: int = 5000) -> str:
+    def take_screenshot(self, url: str, file_name: str = None, each_px: int = 300, max_height: int = 5000) -> str:
         """
         Take a screenshot of the given URL and scroll each px then save it to a movie.
         :param url:
+        :param file_name:
         :param each_px:
         :param max_height:
         :return: List of file absolute paths
