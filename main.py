@@ -14,8 +14,8 @@ async def index():
 def screenshot(url: str, each_px: int = 300, max_height: int = 5000):
     browser = Browser()
     try:
-        file_paths = browser.take_screenshot(url, each_px, max_height)
-        return {'message': 'Success', 'file_paths': file_paths}
+        gcs_file_url = browser.take_screenshot(url, each_px, max_height)
     except Exception as e:
         browser.driver.quit()
         return HTTPException(status_code=500, detail=str(e))
+    return {'message': 'Success', 'gcs_file_url': gcs_file_url}
