@@ -68,7 +68,7 @@ class Browser:
         print(f"Scroll height: {scroll_height}")
         return scroll_height
 
-    def take_screenshot(self, url: str, file_name: str = None, each_px: int = 300, max_height: int = 5000) -> str:
+    def take_screenshot(self, url: str, each_px: int = 300, max_height: int = 5000) -> str:
         """
         Take a screenshot of the given URL and scroll each px then save it to a movie.
         :param url:

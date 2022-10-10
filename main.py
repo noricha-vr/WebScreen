@@ -11,7 +11,7 @@ async def index():
 
 
 @app.get("/screenshot/")
-def screenshot(url: str, file_name: str = None, each_px: int = 300, max_height: int = 5000):
+def screenshot(url: str, each_px: int = 300, max_height: int = 5000):
     browser = Browser()
-    file_paths = browser.take_screenshot(url, file_name, each_px, max_height)
+    file_paths = browser.take_screenshot(url, each_px, max_height)
     return {'urls': file_paths}
