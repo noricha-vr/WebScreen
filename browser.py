@@ -93,6 +93,7 @@ class Browser:
             self.driver.save_screenshot(file_path)
             file_paths.append(file_path)
             file_paths.append(file_path)  # Add the same file twice to make it 2 seconds
+        self.driver.quit()
         # Create a movie
         movie_path = f"{folder_path}/movie.mp4"
         self.create_movie(file_paths, movie_path)

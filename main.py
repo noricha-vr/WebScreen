@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from browser import Browser
 
@@ -13,5 +13,9 @@ async def index():
 @app.get("/screenshot/")
 def screenshot(url: str, each_px: int = 300, max_height: int = 5000):
     browser = Browser()
-    file_paths = browser.take_screenshot(url, each_px, max_height)
-    return {'urls': file_paths}
+    try:
+        file_paths = browser.take_screenshot(url, each_px, max_height)
+        return {'message': 'Success', 'file_paths': file_paths}
+    except Exception as e:
+        browser.driver.quit()
+        return HTTPException(status_code=500, detail=str(e))
