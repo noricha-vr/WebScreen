@@ -103,4 +103,4 @@ class Browser:
         bucket_manager.upload_file(movie_path, file_name)
         bucket_manager.make_public(file_name)
         gcs_file_url = bucket_manager.get_public_file_url(file_name)
-        return gcs_file_url
+        return file_name
