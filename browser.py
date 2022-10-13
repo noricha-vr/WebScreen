@@ -1,15 +1,14 @@
 import os
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 
 from gcs import BucketManager
 
-bucket_name = "vrchat"
-
+BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 print(f'environ: {os.environ}')
 
 
@@ -80,6 +79,7 @@ class Browser:
         :param each_px:
         :param max_height:
         :return: List of file absolute paths
+        :return: file hash
         """
         self.driver.get(url)
         print(f"URL: {url}")
@@ -99,8 +99,11 @@ class Browser:
         self.create_movie(file_paths, movie_path)
         # Upload to GCS, and return GCS file URL
         file_name = f'{folder_path.name}.mp4'
-        bucket_manager = BucketManager(bucket_name)
+        bucket_manager = BucketManager(BUCKET_NAME)
         bucket_manager.upload_file(movie_path, file_name)
         bucket_manager.make_public(file_name)
-        gcs_file_url = bucket_manager.get_public_file_url(file_name)
-        return file_name
+        # Delete folder_path dir and files
+        # for file_path in file_paths:
+        #     os.remove(file_path)
+        # os.rmdir(folder_path)
+        return movie_path
