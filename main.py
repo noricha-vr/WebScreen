@@ -19,6 +19,8 @@ async def index():
 @app.get("/screenshot/")
 def screenshot(url: str, each_px: int = 300, max_height: int = 5000):
     browser = Browser()
+    if len(url) == 0:
+        raise HTTPException(status_code=400, detail="URL is empty.")
     try:
         file_name = browser.take_screenshot(url, each_px, max_height)
         file_path = FileHandler.file_name_to_path(file_name)
