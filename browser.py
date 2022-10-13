@@ -9,7 +9,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from gcs import BucketManager
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
-print(f'environ: {os.environ}')
 
 
 class HeadlessDriverGenerator:
