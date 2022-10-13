@@ -23,12 +23,15 @@ def screenshot(url: str, each_px: int = 300, max_height: int = 5000):
         file_name = browser.take_screenshot(url, each_px, max_height)
         file_path = FileHandler.file_name_to_path(file_name)
         file_hash = FileHandler.file_to_hash(file_path)
+        bucket_manager = BucketManager(BUCKET_NAME)
+        bucket_manager.make_public(file_name)
+        url = bucket_manager.get_public_file_url(file_name)
     except Exception as e:
         browser.driver.quit()
         print(e)
         return {'message': 'Error occurred.'}
         # return HTTPException(status_code=500, detail=str(e))
-    return {'message': 'Success', 'file_name': file_name, 'file_hash': file_hash}
+    return {'message': 'Success', 'file_name': file_name, 'file_hash': file_hash, 'url': url}
 
 
 @app.get("/get_url/{file_name}/{file_hash}")
