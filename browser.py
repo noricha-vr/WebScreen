@@ -77,8 +77,7 @@ class Browser:
         :param url:
         :param each_px:
         :param max_height:
-        :return: List of file absolute paths
-        :return: file hash
+        :return: file_name
         """
         self.driver.get(url)
         print(f"URL: {url}")
@@ -96,13 +95,8 @@ class Browser:
         # Create a movie
         movie_path = f"{folder_path}/movie.mp4"
         self.create_movie(file_paths, movie_path)
-        # Upload to GCS, and return GCS file URL
+        # Upload to GCS
         file_name = f'{folder_path.name}.mp4'
         bucket_manager = BucketManager(BUCKET_NAME)
         bucket_manager.upload_file(movie_path, file_name)
-        bucket_manager.make_public(file_name)
-        # Delete folder_path dir and files
-        # for file_path in file_paths:
-        #     os.remove(file_path)
-        # os.rmdir(folder_path)
-        return movie_path
+        return file_name
