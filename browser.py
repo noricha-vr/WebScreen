@@ -71,13 +71,16 @@ class Browser:
         print(f"Scroll height: {scroll_height}")
         return scroll_height
 
-    def take_screenshot(self, url: str, each_px: int = 300, max_height: int = 5000) -> str:
+    def take_screenshot(self, url: str, each_px: int = 100, max_height: int = 5000, ) -> str:
         """
         Take a screenshot of the given URL and scroll each px then save it to a movie.
+        movie file name is consisted by hash of URL, each_px, width, height. max_height.
+        Before open the URL, check if the movie file exists.
+        If the movie file exists, return the download url.
         :param url:
         :param each_px:
         :param max_height:
-        :return: file_name
+        :return: movie_file_url:
         """
         self.driver.get(url)
         print(f"URL: {url}")
@@ -89,8 +92,6 @@ class Browser:
             self.driver.execute_script(f"window.scrollTo(0, {px})")
             file_path = f"{folder_path}/{px}.png"
             self.driver.save_screenshot(file_path)
-            file_paths.append(file_path)
-            file_paths.append(file_path)  # Add the same file twice to make it 2 seconds
         self.driver.quit()
         # Create a movie
         movie_path = f"{folder_path}/movie.mp4"
