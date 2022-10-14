@@ -3,4 +3,5 @@ selenium==4.5.0
 webdriver-manager==3.8.3
 uvicorn[standard]==0.18.3
 moviepy==1.0.3
-google-cloud-storage
+google-cloud-storage==2.5.0
+pytest==7.1.3

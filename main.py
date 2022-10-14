@@ -2,11 +2,14 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from starlette.responses import RedirectResponse
+
 from browser import Browser
 from file_handler import FileHandler
 from gcs import BucketManager
 from fastapi.responses import HTMLResponse
 from hash_maker import params_to_hash
+from movie_maker import image_to_movie
 
 app = FastAPI()
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
@@ -51,27 +54,21 @@ def create_movie(url: str, width: int = 720, height: int = 720, max_height: int 
     each_px = 100
     browser = Browser(width, height)
     try:
-        image_folder = browser.take_screenshot(url, each_px, max_height)
+        image_paths = browser.take_screenshot(url, each_px, max_height)
         # Create a movie
-        # movie_path = f"{folder_path}/movie.mp4"
-        # self.create_movie(file_paths, movie_path)
-        # Upload to GCS
-        # file_name = f'{folder_path.name}.mp4'
-        # bucket_manager = BucketManager(BUCKET_NAME)
-        # bucket_manager.upload_file(movie_path, file_name)
-        # return file_name
-
-        file_path = FileHandler.file_name_to_path(file_name)
-        file_hash = FileHandler.file_to_hash(file_path)
-        bucket_manager = BucketManager(BUCKET_NAME)
-        bucket_manager.make_public(file_name)
-        url = bucket_manager.get_public_file_url(file_name)
     except Exception as e:
         browser.driver.quit()
         print(e)
         return {'message': 'Error occurred.'}
         # return HTTPException(status_code=500, detail=str(e))
-    return {'message': 'Success', 'file_name': file_name, 'file_hash': file_hash, 'url': url}
+    movie_path = f"movie/{params_hash}.mp4"
+    image_to_movie(image_paths, movie_path)
+    # Upload to GCS
+    bucket_manager = BucketManager(BUCKET_NAME)
+    bucket_manager.upload_file(movie_path, movie_path)
+    bucket_manager.make_public(movie_path)
+    url = bucket_manager.get_public_file_url(movie_path)
+    return RedirectResponse(url=url, status_code=307)
 
 
 @app.get("/get_url/{file_name}/{file_hash}")
