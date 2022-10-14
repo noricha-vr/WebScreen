@@ -12,12 +12,29 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
 @app.get("/")
 async def index():
+    """
+    This is usage of this API.
+    :return: HTML
+    """
     return {
         'message': 'Please access "/screenshot/" and set parameter. It is like "?url=https://example.com"'}
 
 
 @app.get("/screenshot/")
-def screenshot(url: str, each_px: int = 300, max_height: int = 5000):
+def screenshot(url: str, each_px: int = 300, width: int = 720, height: int = 720, max_height: int = 10000):
+    """
+    Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
+    1. create hash of URL, each_px, width, height. max_height.
+    2. check if the movie file exists.
+    3. if the movie file exists, return the download url.
+    4. if the movie file does not exist, take a screenshot and save it to the GCS.
+    :param url: URL to take a screenshot
+    :param each_px: Scroll each px
+    :param width: Browser width
+    :param height: Browser height
+    :param max_height: Max scroll height
+    :return: Download URL
+    """
     browser = Browser()
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.")

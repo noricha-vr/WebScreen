@@ -80,7 +80,7 @@ class Browser:
         :param url:
         :param each_px:
         :param max_height:
-        :return: movie_file_url:
+        :return: movie_file_hash:
         """
         self.driver.get(url)
         print(f"URL: {url}")
