@@ -13,4 +13,4 @@ def create_headless_chromedriver(width: int = 1026, height: int = 768):
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--remote-debugging-port=9222")
     # Initialize a new browser
-    return webdriver.Chrome(ChromeDriverManager().install(), chrome_options=chrome_options)
+    return webdriver.Chrome(ChromeDriverManager(path="/app/drivers").install(), chrome_options=chrome_options)

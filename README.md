@@ -7,7 +7,7 @@ This project is for displaying web pages on the VRChat video player.
 ```bash
 git clone git+https://github.com/noricha-vr/screen_capture.git
 cd screen_capture
-dokcer build -t screen_capture .
+docker build -t screen_capture .
 docker network create my_network
 docker-compose up
 ```
