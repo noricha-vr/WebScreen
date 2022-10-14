@@ -49,8 +49,10 @@ def create_movie(url: str, width: int = 720, height: int = 720, max_height: int 
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
     params_hash = params_to_hash(url, str(width), str(height), str(max_height))
-    if FileHandler.movie_is_exists(params_hash):
-        return bucket_manager.get_public_file_url(f"{params_hash}.mp4")
+    movie_path = f"movie/{params_hash}.mp4"
+    if os.path.exists(movie_path):
+        url = bucket_manager.get_public_file_url(movie_path)
+        return RedirectResponse(url=url, status_code=303)
     each_px = 100
     browser = Browser(width, height)
     try:
@@ -61,14 +63,13 @@ def create_movie(url: str, width: int = 720, height: int = 720, max_height: int 
         print(e)
         return {'message': 'Error occurred.'}
         # return HTTPException(status_code=500, detail=str(e))
-    movie_path = f"movie/{params_hash}.mp4"
     image_to_movie(image_paths, movie_path)
     # Upload to GCS
     bucket_manager = BucketManager(BUCKET_NAME)
     bucket_manager.upload_file(movie_path, movie_path)
     bucket_manager.make_public(movie_path)
     url = bucket_manager.get_public_file_url(movie_path)
-    return RedirectResponse(url=url, status_code=307)
+    return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/get_url/{file_name}/{file_hash}")
