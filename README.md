@@ -1,12 +1,44 @@
 # screen_capture
 
-## Docker commands
-docker build . -t screen_capture
-docker exec -it screen_capture bash
-docker-compose up
+This project is for displaying web pages on the VRChat video player.
 
-## Pycharm setting
+## Setup
+
+```bash
+git clone git+https://github.com/noricha-vr/screen_capture.git
+cd screen_capture
+dokcer build -t screen_capture .
+docker network create my_network
+docker-compose up
+```
+
+### Pycharm settings
+
+#### Run/Debug Configurations
+
 Select: FastAPI
 Path: absolute path to `main.py`
 Uvicorn options: --reload --host=0.0.0.0 --port=8080
 
+#### Interpreter settings
+
+1. Select `docker-compose` interpreter
+2. Select `docker-compose.yaml` file
+3. Select `screen_capture` service
+
+### VSCode settings
+
+## Usage
+
+1. Open the http://0.0.0.0:8000/ on your browser.
+2. Enter the URL of the web page you want to display in VRChat video player.
+3. Copy the URL, then paste it into the VRChat video player.
+4. Enjoy!
+
+## Useful docker commands
+
+```bash
+docker build -t screen_capture .
+docker exec -it screen_capture bash
+docker-compose up
+```
