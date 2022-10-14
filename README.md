@@ -12,6 +12,14 @@ docker network create my_network
 docker-compose up
 ```
 
+When you stop the container, you can use the following command.
+
+```bash
+docker-compose down
+```
+
+or `ctrl + c`
+
 ### Pycharm settings
 
 #### Run/Debug Configurations
