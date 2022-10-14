@@ -24,9 +24,9 @@ or `ctrl + c`
 
 #### Run/Debug Configurations
 
-Select: FastAPI
-Path: absolute path to `main.py`
-Uvicorn options: --reload --host=0.0.0.0 --port=8080
+- Select: FastAPI
+- Path: absolute path to `main.py`
+- Uvicorn options: --reload --host=0.0.0.0 --port=8080
 
 #### Interpreter settings
 
@@ -47,6 +47,7 @@ Uvicorn options: --reload --host=0.0.0.0 --port=8080
 
 ```bash
 docker build -t screen_capture .
-docker exec -it screen_capture bash
 docker-compose up
+docker exec -it screen_capture bash
+docker-compose down
 ```
