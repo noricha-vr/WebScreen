@@ -1,9 +1,21 @@
 import hashlib
+import os
 import time
 from pathlib import Path
 
 
 class FileHandler:
+    @staticmethod
+    def movie_is_exists(file_hash: str) -> bool:
+        """
+        Check if the movie file exists.
+        movie file is in movie folder.
+        :param file_hash:
+        :return: bool
+        """
+        movie_path = f"movie/{file_hash}.mp4"
+        return os.path.exists(movie_path)
+
     @staticmethod
     def file_to_hash(file_path: Path) -> str:
         """

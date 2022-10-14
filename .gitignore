@@ -3,3 +3,5 @@
 /drivers/*
 .env
 credentials.json
+/tests/image/
+/tests/movie/
