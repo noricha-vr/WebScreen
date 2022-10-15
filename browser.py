@@ -12,7 +12,7 @@ class Browser:
     def __init__(self, width: int = 1280, height: int = 720, max_height: int = 5000, scroll_px: int = 200, ):
         minimum_scroll_px = 200  # Set minimum scroll height
         if scroll_px < minimum_scroll_px: scroll_px = minimum_scroll_px
-        self.each_px = scroll_px
+        self.scroll_px = scroll_px
         self.max_height = max_height
         self.scroll_height = None
         self.folder_path = None
@@ -31,18 +31,18 @@ class Browser:
         os.makedirs(folder_path)
         return Path(folder_path)
 
-    def to_scroll_height(self, max_height: int, each_px: int) -> int:
+    def to_scroll_height(self, max_height: int, scroll_px: int) -> int:
         """
         Calculate scroll height.
         :param max_height:
-        :param each_px:
+        :param scroll_px:
         :return scroll_height:
         """
         page_height = self.driver.execute_script("return document.body.scrollHeight")
         scroll_height = page_height - self.height
         if scroll_height > max_height:
             scroll_height = max_height  # Limit scroll height to max_height
-        if scroll_height == 0: scroll_height = each_px  # Set minimum scroll height, for run forloop once.
+        if scroll_height == 0: scroll_height = scroll_px  # Set minimum scroll height, for run forloop once.
         print(f"Scroll height: {scroll_height}")
         return scroll_height
 
@@ -51,7 +51,7 @@ class Browser:
         self.driver.get(url)
         print(f"URL: {url}")
         self.folder_path = self.create_folder()
-        self.scroll_height = self.to_scroll_height(self.max_height, self.each_px)
+        self.scroll_height = self.to_scroll_height(self.max_height, self.scroll_px)
 
     def take_screenshot(self) -> List[str]:
         """
@@ -60,7 +60,7 @@ class Browser:
         """
         file_paths = []
         # Take screenshots
-        for px in range(0, self.scroll_height, self.each_px):
+        for px in range(0, self.scroll_height, self.scroll_px):
             self.driver.execute_script(f"window.scrollTo(0, {px})")
             file_path = f"{self.folder_path}/{px}.png"
             self.driver.save_screenshot(file_path)
