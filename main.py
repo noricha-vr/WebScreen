@@ -1,10 +1,9 @@
 import os
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from starlette.responses import RedirectResponse
 
-from browser import Browser
+from browser_creator import BrowserCreator
 from file_handler import FileHandler
 from gcs import BucketManager
 from fastapi.responses import HTMLResponse
@@ -54,7 +53,8 @@ def create_movie(url: str, width: int = 1280, height: int = 720, max_height: int
     if os.path.exists(movie_path):
         url = bucket_manager.get_public_file_url(movie_path)
         return RedirectResponse(url=url, status_code=303)
-    browser = Browser(width, height, max_height, scroll_px)
+    domain = url.split("/")[2]
+    browser = BrowserCreator(domain, width, height, max_height, scroll_px).create_browser()
     browser.open(url)
     try:
         image_paths = browser.take_screenshot()

@@ -4,11 +4,11 @@ from pathlib import Path
 from typing import List
 
 from headless_driver import create_headless_chromedriver
+import abc
 
-BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
+class BaseBrowser(metaclass=abc.ABCMeta):
 
-class Browser:
     def __init__(self, width: int = 1280, height: int = 720, max_height: int = 5000, scroll_px: int = 200):
         self.scroll_px = scroll_px
         self.max_height = max_height
@@ -62,17 +62,9 @@ class Browser:
         self.folder_path = self.create_folder()
         self.scroll_height = self.to_scroll_height(self.max_height, self.scroll_px)
 
+    @abc.abstractmethod
     def take_screenshot(self) -> List[str]:
         """
         Take a screenshot of the given URL scrolling each px and returns image_file_paths.
         :return: image_file_paths:
         """
-        file_paths = []
-        # Take screenshots
-        for px in range(0, self.scroll_height, self.scroll_px):
-            self.driver.execute_script(f"window.scrollTo(0, {px})")
-            file_path = f"{self.folder_path}/{px}.png"
-            self.driver.save_screenshot(file_path)
-            file_paths.append(file_path)
-        self.driver.quit()
-        return file_paths
