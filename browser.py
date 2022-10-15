@@ -31,17 +31,16 @@ class Browser:
         os.makedirs(folder_path)
         return Path(folder_path)
 
-    def to_scroll_height(self, max_height: int, scroll_px: int) -> int:
+    def to_scroll_height(self, scroll_limit: int, scroll_px: int) -> int:
         """
         Calculate scroll height.
-        :param max_height:
+        :param scroll_limit:
         :param scroll_px:
         :return scroll_height:
         """
         page_height = self.driver.execute_script("return document.body.scrollHeight")
         scroll_height = page_height - self.height
-        if scroll_height > max_height:
-            scroll_height = max_height  # Limit scroll height to max_height
+        if scroll_height > scroll_limit: scroll_height = scroll_limit  # Limit scroll height
         if scroll_height == 0: scroll_height = scroll_px  # Set minimum scroll height, for run forloop once.
         print(f"Scroll height: {scroll_height}")
         return scroll_height
