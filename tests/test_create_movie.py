@@ -1,16 +1,14 @@
 import os
-from unittest import TestCase
 from browser import Browser
 from movie_maker import image_to_movie
 import pytest
 
 
-class TestCreateMovie(TestCase):
-    def test_make_movie(self):
-        browser = Browser(1280, 720)
-        paths = browser.take_screenshot("https://www.google.com", 100, 5000)
-        self.assertEqual(len(paths), 1)
-        output_path = "movie/test.mp4"
-        image_to_movie(paths, output_path)
-        self.assertTrue(os.path.exists(output_path))
-        os.remove(output_path)
+def test_make_movie():
+    browser = Browser(1280, 720)
+    paths = browser.take_screenshot("https://www.google.com", 100, 5000)
+    assert len(paths) == 1
+    output_path = "movie/test.mp4"
+    image_to_movie(paths, output_path)
+    assert os.path.exists(output_path) is True
+    os.remove(output_path)
