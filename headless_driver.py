@@ -2,7 +2,7 @@ from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-def create_headless_chromedriver(width: int = 1026, height: int = 768):
+def create_headless_chromedriver(width: int = 1280, height: int = 720):
     # The following options are required to make headless Chrome
     # Work in a Docker container
     chrome_options = webdriver.ChromeOptions()
