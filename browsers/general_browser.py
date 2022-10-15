@@ -1,3 +1,4 @@
+import time
 from typing import List
 from browsers.base_browser import BaseBrowser
 
@@ -11,10 +12,23 @@ class GeneralBrowser(BaseBrowser):
         """
         file_paths = []
         # Take screenshots
+        file_path = f"{self.folder_path}/{self._get_page_no()}"
         for px in range(0, self.scroll_height, self.scroll_px):
             self.driver.execute_script(f"window.scrollTo(0, {px})")
-            file_path = f"{self.folder_path}/{px}.png"
-            self.driver.save_screenshot(file_path)
+            self.driver.save_screenshot(f'{file_path}-{px}.png')
             file_paths.append(file_path)
         self.driver.quit()
+        return file_paths
+
+    def take_screenshots(self, urls: List[str]) -> List[str]:
+        """
+        Take a screenshot of the given URLs scrolling each px and returns image_file_paths.
+        :return: image_file_paths:
+        """
+        file_paths = []
+        for i, url in enumerate(urls):
+            print(f"Take screenshot: {i + 1}/{len(urls)}: {url}")
+            self.driver.get(url)
+            time.sleep(1)
+            file_paths.extend(self.take_screenshot())
         return file_paths

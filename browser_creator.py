@@ -1,5 +1,6 @@
 from browsers.base_browser import BaseBrowser
 from browsers.general_browser import GeneralBrowser
+from browsers.github_browser import GithubBrowser
 from browsers.twitter_browser import TwitterBrowser
 
 
@@ -17,4 +18,5 @@ class BrowserCreator:
         :return: browser: customized browser
         """
         if self.domain == "twitter.com": return TwitterBrowser(self.width, self.height, self.max_height, self.scroll_px)
+        if self.domain == "github.com": return GithubBrowser(self.width, self.height, self.max_height, self.scroll_px)
         return GeneralBrowser(self.width, self.height, self.max_height, self.scroll_px)
