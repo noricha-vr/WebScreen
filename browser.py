@@ -9,9 +9,10 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
 
 class Browser:
-    def __init__(self, width: int = 1280, height: int = 720, each_px: int = 100, max_height: int = 5000, ):
-        if each_px < 50: each_px = 50  # Set minimum each_px, for run forloop once.
-        self.each_px = each_px
+    def __init__(self, width: int = 1280, height: int = 720, max_height: int = 5000, scroll_px: int = 200, ):
+        minimum_scroll_px = 200  # Set minimum scroll height
+        if scroll_px < minimum_scroll_px: scroll_px = minimum_scroll_px
+        self.each_px = scroll_px
         self.max_height = max_height
         self.scroll_height = None
         self.folder_path = None
