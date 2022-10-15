@@ -9,16 +9,26 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
 
 class Browser:
-    def __init__(self, width: int = 1280, height: int = 720, max_height: int = 5000, scroll_px: int = 200, ):
-        minimum_scroll_px = 200  # Set minimum scroll height
-        if scroll_px < minimum_scroll_px: scroll_px = minimum_scroll_px
+    def __init__(self, width: int = 1280, height: int = 720, max_height: int = 5000, scroll_px: int = 200):
         self.scroll_px = scroll_px
         self.max_height = max_height
         self.scroll_height = None
         self.folder_path = None
+        self.width = width
         self.height = height
+        self.apply_limit()
         self.driver = create_headless_chromedriver(width, height)
         self.driver.implicitly_wait(10)
+
+    def apply_limit(self):
+        limit_minimum_scroll = 200
+        limit_max_height = 100000
+        limit_width = 1920
+        limit_height = 1920
+        if self.width > limit_width: self.width = limit_width
+        if self.height > limit_height: self.height = limit_height
+        if self.max_height > limit_max_height: self.max_height = limit_max_height
+        if self.scroll_px < limit_minimum_scroll: self.scroll_px = limit_minimum_scroll
 
     @staticmethod
     def create_folder() -> Path:
