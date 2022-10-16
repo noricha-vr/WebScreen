@@ -2,7 +2,6 @@ import os
 import shutil
 
 from browser_creator import BrowserCreator
-from browsers.github_browser import GithubBrowser
 from hash_maker import params_to_hash
 from movie_maker import image_to_movie
 import pytest
