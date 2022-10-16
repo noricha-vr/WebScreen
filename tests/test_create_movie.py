@@ -2,16 +2,16 @@ import os
 import shutil
 
 from browser_creator import BrowserCreator
+from browsers.github_browser import GithubBrowser
 from hash_maker import params_to_hash
 from movie_maker import image_to_movie
 import pytest
 from moviepy import editor
 import glob
 
-
-def reset_image_and_movie_folder():
-    for folder in glob.glob("image/*"): shutil.rmtree(folder)
-    for file in glob.glob("movie/*.mp4"): os.remove(file)
+# Rest image and movie folder.
+for folder in glob.glob("image/*"): shutil.rmtree(folder)
+for file in glob.glob("movie/*.mp4"): os.remove(file)
 
 
 @pytest.mark.parametrize(('url', 'width', 'height', 'max_height', 'scroll_px', 'length'), [
@@ -21,7 +21,6 @@ def reset_image_and_movie_folder():
     ("https://gigazine.net/news/20221012-geforce-rtx-4090-benchmark/", 2000, 2000, 1000, 100, 5),  # Limit test
 ])
 def test_create_movie(url, width, height, max_height, scroll_px, length):
-    reset_image_and_movie_folder()
     # Create movie.
     params_hash = params_to_hash(url, width, height, max_height, scroll_px)
     movie_path = f"movie/{params_hash}.mp4"

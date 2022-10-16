@@ -12,11 +12,12 @@ class GeneralBrowser(BaseBrowser):
         """
         file_paths = []
         # Take screenshots
-        file_path = f"{self.folder_path}/{self._get_page_no()}"
         for px in range(0, self.scroll_height, self.scroll_px):
             self.driver.execute_script(f"window.scrollTo(0, {px})")
-            self.driver.save_screenshot(f'{file_path}-{px}.png')
+            file_path = f"{self.folder_path}/{self._get_page_no()}_{px}.png"
+            self.driver.save_screenshot(file_path)
             file_paths.append(file_path)
+        self.page_no += 1
         self.driver.quit()
         return file_paths
 
@@ -29,6 +30,6 @@ class GeneralBrowser(BaseBrowser):
         for i, url in enumerate(urls):
             print(f"Take screenshot: {i + 1}/{len(urls)}: {url}")
             self.driver.get(url)
-            time.sleep(1)
+            time.sleep(5)
             file_paths.extend(self.take_screenshot())
         return file_paths

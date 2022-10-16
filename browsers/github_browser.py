@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 from typing import List
 from selenium.webdriver.common.by import By
 from browsers.base_browser import BaseBrowser
@@ -23,10 +24,12 @@ class GithubBrowser(GeneralBrowser):
         """
         folder_urls = self.__read_folder_urls()
         target_urls = self.__read_target_file_urls(file_types)
+        self.take_screenshot()
         # Open and read subdirectory.
         for i in range(0, len(folder_urls)):
-            print(f"Open folder: {folder_urls[i]}")
-            self.driver.get(folder_urls[i])
+            url = folder_urls[i]
+            print(f"Open folder: {url}")
+            self.driver.get(url)
             time.sleep(1)
             self.take_screenshot()
             folder_urls.extend(self.__read_folder_urls())
@@ -56,3 +59,25 @@ class GithubBrowser(GeneralBrowser):
             for file_element in file_elements:
                 file_urls.append(file_element.get_attribute("href"))
         return file_urls
+
+    def download_zip_file(self) -> Path:
+        """
+        Download zip file.
+        :return: Path of zip file.
+        """
+        # click Code button.
+        code_button_xpath = '//*[@data-action="toggle:get-repo#onDetailsToggle"]'
+        self.driver.find_element(By.XPATH, code_button_xpath).click()
+        # click Download ZIP button.
+        download_zip_file_xpath = "//*[@aria-label='Download ZIP']"
+        self.driver.find_element(By.XPATH, download_zip_file_xpath).click()
+        time.sleep(5)
+        return self.__get_zip_file_path()
+
+    def __get_zip_file_path(self) -> Path:
+        """
+        Get zip file path.
+        :return: Path of zip file.
+        """
+        zip_file_path = Path(self.folder_path).parent / "master.zip"
+        return zip_file_path

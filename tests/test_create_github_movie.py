@@ -1,27 +1,27 @@
-from browser_creator import BrowserCreator
-from browsers.github_browser import GithubBrowser
-from hash_maker import params_to_hash
-from movie_maker import image_to_movie
+import os
+import shutil
+from pathlib import Path
+
+from file_handler import FileHandler
 import pytest
-from moviepy import editor
-from tests.test_create_movie import reset_image_and_movie_folder
+import glob
+
+# rest image and movie folder.
+for folder in glob.glob("image/*"): shutil.rmtree(folder)
+for file in glob.glob("movie/*.mp4"): os.remove(file)
+shutil.rmtree('repo')
 
 
-@pytest.mark.parametrize(('url', 'file_types', 'length'), [
-    ("https://github.com/noricha-vr/screen_capture", ['.py'], 5),  # Limit test
+@pytest.mark.parametrize(('url'), [
+    ("https://github.com/noricha-vr/screen_capture"),
 ])
-def test_create_movie(url, file_types, length):
-    reset_image_and_movie_folder()
-    # Create movie.
-    width, height, max_height, scroll_height = 1280, 720, 5000, 200
-    params_hash = params_to_hash(url, width, height, max_height, scroll_height)
-    movie_path = f"movie/{params_hash}.mp4"
-    browser = GithubBrowser(width, height, max_height, scroll_height)
-    browser.open(url)
-    urls = browser.read_target_urls(file_types)
-    print(f'urls: {urls}')
-    paths = browser.take_screenshots(urls)
-    image_to_movie(paths, movie_path)
-    # Check movie.
-    movie = editor.VideoFileClip(movie_path)
-    assert length == movie.duration
+def test_extract_zip_file(url):
+    download_url = f'{url}/archive/master.zip'
+    project_name = url.split('/')[-1]
+    zip_path = Path(f"repo/{project_name}.zip")
+    os.mkdir(zip_path.parent)
+    FileHandler.download_file(download_url, zip_path)
+    assert zip_path.exists()
+    FileHandler.unzip_file(zip_path, zip_path.parent)
+    folder_path = zip_path.parent.glob(f"{project_name}-*").__next__()
+    assert folder_path.exists() is True

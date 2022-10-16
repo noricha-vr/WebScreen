@@ -61,7 +61,6 @@ class BaseBrowser(metaclass=abc.ABCMeta):
         Get page number. for example: 001, 002, 003, ...
         :return: page number.
         """
-        self.page_no += 1
         return str(self.page_no).zfill(3)
 
     def open(self, url: str) -> None:
