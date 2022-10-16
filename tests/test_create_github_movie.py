@@ -9,7 +9,7 @@ import glob
 # rest image and movie folder.
 for folder in glob.glob("image/*"): shutil.rmtree(folder)
 for file in glob.glob("movie/*.mp4"): os.remove(file)
-shutil.rmtree('repo')
+shutil.rmtree('tmp')
 
 
 @pytest.mark.parametrize(('url'), [
@@ -18,7 +18,7 @@ shutil.rmtree('repo')
 def test_extract_zip_file(url):
     download_url = f'{url}/archive/master.zip'
     project_name = url.split('/')[-1]
-    zip_path = Path(f"repo/{project_name}.zip")
+    zip_path = Path(f"tmp/{project_name}.zip")
     os.mkdir(zip_path.parent)
     FileHandler.download_file(download_url, zip_path)
     assert zip_path.exists()
