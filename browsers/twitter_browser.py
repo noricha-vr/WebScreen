@@ -10,7 +10,7 @@ class TwitterBrowser(BaseBrowser):
         Take a screenshot of the given URL scrolling each px and returns image_file_paths.
         :return: image_file_paths:
         """
-        time.sleep(5)
+        time.sleep(6)
         self.scroll_height = self.to_scroll_height(self.max_height, self.scroll_px)
         file_paths = []
         # Take screenshots
