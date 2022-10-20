@@ -1,4 +1,6 @@
 import os
+
+import pytest
 from fastapi.testclient import TestClient
 from main import app
 
@@ -20,3 +22,10 @@ def test_create_movie():
     response = response.history[0]
     assert response.status_code == 303
     assert "https://storage.googleapis.com/" in response.headers.get('location')
+
+
+@pytest.mark.parametrize(("url", 'targets')["https://github.com/noricha-vr/source_converter",])
+def test_create_github_movie(url):
+    response = client.get("/create_movie/?url=")
+    assert response.status_code == 400
+    assert "URL is empty.Please set URL." in response.text

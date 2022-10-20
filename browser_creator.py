@@ -1,6 +1,5 @@
 from browsers.base_browser import BaseBrowser
 from browsers.general_browser import GeneralBrowser
-from browsers.github_browser import GithubBrowser
 from browsers.twitter_browser import TwitterBrowser
 
 

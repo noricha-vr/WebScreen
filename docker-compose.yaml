@@ -12,8 +12,8 @@ services:
       - PORT=8080
       - HOST=0.0.0.0
       - BUCKET_NAME=vrchat
-    networks:
-      - my_network
-networks:
-  my_network:
-    external: true
+#    networks:
+#      - my_network
+#networks:
+#  my_network:
+#    external: true

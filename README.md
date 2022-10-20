@@ -1,6 +1,6 @@
 # screen_capture
 
-This project is for displaying web pages on the VRChat video player.
+This project is for displaying web pages, images and desktop on the VRChat video player.
 
 ## Setup
 
@@ -38,7 +38,7 @@ or `ctrl + c`
 
 ## Usage
 
-1. Open the http://0.0.0.0:8000/ on your browser.
+1. Open the http://0.0.0.0:8080/ on your browser.
 2. Enter the URL of the web page you want to display in VRChat video player.
 3. Copy the URL, then paste it into the VRChat video player.
 4. Enjoy!

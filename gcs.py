@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import google.cloud.storage
 
 
@@ -41,3 +43,8 @@ class BucketManager:
         """
         blob = self.bucket.get_blob(file_name)
         return blob.make_public()
+
+    def to_public_url(self, movie_path: str):
+        self.upload_file(movie_path, movie_path)
+        self.make_public(movie_path)
+        return self.get_public_file_url(movie_path)
