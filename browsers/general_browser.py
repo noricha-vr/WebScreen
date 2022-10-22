@@ -12,9 +12,9 @@ class GeneralBrowser(BaseBrowser):
         """
         file_paths = []
         # Take screenshots
-        for px in range(0, self.scroll_height, self.movie_config.scroll_px):
+        for px in range(0, self.scroll_height, self.movie_config.scroll_each):
             self.driver.execute_script(f"window.scrollTo(0, {px})")
-            file_path = f"{self.folder_path}/{self._get_page_no()}_{px}.png"
+            file_path = f"{self.image_folder_path}/{self._get_page_no()}_{px}.png"
             self.driver.save_screenshot(file_path)
             file_paths.append(file_path)
         self.page_no += 1

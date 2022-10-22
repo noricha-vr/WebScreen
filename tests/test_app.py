@@ -15,9 +15,12 @@ def test_index():
     assert "NorichaConverter" in response.text
 
 
-def test_create_movie():
+@pytest.mark.parametrize(('url',), [
+    ('https://www.google.com/',),
+])
+def test_create_movie(url):
     """This test needs GOOGLE_APPLICATION_CREDENTIALS"""
-    response = client.get("/create_movie/?url=https://www.google.com")
+    response = client.get(f"/create_movie/?url={url}")
     # Why redirect response is in history?
     response = response.history[0]
     assert response.status_code == 303

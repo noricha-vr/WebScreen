@@ -14,7 +14,7 @@ class BaseBrowser(metaclass=abc.ABCMeta):
     def __init__(self, movie_config: MovieConfig):
         self.movie_config = movie_config
         self.scroll_height = None
-        self.folder_path = self.create_folder()
+        self.image_folder_path = self.create_folder()
         self.driver = create_headless_chromedriver(movie_config.width, movie_config.height)
         self.driver.implicitly_wait(10)
         self.page_no = 0
@@ -26,9 +26,9 @@ class BaseBrowser(metaclass=abc.ABCMeta):
         :return: Path object
         """
         timestamp = str(time.time())[0:10]
-        folder_path = f"image/{timestamp}"
-        os.makedirs(folder_path)
-        return Path(folder_path)
+        image_folder_path = f"image/{timestamp}"
+        os.makedirs(image_folder_path)
+        return Path(image_folder_path)
 
     def to_scroll_height(self, scroll_limit: int, scroll_px: int) -> int:
         """
@@ -55,7 +55,7 @@ class BaseBrowser(metaclass=abc.ABCMeta):
         """open url and set scroll_height"""
         self.driver.get(url)
         print(f"Open url: {url}")
-        self.scroll_height = self.to_scroll_height(self.movie_config.max_height, self.movie_config.scroll_px)
+        self.scroll_height = self.to_scroll_height(self.movie_config.limit_height, self.movie_config.scroll_each)
 
     @abc.abstractmethod
     def take_screenshot(self) -> List[str]:

@@ -11,12 +11,12 @@ class TwitterBrowser(BaseBrowser):
         :return: image_file_paths:
         """
         time.sleep(6)
-        self.scroll_height = self.to_scroll_height(self.movie_config.max_height, self.movie_config.scroll_px)
+        self.scroll_height = self.to_scroll_height(self.movie_config.limit_height, self.movie_config.scroll_each)
         file_paths = []
         # Take screenshots
-        for px in range(0, self.scroll_height, self.movie_config.scroll_px):
+        for px in range(0, self.scroll_height, self.movie_config.scroll_each):
             self.driver.execute_script(f"window.scrollTo(0, {px})")
-            file_path = f"{self.folder_path}/{px}.png"
+            file_path = f"{self.image_folder_path}/{px}.png"
             self.driver.save_screenshot(file_path)
             file_paths.append(file_path)
         self.driver.quit()

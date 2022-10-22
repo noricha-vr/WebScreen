@@ -3,6 +3,7 @@ import shutil
 
 from browser_creator import BrowserCreator
 from hash_maker import params_to_hash
+from movie_config import MovieConfig
 from movie_maker import MovieMaker
 import pytest
 from moviepy import editor
@@ -21,15 +22,15 @@ for file in glob.glob("movie/*.mp4"): os.remove(file)
 ])
 def test_create_movie(url, width, height, max_height, scroll_px, length):
     # Create movie.
-    params_hash = params_to_hash(url, width, height, max_height, scroll_px)
-    movie_path = f"movie/{params_hash}.mp4"
-    domain = url.split("/")[2]
-    browser = BrowserCreator(domain, width, height, max_height, scroll_px).create_browser()
+    movie_config = MovieConfig(url, width, height, max_height, scroll_px)
+    browser = BrowserCreator(movie_config).create_browser()
     browser.open(url)
     paths = browser.take_screenshot()
-    MovieMaker.image_to_movie(paths, movie_path)
+    MovieMaker.image_to_movie(paths, movie_config.movie_path)
     # Check movie.
-    movie = editor.VideoFileClip(movie_path)
+    movie = editor.VideoFileClip(movie_config.movie_path)
+    if width > 1920: width = 1920
+    if height > 1920: height = 1920
     assert length == movie.duration
     assert movie.w == width
     assert movie.h == height

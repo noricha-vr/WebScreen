@@ -101,8 +101,7 @@ def create_github_movie(url: str, targets: List[str], width: int = 1280, height:
     source_converter = SourceConverter('default')
     html_file_path = source_converter.project_to_html(project_path, targets)
     # Take a screenshot
-    domain = url.split("/")[2]
-    browser = BrowserCreator(domain, width, height, max_height, scroll_px).create_browser()
+    browser = BrowserCreator(movie_config).create_browser()
     image_paths = []
     for html_path in html_file_path:
         url = f"file://{html_path}"
