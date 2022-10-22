@@ -59,6 +59,7 @@ def create_movie(url: str, width: int = 1280, height: int = 720, max_height: int
     browser.open(url)
     try:
         image_paths = browser.take_screenshot()
+        browser.driver.quit()
         # Create a movie
     except Exception as e:
         browser.driver.quit()
@@ -94,25 +95,8 @@ def create_github_movie(url: str, targets: List[str], width: int = 1280, height:
         url = bucket_manager.get_public_file_url(movie_config.movie_path)
         return RedirectResponse(url=url, status_code=303)
     # Download the repository.
-    project_name = url.split("/")[4]
-    folder_path = GithubDownloader.download_github_archive_and_unzip_to_file(url, project_name)
-    project_path = GithubDownloader.rename_project(folder_path, project_name)
-    # Convert the source codes to html files.
-    source_converter = SourceConverter('default')
-    html_file_path = source_converter.project_to_html(project_path, targets)
-    # Take a screenshot
-    browser = BrowserCreator(movie_config).create_browser()
-    image_paths = []
-    for html_path in html_file_path:
-        url = f"file://{html_path}"
-        browser.open(url)
-        try:
-            image_paths.extend(browser.take_screenshot())
-        except Exception as e:
-            browser.driver.quit()
-            print(e)
-            return {'message': f'Error occurred. url:{url}'}
-    MovieMaker.image_to_movie(image_paths, movie_config.movie_path)
+    movie_maker = MovieMaker(movie_config)
+    movie_maker.create_github_movie()
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)

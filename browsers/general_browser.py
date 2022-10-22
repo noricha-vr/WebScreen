@@ -18,7 +18,6 @@ class GeneralBrowser(BaseBrowser):
             self.driver.save_screenshot(file_path)
             file_paths.append(file_path)
         self.page_no += 1
-        self.driver.quit()
         return file_paths
 
     def take_screenshots(self, urls: List[str]) -> List[str]:
@@ -26,6 +25,7 @@ class GeneralBrowser(BaseBrowser):
         Take a screenshot of the given URLs scrolling each px and returns image_file_paths.
         :return: image_file_paths:
         """
+        time.sleep(1)
         file_paths = []
         for i, url in enumerate(urls):
             print(f"Take screenshot: {i + 1}/{len(urls)}: {url}")

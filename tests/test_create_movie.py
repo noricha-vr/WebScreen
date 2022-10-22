@@ -2,7 +2,6 @@ import os
 import shutil
 
 from browser_creator import BrowserCreator
-from hash_maker import params_to_hash
 from movie_config import MovieConfig
 from movie_maker import MovieMaker
 import pytest
@@ -26,6 +25,7 @@ def test_create_movie(url, width, height, max_height, scroll_px, length):
     browser = BrowserCreator(movie_config).create_browser()
     browser.open(url)
     paths = browser.take_screenshot()
+    browser.driver.quit()
     MovieMaker.image_to_movie(paths, movie_config.movie_path)
     # Check movie.
     movie = editor.VideoFileClip(movie_config.movie_path)
@@ -34,3 +34,26 @@ def test_create_movie(url, width, height, max_height, scroll_px, length):
     assert length == movie.duration
     assert movie.w == width
     assert movie.h == height
+
+
+class TestMovieMaker:
+    @pytest.mark.parametrize(('url', 'targets'), [
+        ('https://github.com/noricha-vr/source_converter', ['*.py', '*.md']),
+    ])
+    def test_create_github_movie(self, url, targets):
+        movie_config = MovieConfig(url, 1280, 720, 5000, 100, targets=targets)
+        movie_path = MovieMaker(movie_config).create_github_movie()
+        movie = editor.VideoFileClip(movie_path)
+        assert movie.duration == 14.0
+        assert movie.w == 1280
+        assert movie.h == 720
+
+    def test_open_local_html_file(self, ):
+        url = "file:///opt/project/tests/html/source_converter/github_downloader.html"
+        movie_config = MovieConfig(url)
+        browser = BrowserCreator(movie_config).create_browser()
+        browser.open(url)
+        paths = browser.take_screenshot()
+        MovieMaker.image_to_movie(paths, movie_config.movie_path)
+        movie = editor.VideoFileClip(movie_config.movie_path)
+        assert movie.duration == 4.0

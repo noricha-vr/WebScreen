@@ -53,8 +53,8 @@ class BaseBrowser(metaclass=abc.ABCMeta):
 
     def open(self, url: str) -> None:
         """open url and set scroll_height"""
-        self.driver.get(url)
         print(f"Open url: {url}")
+        self.driver.get(url)
         self.scroll_height = self.to_scroll_height(self.movie_config.limit_height, self.movie_config.scroll_each)
 
     @abc.abstractmethod
