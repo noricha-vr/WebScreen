@@ -24,20 +24,18 @@ class MovieMaker:
         clip.write_videofile(movie_path, fps=1)
 
     def create_github_movie(self) -> Path:
+        # download source code
         project_name = self.movie_config.url.split("/")[4]
         folder_path = GithubDownloader.download_github_archive_and_unzip_to_file(self.movie_config.url, project_name)
         project_path = GithubDownloader.rename_project(folder_path, project_name)
         # Convert the source codes to html files.
         source_converter = SourceConverter('default')
         html_file_path = source_converter.project_to_html(project_path, self.movie_config.targets)
-        # Take a screenshot
+        # Take screenshots
         browser = BrowserCreator(self.movie_config).create_browser()
         image_paths = []
         for html_path in html_file_path:
-            # get absolute current dir
-            print(f'html_path: {html_path.absolute()}')
-            url = f"file://{html_path.absolute()}"
-            browser.open(url)
+            browser.open(f"file://{html_path.absolute()}")
             try:
                 image_paths.extend(browser.take_screenshot())
             except Exception as e:

@@ -47,13 +47,3 @@ class TestMovieMaker:
         assert movie.duration == 14.0
         assert movie.w == 1280
         assert movie.h == 720
-
-    def test_open_local_html_file(self, ):
-        url = "file:///opt/project/tests/html/source_converter/github_downloader.html"
-        movie_config = MovieConfig(url)
-        browser = BrowserCreator(movie_config).create_browser()
-        browser.open(url)
-        paths = browser.take_screenshot()
-        MovieMaker.image_to_movie(paths, movie_config.movie_path)
-        movie = editor.VideoFileClip(movie_config.movie_path)
-        assert movie.duration == 4.0
