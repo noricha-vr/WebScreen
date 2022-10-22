@@ -23,9 +23,13 @@ def test_create_movie():
     assert response.status_code == 303
     assert "https://storage.googleapis.com/" in response.headers.get('location')
 
-
-@pytest.mark.parametrize(("url", 'targets')["https://github.com/noricha-vr/source_converter",])
-def test_create_github_movie(url):
-    response = client.get("/create_movie/?url=")
-    assert response.status_code == 400
-    assert "URL is empty.Please set URL." in response.text
+# @pytest.mark.parametrize(("url", 'targets'), [
+#     ("https://github.com/noricha-vr/source_converter", ['*.py', 'README.md']),
+# ])
+# def test_create_github_movie(url, targets):
+#     targets_param = "&targets=".join(targets)
+#     url = f"/create_github_movie/?url={url}&targets={targets_param}"
+#     print(url)
+#     response = client.get(url)
+#     assert response.status_code == 400
+#     assert "URL is empty.Please set URL." in response.text
