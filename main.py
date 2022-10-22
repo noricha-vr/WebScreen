@@ -73,7 +73,7 @@ def create_movie(url: str, width: int = 1280, height: int = 720, max_height: int
 
 
 @app.get("/create_github_movie/")
-def create_github_movie(url: str, targets: List[str], width: int = 1280, height: int = 720, max_height: int = 10000,
+def create_github_movie(url: str, targets: str, width: int = 1280, height: int = 720, max_height: int = 10000,
                         scroll_px: int = 200,
                         catch: bool = True):
     """
@@ -87,6 +87,7 @@ def create_github_movie(url: str, targets: List[str], width: int = 1280, height:
     :param catch: if catch is true, check saved movie is suitable.
     :return: GitHub repository page URL
     """
+    targets = targets.split(",")
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)

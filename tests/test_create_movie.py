@@ -38,12 +38,10 @@ def test_create_movie(url, width, height, max_height, scroll_px, length):
 
 class TestMovieMaker:
     @pytest.mark.parametrize(('url', 'targets'), [
-        ('https://github.com/noricha-vr/source_converter', ['*.py', '*.md']),
+        ('https://github.com/noricha-vr/source_converter', ['*.md', '*.py', ]),
     ])
     def test_create_github_movie(self, url, targets):
-        movie_config = MovieConfig(url, 1280, 720, 5000, 100, targets=targets)
+        movie_config = MovieConfig(url, targets=targets)
         movie_path = MovieMaker(movie_config).create_github_movie()
         movie = editor.VideoFileClip(movie_path)
         assert movie.duration == 14.0
-        assert movie.w == 1280
-        assert movie.h == 720
