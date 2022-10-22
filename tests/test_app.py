@@ -6,6 +6,9 @@ from main import app
 
 client = TestClient(app)
 
+"""
+This test needs GOOGLE_APPLICATION_CREDENTIALS
+"""
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/app/credentials.json"
 
 
@@ -19,7 +22,6 @@ def test_index():
     ('https://www.google.com/',),
 ])
 def test_create_movie(url):
-    """This test needs GOOGLE_APPLICATION_CREDENTIALS"""
     response = client.get(f"/create_movie/?url={url}")
     # Why redirect response is in history?
     response = response.history[0]

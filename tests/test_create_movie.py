@@ -1,7 +1,6 @@
 import os
 import shutil
 
-from browser_creator import BrowserCreator
 from movie_config import MovieConfig
 from movie_maker import MovieMaker
 import pytest
