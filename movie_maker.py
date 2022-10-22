@@ -23,7 +23,27 @@ class MovieMaker:
         clip = ImageSequenceClip(file_paths, fps=1)
         clip.write_videofile(movie_path, fps=1)
 
+    def create_movie(self):
+        """
+        Create a movie from the given url.
+        :return:
+        """
+        browser = BrowserCreator(self.movie_config).create_browser()
+        browser.open(self.movie_config.url)
+        try:
+            image_paths = browser.take_screenshot()
+            browser.driver.quit()
+            # Create a movie
+        except Exception as e:
+            browser.driver.quit()
+            print(e)
+            raise e
+        self.image_to_movie(image_paths, self.movie_config.movie_path)
+
     def create_github_movie(self) -> Path:
+        """
+        Create a movie from the given GitHub url.
+        """
         # download source code
         project_name = self.movie_config.url.split("/")[4]
         folder_path = GithubDownloader.download_github_archive_and_unzip_to_file(self.movie_config.url, project_name)
@@ -43,5 +63,5 @@ class MovieMaker:
                 print(e)
                 raise e
         browser.driver.quit()
-        MovieMaker.image_to_movie(image_paths, self.movie_config.movie_path)
+        self.image_to_movie(image_paths, self.movie_config.movie_path)
         return self.movie_config.movie_path

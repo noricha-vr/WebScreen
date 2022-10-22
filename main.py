@@ -49,18 +49,8 @@ def create_movie(url: str, width: int = 1280, height: int = 720, max_height: int
     if os.path.exists(movie_config.movie_path):
         url = bucket_manager.get_public_file_url(movie_config.movie_path)
         return RedirectResponse(url=url, status_code=303)
-    browser = BrowserCreator(movie_config).create_browser()
-    browser.open(url)
-    try:
-        image_paths = browser.take_screenshot()
-        browser.driver.quit()
-        # Create a movie
-    except Exception as e:
-        browser.driver.quit()
-        print(e)
-        return {'message': 'Error occurred.'}
-        # return HTTPException(status_code=500, detail=str(e))
-    MovieMaker.image_to_movie(image_paths, movie_config.movie_path)
+    movie_maker = MovieMaker(movie_config)
+    movie_maker.create_movie()
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)

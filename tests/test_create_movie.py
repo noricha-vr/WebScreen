@@ -22,11 +22,8 @@ for file in glob.glob("movie/*.mp4"): os.remove(file)
 def test_create_movie(url, width, height, max_height, scroll_px, length):
     # Create movie.
     movie_config = MovieConfig(url, width, height, max_height, scroll_px)
-    browser = BrowserCreator(movie_config).create_browser()
-    browser.open(url)
-    paths = browser.take_screenshot()
-    browser.driver.quit()
-    MovieMaker.image_to_movie(paths, movie_config.movie_path)
+    movie_maker = MovieMaker(movie_config)
+    movie_maker.create_movie()
     # Check movie.
     movie = editor.VideoFileClip(movie_config.movie_path)
     if width > 1920: width = 1920
