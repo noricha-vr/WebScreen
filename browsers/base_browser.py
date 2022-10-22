@@ -6,30 +6,18 @@ from typing import List
 from headless_driver import create_headless_chromedriver
 import abc
 
+from movie_config import MovieConfig
+
 
 class BaseBrowser(metaclass=abc.ABCMeta):
 
-    def __init__(self, width: int = 1280, height: int = 720, max_height: int = 5000, scroll_px: int = 200):
+    def __init__(self, movie_config: MovieConfig):
+        self.movie_config = movie_config
         self.scroll_height = None
-        self.scroll_px = scroll_px
-        self.max_height = max_height
         self.folder_path = self.create_folder()
-        self.width = width
-        self.height = height
-        self.apply_limit()
-        self.driver = create_headless_chromedriver(width, height)
+        self.driver = create_headless_chromedriver(movie_config.width, movie_config.height)
         self.driver.implicitly_wait(10)
         self.page_no = 0
-
-    def apply_limit(self):
-        limit_minimum_scroll = 200
-        limit_max_height = 100000
-        limit_width = 1920
-        limit_height = 1920
-        if self.width > limit_width: self.width = limit_width
-        if self.height > limit_height: self.height = limit_height
-        if self.max_height > limit_max_height: self.max_height = limit_max_height
-        if self.scroll_px < limit_minimum_scroll: self.scroll_px = limit_minimum_scroll
 
     @staticmethod
     def create_folder() -> Path:
@@ -50,7 +38,7 @@ class BaseBrowser(metaclass=abc.ABCMeta):
         :return scroll_height:
         """
         page_height = self.driver.execute_script("return document.body.scrollHeight")
-        scroll_height = page_height - self.height
+        scroll_height = page_height - self.movie_config.height
         if scroll_height > scroll_limit: scroll_height = scroll_limit  # Limit scroll height
         if scroll_height == 0: scroll_height = scroll_px  # Set minimum scroll height, for run forloop once.
         print(f"Scroll height: {scroll_height}")
@@ -67,7 +55,7 @@ class BaseBrowser(metaclass=abc.ABCMeta):
         """open url and set scroll_height"""
         self.driver.get(url)
         print(f"Open url: {url}")
-        self.scroll_height = self.to_scroll_height(self.max_height, self.scroll_px)
+        self.scroll_height = self.to_scroll_height(self.movie_config.max_height, self.movie_config.scroll_px)
 
     @abc.abstractmethod
     def take_screenshot(self) -> List[str]:

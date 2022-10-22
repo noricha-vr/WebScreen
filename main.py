@@ -51,13 +51,11 @@ def create_movie(url: str, width: int = 1280, height: int = 720, max_height: int
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    params_hash = params_to_hash(url, width, height, max_height, scroll_px)
-    movie_path = f"movie/{params_hash}.mp4"
-    if os.path.exists(movie_path):
-        url = bucket_manager.get_public_file_url(movie_path)
+    movie_config = MovieConfig(url, width, height, max_height, scroll_px)
+    if os.path.exists(movie_config.movie_path):
+        url = bucket_manager.get_public_file_url(movie_config.movie_path)
         return RedirectResponse(url=url, status_code=303)
-    domain = url.split("/")[2]
-    browser = BrowserCreator(domain, width, height, max_height, scroll_px).create_browser()
+    browser = BrowserCreator(movie_config).create_browser()
     browser.open(url)
     try:
         image_paths = browser.take_screenshot()
@@ -67,9 +65,9 @@ def create_movie(url: str, width: int = 1280, height: int = 720, max_height: int
         print(e)
         return {'message': 'Error occurred.'}
         # return HTTPException(status_code=500, detail=str(e))
-    MovieMaker.image_to_movie(image_paths, movie_path)
+    MovieMaker.image_to_movie(image_paths, movie_config.movie_path)
     # Upload to GCS
-    url = BucketManager(BUCKET_NAME).to_public_url(movie_path)
+    url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)
 
 
