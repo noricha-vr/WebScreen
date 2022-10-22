@@ -13,7 +13,6 @@ class BaseBrowser(metaclass=abc.ABCMeta):
 
     def __init__(self, movie_config: MovieConfig):
         self.movie_config = movie_config
-        self.scroll_height = None
         self.image_folder_path = self.create_folder()
         self.driver = create_headless_chromedriver(movie_config.width, movie_config.height)
         self.driver.implicitly_wait(10)
@@ -30,19 +29,12 @@ class BaseBrowser(metaclass=abc.ABCMeta):
         os.makedirs(image_folder_path)
         return Path(image_folder_path)
 
-    def to_scroll_height(self, scroll_limit: int, scroll_px: int) -> int:
+    def set_scroll_height(self) -> None:
         """
         Calculate scroll height.
-        :param scroll_limit:
-        :param scroll_px:
-        :return scroll_height:
         """
         page_height = self.driver.execute_script("return document.body.scrollHeight")
-        scroll_height = page_height - self.movie_config.height
-        if scroll_height > scroll_limit: scroll_height = scroll_limit  # Limit scroll height
-        if scroll_height == 0: scroll_height = scroll_px  # Set minimum scroll height, for run forloop once.
-        print(f"Scroll height: {scroll_height}")
-        return scroll_height
+        self.movie_config.set_scroll_height(page_height)
 
     def _get_page_no(self) -> str:
         """
@@ -55,7 +47,7 @@ class BaseBrowser(metaclass=abc.ABCMeta):
         """open url and set scroll_height"""
         print(f"Open url: {url}")
         self.driver.get(url)
-        self.scroll_height = self.to_scroll_height(self.movie_config.limit_height, self.movie_config.scroll_each)
+        self.set_scroll_height()
 
     @abc.abstractmethod
     def take_screenshot(self) -> List[str]:

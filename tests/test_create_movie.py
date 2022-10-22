@@ -15,9 +15,9 @@ for file in glob.glob("movie/*.mp4"): os.remove(file)
 
 @pytest.mark.parametrize(('url', 'width', 'height', 'max_height', 'scroll_px', 'length'), [
     ("https://www.google.com", 1280, 720, 5000, 100, 1),  # No scroll page test.
-    ("https://twitter.com/search?q=vrchat&src=typed_query", 1280, 720, 5000, 100, 25),  # Twitter test.
-    ("https://forest.watch.impress.co.jp/docs/serial/sspcgame/1436345.html", 720, 1280, 5000, 500, 10),  # Change sizes
-    ("https://gigazine.net/news/20221012-geforce-rtx-4090-benchmark/", 2000, 2000, 1000, 100, 5),  # Limit test
+    ("https://twitter.com/search?q=vrchat&src=typed_query", 1280, 720, 5000, 100, 26),  # Twitter test.
+    ("https://forest.watch.impress.co.jp/docs/serial/sspcgame/1436345.html", 720, 1280, 5000, 500, 11),  # Change sizes
+    ("https://gigazine.net/news/20221012-geforce-rtx-4090-benchmark/", 2000, 2000, 1000, 100, 6),  # Limit test
 ])
 def test_create_movie(url, width, height, max_height, scroll_px, length):
     # Create movie.
@@ -44,4 +44,4 @@ class TestMovieMaker:
         movie_config = MovieConfig(url, targets=targets)
         movie_path = MovieMaker(movie_config).create_github_movie()
         movie = editor.VideoFileClip(movie_path)
-        assert movie.duration == 14.0
+        assert movie.duration == 16.0

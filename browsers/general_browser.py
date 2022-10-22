@@ -12,7 +12,7 @@ class GeneralBrowser(BaseBrowser):
         """
         file_paths = []
         # Take screenshots
-        for px in range(0, self.scroll_height, self.movie_config.scroll_each):
+        for px in range(0, self.movie_config.scroll_height, self.movie_config.scroll_each):
             self.driver.execute_script(f"window.scrollTo(0, {px})")
             file_path = f"{self.image_folder_path}/{self._get_page_no()}_{px}.png"
             self.driver.save_screenshot(file_path)
@@ -25,7 +25,6 @@ class GeneralBrowser(BaseBrowser):
         Take a screenshot of the given URLs scrolling each px and returns image_file_paths.
         :return: image_file_paths:
         """
-        time.sleep(1)
         file_paths = []
         for i, url in enumerate(urls):
             print(f"Take screenshot: {i + 1}/{len(urls)}: {url}")

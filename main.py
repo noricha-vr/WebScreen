@@ -1,15 +1,9 @@
 import os
-from typing import List
-
 from fastapi import FastAPI, HTTPException
 from starlette.responses import RedirectResponse
-
 from browser_creator import BrowserCreator
-from source_converter import SourceConverter
-from github_downloader import GithubDownloader
 from gcs import BucketManager
 from fastapi.responses import HTMLResponse
-from hash_maker import params_to_hash
 from movie_config import MovieConfig
 from movie_maker import MovieMaker
 
@@ -101,15 +95,3 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)
-
-# @app.get("/get_url/{file_name}/{file_hash}")
-# def get_url(file_name: str, file_hash: str):
-#     # file name to file path
-#     file_path = FileHandler.file_name_to_path(file_name)
-#     print(f'file_path: {file_path}')
-#     if FileHandler.file_to_hash(file_path) != file_hash:
-#         return {'message': 'File hash is not correct.'}
-#     bucket_manager = BucketManager(BUCKET_NAME)
-#     bucket_manager.make_public(file_name)
-#     gcs_file_url = bucket_manager.get_public_file_url(file_name)
-#     return {'message': 'Success', 'url': gcs_file_url}

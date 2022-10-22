@@ -31,20 +31,12 @@ class MovieConfig:
         if self.limit_height > limit_max_height: self.limit_height = limit_max_height
         if self.scroll_each < limit_minimum_scroll: self.scroll_each = limit_minimum_scroll
 
-    def set_scroll_height(self, page_height: int):
+    def set_scroll_height(self, page_height: int) -> None:
+        """
+        Calculate and set scroll height.
+        :param page_height:
+        """
         self.scroll_height = page_height - self.height
         if self.scroll_height > self.limit_height: self.scroll_height = self.limit_height
-
-        # def to_scroll_height(self, scroll_limit: int, scroll_px: int) -> int:
-
-        """
-        Calculate scroll height.
-        :param scroll_limit:
-        :param scroll_px:
-        :return scroll_height:
-        """
-        scroll_height = page_height - self.height
-        if scroll_height > self.limit_height: scroll_height = self.limit_height  # Limit scroll height
-        if scroll_height == 0: scroll_height = self.scroll_each  # Set minimum scroll height, for run forloop once.
-        print(f"Scroll height: {scroll_height}")
-        return scroll_height
+        self.scroll_height += self.scroll_each  # add scroll each
+        print(f"Scroll height: {self.scroll_height}")
