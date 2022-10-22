@@ -3,7 +3,7 @@ import shutil
 
 from browser_creator import BrowserCreator
 from hash_maker import params_to_hash
-from movie_maker import image_to_movie
+from movie_maker import MovieMaker
 import pytest
 from moviepy import editor
 import glob
@@ -27,7 +27,7 @@ def test_create_movie(url, width, height, max_height, scroll_px, length):
     browser = BrowserCreator(domain, width, height, max_height, scroll_px).create_browser()
     browser.open(url)
     paths = browser.take_screenshot()
-    image_to_movie(paths, movie_path)
+    MovieMaker.image_to_movie(paths, movie_path)
     # Check movie.
     movie = editor.VideoFileClip(movie_path)
     assert length == movie.duration

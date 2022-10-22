@@ -10,7 +10,8 @@ from github_downloader import GithubDownloader
 from gcs import BucketManager
 from fastapi.responses import HTMLResponse
 from hash_maker import params_to_hash
-from movie_maker import image_to_movie
+from movie_config import MovieConfig
+from movie_maker import MovieMaker
 
 app = FastAPI()
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
@@ -66,7 +67,7 @@ def create_movie(url: str, width: int = 1280, height: int = 720, max_height: int
         print(e)
         return {'message': 'Error occurred.'}
         # return HTTPException(status_code=500, detail=str(e))
-    image_to_movie(image_paths, movie_path)
+    MovieMaker.image_to_movie(image_paths, movie_path)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_path)
     return RedirectResponse(url=url, status_code=303)
@@ -90,10 +91,9 @@ def create_github_movie(url: str, targets: List[str], width: int = 1280, height:
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    params_hash = params_to_hash(url, width, height, max_height, scroll_px)
-    movie_path = f"movie/{params_hash}.mp4"
-    if catch and os.path.exists(movie_path):
-        url = bucket_manager.get_public_file_url(movie_path)
+    movie_config = MovieConfig(url, width, height, max_height, scroll_px, targets)
+    if catch and os.path.exists(movie_config.movie_path):
+        url = bucket_manager.get_public_file_url(movie_config.movie_path)
         return RedirectResponse(url=url, status_code=303)
     # Download the repository.
     project_name = url.split("/")[4]
@@ -115,9 +115,9 @@ def create_github_movie(url: str, targets: List[str], width: int = 1280, height:
             browser.driver.quit()
             print(e)
             return {'message': f'Error occurred. url:{url}'}
-    image_to_movie(image_paths, movie_path)
+    MovieMaker.image_to_movie(image_paths, movie_config.movie_path)
     # Upload to GCS
-    url = BucketManager(BUCKET_NAME).to_public_url(movie_path)
+    url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)
 
 # @app.get("/get_url/{file_name}/{file_hash}")
