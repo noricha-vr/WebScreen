@@ -38,6 +38,6 @@ class TestMovieMaker:
     ])
     def test_create_github_movie(self, url, targets):
         movie_config = MovieConfig(url, targets=targets)
-        movie_path = MovieMaker(movie_config).create_github_movie()
-        movie = editor.VideoFileClip(movie_path)
+        MovieMaker(movie_config).create_github_movie()
+        movie = editor.VideoFileClip(str(movie_config.movie_path))
         assert movie.duration == 16.0

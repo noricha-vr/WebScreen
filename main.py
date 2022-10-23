@@ -15,6 +15,21 @@ async def read_index():
     return FileResponse('static/index.html')
 
 
+@app.get("/image/")
+async def read_index():
+    return FileResponse('static/index.html')
+
+
+@app.get("/desktop/")
+async def read_index():
+    return FileResponse('static/index.html')
+
+
+@app.get("/github")
+async def read_index():
+    return FileResponse('static/github.html')
+
+
 @app.get("/create_movie/")
 def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: int = 50000, scroll_each: int = 200):
     """
