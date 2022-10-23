@@ -1,30 +1,20 @@
 import os
 from fastapi import FastAPI, HTTPException
 from starlette.responses import RedirectResponse
-from browser_creator import BrowserCreator
+from fastapi.staticfiles import StaticFiles
 from gcs import BucketManager
 from fastapi.responses import HTMLResponse
 from movie_config import MovieConfig
 from movie_maker import MovieMaker
 
-app = FastAPI()
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
+app = FastAPI()
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-@app.get("/")
-async def index():
-    """
-    This is usage of this API.
-    :return: HTML
-    """
-    return HTMLResponse("""
-    <h1>NorichaConverter</h1>
-    <h2>VRChatで表示したいウェブページのURLを入力してください</h2>
-    <form action="/create_movie" method="get">
-        <input type="text" name="url" placeholder="https://">
-        <input type="submit" value="Create Movie">
-    </form>
-    """)
+
+# app.mount("/static/css", StaticFiles(directory="static/css", html=True), name="css")
+# app.mount("/static/js", StaticFiles(directory="static/js", html=True), name="js")
 
 
 @app.get("/create_movie/")
