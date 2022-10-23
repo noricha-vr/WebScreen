@@ -54,10 +54,21 @@
             <form class="row g-3 justify-content-md-center" method="get" action="/create_movie/">
                 <div class="col-12">
                     <label for="url" class="visually-hidden">URL</label>
-                    <input type="url" class="form-control" id="url" name="url" placeholder="https://">
+                    <input type="url" class="form-control border border-dark" id="url" name="url"
+                           placeholder="https://">
+                    <div class="form-group mt-3">
+                        <label for="width">ブラウザサイズ（横×縦）</label>
+                        <input type="number" class="form-inline border" id="width" name="width"
+                               value="1280"> x
+                        <input type="number" class="form-inline border" id="hegith" name="height"
+                               value="720">
+                        <label for="scroll">スクロール(px)</label>
+                        <input type="number" class="form-inline border" id="scroll" name="scroll_each"
+                               value="200">
+                    </div>
                 </div>
                 <div class="col-12">
-                    <button type="submit" class="btn btn-primary btn-block mb-3">作成</button>
+                    <button type="submit" class="btn btn-primary">動画を作成</button>
                 </div>
             </form>
         </section>

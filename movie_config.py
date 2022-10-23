@@ -1,9 +1,13 @@
 import hashlib
+import logging.config
 from typing import List
+
+logging.config.fileConfig('logging.conf')
+logger = logging.getLogger(__name__)
 
 
 class MovieConfig:
-    def __init__(self, url, width: int = 1280, height: int = 720, limit_height: int = 5000, scroll_each: int = 200,
+    def __init__(self, url, width: int = 1280, height: int = 720, limit_height: int = 50000, scroll_each: int = 200,
                  targets: List[str] = None):
         self.scroll_height = None
         self.url = url
@@ -30,6 +34,7 @@ class MovieConfig:
         if self.height > limit_height: self.height = limit_height
         if self.limit_height > limit_max_height: self.limit_height = limit_max_height
         if self.scroll_each < limit_minimum_scroll: self.scroll_each = limit_minimum_scroll
+        logger.info(f"MovieConfig: {self.__dict__}")
 
     def set_scroll_height(self, page_height: int) -> None:
         """
