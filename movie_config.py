@@ -1,5 +1,6 @@
 import hashlib
 import logging.config
+from pathlib import Path
 from typing import List
 
 logging.config.fileConfig('logging.conf')
@@ -18,7 +19,7 @@ class MovieConfig:
         self.scroll_each = scroll_each
         self.targets = targets
         self.params_hash = self.params_to_hash()
-        self.movie_path = f"movie/{self.params_hash}.mp4"
+        self.movie_path = Path(f"movie/{self.params_hash}.mp4")
         self.apply_limit()
 
     def params_to_hash(self):

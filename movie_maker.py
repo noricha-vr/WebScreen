@@ -21,7 +21,7 @@ class MovieMaker:
         """
         from moviepy.editor import ImageSequenceClip
         clip = ImageSequenceClip(file_paths, fps=1)
-        clip.write_videofile(movie_path, fps=1)
+        clip.write_videofile(str(movie_path), fps=1)
 
     def create_movie(self):
         """

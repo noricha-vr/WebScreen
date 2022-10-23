@@ -23,7 +23,7 @@ class BucketManager:
         :param file_name:
         :return None:
         """
-        blob = self.bucket.blob(file_name)
+        blob = self.bucket.blob(str(file_name))
         blob.upload_from_filename(file_path)
 
     def get_public_file_url(self, file_name: str) -> str:
@@ -32,7 +32,7 @@ class BucketManager:
         :param file_name:
         :return str:
         """
-        blob = self.bucket.get_blob(file_name)
+        blob = self.bucket.get_blob(str(file_name))
         return blob.public_url
 
     def make_public(self, file_name: str) -> bool:
@@ -41,7 +41,7 @@ class BucketManager:
         :param file_name:
         :return bool:
         """
-        blob = self.bucket.get_blob(file_name)
+        blob = self.bucket.get_blob(str(file_name))
         return blob.make_public()
 
     def to_public_url(self, movie_path: str):
