@@ -12,15 +12,15 @@ for folder in glob.glob("image/*"): shutil.rmtree(folder)
 for file in glob.glob("movie/*.mp4"): os.remove(file)
 
 
-@pytest.mark.parametrize(('url', 'width', 'height', 'max_height', 'scroll_px', 'length'), [
+@pytest.mark.parametrize(('url', 'width', 'height', 'max_height', 'scroll_each', 'length'), [
     ("https://www.google.com", 1280, 720, 5000, 100, 1),  # No scroll page test.
     ("https://twitter.com/search?q=vrchat&src=typed_query", 1280, 720, 5000, 100, 26),  # Twitter test.
     ("https://forest.watch.impress.co.jp/docs/serial/sspcgame/1436345.html", 720, 1280, 5000, 500, 11),  # Change sizes
     ("https://gigazine.net/news/20221012-geforce-rtx-4090-benchmark/", 2000, 2000, 1000, 100, 6),  # Limit test
 ])
-def test_create_movie(url, width, height, max_height, scroll_px, length):
+def test_create_movie(url, width, height, max_height, scroll_each, length):
     # Create movie.
-    movie_config = MovieConfig(url, width, height, max_height, scroll_px)
+    movie_config = MovieConfig(url, width, height, max_height, scroll_each)
     movie_maker = MovieMaker(movie_config)
     movie_maker.create_movie()
     # Check movie.

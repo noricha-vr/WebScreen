@@ -1,7 +1,6 @@
 import os
 from fastapi import FastAPI, HTTPException
 from starlette.responses import RedirectResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from gcs import BucketManager
 from movie_config import MovieConfig
 from movie_maker import MovieMaker
@@ -9,12 +8,6 @@ from movie_maker import MovieMaker
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
 app = FastAPI()
-
-# app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
-
-app.mount("/static/css", StaticFiles(directory="static/css"), name="css")
-app.mount("/static/js", StaticFiles(directory="static/js"), name="js")
 
 
 @app.get("/")
