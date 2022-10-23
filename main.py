@@ -1,20 +1,25 @@
 import os
 from fastapi import FastAPI, HTTPException
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from gcs import BucketManager
-from fastapi.responses import HTMLResponse
 from movie_config import MovieConfig
 from movie_maker import MovieMaker
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
 app = FastAPI()
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+# app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
-# app.mount("/static/css", StaticFiles(directory="static/css", html=True), name="css")
-# app.mount("/static/js", StaticFiles(directory="static/js", html=True), name="js")
+app.mount("/static/css", StaticFiles(directory="static/css"), name="css")
+app.mount("/static/js", StaticFiles(directory="static/js"), name="js")
+
+
+@app.get("/")
+async def read_index():
+    return FileResponse('static/index.html')
 
 
 @app.get("/create_movie/")

@@ -1,6 +1,7 @@
 # screen_capture
 
 This project is for displaying web pages, images and desktop on the VRChat video player.
+Also, in the future I would like to display input images, pdfs and the user's desktop.
 
 ## Setup
 
