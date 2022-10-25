@@ -5,5 +5,5 @@ credentials.json
 /drivers/
 /project/
 /html/
-/tests/project/
-/tests/html/
+/test/project/
+/test/html/
