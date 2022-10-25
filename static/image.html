@@ -54,10 +54,10 @@
                     <h2 class="h3 mb-3">動画化したいページのURLを貼り付けてください</h2>
                 </div>
             </div>
-            <form class="row g-3 justify-content-md-center" method="get" action="/api/create_movie/">
+            <form class="row g-3 justify-content-md-center" method="post" action="/api/create_image_movie/">
                 <div class="col-12">
-                    <label for="url" class="visually-hidden">URL</label>
-                    <input type="url" class="form-control border border-dark" id="url" name="url"
+                    <label for="images" class="visually-hidden">画像</label>
+                    <input type="file" multiple class="form-control border border-dark" id="images" name="images"
                            placeholder="https://">
                     <div class="form-group mt-3">
                         <label for="width">ブラウザサイズ（横×縦）</label>

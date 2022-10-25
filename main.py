@@ -1,5 +1,7 @@
 import os
+import shutil
 from pathlib import Path
+from typing import List
 
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from starlette.responses import RedirectResponse, FileResponse
@@ -58,6 +60,34 @@ def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: i
     movie_maker.create_movie()
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
+    return RedirectResponse(url=url, status_code=303)
+
+
+@app.post("/api/create_image_movie/")
+def create_image_movie(images: List[UploadFile] = File(...), width: int = 1280, height: int = 720,
+                       limit_height: int = 50000, scroll_each: int = 200):
+    """
+    Merge images and create a movie.
+    :param images: List of image files
+    :param width: Browser width
+    :param height: Browser height
+    :param limit_height: Max scroll height
+    :param scroll_each:
+    :return: Download URL
+    """
+    bucket_manager = BucketManager(BUCKET_NAME)
+    movie_config = MovieConfig("", width, height, limit_height, scroll_each)
+    movie_maker = MovieMaker(movie_config)
+    image_paths = []
+    image_dir = Path('image')
+    image_dir.mkdir(exist_ok=True)
+    for f in images:
+        image_path = str(image_dir / f.filename)
+        image_paths.append(image_path)
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(f.file, buffer)
+    movie_maker.image_to_movie(image_paths, movie_config.movie_path)
+    url = bucket_manager.get_public_file_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)
 
 

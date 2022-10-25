@@ -29,6 +29,20 @@ def test_create_movie(url):
     assert "https://storage.googleapis.com/" in response.headers.get('location')
 
 
+from fastapi import FastAPI, HTTPException, File, UploadFile
+
+
+@pytest.mark.parametrize(('url', 'images'), [
+    ('https://www.google.com/', [File('test_image/01.png'), File('test_image/02.png'), File('test_image/03.png')]),
+])
+def test_create_image_movie(url, images):
+    response = client.get(f"/api/create_image_movie/", files=images)
+    # Why redirect response is in history?
+    response = response.history[0]
+    assert response.status_code == 303
+    assert "https://storage.googleapis.com/" in response.headers.get('location')
+
+
 @pytest.mark.parametrize(("url", 'targets'), [
     ("https://github.com/noricha-vr/source_converter", '*.md,*.py'),
 ])
