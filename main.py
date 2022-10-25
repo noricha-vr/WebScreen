@@ -1,11 +1,8 @@
 import os
-from zipfile import Path
-
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from starlette.responses import RedirectResponse, FileResponse
 from gcs import BucketManager
-from movie_config import MovieConfig
-from movie_maker import MovieMaker
+from movie_maker import MovieMaker, MovieConfig
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
