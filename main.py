@@ -19,7 +19,7 @@ async def read_index():
 
 @app.get("/image/")
 async def read_index():
-    return FileResponse((STATIC_DIR / 'index.html'))
+    return FileResponse((STATIC_DIR / 'image.html'))
 
 
 @app.get("/desktop/")
@@ -32,7 +32,7 @@ async def read_index():
     return FileResponse((STATIC_DIR / 'github.html'))
 
 
-@app.get("/create_movie/")
+@app.get("/api/create_movie/")
 def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: int = 50000, scroll_each: int = 200):
     """
     Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
@@ -61,7 +61,7 @@ def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: i
     return RedirectResponse(url=url, status_code=303)
 
 
-@app.get("/create_github_movie/")
+@app.get("/api/create_github_movie/")
 def create_github_movie(url: str, targets: str, width: int = 1280, height: int = 720, limit_height: int = 50000,
                         scroll_each: int = 200,
                         catch: bool = True):

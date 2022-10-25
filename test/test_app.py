@@ -22,7 +22,7 @@ def test_index():
     ('https://www.google.com/',),
 ])
 def test_create_movie(url):
-    response = client.get(f"/create_movie/?url={url}")
+    response = client.get(f"/api/create_movie/?url={url}")
     # Why redirect response is in history?
     response = response.history[0]
     assert response.status_code == 303
@@ -33,7 +33,7 @@ def test_create_movie(url):
     ("https://github.com/noricha-vr/source_converter", '*.md,*.py'),
 ])
 def test_create_github_movie(url, targets):
-    url = f"/create_github_movie/?url={url}&targets={targets}"
+    url = f"/api/create_github_movie/?url={url}&targets={targets}"
     print(url)
     response = client.get(url)
     # show error message if the movie is not created.
