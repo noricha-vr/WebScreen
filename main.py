@@ -1,32 +1,35 @@
 import os
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from starlette.responses import RedirectResponse, FileResponse
 from gcs import BucketManager
 from movie_maker import MovieMaker, MovieConfig
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
+STATIC_DIR = Path(os.path.join(os.path.dirname(__file__), "static"))
 
 app = FastAPI()
 
 
 @app.get("/")
 async def read_index():
-    return FileResponse('static/index.html')
+    return FileResponse((STATIC_DIR / 'index.html'))
 
 
 @app.get("/image/")
 async def read_index():
-    return FileResponse('static/index.html')
+    return FileResponse((STATIC_DIR / 'index.html'))
 
 
 @app.get("/desktop/")
 async def read_index():
-    return FileResponse('static/index.html')
+    return FileResponse((STATIC_DIR / 'index.html'))
 
 
 @app.get("/github")
 async def read_index():
-    return FileResponse('static/github.html')
+    return FileResponse((STATIC_DIR / 'github.html'))
 
 
 @app.get("/create_movie/")
