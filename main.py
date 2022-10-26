@@ -93,6 +93,19 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
     return RedirectResponse(url=url, status_code=303)
 
 
+@app.get("/desktop/{session_id}/")
+def get_desktop(session_id: str):
+    """
+    Get movie which file name is 'movie/{session_id}.mp4.
+    :param session_id:
+    :return: movie file
+    """
+    movie_path = f"movie/{session_id}.mp4"
+    if not os.path.exists(movie_path):
+        raise HTTPException(status_code=404, detail="Movie file does not exist.")
+    return FileResponse(movie_path)
+
+
 @app.get("/api/create_github_movie/")
 def create_github_movie(url: str, targets: str, width: int = 1280, height: int = 720, limit_height: int = 50000,
                         scroll_each: int = 200,
