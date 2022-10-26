@@ -36,8 +36,17 @@ def test_create_movie(url):
 def test_create_image_movie(url, images):
     files = {}
     for i, image in enumerate(images):
-        files[f'file_{i}'] = open(image, 'rb')
-    response = client.post(f"/api/create_image_movie/", data=files)
+        files[f'file_{i}'] = [image, open(image, 'rb'), 'image/png']
+
+    """
+    /usr/local/lib/python3.8/site-packages/requests/models.py:191: ValueError
+    Will successfully encode files when passed as a dict or a list of
+        tuples. Order is retained if data is a list of tuples but arbitrary
+        if parameters are supplied as a dict.
+        """
+    response = client.post(f"/api/create_image_movie/", files=files,
+                           headers={"Content-Type": "multipart/form-data;boundary='boundary'"})
+    assert response.status_code != 422
     # Why redirect response is in history?
     response = response.history[0]
     assert response.status_code == 303
