@@ -64,11 +64,11 @@ def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: i
 
 
 @app.post("/api/create_image_movie/")
-def create_image_movie(images: List[UploadFile] = File(...), width: int = 1280, height: int = 720,
-                       limit_height: int = 50000, scroll_each: int = 200):
+async def create_image_movie(files: List[UploadFile], width: int = 1280, height: int = 720,
+                             limit_height: int = 50000, scroll_each: int = 200):
     """
     Merge images and create a movie.
-    :param images: List of image files
+    :param files: List of image files
     :param width: Browser width
     :param height: Browser height
     :param limit_height: Max scroll height
@@ -81,13 +81,15 @@ def create_image_movie(images: List[UploadFile] = File(...), width: int = 1280, 
     image_paths = []
     image_dir = Path('image')
     image_dir.mkdir(exist_ok=True)
-    for f in images:
-        image_path = str(image_dir / f.filename)
+    print(f"image_dir: {image_dir.absolute()}")
+    for f in files:
+        image_path = str(image_dir.joinpath(f.filename).absolute())
+        print(f"image_path: {image_path}")
         image_paths.append(image_path)
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
     movie_maker.image_to_movie(image_paths, movie_config.movie_path)
-    url = bucket_manager.get_public_file_url(movie_config.movie_path)
+    url = bucket_manager.to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)
 
 

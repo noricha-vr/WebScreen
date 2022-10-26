@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from main import app
 
@@ -29,14 +30,14 @@ def test_create_movie(url):
     assert "https://storage.googleapis.com/" in response.headers.get('location')
 
 
-from fastapi import FastAPI, HTTPException, File, UploadFile
-
-
 @pytest.mark.parametrize(('url', 'images'), [
-    ('https://www.google.com/', [File('test_image/01.png'), File('test_image/02.png'), File('test_image/03.png')]),
+    ('https://www.google.com/', ['test_image/01.png', 'test_image/02.png', 'test_image/03.png']),
 ])
 def test_create_image_movie(url, images):
-    response = client.get(f"/api/create_image_movie/", files=images)
+    files = {}
+    for i, image in enumerate(images):
+        files[f'file_{i}'] = open(image, 'rb')
+    response = client.post(f"/api/create_image_movie/", data=files)
     # Why redirect response is in history?
     response = response.history[0]
     assert response.status_code == 303
