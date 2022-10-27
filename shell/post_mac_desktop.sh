@@ -12,6 +12,7 @@ do
 done
 
 # example
+#while true;
 #do
 #    screencapture -x -t jpg /tmp/desktop.jpg
 #    curl -X POST -F "file=@/tmp/desktop.jpg" -H 'X-Token: xxx' https://screen-capture-7fhttuy7sq-an.a.run.app/api/desktop/
