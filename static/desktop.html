@@ -53,10 +53,9 @@
                     <h1 class="h1 mb-5">ScreenCapture</h1>
                     <h2 class="h3 mb-3">VRChatにデスクトップを共有しよう！</h2>
                 </div>
-
                 <div>
                     1.このコードをターミナルに貼り付ける
-                    <pre  class="bg-dark text-white p-3 mt-2">
+                    <pre class="bg-dark text-white p-3 mt-2">
                         <code>
 while true;
 do
@@ -64,8 +63,10 @@ do
     curl -X POST -F "file=@/tmp/desktop.jpg" -H 'X-Token: <span name="uuid">uuid</span>' <span name="origin">uuid</span>/api/desktop/
     sleep 3
 done</code>
+                    </pre>
+                    ※ Pythonスクリプト<a href="https://storage.googleapis.com/vrchat/post_client/post_desktop.py">post_desktop.py</a>
                 </div>
-                <div class="">
+                <div class="mt-3">
                     2.このURLをVRChatの動画プレイヤーに貼り付ける<br/>
                     <a id="player_url"></a>
                 </div>
