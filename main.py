@@ -1,17 +1,21 @@
+import logging
 import os
 import shutil
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, HTTPException, File, UploadFile, Header
 from starlette.responses import RedirectResponse, FileResponse
 from gcs import BucketManager
 from movie_maker import MovieMaker, MovieConfig
 
+logger = logging.getLogger('uvicorn')
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 STATIC_DIR = Path(os.path.join(os.path.dirname(__file__), "static"))
 
 app = FastAPI()
+logger.info('info-test')
+logger.debug('debug-test')
 
 
 @app.get("/")
@@ -93,7 +97,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
     return RedirectResponse(url=url, status_code=303)
 
 
-@app.get("/desktop/{session_id}/")
+@app.get("/api/desktop/{session_id}/")
 def get_desktop(session_id: str):
     """
     Get movie which file name is 'movie/{session_id}.mp4.
@@ -104,6 +108,25 @@ def get_desktop(session_id: str):
     if not os.path.exists(movie_path):
         raise HTTPException(status_code=404, detail="Movie file does not exist.")
     return FileResponse(movie_path)
+
+
+@app.post("/api/desktop/")
+def post_desktop(file: UploadFile = File(...), x_token: Union[List[str], None] = Header(default=None)):
+    """
+    Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
+    :param file: image file
+    :return: message
+    """
+    if x_token is None:
+        raise HTTPException(status_code=400, detail="session_id is empty.")
+    token = x_token[0]
+    movie_path = f"movie/{token}.mp4"
+    temp_movie_path = f"movie/{token}_temp.mp4"
+    image_path = f"image/{token}.jpg"
+    with open(image_path, "wb") as f: f.write(file.file.read())
+    MovieMaker.image_to_movie([image_path], temp_movie_path)
+    shutil.move(temp_movie_path, movie_path)
+    return {"message": f"success. URL: /api/desktop/{token}/"}
 
 
 @app.get("/api/create_github_movie/")
