@@ -54,17 +54,16 @@
                     <h2 class="h3 mb-3">VRChatにデスクトップを共有しよう！</h2>
                 </div>
 
-                <div class="">
+                <div>
                     1.このコードをターミナルに貼り付ける
-                    <pre>
+                    <pre  class="bg-dark text-white p-3 mt-2">
                         <code>
 while true;
 do
     screencapture -x -t jpg /tmp/desktop.jpg
-    curl -X POST -F "file=@/tmp/desktop.jpg" -H 'X-Token: <span name="uuid">uuid</span>' https://screen-capture-7fhttuy7sq-an.a.run.app/api/desktop/
+    curl -X POST -F "file=@/tmp/desktop.jpg" -H 'X-Token: <span name="uuid">uuid</span>' <span name="origin">uuid</span>/api/desktop/
     sleep 3
-done
-                        </code>
+done</code>
                 </div>
                 <div class="">
                     2.このURLをVRChatの動画プレイヤーに貼り付ける<br/>
@@ -108,8 +107,9 @@ done
     }
     console.log(`current uuid: ${uuid}`);
     document.getElementsByName("uuid").forEach(e => e.innerText = uuid);
-    document.getElementById("player_url").innerText = `https://screen-capture-7fhttuy7sq-an.a.run.app/api/desktop/${uuid}`;
-    document.getElementById("player_url").href = `https://screen-capture-7fhttuy7sq-an.a.run.app/api/desktop/${uuid}`;
+    document.getElementsByName("origin").forEach(e => e.innerText = location.origin);
+    document.getElementById("player_url").innerText = `${location.origin}/api/desktop/${uuid}`;
+    document.getElementById("player_url").href = `${location.origin}/api/desktop/${uuid}`;
 
 </script>
 </html>
