@@ -123,9 +123,11 @@ def post_desktop(file: UploadFile = File(...), x_token: Union[List[str], None] =
         raise HTTPException(status_code=400, detail="session_id is empty.")
     token = x_token[0]
     movie_path = f"movie/{token}.mp4"
+    temp_movie_path = f"movie/{token}_temp.mp4"
     image_path = f"image/{token}.jpg"
     with open(image_path, "wb") as f: f.write(file.file.read())
-    MovieMaker.image_to_movie([image_path], movie_path)
+    MovieMaker.image_to_movie([image_path], temp_movie_path)
+    os.rename(temp_movie_path, movie_path)
     return {"message": f"success. URL: /api/desktop/{token}/"}
 
 
