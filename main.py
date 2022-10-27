@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import List, Union
 
@@ -105,9 +106,10 @@ def get_desktop(session_id: str):
     :return: movie file
     """
     movie_path = f"movie/{session_id}.mp4"
-    if not os.path.exists(movie_path):
-        raise HTTPException(status_code=404, detail="Movie file does not exist.")
-    return FileResponse(movie_path)
+    for i in range(3):
+        if os.path.exists(movie_path): return FileResponse(movie_path)
+        time.sleep(1)
+    raise HTTPException(status_code=404, detail="Movie file does not exist.")
 
 
 @app.post("/api/desktop/")
@@ -121,11 +123,9 @@ def post_desktop(file: UploadFile = File(...), x_token: Union[List[str], None] =
         raise HTTPException(status_code=400, detail="session_id is empty.")
     token = x_token[0]
     movie_path = f"movie/{token}.mp4"
-    temp_movie_path = f"movie/{token}_temp.mp4"
     image_path = f"image/{token}.jpg"
     with open(image_path, "wb") as f: f.write(file.file.read())
-    MovieMaker.image_to_movie([image_path], temp_movie_path)
-    shutil.move(temp_movie_path, movie_path)
+    MovieMaker.image_to_movie([image_path], movie_path)
     return {"message": f"success. URL: /api/desktop/{token}/"}
 
 
