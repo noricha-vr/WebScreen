@@ -14,8 +14,6 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 STATIC_DIR = Path(os.path.join(os.path.dirname(__file__), "static"))
 
 app = FastAPI()
-logger.info('info-test')
-logger.debug('debug-test')
 
 
 @app.get("/")
@@ -30,7 +28,7 @@ async def read_index():
 
 @app.get("/desktop/")
 async def read_index():
-    return FileResponse((STATIC_DIR / 'index.html'))
+    return FileResponse((STATIC_DIR / 'desktop.html'))
 
 
 @app.get("/github")
@@ -62,6 +60,7 @@ def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: i
         return RedirectResponse(url=url, status_code=303)
     movie_maker = MovieMaker(movie_config)
     movie_maker.create_movie()
+    if BUCKET_NAME is None: return FileResponse(movie_config.movie_path)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)
@@ -93,6 +92,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
     movie_maker.image_to_movie(image_paths, movie_config.movie_path)
+    if BUCKET_NAME is None: return FileResponse(movie_config.movie_path)
     url = bucket_manager.to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)
 
@@ -155,6 +155,7 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     # Download the repository.
     movie_maker = MovieMaker(movie_config)
     movie_maker.create_github_movie()
+    if BUCKET_NAME is None: return FileResponse(movie_config.movie_path)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
     return RedirectResponse(url=url, status_code=303)
