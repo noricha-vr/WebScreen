@@ -51,7 +51,7 @@
             <div class="row justify-content-md-center">
                 <div class="col mt-3">
                     <h1 class="h1 mb-5">ScreenCapture</h1>
-                    <h2 class="h3 mb-3">動画化したいページのURLを貼り付けてください</h2>
+                    <h2 class="h3 mb-3">画像を選択してください。</h2>
                 </div>
             </div>
             <form class="row g-3 justify-content-md-center" method="post" action="/api/create_image_movie/"
@@ -60,6 +60,7 @@
                     <label for="files" class="visually-hidden">画像</label>
                     <input type="file" multiple class="form-control border border-dark" id="files" name="files"
                            placeholder="https://">
+                    <div class="mt-1 text-muted">※ 複数枚選択可能。ドラッグもOK！</div>
                     <div class="form-group mt-3">
                         <label for="width">ブラウザサイズ（横×縦）</label>
                         <input type="number" class="form-inline border" id="width" name="width"
