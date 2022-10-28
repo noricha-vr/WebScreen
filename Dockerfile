@@ -17,6 +17,11 @@ RUN dpkg -i google-chrome-stable_current_amd64.deb; apt-get -fy install
 COPY requirements.txt requirements.txt
 RUN python -m pip install --upgrade pip && pip install -r requirements.txt
 
+# Install MovieMaker
+RUN git clone https://github.com/noricha-vr/MovieMaker \
+    && cd MovieMaker \
+    && python setup.py install
+
 # Copy local code to the container image.
 ENV APP_HOME /app
 WORKDIR $APP_HOME
