@@ -8,4 +8,4 @@ steps:
       - --cache-ttl=72h
       - --dockerfile=./Dockerfile
   - name: 'gcr.io/cloud-builders/gcloud'
-    args: [ 'run', 'deploy',  'screen-capture', '--allow-unauthenticated','--region', 'asia-northeast1', '--memory', '1024Mi' ,'--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
+    args: [ 'run', 'deploy',  'screen-capture', '--allow-unauthenticated','--region', 'asia-northeast1', '--memory', '4Gi' ,'--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
