@@ -8,5 +8,4 @@ selenium==4.5.0
 source-converter==0.1.11
 uvicorn[standard]==0.18.3
 webdriver-manager==3.8.4
-vrc-movie-maker>=0.1.0
 pyautogui
