@@ -8,7 +8,7 @@ from typing import List, Union
 from fastapi import FastAPI, HTTPException, File, UploadFile, Header
 from starlette.responses import RedirectResponse, FileResponse
 from gcs import BucketManager
-from movie_maker import MovieMaker, MovieConfig
+from movie_maker import MovieMaker, BrowserConfig
 
 logger = logging.getLogger('uvicorn')
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
@@ -55,7 +55,7 @@ def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: i
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    movie_config = MovieConfig(url, width, height, limit_height, scroll_each)
+    movie_config = BrowserConfig(url, width, height, limit_height, scroll_each)
     if os.path.exists(movie_config.movie_path):
         url = bucket_manager.get_public_file_url(movie_config.movie_path)
         return RedirectResponse(url=url, status_code=303)
@@ -80,7 +80,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
-    movie_config = MovieConfig("", width, height, limit_height, scroll_each)
+    movie_config = BrowserConfig("", width, height, limit_height, scroll_each)
     movie_maker = MovieMaker(movie_config)
     image_paths = []
     image_dir = Path('image')
