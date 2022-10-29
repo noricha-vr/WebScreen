@@ -1,3 +1,4 @@
+git+https://github.com/noricha-vr/MovieMaker.git@960ad427dfcd077025a46915e95e88cd517e01f8
 fastapi==0.85.1
 google-cloud-storage==2.5.0
 Jinja2==3.1.2
@@ -8,4 +9,4 @@ selenium==4.5.0
 source-converter==0.1.11
 uvicorn[standard]==0.18.3
 webdriver-manager==3.8.4
-pyautogui
+pyautogui # screenshot
