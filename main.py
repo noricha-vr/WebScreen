@@ -34,7 +34,7 @@ async def read_index():
 
 @app.get("/github")
 async def read_index():
-    return FileResponse((STATIC_DIR / 'github.html'))
+    return FileResponse((STATIC_DIR / 'index.html'))
 
 
 @app.get("/api/create_movie/")
