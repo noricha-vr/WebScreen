@@ -150,7 +150,7 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    movie_config = MovieConfig(url, width, height, limit_height, scroll_each, targets)
+    movie_config = BrowserConfig(url, width, height, limit_height, scroll_each, targets)
     if catch and os.path.exists(movie_config.movie_path):
         url = bucket_manager.get_public_file_url(movie_config.movie_path)
         return RedirectResponse(url=url, status_code=303)
