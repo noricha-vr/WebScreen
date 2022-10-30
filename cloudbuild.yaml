@@ -11,5 +11,5 @@ steps:
     args: [ 'run', 'deploy',  'screen-capture', '--allow-unauthenticated','--region', 'asia-northeast1',
             '--memory', '4Gi' ,'--cpu','2','--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
   - name: 'gcr.io/cloud-builders/gcloud'
-    args: [ 'run', 'deploy',  'web-screen', '--allow-unauthenticated','--region', 'asia-northeast1',
+    args: [ 'run', 'deploy',  'web-screen-api', '--allow-unauthenticated','--region', 'asia-northeast1',
             '--memory', '4Gi' ,'--cpu','2','--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
