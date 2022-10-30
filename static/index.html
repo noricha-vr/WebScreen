@@ -102,7 +102,9 @@
                     </div>
                 </div>
                 <div class="col-12">
-                    <button type="submit" class="btn btn-primary">動画を作成</button>
+                    <button type="submit" id="submit" class="btn btn-primary">動画を作成</button>
+                    <img id="loading" class="text-center visually-hidden" style="width: 80px"
+                         src="https://storage.googleapis.com/vrchat/image/loading.png">
                 </div>
             </form>
         </section>
@@ -127,4 +129,21 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF" crossorigin="anonymous"></script>
 -->
 </body>
+<footer>
+    <div class="container">
+        <div class="row justify-content-md-center">
+            <div class="col mt-3">
+                <!--                <p class="text-center"><a href="">Powered by OSS集会</a></p>-->
+            </div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('submit').addEventListener('click', function () {
+                document.getElementById('loading').classList.remove('visually-hidden');
+                document.getElementById('submit').classList.add('visually-hidden');
+            });
+        });
+    </script>
+</footer>
 </html>
