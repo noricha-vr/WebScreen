@@ -16,27 +16,25 @@ STATIC_DIR = Path(os.path.join(os.path.dirname(__file__), "static"))
 
 app = FastAPI()
 
-redirect_url = "https://web-screen.net/"
-
 
 @app.get("/")
 async def read_index():
-    return RedirectResponse(redirect_url)
+    return FileResponse((STATIC_DIR / 'index.html'))
 
 
 @app.get("/image/")
 async def read_index():
-    return RedirectResponse(redirect_url)
+    return FileResponse((STATIC_DIR / 'image.html'))
 
 
 @app.get("/desktop/")
 async def read_index():
-    return RedirectResponse(redirect_url)
+    return FileResponse((STATIC_DIR / 'desktop.html'))
 
 
 @app.get("/github")
 async def read_index():
-    return RedirectResponse(redirect_url)
+    return FileResponse((STATIC_DIR / 'github.html'))
 
 
 @app.get("/api/create_movie/")
