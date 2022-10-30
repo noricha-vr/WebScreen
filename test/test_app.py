@@ -16,7 +16,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/app/credentials.json"
 def test_index():
     response = client.get("/")
     assert response.status_code == 200
-    assert "ScreenCapture" in response.text
+    assert "Web Screen" in response.text
 
 
 @pytest.mark.parametrize(('url',), [
