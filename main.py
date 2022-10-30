@@ -60,7 +60,11 @@ def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: i
         url = bucket_manager.get_public_file_url(movie_config.movie_path)
         return RedirectResponse(url=url, status_code=303)
     movie_maker = MovieMaker(movie_config)
-    movie_maker.create_movie()
+    try:
+        movie_maker.create_movie()
+    except Exception as e:
+        logger.error(f'Failed to make movie.  url: {url} {e}')
+        raise HTTPException(status_code=500, detail="Failed to make movie.")
     if BUCKET_NAME is None: return FileResponse(movie_config.movie_path)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
