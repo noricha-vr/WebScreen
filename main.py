@@ -38,7 +38,7 @@ async def read_index():
 
 
 @app.get("/api/create_movie/")
-def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: int = 50000, scroll_each: int = 200):
+def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: int = 25000, scroll_each: int = 200):
     """
     Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
     1. create hash of URL, scroll_px, width, height. max_height.
