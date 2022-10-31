@@ -21,6 +21,7 @@ def test_index():
 
 @pytest.mark.parametrize(('url',), [
     ('https://www.google.com/',),
+    ('https://www.youtube.com/',),
 ])
 def test_create_movie(url):
     response = client.get(f"/api/create_movie/?url={url}")
