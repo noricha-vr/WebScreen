@@ -1,16 +1,21 @@
+import glob
 import os
+import shutil
 
 import pytest
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from main import app
 
-client = TestClient(app)
-
 """
 This test needs GOOGLE_APPLICATION_CREDENTIALS
 """
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/app/credentials.json"
+# Rest image and movie folder.
+for folder in glob.glob("image/*"): shutil.rmtree(folder)
+for file in glob.glob("movie/*.mp4"): os.remove(file)
+
+client = TestClient(app)
 
 
 def test_index():
