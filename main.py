@@ -42,14 +42,13 @@ app.add_middleware(
 
 
 @app.get("/", response_class=HTMLResponse)
-async def read_index(request: Request, file_hash: str = None) -> templates.TemplateResponse:
-    logger.info(f'file_hash: {file_hash}')
-    return templates.TemplateResponse('index.html', {'request': request, 'file_hash': file_hash})
+async def read_index(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('index.html', {'request': request})
 
 
 @app.get("/image/")
-async def read_index(request: Request, file_hash: str = None) -> templates.TemplateResponse:
-    return templates.TemplateResponse('image.html', {'request': request, 'file_hash': file_hash})
+async def read_index(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('image.html', {'request': request})
 
 
 @app.get("/desktop/")
@@ -58,8 +57,8 @@ async def read_index(request: Request) -> templates.TemplateResponse:
 
 
 @app.get("/github")
-async def read_index(request: Request, file_hash: str = None) -> templates.TemplateResponse:
-    return templates.TemplateResponse('github.html', {'request': request, 'file_hash': file_hash})
+async def read_index(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('github.html', {'request': request})
 
 
 @app.get("/favicon.ico")
@@ -95,7 +94,7 @@ def create_movie(url: str, max_page_height: int, width: int = 1280, height: int 
     except Exception as e:
         logger.error(f'Failed to make movie.  url: {url} {e}')
         raise HTTPException(status_code=500, detail="Failed to make movie.")
-    if BUCKET_NAME is None: return FileResponse(movie_config.movie_path)
+    if BUCKET_NAME is None: return {'url': f'file://{movie_config.movie_path.absolute()}'}
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
     return {'url': url}
