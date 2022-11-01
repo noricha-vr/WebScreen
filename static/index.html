@@ -108,6 +108,12 @@
                          src="https://storage.googleapis.com/vrchat/image/loading.gif">
                 </div>
             </form>
+            <div class="row justify-content-md-center">
+                <div>
+                    動画URL: <a id="movie_url" href=""></a>
+                    <button id="copy" class="btn btn-outline-secondary btn-sm">コピー</button>
+                </div>
+            </div>
         </section>
     </div>
     <!--    {% endblock %}-->
@@ -148,6 +154,8 @@
         document.getElementById('max_page_height').addEventListener('input', function () {
             document.getElementById('max_page_height_text').innerText = document.getElementById('max_page_height').value;
         });
+        // get url parameter of hash. It in to the movie url.
+        const urlParams = new URLSearchParams(window.location.hash);
     </script>
 </footer>
 </html>
