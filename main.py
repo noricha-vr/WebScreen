@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shutil
 import time
 from pathlib import Path
@@ -18,27 +19,41 @@ app = FastAPI()
 
 
 @app.get("/")
-async def read_index():
+async def read_index() -> FileResponse:
+    return FileResponse((STATIC_DIR / 'index.html'))
+
+
+@app.get("/result/{file_hash}")
+async def read_index(file_hash: str) -> FileResponse:
+    """
+    This page shows result of movie.
+    :param file_hash:
+    :return: FileResponse
+    """
+    # Validate file_hash by regex
+    result = re.match(r'^[0-9a-f]{64}$', file_hash)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Not Found. Invalid file hash.")
     return FileResponse((STATIC_DIR / 'index.html'))
 
 
 @app.get("/image/")
-async def read_index():
+async def read_index() -> FileResponse:
     return FileResponse((STATIC_DIR / 'image.html'))
 
 
 @app.get("/desktop/")
-async def read_index():
+async def read_index() -> FileResponse:
     return FileResponse((STATIC_DIR / 'desktop.html'))
 
 
 @app.get("/github")
-async def read_index():
+async def read_index() -> FileResponse:
     return FileResponse((STATIC_DIR / 'github.html'))
 
 
 @app.get("/favicon.ico")
-async def favicon():
+async def favicon() -> FileResponse:
     return FileResponse((STATIC_DIR / 'favicon.ico'))
 
 
