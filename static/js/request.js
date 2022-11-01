@@ -49,3 +49,16 @@ document.getElementById('submit').addEventListener('click', async () => {
         }
     });
 });
+
+function copyToClipboard() {
+    let copyText = document.getElementById("movie_url").href;
+    navigator.clipboard.writeText(copyText).then(r => {
+        console.log('copied');
+        document.getElementById('copy').innerHTML = 'Copied!';
+    });
+}
+
+// when click copy button, copy movie_url to clipboard
+document.getElementById('copy').addEventListener('click', () => {
+    copyToClipboard();
+})
