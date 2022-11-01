@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import List, Union
 
@@ -116,7 +117,8 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
     movie_config = BrowserConfig("", width, height, max_page_height, scroll_each)
     movie_maker = MovieMaker(movie_config)
     image_paths = []
-    image_dir = Path('image')
+
+    image_dir = Path('image') / datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')
     image_dir.mkdir(exist_ok=True)
     print(f"image_dir: {image_dir.absolute()}")
     for f in files:
