@@ -90,15 +90,16 @@
                     <label for="url" class="visually-hidden">URL</label>
                     <input type="url" class="form-control border border-dark" id="url" name="url"
                            placeholder="https://">
+                    <label for="max_page_height" class="form-label mt-3">ページの長さ（最大）<span
+                            id="max_page_height_text">5000</span>px</label>
+                    <input type="range" class="form-range" id="max_page_height" name="max_page_height"
+                           min="2000" max="25000" value="5000">
                     <div class="form-group mt-3">
-                        <label for="width">ブラウザサイズ（横×縦）</label>
+                        <label for="width">ブラウザのサイズ（横×縦）:</label><br/>
                         <input type="number" class="form-inline border" id="width" name="width"
                                value="1280"> x
-                        <input type="number" class="form-inline border" id="hegith" name="height"
+                        <input type="number" class="form-inline border" id="height" name="height"
                                value="720">
-                        <label for="scroll">スクロール(px)</label>
-                        <input type="number" class="form-inline border" id="scroll" name="scroll_each"
-                               value="200">
                     </div>
                 </div>
                 <div class="col-12">
@@ -143,6 +144,9 @@
                 document.getElementById('loading').classList.remove('visually-hidden');
                 document.getElementById('submit').classList.add('visually-hidden');
             });
+        });
+        document.getElementById('max_page_height').addEventListener('input', function () {
+            document.getElementById('max_page_height_text').innerText = document.getElementById('max_page_height').value;
         });
     </script>
 </footer>
