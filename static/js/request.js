@@ -4,10 +4,11 @@ const submitButton = document.getElementById('submit');
 const loadingImage = document.getElementById('loading');
 const movieUrlElement = document.getElementById('movie_url');
 const copyButton = document.getElementById('copy');
+const resultArea = document.getElementById('result');
 
-async function createMovie(movie) {
-    let request_url = `${CREATE_MOVIE_URL}?url=${movie.url}&max_page_height=${movie.max_page_height}` +
-        `&width=${movie.width}&height=${movie.height}`;
+async function createMovie(settings) {
+    let request_url = `${CREATE_MOVIE_URL}?url=${settings.url}&max_page_height=${settings.max_page_height}` +
+        `&width=${settings.width}&height=${settings.height}`;
     console.log(`Requesting ${request_url}`);
     return await fetch(request_url, {
         method: 'GET',
@@ -17,22 +18,25 @@ async function createMovie(movie) {
 
 // when click submit button, create movie
 submitButton.addEventListener('click', async () => {
-    // invisible submit button. add  visually-hidden class
+    // Hide submit button and result area.
     submitButton.className = 'visually-hidden';
-    // visible loading button. remove visually-hidden class
+    resultArea.className = 'visually-hidden';
+    // show loading button. remove visually-hidden class
     loadingImage.className = '';
-    let movie = {
+
+    let settings = {
         url: encodeURI(document.getElementById('url').value),
         max_page_height: document.getElementById('max_page_height').value,
         width: document.getElementById('width').value,
         height: document.getElementById('height').value,
     }
-    console.log(`movie: ${JSON.stringify(movie)}`);
-    let response = await createMovie(movie)
+    console.log(`movie: ${JSON.stringify(settings)}`);
+    let response = await createMovie(settings)
     // show submit button
     submitButton.className = 'btn btn-primary';
     // hide loading button
     loadingImage.className = 'visually-hidden';
+
     if (response.status === 200) {
         // set url to movie_url
         let data = await response.json()
@@ -41,7 +45,7 @@ submitButton.addEventListener('click', async () => {
         movieUrlElement.href = data.url;
         movieUrlElement.innerHTML = data.url;
         // show movie_url
-        document.getElementById('result').className = '';
+        resultArea.className = '';
     } else {
         alert('error');
     }
