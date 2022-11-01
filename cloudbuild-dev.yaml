@@ -1,0 +1,12 @@
+steps:
+  - name: 'gcr.io/kaniko-project/executor'
+    args:
+      - --destination=gcr.io/$PROJECT_ID/screen-capture:$SHORT_SHA
+      - --destination=gcr.io/$PROJECT_ID/screen-capture:$BRANCH_NAME
+      - --destination=gcr.io/$PROJECT_ID/screen-capture:latest
+      - --cache=true
+      - --cache-ttl=72h
+      - --dockerfile=./Dockerfile
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: [ 'run', 'deploy',  'web-screen-dev', '--allow-unauthenticated','--region', 'asia-northeast1',
+            '--memory', '4Gi' ,'--cpu','2','--image', 'gcr.io/$PROJECT_ID/screen-capture', '--platform', 'managed' ]
