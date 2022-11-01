@@ -1,7 +1,8 @@
 const CREATE_MOVIE_URL = '/api/create_movie/';
 
 function createMovie(movie) {
-    let request_url = `${CREATE_MOVIE_URL}?url=${movie.url}&max_page_height=${movie.max_page_height}&width=${movie.width}&height=${movie.height}`;
+    let request_url = `${CREATE_MOVIE_URL}?url=${movie.url}&max_page_height=${movie.max_page_height}` +
+        `&width=${movie.width}&height=${movie.height}`;
     console.log(`Requesting ${request_url}`);
     return fetch(request_url, {
         method: 'GET',
