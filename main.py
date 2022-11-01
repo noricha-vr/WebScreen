@@ -9,6 +9,9 @@ from typing import List, Union
 from fastapi import FastAPI, HTTPException, File, UploadFile, Header, Request
 from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
 from gcs import BucketManager
 from movie_maker import MovieMaker, BrowserConfig
 
@@ -17,17 +20,30 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
 ROOT_DIR = Path(os.path.dirname(__file__))
 STATIC_DIR = ROOT_DIR / "static"
+
 templates = Jinja2Templates(directory=ROOT_DIR / "templates")
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+origins = [
+    "http://0.0.0.0:8080", os.environ.get("ALLOW_HOST", None)
+]
+
+logger.info(f"origins: {origins}")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[""],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request, file_hash: str = None) -> templates.TemplateResponse:
-    # Validate file_hash by regex
-    if not file_hash or re.match(r'^[0-9a-f]{64}$', file_hash) is None:
-        return FileResponse((STATIC_DIR / 'index.html'))
-    # Check file exists in GCS
+    logger.info(f'file_hash: {file_hash}')
     return templates.TemplateResponse('index.html', {'request': request, 'file_hash': file_hash})
 
 
@@ -52,7 +68,7 @@ async def favicon() -> FileResponse:
 
 
 @app.get("/api/create_movie/")
-def create_movie(url: str, max_page_height: int, width: int = 1280, height: int = 720):
+def create_movie(url: str, max_page_height: int, width: int = 1280, height: int = 720) -> dict:
     """
     Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
     1. create hash of URL, scroll_px, width, height. max_height.
@@ -72,7 +88,7 @@ def create_movie(url: str, max_page_height: int, width: int = 1280, height: int 
     movie_config = BrowserConfig(url, width, height, max_page_height, scroll_each)
     if os.path.exists(movie_config.movie_path):
         url = bucket_manager.get_public_file_url(movie_config.movie_path)
-        return RedirectResponse(url=url, status_code=303)
+        return {'url': url}
     movie_maker = MovieMaker(movie_config)
     try:
         movie_maker.create_movie()
@@ -82,7 +98,7 @@ def create_movie(url: str, max_page_height: int, width: int = 1280, height: int 
     if BUCKET_NAME is None: return FileResponse(movie_config.movie_path)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
-    return RedirectResponse(url=url, status_code=303)
+    return {'url': url}
 
 
 @app.post("/api/create_image_movie/")
