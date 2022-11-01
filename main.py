@@ -37,8 +37,13 @@ async def read_index():
     return FileResponse((STATIC_DIR / 'github.html'))
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse((STATIC_DIR / 'favicon.ico'))
+
+
 @app.get("/api/create_movie/")
-def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: int = 25000, scroll_each: int = 200):
+def create_movie(url: str, max_page_height: int, width: int = 1280, height: int = 720):
     """
     Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
     1. create hash of URL, scroll_px, width, height. max_height.
@@ -48,14 +53,14 @@ def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: i
     :param url: URL to take a screenshot
     :param width: Browser width
     :param height: Browser height
-    :param limit_height: Max scroll height
-    :param scroll_each:
+    :param max_page_height: Max scroll height
     :return: Download URL
     """
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    movie_config = BrowserConfig(url, width, height, limit_height, scroll_each)
+    scroll_each = int(height // 3)
+    movie_config = BrowserConfig(url, width, height, max_page_height, scroll_each)
     if os.path.exists(movie_config.movie_path):
         url = bucket_manager.get_public_file_url(movie_config.movie_path)
         return RedirectResponse(url=url, status_code=303)
@@ -73,18 +78,18 @@ def create_movie(url: str, width: int = 1280, height: int = 720, limit_height: i
 
 @app.post("/api/create_image_movie/")
 async def create_image_movie(files: List[UploadFile], width: int = 1280, height: int = 720,
-                             limit_height: int = 50000, scroll_each: int = 200):
+                             max_page_height: int = 50000, scroll_each: int = 200):
     """
     Merge images and create a movie.
     :param files: List of image files
     :param width: Browser width
     :param height: Browser height
-    :param limit_height: Max scroll height
+    :param max_page_height: Max scroll height
     :param scroll_each:
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
-    movie_config = BrowserConfig("", width, height, limit_height, scroll_each)
+    movie_config = BrowserConfig("", width, height, max_page_height, scroll_each)
     movie_maker = MovieMaker(movie_config)
     image_paths = []
     image_dir = Path('image')
