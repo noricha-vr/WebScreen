@@ -6,50 +6,44 @@ import time
 from pathlib import Path
 from typing import List, Union
 
-from fastapi import FastAPI, HTTPException, File, UploadFile, Header
-from starlette.responses import RedirectResponse, FileResponse
+from fastapi import FastAPI, HTTPException, File, UploadFile, Header, Request
+from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from gcs import BucketManager
 from movie_maker import MovieMaker, BrowserConfig
 
 logger = logging.getLogger('uvicorn')
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
-STATIC_DIR = Path(os.path.join(os.path.dirname(__file__), "static"))
+
+ROOT_DIR = Path(os.path.dirname(__file__))
+STATIC_DIR = ROOT_DIR / "static"
+templates = Jinja2Templates(directory=ROOT_DIR / "templates")
 
 app = FastAPI()
 
 
-@app.get("/")
-async def read_index() -> FileResponse:
-    return FileResponse((STATIC_DIR / 'index.html'))
-
-
-@app.get("/result/{file_hash}")
-async def read_index(file_hash: str) -> FileResponse:
-    """
-    This page shows result of movie.
-    :param file_hash:
-    :return: FileResponse
-    """
+@app.get("/", response_class=HTMLResponse)
+async def read_index(request: Request, file_hash: str = None) -> templates.TemplateResponse:
     # Validate file_hash by regex
-    result = re.match(r'^[0-9a-f]{64}$', file_hash)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Not Found. Invalid file hash.")
-    return FileResponse((STATIC_DIR / 'index.html'))
+    if not file_hash or re.match(r'^[0-9a-f]{64}$', file_hash) is None:
+        return FileResponse((STATIC_DIR / 'index.html'))
+    # Check file exists in GCS
+    return templates.TemplateResponse('index.html', {'request': request, 'file_hash': file_hash})
 
 
 @app.get("/image/")
-async def read_index() -> FileResponse:
-    return FileResponse((STATIC_DIR / 'image.html'))
+async def read_index(request: Request, file_hash: str = None) -> templates.TemplateResponse:
+    return templates.TemplateResponse('image.html', {'request': request, 'file_hash': file_hash})
 
 
 @app.get("/desktop/")
-async def read_index() -> FileResponse:
-    return FileResponse((STATIC_DIR / 'desktop.html'))
+async def read_index(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('desktop.html', {'request': request})
 
 
 @app.get("/github")
-async def read_index() -> FileResponse:
-    return FileResponse((STATIC_DIR / 'github.html'))
+async def read_index(request: Request, file_hash: str = None) -> templates.TemplateResponse:
+    return templates.TemplateResponse('github.html', {'request': request, 'file_hash': file_hash})
 
 
 @app.get("/favicon.ico")
