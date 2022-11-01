@@ -19,12 +19,12 @@ def test_index():
     assert "Web Screen" in response.text
 
 
-@pytest.mark.parametrize(('url',), [
-    ('https://www.google.com/',),
-    ('https://www.youtube.com/',),
+@pytest.mark.parametrize(('url', 'max_page_height'), [
+    ('https://www.google.com/', 200),
+    ('https://www.youtube.com/', 1000),
 ])
-def test_create_movie(url):
-    response = client.get(f"/api/create_movie/?url={url}")
+def test_create_movie(url, max_page_height):
+    response = client.get(f"/api/create_movie/?url={url}&max_page_height={max_page_height}")
     # Why redirect response is in history?
     response = response.history[0]
     assert response.status_code == 303
