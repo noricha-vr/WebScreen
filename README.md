@@ -1,4 +1,4 @@
-# screen_capture
+# web_screen
 
 This project is for displaying web pages, images and desktop on the VRChat video player.
 Also, in the future I would like to display input images, pdfs and the user's desktop.
@@ -6,9 +6,9 @@ Also, in the future I would like to display input images, pdfs and the user's de
 ## Setup
 
 ```bash
-git clone git+https://github.com/noricha-vr/screen_capture.git
-cd screen_capture
-docker build -t screen_capture .
+git clone git+https://github.com/noricha-vr/screen_capture.git web_screen
+cd web_screen
+docker build -t web_screen .
 docker network create my_network
 docker-compose up
 ```
@@ -33,7 +33,7 @@ or `ctrl + c`
 
 1. Select `docker-compose` interpreter
 2. Select `docker-compose.yaml` file
-3. Select `screen_capture` service
+3. Select `web_screen` service
 
 ### VSCode settings
 
@@ -47,8 +47,8 @@ or `ctrl + c`
 ## Useful docker commands
 
 ```bash
-docker build -t screen_capture .
+docker build -t web_screen .
 docker-compose up
-docker exec -it screen_capture bash
+docker exec -it web_screen bash
 docker-compose down
 ```
