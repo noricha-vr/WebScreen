@@ -1,8 +1,8 @@
 version: '3'
 services:
-  screen_capture:
-    container_name: 'screen_capture'
-    image: 'screen_capture'
+  web_screen:
+    container_name: 'web_screen'
+    image: 'web_screen'
     volumes:
       - .:/app
       - ./drivers:/root/.wdm/drivers/

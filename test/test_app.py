@@ -30,10 +30,8 @@ def test_index():
 ])
 def test_create_movie(url, max_page_height):
     response = client.get(f"/api/create_movie/?url={url}&max_page_height={max_page_height}")
-    # Why redirect response is in history?
-    response = response.history[0]
-    assert response.status_code == 303
-    assert "https://storage.googleapis.com/" in response.headers.get('location')
+    assert response.status_code == 200
+    assert response.json().get('url').startswith("https://storage.googleapis.com/")
 
 
 @pytest.mark.parametrize(('url', 'images'), [
