@@ -12,6 +12,7 @@ from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from movie_maker.browser_config import ImageConfig
 
 from gcs import BucketManager
 from movie_maker import MovieMaker, BrowserConfig
@@ -86,18 +87,16 @@ def create_movie(url: str, max_page_height: int, width: int = 1280, height: int 
     bucket_manager = BucketManager(BUCKET_NAME)
     scroll_each = int(height // 3)
     browser_config = BrowserConfig(url, width, height, max_page_height, scroll_each)
-    movie_path = f"movie/{browser_config.hash}.mp4"
-    if os.path.exists(movie_path):
-        url = bucket_manager.get_public_file_url(movie_path)
+    movie_path = Path(f"movie/{browser_config.hash}.mp4")
+    if movie_path.exists():
+        url = bucket_manager.get_public_file_url(str(movie_path))
         return {'url': url}
-
     try:
         image_dir = MovieMaker.take_screenshots(browser_config)
     except Exception as e:
         logger.error(f'Failed to make movie.  url: {url} {e}')
         raise HTTPException(status_code=500, detail="Failed to make movie.")
-    movie_path = MovieMaker.image_to_movie(image_dir, browser_config.hash)
-    if BUCKET_NAME is None: return {'url': f'file://{movie_path.absolute()}'}
+    MovieMaker.image_to_movie(image_dir, movie_path)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
     return {'url': url}
@@ -116,8 +115,8 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
-    movie_config = BrowserConfig("", width, height, max_page_height, scroll_each)
-    movie_maker = MovieMaker(movie_config)
+    image_config = ImageConfig()
+    movie_path = Path(f"movie/{image_config.hash}.mp4")
     image_paths = []
 
     image_dir = Path('image') / datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')
@@ -129,9 +128,8 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
         image_paths.append(image_path)
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
-    movie_maker.image_to_movie(image_paths, movie_config.movie_path)
-    if BUCKET_NAME is None: return FileResponse(movie_config.movie_path)
-    url = bucket_manager.to_public_url(movie_config.movie_path)
+    MovieMaker.image_to_movie(image_dir, movie_path)
+    url = bucket_manager.to_public_url(movie_path)
     return RedirectResponse(url=url, status_code=303)
 
 
