@@ -1,102 +1,39 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <!-- Required meta tags -->
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
-          integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-
-    <title>Web Screen</title>
-</head>
-<body>
-<main>
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="/">Web Screen</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item">
-                            <a class="nav-link active" aria-current="page" href="/">URL</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/image/">Image</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/desktop/">Desktop</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/github/">GitHub</a>
-                        </li>
-                    </ul>
-
+{% extends 'base.html' %}
+{% block title %}Web Screen|VRChatでGithubリポジトリのソースコードを表示{% endblock %}
+{% block content %}
+<div class="container">
+    <section class="section mt-5">
+        <div class="row justify-content-md-center">
+            <div class="col mt-3">
+                <h1 class="h1 mb-5">Web Screen</h1>
+                <h2 class="h3 mb-3">動画化したいGitHubプロジェクトのURLを貼り付けてください</h2>
+            </div>
+        </div>
+        <form class="row g-3 justify-content-md-center" method="get" action="/api/create_github_movie/">
+            <div class="col-12">
+                <label for="url" class="visually-hidden">URL</label>
+                <input type="url" class="form-control border border-dark mb-3" id="url" name="url"
+                       placeholder="https://github.com/noricha-vr/source_converter">
+                <label for="targets" class="">表示したいファイル名やファイルタイプをカンマ区切りで入力してください</label>
+                <input type="text" class="form-control border border-dark" id="targets" name="targets"
+                       value="README.md,*.py">
+                <div class="form-group mt-3">
+                    <label for="width">ブラウザサイズ（横×縦）</label>
+                    <input type="number" class="form-inline border" id="width" name="width"
+                           value="1280"> x
+                    <label for="width" class="visually-hidden">ブラウザサイズ（横×縦）</label>
+                    <input type="number" class="form-inline border" id="height" name="height"
+                           value="720">
+                    <label for="catch">キャッシュ</label>
+                    <input type="checkbox" class="form-inline border" id="catch" name="catch" checked>
                 </div>
             </div>
-        </nav>
-    </header>
+        </form>
+        {% include 'result.html' %}
+    </section>
+</div>
+{% endblock %}
 
-    <!--    {% block content %}-->
-
-    <div class="container">
-        <section class="section mt-5">
-            <div class="row justify-content-md-center">
-                <div class="col mt-3">
-                    <h1 class="h1 mb-5">Web Screen</h1>
-                    <h2 class="h3 mb-3">動画化したいGitHubプロジェクトのURLを貼り付けてください</h2>
-                </div>
-            </div>
-            <form class="row g-3 justify-content-md-center" method="get" action="/api/create_github_movie/">
-                <div class="col-12">
-                    <label for="url" class="visually-hidden">URL</label>
-                    <input type="url" class="form-control border border-dark mb-3" id="url" name="url"
-                           placeholder="https://github.com/noricha-vr/source_converter">
-                    <label for="targets" class="">表示したいファイル名やファイルタイプをカンマ区切りで入力してください</label>
-                    <input type="text" class="form-control border border-dark" id="targets" name="targets"
-                           value="README.md,*.py">
-                    <div class="form-group mt-3">
-                        <label for="width">ブラウザサイズ（横×縦）</label>
-                        <input type="number" class="form-inline border" id="width" name="width"
-                               value="1280"> x
-                        <label for="width" class="visually-hidden">ブラウザサイズ（横×縦）</label>
-                        <input type="number" class="form-inline border" id="hegith" name="height"
-                               value="720">
-                        <label for="scroll">スクロール(px)</label>
-                        <input type="number" class="form-inline border" id="scroll" name="scroll_each"
-                               value="200">
-                    </div>
-                </div>
-                <div class="col-12">
-                    <button type="submit" class="btn btn-primary">動画を作成</button>
-                </div>
-            </form>
-        </section>
-    </div>
-    <!--    {% endblock %}-->
-
-    <footer>
-
-    </footer>
-</main>
-
-<!-- Optional JavaScript; choose one of the two! -->
-
-<!-- Option 1: Bootstrap Bundle with Popper -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-        crossorigin="anonymous"></script>
-
-<!-- Option 2: Separate Popper and Bootstrap JS -->
-<!--
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js" integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF" crossorigin="anonymous"></script>
--->
-</body>
-</html>
+{% block script %}
+<script src="/static/js/github.js"></script>
+{% endblock %}
