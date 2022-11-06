@@ -116,7 +116,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
     """
     bucket_manager = BucketManager(BUCKET_NAME)
     image_dir = Path('image') / datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')
-    image_dir.mkdir(exist_ok=True)
+    image_dir.mkdir(exist_ok=True, parents=True)
     image_config = ImageConfig(image_dir)
     movie_path = Path(f"movie/{image_config.hash}.mp4")
     image_paths = []
