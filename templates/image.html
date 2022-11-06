@@ -9,8 +9,7 @@
                 <h2 class="h3 mb-3">画像を選択してください。</h2>
             </div>
         </div>
-        <form class="row g-3 justify-content-md-center" method="post" action="/api/create_image_movie/"
-              enctype="multipart/form-data">
+        <form class="row g-3 justify-content-md-center" method="post" id="image_form" enctype="multipart/form-data">
             <div class="col-12">
                 <label for="files" class="visually-hidden">画像</label>
                 <input type="file" multiple class="form-control border border-dark" id="files" name="files"
@@ -21,15 +20,15 @@
                     <label for="width">ブラウザサイズ（横×縦）</label>
                     <input type="number" class="form-inline border" id="width" name="width"
                            value="1280"> x
-                    <input type="number" class="form-inline border" id="hegith" name="height"
+                    <input type="number" class="form-inline border" id="height" name="height"
                            value="720">
-                    <label for="scroll">スクロール(px)</label>
-                    <input type="number" class="form-inline border" id="scroll" name="scroll_each"
-                           value="200">
                 </div>
             </div>
         </form>
         {% include 'result.html' %}
     </section>
 </div>
+{% endblock %}
+{% block script %}
+<script src="/static/js/image.js"></script>
 {% endblock %}

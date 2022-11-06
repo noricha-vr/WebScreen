@@ -108,13 +108,17 @@
             </div>
         </div>
     </div>
+    <script src="/static/js/baseFunctions.js"></script>
+    {% block script %}{% endblock %}
     <script>
-        document.getElementById('max_page_height').addEventListener('input', function () {
-            document.getElementById('max_page_height_text').innerText = document.getElementById('max_page_height').value;
-        });
-        // get url parameter of hash. It in to the movie url.
-        const urlParams = new URLSearchParams(window.location.hash);
+        window.onload = function () {
+            // when click submit button, create movie
+            submitButton.addEventListener('click', submit);
+            // when click copy button, copy movie_url to clipboard
+            copyButton.addEventListener('click', () => {
+                copyToClipboard();
+            })
+        }
     </script>
-    <script src="/static/js/request.js"></script>
 </footer>
 </html>

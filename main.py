@@ -103,8 +103,7 @@ def create_movie(url: str, max_page_height: int, width: int = 1280, height: int 
 
 
 @app.post("/api/create_image_movie/")
-async def create_image_movie(files: List[UploadFile], width: int = 1280, height: int = 720,
-                             max_page_height: int = 50000, scroll_each: int = 200):
+async def create_image_movie(files: List[UploadFile], width: int = 1280, height: int = 720) -> dict:
     """
     Merge images and create a movie.
     :param files: List of image files
@@ -119,18 +118,17 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
     image_dir.mkdir(exist_ok=True, parents=True)
     image_config = ImageConfig(image_dir)
     movie_path = Path(f"movie/{image_config.hash}.mp4")
-    image_paths = []
 
     print(f"image_dir: {image_dir.absolute()}")
     for f in files:
         image_path = str(image_dir.joinpath(f.filename).absolute())
         print(f"image_path: {image_path}")
-        image_paths.append(image_path)
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
-    MovieMaker.image_to_movie(image_dir, movie_path)
-    url = bucket_manager.to_public_url(movie_path)
-    return RedirectResponse(url=url, status_code=303)
+    output_image_dir = MovieMaker.format_images(image_config)
+    MovieMaker.image_to_movie(output_image_dir, movie_path)
+    url = bucket_manager.to_public_url(str(movie_path))
+    return {'url': url}
 
 
 @app.get("/api/desktop/{session_id}/")
