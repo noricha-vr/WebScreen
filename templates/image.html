@@ -1,101 +1,35 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <!-- Required meta tags -->
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
-          integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-
-    <title>Web Screen</title>
-</head>
-<body>
-<main>
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="/">Web Screen</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item">
-                            <a class="nav-link active" aria-current="page" href="/">URL</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/image/">Image</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/desktop/">Desktop</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/github/">GitHub</a>
-                        </li>
-
-                    </ul>
-
+{% extends 'base.html' %}
+{% block title %}Web Screen|VRChatでローカルの複数枚の画像を表示{% endblock %}
+{% block content %}
+<div class="container">
+    <section class="section mt-5">
+        <div class="row justify-content-md-center">
+            <div class="col mt-3">
+                <h1 class="h1 mb-5">Web Screen</h1>
+                <h2 class="h3 mb-3">画像を選択してください。</h2>
+            </div>
+        </div>
+        <form class="row g-3 justify-content-md-center" method="post" action="/api/create_image_movie/"
+              enctype="multipart/form-data">
+            <div class="col-12">
+                <label for="files" class="visually-hidden">画像</label>
+                <input type="file" multiple class="form-control border border-dark" id="files" name="files"
+                       placeholder="https://">
+                <div class="mt-1 text-muted">※ 複数枚選択可能。ドラッグもOK！</div>
+                <div class="mt-1 text-muted">※ 順番を設定するには01、02、03...のようにファイル名を設定してください。</div>
+                <div class="form-group mt-3">
+                    <label for="width">ブラウザサイズ（横×縦）</label>
+                    <input type="number" class="form-inline border" id="width" name="width"
+                           value="1280"> x
+                    <input type="number" class="form-inline border" id="hegith" name="height"
+                           value="720">
+                    <label for="scroll">スクロール(px)</label>
+                    <input type="number" class="form-inline border" id="scroll" name="scroll_each"
+                           value="200">
                 </div>
             </div>
-        </nav>
-    </header>
-
-    <!--    {% block content %}-->
-
-    <div class="container">
-        <section class="section mt-5">
-            <div class="row justify-content-md-center">
-                <div class="col mt-3">
-                    <h1 class="h1 mb-5">Web Screen</h1>
-                    <h2 class="h3 mb-3">画像を選択してください。</h2>
-                </div>
-            </div>
-            <form class="row g-3 justify-content-md-center" method="post" action="/api/create_image_movie/"
-                  enctype="multipart/form-data">
-                <div class="col-12">
-                    <label for="files" class="visually-hidden">画像</label>
-                    <input type="file" multiple class="form-control border border-dark" id="files" name="files"
-                           placeholder="https://">
-                    <div class="mt-1 text-muted">※ 複数枚選択可能。ドラッグもOK！</div>
-                    <div class="form-group mt-3">
-                        <label for="width">ブラウザサイズ（横×縦）</label>
-                        <input type="number" class="form-inline border" id="width" name="width"
-                               value="1280"> x
-                        <input type="number" class="form-inline border" id="hegith" name="height"
-                               value="720">
-                        <label for="scroll">スクロール(px)</label>
-                        <input type="number" class="form-inline border" id="scroll" name="scroll_each"
-                               value="200">
-                    </div>
-                </div>
-                <div class="col-12">
-                    <button type="submit" class="btn btn-primary">動画を作成</button>
-                </div>
-            </form>
-        </section>
-    </div>
-    <!--    {% endblock %}-->
-
-    <footer>
-
-    </footer>
-</main>
-
-<!-- Optional JavaScript; choose one of the two! -->
-
-<!-- Option 1: Bootstrap Bundle with Popper -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-        crossorigin="anonymous"></script>
-
-<!-- Option 2: Separate Popper and Bootstrap JS -->
-<!--
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js" integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF" crossorigin="anonymous"></script>
--->
-</body>
-</html>
+        </form>
+        {% include 'result.html' %}
+    </section>
+</div>
+{% endblock %}
