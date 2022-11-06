@@ -166,8 +166,7 @@ def post_desktop(file: UploadFile = File(...), x_token: Union[List[str], None] =
 
 @app.get("/api/create_github_movie/")
 def create_github_movie(url: str, targets: str, width: int = 1280, height: int = 720, limit_height: int = 50000,
-                        scroll_each: int = 200,
-                        catch: bool = True):
+                        scroll_each: int = 200, catch: bool = True) -> dict:
     """
     Download github repository, convert file into HTML, and take a screenshot.
     :param url: URL to take a screenshot
@@ -184,13 +183,13 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
     movie_config = BrowserConfig(url, width, height, limit_height, scroll_each, targets)
-    if catch and os.path.exists(movie_config.movie_path):
-        url = bucket_manager.get_public_file_url(movie_config.movie_path)
+    movie_path = Path(f"movie/{movie_config.hash}.mp4")
+    if catch and movie_path.exists():
+        url = bucket_manager.get_public_file_url(str(movie_path))
         return RedirectResponse(url=url, status_code=303)
     # Download the repository.
-    movie_maker = MovieMaker(movie_config)
-    movie_maker.create_github_movie()
-    if BUCKET_NAME is None: return FileResponse(movie_config.movie_path)
+    image_dir = MovieMaker.take_screenshots_github_files(movie_config)
+    MovieMaker.image_to_movie(image_dir, movie_path)
     # Upload to GCS
-    url = BucketManager(BUCKET_NAME).to_public_url(movie_config.movie_path)
-    return RedirectResponse(url=url, status_code=303)
+    url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
+    return {'url': url}
