@@ -1,9 +1,6 @@
 'use static';
 
 async function fetchMovieUrl() {
-    //curl -X 'GET' \
-    //   'http://0.0.0.0:8080/api/create_github_movie/?url=https%3A%2F%2Fgithub.com%2Fnoricha-vr%2Fscreen_capture&targets=%2A.py&width=1280&height=720&limit_height=50000&scroll_each=200&catch=true' \
-    //   -H 'accept: application/json'
     let settings = {
         url: document.getElementById('url').value,
         targets: document.getElementById('targets').value,

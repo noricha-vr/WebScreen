@@ -1,9 +1,4 @@
 'use static';
-//curl -X 'POST' \
-//   'http://0.0.0.0:8080/api/create_image_movie/?width=1280&height=720' \
-//   -H 'accept: application/json' \
-//   -H 'Content-Type: multipart/form-data' \
-//   -F 'files=@download.png;type=image/png'
 
 async function fetchMovieUrl() {
     let settings = {
