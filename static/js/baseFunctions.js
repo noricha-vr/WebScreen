@@ -1,13 +1,10 @@
-const CREATE_MOVIE_URL = '/api/create_movie/';
-
+'use static';
 const submitButton = document.getElementById('submit');
 const loadingImage = document.getElementById('loading');
 const movieUrlElement = document.getElementById('movie_url');
 const copyButton = document.getElementById('copy');
 const resultArea = document.getElementById('result');
 
-// when click submit button, create movie
-submitButton.addEventListener('click', submit);
 
 async function fetchMovieUrl() {
     let settings = {
@@ -16,7 +13,7 @@ async function fetchMovieUrl() {
         width: document.getElementById('width').value,
         height: document.getElementById('height').value,
     }
-    let request_url = `${CREATE_MOVIE_URL}?url=${settings.url}&max_page_height=${settings.max_page_height}` +
+    let request_url = `/api/create_movie/?url=${settings.url}&max_page_height=${settings.max_page_height}` +
         `&width=${settings.width}&height=${settings.height}`;
     console.log(`Requesting ${request_url}`);
     return await fetch(request_url, {
@@ -60,8 +57,3 @@ function copyToClipboard() {
         copyButton.innerHTML = 'Copied!';
     });
 }
-
-// when click copy button, copy movie_url to clipboard
-copyButton.addEventListener('click', () => {
-    copyToClipboard();
-})
