@@ -55,7 +55,7 @@ async def read_index(request: Request) -> templates.TemplateResponse:
 
 @app.get("/desktop/")
 async def read_index(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('desktop.html', {'request': request})
+    return templates.TemplateResponse('desktop_post.html', {'request': request})
 
 
 @app.get("/github")
@@ -186,7 +186,7 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     movie_path = Path(f"movie/{movie_config.hash}.mp4")
     if catch and movie_path.exists():
         url = bucket_manager.get_public_file_url(str(movie_path))
-        return RedirectResponse(url=url, status_code=303)
+        return {'url': url}
     # Download the repository.
     image_dir = MovieMaker.take_screenshots_github_files(movie_config)
     MovieMaker.image_to_movie(image_dir, movie_path)
