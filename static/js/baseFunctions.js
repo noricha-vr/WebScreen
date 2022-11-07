@@ -57,3 +57,8 @@ function copyToClipboard() {
         copyButton.innerHTML = 'Copied!';
     });
 }
+
+function addEventListeners() {
+    submitButton.addEventListener('click', submit);
+    copyButton.addEventListener('click', copyToClipboard);
+}
