@@ -55,7 +55,7 @@ async def read_index(request: Request) -> templates.TemplateResponse:
 
 @app.get("/desktop/")
 async def read_index(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('desktop_post.html', {'request': request})
+    return templates.TemplateResponse('desktop_share.html', {'request': request})
 
 
 @app.get("/github")
@@ -193,3 +193,15 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
     return {'url': url}
+
+
+@app.post('/api/upload/video/')
+def upload_video(file: UploadFile = File(...)):
+    """
+    Upload video file.
+    :param file: video file
+    :return: message
+    """
+    file_path = f"movie/{file.filename}"
+    with open(file_path, "wb") as f: f.write(file.file.read())
+    return {"message": f"success. URL: /api/desktop/{file.filename}/"}
