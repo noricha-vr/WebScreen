@@ -8,14 +8,18 @@
         <div class="row justify-content-md-center">
             <div class="col mt-3">
                 <h1 class="h1 mb-5">Web Screen</h1>
-                <h2 class="h3 mb-3">共有したいウィンドウを選択してください。</h2>
+                <h2 class="h3 mb-3">共有したい画面を選んでください</h2>
+                <div class="mt-3 mb-3">
+                    共有を開始したらこのURLをVRChatの動画プレイヤーに貼り付けてください<br/>
+                    <a id="player_url"></a><br/>
+                    ※ ブラウザでは動画が再生されません。VRChatの動画プレイヤーで再生してください。
+                </div>
             </div>
-        </div>
-        <p>This example shows you the contents of the selected part of your display.
-            Click the Start Capture button to begin.</p>
 
+        </div>
         <p>
-            <button id="start">Start Capture</button>&nbsp;<button id="stop">Stop Capture</button>
+            <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
+            <button class="btn btn-danger" id="stop">停止</button>
         </p>
         <h2>Video</h2>
         <video id="video" width="400px" height="300px" autoplay></video>
@@ -24,16 +28,14 @@
         <h2>Image</h2>
         <img id="photo" alt="The screen capture will appear in this box.">
         <br>
-        <div class="mt-3">
-            2.このURLをVRChatの動画プレイヤーに貼り付ける<br/>
-            <a id="player_url"></a>
-        </div>
 
-        <strong>Log:</strong>
+
+        <!--        <strong>Log:</strong>-->
         <br>
         <pre id="log"></pre>
 
         <script src="/static/js/desktopCapture.js"></script>
+        <script src="/static/js/baseFunctions.js"></script>
         <!--        {% include 'result.html' %}-->
     </section>
 </div>
