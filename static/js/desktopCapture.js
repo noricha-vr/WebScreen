@@ -36,26 +36,13 @@ async function startCapture() {
     interval = setInterval(async () => {
         let base64 = await captureImage(videoElem.srcObject.getVideoTracks()[0]);
         document.getElementById('photo').src = base64;
-        await postImage(url, base64);
-        console.log(`postImage`);
-    }, 1000);
-    setTimeout(() => {
-        stopCapture();
-    }, 2000);
-}
-
-async function testStartCapture() {
-    logElem.innerHTML = "";
-    let url = `${location.origin}/api/receive-image/`;
-    try {
-        videoElem.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
-    } catch (err) {
-        console.error("Error: " + err);
-    }
-    console.log(`count of tracks: ${videoElem.srcObject.getTracks().length}`);
-    let base64 = await captureImage(videoElem.srcObject.getVideoTracks()[0]);
-    document.getElementById('photo').src = base64;
-    await postImage(url, base64);
+        let res = await postImage(url, base64);
+        if (res.ok) {
+            console.log(`postImage success`);
+        } else {
+            console.log(`postImage fail`);
+        }
+    }, 5000);
 }
 
 function stopCapture(evt) {
@@ -94,14 +81,13 @@ async function postImage(url, image) {
         'Content-Type': 'application/image',
         'session_id': '1234567890',
     }
-    console.log(`image: ${image.length}`);
+    console.log(`Post image size: ${image.length / 1024} KB`);
     let res = await fetch(url, {
         method: 'POST',
         headers: header,
         body: image,
-
     })
-    console.log(`Response: ${res.status} ${res.body}`);
+    return res;
 }
 
 

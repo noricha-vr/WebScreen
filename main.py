@@ -20,6 +20,8 @@ from fastapi.responses import StreamingResponse
 from gcs import BucketManager
 from movie_maker import MovieMaker, BrowserConfig
 
+from util import image2mp4
+
 logger = logging.getLogger('uvicorn')
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
@@ -147,61 +149,26 @@ def send_desktop_movie(session_id: str):
     return FileResponse(movie_path)
 
 
-import glob
-import cv2
-
-fps = 1.0  # 1フレームあたりのスライド数。1.0で1スライド/1秒、2.0で2スライド/1秒
-
-
-def image2mp4(image_dir: Path, movie_path: Path):
-    image_files = sorted(glob.glob(f"{image_dir}/*.png"))
-
-    height, width, _ = cv2.imread(image_files[0]).shape[:3]
-    video_writer = cv2.VideoWriter(
-        str(movie_path),
-        # cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),
-        cv2.VideoWriter_fourcc("H", "2", "6", "4"),
-        fps, (width, height))
-
-    for image_file in image_files:
-        img = cv2.imread(image_file)
-        video_writer.write(img)
-    video_writer.release()
-
-
 @app.post('/api/receive-image/')
 async def receive_image(request: Request, body: bytes = Body(...)):
     """
     Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
     body is posted by canvas.toDataURL().
     :param request:
+    :param body: base64 image.
     :return: message
     """
-    token = 1234567890
-    # token = request.headers.get('session_id')
-    # if token is None:
-    #     raise HTTPException(status_code=400, detail="session_id is empty.")
+    token = request.headers.get('session_id')
+    if token is None:
+        raise HTTPException(status_code=400, detail="session_id is empty.")
     movie_path = Path(f"movie/{token}.mp4")
     temp_movie_path = Path(f"movie/{token}_temp.mp4")
     image_data = str(body).split(',')[1]
     image_path = Path(f"image/{token}/desktop.png")
     image_path.parent.mkdir(exist_ok=True, parents=True)
     with open(image_path, "wb") as f: f.write(base64.b64decode(bytes(image_data, 'utf-8')))
-    assert image_path.exists() and image_path.stat().st_size > 0
-    image2mp4(image_path.parent, temp_movie_path)
-    # MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
-    #
-    # subprocess.call(['ffmpeg',
-    #                  '-framerate', '1',
-    #                  # Get image_dir/*.file_type
-    #                  '-pattern_type', 'glob', '-i', f'{image_path.parent}/*.png',
-    #                  '-c:v', 'h264',  # codec
-    #                  '-pix_fmt', 'yuv420p',  # pixel format (color space)
-    #                  '-preset', 'veryslow',  # encoding speed
-    #                  '-tune', 'stillimage',  # tune for still image
-    #                  f'{movie_path}'])
-
-    os.rename(temp_movie_path, movie_path)
+    image2mp4(str(image_path.parent), str(temp_movie_path))
+    temp_movie_path.rename(movie_path)
     return {"message": f"success. URL: /api/receive-image/{token}/"}
 
 
@@ -234,29 +201,3 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
     return {'url': url}
-
-
-@app.get("/api/stream/{movie_dir}/")
-def stream(movie_dir) -> StreamingResponse:
-    """
-    Stream video file. Select movie from movie directory.
-    Get each movie then return by StreamingResponse.
-    :param movie_dir: movie directory
-    :return: StreamingResponse
-    """
-    movie_path = Path(f"movie/{movie_dir}")
-    if not movie_path.exists():
-        raise HTTPException(status_code=404, detail="Movie file does not exist.")
-    movie_files = list(movie_path.glob('*.mp4'))
-    if len(movie_files) == 0:
-        raise HTTPException(status_code=404, detail="Movie file does not exist.")
-    movie_files.sort()
-
-    def gen():
-        while True:
-            for movie_file in movie_files:
-                logger.info(f'Streaming {movie_file}')
-                with open(movie_file, 'rb') as f:
-                    yield f.read()
-
-    return StreamingResponse(gen(), media_type='multipart/x-mixed-replace; boundary=frame')
