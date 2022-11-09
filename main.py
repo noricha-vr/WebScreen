@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import re
@@ -199,6 +200,7 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
 def upload_video(request: Request, body: bytes = Body(...)):
     """
     Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
+    body is posted by canvas.toDataURL().
     :param request:
     :return: message
     """
@@ -207,8 +209,11 @@ def upload_video(request: Request, body: bytes = Body(...)):
         raise HTTPException(status_code=400, detail="session_id is empty.")
     movie_path = f"movie/{token}.mp4"
     temp_movie_path = Path(f"movie/{token}_temp.mp4")
-    image_path = Path(f"image/{token}.jpg")
-    with open(image_path, "wb") as f: f.write(body)
+    image_data = str(body).split(',')[1]
+    image_path = Path(f"image/{token}/desktop.png")
+    image_path.parent.mkdir(exist_ok=True, parents=True)
+    with open(image_path, "wb") as f: f.write(base64.b64decode(bytes(image_data, 'utf-8')))
+    assert image_path.exists() and image_path.stat().st_size > 0
     MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
 
     return {"message": f"success. URL: /api/desktop/image/"}

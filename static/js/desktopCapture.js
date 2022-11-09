@@ -61,15 +61,7 @@ async function captureImage(track) {
     canvas.height = bitmap.height;
     canvas.getContext('2d').drawImage(bitmap, 0, 0);
     // Grab blob from canvas
-    canvas.toBlob(blob => {
-        // Do things with blob here
-        blob.name = `screenshot-${new Date().getTime()}`;
-        // copy to clipboard
-        let data = [new ClipboardItem({[blob.type]: blob})];
-        // navigator.clipboard.write(data);
-        console.log('output blob:', blob);
-        return blob;
-    });
+    return canvas.toDataURL('image/png', 0.5);
     // var canvas = document.createElement('canvas');
     // canvas.width = videoElem.videoWidth;
     // canvas.height = videoElem.videoHeight;
@@ -87,7 +79,7 @@ async function postImage(url, image) {
     let res = await fetch(url, {
         method: 'POST',
         headers: header,
-        body: {'image': image},
+        body: image,
 
     })
     console.log(`Response: ${res.status} ${res.body}`);
