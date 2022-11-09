@@ -79,7 +79,7 @@ async function captureImage(track) {
 async function postImage(url, image) {
     let header = {
         'Content-Type': 'application/image',
-        'session_id': '1234567890',
+        'session_id': localStorage.getItem("uuid"),
     }
     console.log(`Post image size: ${image.length / 1024} KB`);
     let res = await fetch(url, {
@@ -98,4 +98,26 @@ function dumpOptionsInfo() {
     console.info(JSON.stringify(videoTrack.getSettings(), null, 2));
     console.info("Track constraints:");
     console.info(JSON.stringify(videoTrack.getConstraints(), null, 2));
+}
+
+
+function uuidv4() {
+    return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
+}
+
+window.onload = function () {
+    let uuid = localStorage.getItem("uuid");
+    if (uuid === null) {
+        uuid = uuidv4();
+        localStorage.setItem("uuid", uuid);
+        console.log(`created uuid`);
+    }
+    console.log(`current uuid: ${uuid}`);
+    document.getElementsByName("uuid").forEach(e => e.innerText = uuid);
+    document.getElementsByName("origin").forEach(e => e.innerText = location.origin);
+    let url = `${location.origin}/desktop/${uuid}/`;
+    document.getElementById("player_url").innerText = url;
+    document.getElementById("player_url").href = url;
 }
