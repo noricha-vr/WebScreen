@@ -7,13 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Union
 
-from fastapi import FastAPI, HTTPException, File, UploadFile, Header, Request
+from fastapi import FastAPI, HTTPException, File, UploadFile, Header, Request, Body
 from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from movie_maker.browser_config import ImageConfig
-
+from fastapi.responses import StreamingResponse
 from gcs import BucketManager
 from movie_maker import MovieMaker, BrowserConfig
 
@@ -195,13 +195,58 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     return {'url': url}
 
 
-@app.post('/api/upload/video/')
-def upload_video(file: UploadFile = File(...)):
+@app.post('/api/desktop-image/')
+def upload_video(request: Request, body: bytes = Body(...)):
+    """
+    Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
+    :param request:
+    :return: message
+    """
+    token = request.headers.get('session_id')
+    if token is None:
+        raise HTTPException(status_code=400, detail="session_id is empty.")
+    movie_path = f"movie/{token}.mp4"
+    temp_movie_path = Path(f"movie/{token}_temp.mp4")
+    image_path = Path(f"image/{token}.jpg")
+    with open(image_path, "wb") as f: f.write(body)
+    MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
+
+    return {"message": f"success. URL: /api/desktop/image/"}
+
+
+@app.post('/api/stream/{file_name}/')
+def receive_video(file_name: str, file: UploadFile = File(...)):
     """
     Upload video file.
     :param file: video file
     :return: message
     """
-    file_path = f"movie/{file.filename}"
+    file_path = f"image/{file_name}.jpg"
     with open(file_path, "wb") as f: f.write(file.file.read())
-    return {"message": f"success. URL: /api/desktop/{file.filename}/"}
+    return {"message": f"success. URL: /api/desktop/{file_name}/"}
+
+
+@app.get("/api/stream/{movie_dir}/")
+def stream(movie_dir) -> StreamingResponse:
+    """
+    Stream video file. Select movie from movie directory.
+    Get each movie then return by StreamingResponse.
+    :param movie_dir: movie directory
+    :return: StreamingResponse
+    """
+    movie_path = Path(f"movie/{movie_dir}")
+    if not movie_path.exists():
+        raise HTTPException(status_code=404, detail="Movie file does not exist.")
+    movie_files = list(movie_path.glob('*.mp4'))
+    if len(movie_files) == 0:
+        raise HTTPException(status_code=404, detail="Movie file does not exist.")
+    movie_files.sort()
+
+    def gen():
+        while True:
+            for movie_file in movie_files:
+                logger.info(f'Streaming {movie_file}')
+                with open(movie_file, 'rb') as f:
+                    yield f.read()
+
+    return StreamingResponse(gen(), media_type='multipart/x-mixed-replace; boundary=frame')

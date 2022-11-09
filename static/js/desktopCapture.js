@@ -5,7 +5,7 @@ const stopElem = document.getElementById("stop");
 
 // Options for getDisplayMedia()
 
-var displayMediaOptions = {
+let displayMediaOptions = {
     video: {
         cursor: "always"
     },
@@ -23,11 +23,17 @@ stopElem.addEventListener("click", function (evt) {
 
 async function startCapture() {
     logElem.innerHTML = "";
-
+    let url = `${location.origin}/api/desktop-image/`;
     try {
         videoElem.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
-        // dumpOptionsInfo();
-        sendVideo();
+        let base64 = await captureImage(videoElem.srcObject.getVideoTracks()[0]);
+        console.log(`base64: ${base64}`);
+        document.getElementById('photo').src = base64;
+        if (base64.length > 100) {
+            await postImage(url, base64);
+        } else {
+            console.log(`base64 is too short: ${base64.length}`);
+        }
     } catch (err) {
         console.error("Error: " + err);
     }
@@ -40,6 +46,55 @@ function stopCapture(evt) {
     videoElem.srcObject = null;
 }
 
+
+async function captureImage(track) {
+    // videoElem.srcObject into canvas. Then save as image.
+    const canvas = document.querySelector("canvas");
+    const ctx = canvas.getContext("2d");
+    // const track = videoElem.srcObject.getCanvasTrack(); // MediaStream.getVideoTracks()[0]
+    let capture = new ImageCapture(track);
+    capture.grabFrame().then(bitmap => {
+        // Stop sharing
+        track.stop();
+        // Draw the bitmap to canvas
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        // Grab blob from canvas
+        canvas.toBlob(blob => {
+            // Do things with blob here
+            blob.name = `screenshot-${new Date().getTime()}`;
+            // copy to clipboard
+            let data = [new ClipboardItem({[blob.type]: blob})];
+            // navigator.clipboard.write(data);
+            console.log('output blob:', blob);
+            return blob;
+        });
+    });
+    // var canvas = document.createElement('canvas');
+    // canvas.width = videoElem.videoWidth;
+    // canvas.height = videoElem.videoHeight;
+    // canvas.getContext('2d')
+    //     .drawImage(videoElem, 0, 0, canvas.width, canvas.height);
+    // return canvas.toDataURL('image/jpeg', 0.5);
+}
+
+async function postImage(url, image) {
+    let header = {
+        'Content-Type': 'application/image',
+        'session_id': '1234567890',
+    }
+    console.log(`image: ${image}`);
+    let res = await fetch(url, {
+        method: 'POST',
+        headers: header,
+        body: {'image': image},
+
+    })
+    console.log(`Response: ${res.status} ${res.body}`);
+}
+
+
 function dumpOptionsInfo() {
     const videoTrack = videoElem.srcObject.getVideoTracks()[0];
 
@@ -47,34 +102,4 @@ function dumpOptionsInfo() {
     console.info(JSON.stringify(videoTrack.getSettings(), null, 2));
     console.info("Track constraints:");
     console.info(JSON.stringify(videoTrack.getConstraints(), null, 2));
-}
-
-// send the video to the server by streaming fetch. post url is /api/upload/video/
-function sendVideo() {
-    console.log("sending video");
-    const _videoTrack = videoElem.srcObject.getVideoTracks()[0];
-    const mediaRecorder = new MediaRecorder(_videoTrack);
-    const stream = new ReadableStream({
-        start(controller) {
-            mediaRecorder.ondataavailable = (event) => {
-                controller.enqueue(event.data);
-            };
-            mediaRecorder.onstop = () => {
-                controller.close();
-            };
-        }
-    })
-    mediaRecorder.ondataavailable = function (e) {
-        fetch('/api/upload/video/', {
-            method: 'POST',
-            body: stream,
-            duplex: "half",
-        }).then(function (response) {
-            console.log(response);
-        });
-    };
-    mediaRecorder.start();
-    setTimeout(() => {
-        mediaRecorder.stop();
-    }, 5000);
 }
