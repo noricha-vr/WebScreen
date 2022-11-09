@@ -133,7 +133,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
 
 
 @app.get("/desktop/{session_id}/")
-def get_desktop(session_id: str):
+def send_desktop_movie(session_id: str):
     """
     Get movie which file name is 'movie/{session_id}.mp4.
     :param session_id:
@@ -145,23 +145,27 @@ def get_desktop(session_id: str):
     return FileResponse(movie_path)
 
 
-@app.post("/api/desktop/")
-def post_desktop(file: UploadFile = File(...), x_token: Union[List[str], None] = Header(default=None)):
+@app.post('/api/receive-image/')
+def receive_image(request: Request, body: bytes = Body(...)):
     """
     Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
-    :param file: image file
+    body is posted by canvas.toDataURL().
+    :param request:
     :return: message
     """
-    if x_token is None:
+    token = request.headers.get('session_id')
+    if token is None:
         raise HTTPException(status_code=400, detail="session_id is empty.")
-    token = x_token[0]
     movie_path = f"movie/{token}.mp4"
-    temp_movie_path = f"movie/{token}_temp.mp4"
-    image_path = f"image/{token}.jpg"
-    with open(image_path, "wb") as f: f.write(file.file.read())
-    MovieMaker.image_to_movie([image_path], temp_movie_path)
+    temp_movie_path = Path(f"movie/{token}_temp.mp4")
+    image_data = str(body).split(',')[1]
+    image_path = Path(f"image/{token}/desktop.png")
+    image_path.parent.mkdir(exist_ok=True, parents=True)
+    with open(image_path, "wb") as f: f.write(base64.b64decode(bytes(image_data, 'utf-8')))
+    assert image_path.exists() and image_path.stat().st_size > 0
+    MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
     os.rename(temp_movie_path, movie_path)
-    return {"message": f"success. URL: /api/desktop/{token}/"}
+    return {"message": f"success. URL: /api/receive-image/{token}/"}
 
 
 @app.get("/api/create_github_movie/")
@@ -193,41 +197,6 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
     return {'url': url}
-
-
-@app.post('/api/receive-image/')
-def receive_image(request: Request, body: bytes = Body(...)):
-    """
-    Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
-    body is posted by canvas.toDataURL().
-    :param request:
-    :return: message
-    """
-    token = request.headers.get('session_id')
-    if token is None:
-        raise HTTPException(status_code=400, detail="session_id is empty.")
-    movie_path = f"movie/{token}.mp4"
-    temp_movie_path = Path(f"movie/{token}_temp.mp4")
-    image_data = str(body).split(',')[1]
-    image_path = Path(f"image/{token}/desktop.png")
-    image_path.parent.mkdir(exist_ok=True, parents=True)
-    with open(image_path, "wb") as f: f.write(base64.b64decode(bytes(image_data, 'utf-8')))
-    assert image_path.exists() and image_path.stat().st_size > 0
-    MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
-    os.rename(temp_movie_path, movie_path)
-    return {"message": f"success. URL: /api/receive-image/{token}/"}
-
-
-@app.post('/api/stream/{file_name}/')
-def receive_video(file_name: str, file: UploadFile = File(...)):
-    """
-    Upload video file.
-    :param file: video file
-    :return: message
-    """
-    file_path = f"image/{file_name}.jpg"
-    with open(file_path, "wb") as f: f.write(file.file.read())
-    return {"message": f"success. URL: /api/desktop/{file_name}/"}
 
 
 @app.get("/api/stream/{movie_dir}/")
