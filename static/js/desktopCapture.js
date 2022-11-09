@@ -21,22 +21,27 @@ stopElem.addEventListener("click", function (evt) {
     stopCapture();
 }, false);
 
+let interval = null;
+
 async function startCapture() {
     logElem.innerHTML = "";
     let url = `${location.origin}/api/desktop-image/`;
     try {
         videoElem.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+    } catch (err) {
+        console.error("Error: " + err);
+    }
+    console.log(`count of tracks: ${videoElem.srcObject.getTracks().length}`);
+    interval = setInterval(async () => {
         let base64 = await captureImage(videoElem.srcObject.getVideoTracks()[0]);
-        console.log(`base64: ${base64}`);
+        console.log(`base64: ${base64.length}`);
         document.getElementById('photo').src = base64;
         if (base64.length > 100) {
             await postImage(url, base64);
         } else {
             console.log(`base64 is too short: ${base64.length}`);
         }
-    } catch (err) {
-        console.error("Error: " + err);
-    }
+    }, 5000);
 }
 
 function stopCapture(evt) {
@@ -44,19 +49,19 @@ function stopCapture(evt) {
 
     tracks.forEach(track => track.stop());
     videoElem.srcObject = null;
+    clearInterval(interval);
 }
 
 
 async function captureImage(track) {
     // videoElem.srcObject into canvas. Then save as image.
-    const canvas = document.querySelector("canvas");
-    const ctx = canvas.getContext("2d");
     // const track = videoElem.srcObject.getCanvasTrack(); // MediaStream.getVideoTracks()[0]
     let capture = new ImageCapture(track);
     let bitmap = await capture.grabFrame()
     // Stop sharing
-    track.stop();
+    // track.stop();
     // Draw the bitmap to canvas
+    let canvas = document.querySelector("canvas");
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
     canvas.getContext('2d').drawImage(bitmap, 0, 0);
