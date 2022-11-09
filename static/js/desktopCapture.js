@@ -25,7 +25,7 @@ let interval = null;
 
 async function startCapture() {
     logElem.innerHTML = "";
-    let url = `${location.origin}/api/desktop-image/`;
+    let url = `${location.origin}/api/receive-image/`;
     try {
         videoElem.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
     } catch (err) {
