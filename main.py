@@ -1,8 +1,10 @@
 import base64
+import glob
 import logging
 import os
 import re
 import shutil
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -145,19 +147,26 @@ def send_desktop_movie(session_id: str):
     return FileResponse(movie_path)
 
 
-# def image2mp4(image_dir, mp4_dir, filename):
-#     image_files = sorted(glob.glob(f"{image_dir}/*.png"))
-#
-#     height, width, _ = cv2.imread(image_files[0]).shape[:3]
-#     video_writer = cv2.VideoWriter(
-#         f"{mp4_dir}/{filename}.mp4",
-#         cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),
-#         fps, (width, height))
-#
-#     for image_file in image_files:
-#         img = cv2.imread(image_file)
-#         video_writer.write(img)
-#     video_writer.release()
+import glob
+import cv2
+
+fps = 1.0  # 1フレームあたりのスライド数。1.0で1スライド/1秒、2.0で2スライド/1秒
+
+
+def image2mp4(image_dir: Path, movie_path: Path):
+    image_files = sorted(glob.glob(f"{image_dir}/*.png"))
+
+    height, width, _ = cv2.imread(image_files[0]).shape[:3]
+    video_writer = cv2.VideoWriter(
+        str(movie_path),
+        # cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),
+        cv2.VideoWriter_fourcc("H", "2", "6", "4"),
+        fps, (width, height))
+
+    for image_file in image_files:
+        img = cv2.imread(image_file)
+        video_writer.write(img)
+    video_writer.release()
 
 
 @app.post('/api/receive-image/')
@@ -168,17 +177,30 @@ async def receive_image(request: Request, body: bytes = Body(...)):
     :param request:
     :return: message
     """
-    token = request.headers.get('session_id')
-    if token is None:
-        raise HTTPException(status_code=400, detail="session_id is empty.")
-    movie_path = f"movie/{token}.mp4"
+    token = 1234567890
+    # token = request.headers.get('session_id')
+    # if token is None:
+    #     raise HTTPException(status_code=400, detail="session_id is empty.")
+    movie_path = Path(f"movie/{token}.mp4")
     temp_movie_path = Path(f"movie/{token}_temp.mp4")
     image_data = str(body).split(',')[1]
     image_path = Path(f"image/{token}/desktop.png")
     image_path.parent.mkdir(exist_ok=True, parents=True)
     with open(image_path, "wb") as f: f.write(base64.b64decode(bytes(image_data, 'utf-8')))
     assert image_path.exists() and image_path.stat().st_size > 0
-    MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
+    image2mp4(image_path.parent, temp_movie_path)
+    # MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
+    #
+    # subprocess.call(['ffmpeg',
+    #                  '-framerate', '1',
+    #                  # Get image_dir/*.file_type
+    #                  '-pattern_type', 'glob', '-i', f'{image_path.parent}/*.png',
+    #                  '-c:v', 'h264',  # codec
+    #                  '-pix_fmt', 'yuv420p',  # pixel format (color space)
+    #                  '-preset', 'veryslow',  # encoding speed
+    #                  '-tune', 'stillimage',  # tune for still image
+    #                  f'{movie_path}'])
+
     os.rename(temp_movie_path, movie_path)
     return {"message": f"success. URL: /api/receive-image/{token}/"}
 
