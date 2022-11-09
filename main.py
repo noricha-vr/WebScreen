@@ -145,8 +145,23 @@ def send_desktop_movie(session_id: str):
     return FileResponse(movie_path)
 
 
+# def image2mp4(image_dir, mp4_dir, filename):
+#     image_files = sorted(glob.glob(f"{image_dir}/*.png"))
+#
+#     height, width, _ = cv2.imread(image_files[0]).shape[:3]
+#     video_writer = cv2.VideoWriter(
+#         f"{mp4_dir}/{filename}.mp4",
+#         cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),
+#         fps, (width, height))
+#
+#     for image_file in image_files:
+#         img = cv2.imread(image_file)
+#         video_writer.write(img)
+#     video_writer.release()
+
+
 @app.post('/api/receive-image/')
-def receive_image(request: Request, body: bytes = Body(...)):
+async def receive_image(request: Request, body: bytes = Body(...)):
     """
     Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
     body is posted by canvas.toDataURL().
