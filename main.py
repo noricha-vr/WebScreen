@@ -132,18 +132,17 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
     return {'url': url}
 
 
-@app.get("/api/desktop/{session_id}/")
+@app.get("/desktop/{session_id}/")
 def get_desktop(session_id: str):
     """
     Get movie which file name is 'movie/{session_id}.mp4.
     :param session_id:
     :return: movie file
     """
-    movie_path = f"movie/{session_id}.mp4"
-    for i in range(3):
-        if os.path.exists(movie_path): return FileResponse(movie_path)
-        time.sleep(1)
-    raise HTTPException(status_code=404, detail="Movie file does not exist.")
+    movie_path = Path(f"movie/{session_id}.mp4")
+    if not movie_path.exists():
+        return FileResponse('movie/not_found.mp4')
+    return FileResponse(movie_path)
 
 
 @app.post("/api/desktop/")
@@ -215,7 +214,7 @@ def upload_video(request: Request, body: bytes = Body(...)):
     with open(image_path, "wb") as f: f.write(base64.b64decode(bytes(image_data, 'utf-8')))
     assert image_path.exists() and image_path.stat().st_size > 0
     MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
-
+    os.rename(temp_movie_path, movie_path)
     return {"message": f"success. URL: /api/desktop/image/"}
 
 
