@@ -53,23 +53,22 @@ async function captureImage(track) {
     const ctx = canvas.getContext("2d");
     // const track = videoElem.srcObject.getCanvasTrack(); // MediaStream.getVideoTracks()[0]
     let capture = new ImageCapture(track);
-    capture.grabFrame().then(bitmap => {
-        // Stop sharing
-        track.stop();
-        // Draw the bitmap to canvas
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        canvas.getContext('2d').drawImage(bitmap, 0, 0);
-        // Grab blob from canvas
-        canvas.toBlob(blob => {
-            // Do things with blob here
-            blob.name = `screenshot-${new Date().getTime()}`;
-            // copy to clipboard
-            let data = [new ClipboardItem({[blob.type]: blob})];
-            // navigator.clipboard.write(data);
-            console.log('output blob:', blob);
-            return blob;
-        });
+    let bitmap = await capture.grabFrame()
+    // Stop sharing
+    track.stop();
+    // Draw the bitmap to canvas
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    // Grab blob from canvas
+    canvas.toBlob(blob => {
+        // Do things with blob here
+        blob.name = `screenshot-${new Date().getTime()}`;
+        // copy to clipboard
+        let data = [new ClipboardItem({[blob.type]: blob})];
+        // navigator.clipboard.write(data);
+        console.log('output blob:', blob);
+        return blob;
     });
     // var canvas = document.createElement('canvas');
     // canvas.width = videoElem.videoWidth;
