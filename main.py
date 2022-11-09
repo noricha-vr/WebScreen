@@ -195,8 +195,8 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     return {'url': url}
 
 
-@app.post('/api/desktop-image/')
-def upload_video(request: Request, body: bytes = Body(...)):
+@app.post('/api/receive-image/')
+def receive_image(request: Request, body: bytes = Body(...)):
     """
     Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
     body is posted by canvas.toDataURL().
@@ -215,7 +215,7 @@ def upload_video(request: Request, body: bytes = Body(...)):
     assert image_path.exists() and image_path.stat().st_size > 0
     MovieMaker.image_to_movie(image_path.parent, temp_movie_path)
     os.rename(temp_movie_path, movie_path)
-    return {"message": f"success. URL: /api/desktop/image/"}
+    return {"message": f"success. URL: /api/receive-image/{token}/"}
 
 
 @app.post('/api/stream/{file_name}/')
