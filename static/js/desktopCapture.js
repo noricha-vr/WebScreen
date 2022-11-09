@@ -15,6 +15,7 @@ let displayMediaOptions = {
 // Set event listeners for the start and stop buttons
 startElem.addEventListener("click", function (evt) {
     startCapture();
+    // testStartCapture();
 }, false);
 
 stopElem.addEventListener("click", function (evt) {
@@ -34,14 +35,27 @@ async function startCapture() {
     console.log(`count of tracks: ${videoElem.srcObject.getTracks().length}`);
     interval = setInterval(async () => {
         let base64 = await captureImage(videoElem.srcObject.getVideoTracks()[0]);
-        console.log(`base64: ${base64.length}`);
         document.getElementById('photo').src = base64;
-        if (base64.length > 100) {
-            await postImage(url, base64);
-        } else {
-            console.log(`base64 is too short: ${base64.length}`);
-        }
-    }, 5000);
+        await postImage(url, base64);
+        console.log(`postImage`);
+    }, 1000);
+    setTimeout(() => {
+        stopCapture();
+    }, 2000);
+}
+
+async function testStartCapture() {
+    logElem.innerHTML = "";
+    let url = `${location.origin}/api/receive-image/`;
+    try {
+        videoElem.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+    } catch (err) {
+        console.error("Error: " + err);
+    }
+    console.log(`count of tracks: ${videoElem.srcObject.getTracks().length}`);
+    let base64 = await captureImage(videoElem.srcObject.getVideoTracks()[0]);
+    document.getElementById('photo').src = base64;
+    await postImage(url, base64);
 }
 
 function stopCapture(evt) {
@@ -80,7 +94,7 @@ async function postImage(url, image) {
         'Content-Type': 'application/image',
         'session_id': '1234567890',
     }
-    console.log(`image: ${image}`);
+    console.log(`image: ${image.length}`);
     let res = await fetch(url, {
         method: 'POST',
         headers: header,
