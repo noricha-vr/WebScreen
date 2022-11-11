@@ -1,10 +1,9 @@
 import glob
 import cv2
 
-fps = 0.2  # 1フレームあたりのスライド数。1.0で1スライド/1秒、2.0で2スライド/1秒
 
-
-def image2mp4(image_dir: str, movie_path: str):
+def image2mp4(image_dir: str, movie_path: str, fps: int = 1):
+    fps = 1 / fps
     image_files = sorted(glob.glob(f"{image_dir}/*.png"))
 
     height, width, _ = cv2.imread(image_files[0]).shape[:3]
