@@ -14,7 +14,7 @@ async function fetchMovieUrl() {
         height: document.getElementById('height').value,
     }
     let request_url = `/api/create_movie/?url=${settings.url}&max_page_height=${settings.max_page_height}` +
-        `&width=${settings.width}&height=${settings.height}`;
+        `&width=${settings.width}&height=${settings.height}&lang=${navigator.language}`;
     console.log(`Requesting ${request_url}`);
     return await fetch(request_url, {
         method: 'GET',
@@ -28,6 +28,7 @@ async function submit() {
     resultArea.className = 'visually-hidden';
     // show loading button. remove visually-hidden class
     loadingImage.className = '';
+    copyButton.textContent = 'Copy';
     // fetch movie url
     let response = await fetchMovieUrl()
     // show submit button
@@ -41,7 +42,7 @@ async function submit() {
         console.log(`data: ${JSON.stringify(data)}`);
         // set movie_url
         movieUrlElement.href = data.url;
-        movieUrlElement.innerHTML = data.url;
+        movieUrlElement.textContent = data.url;
         // show movie_url
         resultArea.className = '';
     } else {
@@ -54,7 +55,7 @@ function copyToClipboard() {
     let copyText = movieUrlElement.href;
     navigator.clipboard.writeText(copyText).then(r => {
         console.log('copied');
-        copyButton.innerHTML = 'Copied!';
+        copyButton.textContent = 'Copied!';
     });
 }
 
