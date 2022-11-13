@@ -1,5 +1,5 @@
-git+https://github.com/noricha-vr/MovieMaker.git@3b80c4e0d52957582dc244aeb1a8d296c1fdd831
-fastapi>=0.85
+git+https://github.com/noricha-vr/MovieMaker.git@9fad5c0a556f8fc97adc9af8fe7efab5fd17c3bf
+git+https://github.com/tiangolo/fastapi.git@41735d2de9afbb2c01541d0f3052c718cb9f4f30
 google-cloud-storage==2.5.0
 Jinja2==3.1.2
 moviepy==1.0.3

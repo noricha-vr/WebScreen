@@ -15,10 +15,10 @@ from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from movie_maker.browser_config import ImageConfig
+from movie_maker.config import ImageConfig
 from fastapi.responses import StreamingResponse
 from gcs import BucketManager
-from movie_maker import MovieMaker, BrowserConfig
+from movie_maker import MovieMaker, BrowserConfig, MovieConfig
 
 from util import image2mp4
 
@@ -74,7 +74,7 @@ async def favicon() -> FileResponse:
 
 
 @app.get("/api/create_movie/")
-def create_movie(url: str, max_page_height: int, width: int = 1280, height: int = 720) -> dict:
+def create_movie(url: str, lang: str, max_page_height: int, width: int = 1280, height: int = 720) -> dict:
     """
     Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
     1. create hash of URL, scroll_px, width, height. max_height.
@@ -82,6 +82,7 @@ def create_movie(url: str, max_page_height: int, width: int = 1280, height: int 
     3. if the movie file exists, return the download url.
     4. if the movie file does not exist, take a screenshot and save it to the GCS.
     :param url: URL to take a screenshot
+    :param lang: language
     :param width: Browser width
     :param height: Browser height
     :param max_page_height: Max scroll height
@@ -90,8 +91,8 @@ def create_movie(url: str, max_page_height: int, width: int = 1280, height: int 
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    scroll_each = int(height // 3)
-    browser_config = BrowserConfig(url, width, height, max_page_height, scroll_each)
+    scroll = int(height // 3)
+    browser_config = BrowserConfig(url, width, height, max_page_height, scroll, lang=lang)
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if movie_path.exists():
         url = bucket_manager.get_public_file_url(str(movie_path))
@@ -101,7 +102,8 @@ def create_movie(url: str, max_page_height: int, width: int = 1280, height: int 
     except Exception as e:
         logger.error(f'Failed to make movie.  url: {url} {e}')
         raise HTTPException(status_code=500, detail="Failed to make movie.")
-    MovieMaker.image_to_movie(image_dir, movie_path)
+    movie_config = MovieConfig(image_dir, movie_path, width=width)
+    MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
     return {'url': url}
@@ -131,7 +133,8 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280, height:
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
     output_image_dir = MovieMaker.format_images(image_config)
-    MovieMaker.image_to_movie(output_image_dir, movie_path)
+    movie_config = MovieConfig(output_image_dir, movie_path, width=width)
+    MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
     return {'url': url}
 
@@ -190,14 +193,15 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    movie_config = BrowserConfig(url, width, height, limit_height, scroll_each, targets)
-    movie_path = Path(f"movie/{movie_config.hash}.mp4")
+    browser_config = BrowserConfig(url, width, height, limit_height, scroll_each, targets=targets)
+    movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if catch and movie_path.exists():
         url = bucket_manager.get_public_file_url(str(movie_path))
         return {'url': url}
     # Download the repository.
-    image_dir = MovieMaker.take_screenshots_github_files(movie_config)
-    MovieMaker.image_to_movie(image_dir, movie_path)
+    image_dir = MovieMaker.take_screenshots_github_files(browser_config)
+    movie_config = MovieConfig(image_dir, movie_path, width=width)
+    MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
     return {'url': url}
