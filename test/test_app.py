@@ -24,12 +24,21 @@ def test_index():
     assert "Web Screen" in response.text
 
 
-@pytest.mark.parametrize(('url', 'max_page_height'), [
-    ('https://www.google.com/', 200),
-    ('https://www.youtube.com/', 1000),
+@pytest.mark.parametrize(('url', 'max_page_height', 'width', 'height', 'lang'), [
+    # ('https://www.google.com/', 200, 1280, 720, 'en_US'),
+    # ('https://www.youtube.com/', 1000, 1280, 720, 'ja_JP'),
+    ('https://twitter.com/search?q=%23WebScreen&src=hashtag_click', 200000, 200000, 200000, 'ja_JP'),
+    ('https://fastapi.tiangolo.com/async/#very-technical-details', 0, 0, 0, 'ja_JP'),
+    (
+            'https://www.google.co.jp/maps/place/HUB%E7%A7%8B%E8%91%89%E5%8E%9F%E5%BA%97/@35.700164,138.7193184,9z/data=!3m1!5s0x60188ea7985323af:0x1c68bb773edd834a!4m10!1m2!2m1!1z56eL44OP44OW!3m6!1s0x60188ea7bd68888d:0x25f90a2ae6b34060!8m2!3d35.700164!4d139.7740059!15sCgnnp4vjg4_jg5YiA4gBAVoMIgrnp4sg44OP44OWkgEDcHVimgEkQ2hkRFNVaE5NRzluUzBWSlEwRm5TVVE0YkZsbVFuZG5SUkFC4AEA!16s%2Fg%2F1tvw4y7l?hl=ja',
+            1000, 1280, 720, 'ja_JP'),
+    (
+            'https://www.google.com/search?q=%E9%A3%9F%E3%83%86%E3%83%AD&tbm=isch&ved=2ahUKEwjy5Le2vqr7AhV1QfUHHY8XCvsQ2-cCegQIABAA&oq=%E9%A3%9F%E3%83%86%E3%83%AD&gs_lcp=CgNpbWcQAzIFCAAQgAQyBQgAEIAEMgUIABCABDIFCAAQgAQyBQgAEIAEMgUIABCABDoHCAAQBBCABDoECCMQJzoHCCMQ6gIQJzoKCAAQBBCABBCxAzoICAAQsQMQgwE6CAgAEIAEELEDOgYIABAEEAM6DQgAEAQQgAQQsQMQgwE6CQgAEAQQgAQQGDoLCAAQgAQQsQMQsQNQ2AFY3ShgmStoCXAAeAKAAYwBiAHJE5IBBDIyLjaYAQCgAQGqAQtnd3Mtd2l6LWltZ7ABCsABAQ&sclient=img&ei=BYlwY7LONfWC1e8Pj6-o2A8&bih=1014&biw=1245&rlz=1C5GCEM_enJP1012JP1012',
+            1000, 1280, 720, 'ja_JP'),
 ])
-def test_create_movie(url, max_page_height):
-    response = client.get(f"/api/create_movie/?url={url}&max_page_height={max_page_height}")
+def test_create_movie(url, max_page_height, width, height, lang):
+    response = client.get(
+        f"/api/create_movie/?url={url}&max_page_height={max_page_height}&width={width}&height={height}&lang={lang}")
     assert response.status_code == 200
     assert response.json().get('url').startswith("https://storage.googleapis.com/")
 
