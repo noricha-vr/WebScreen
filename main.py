@@ -1,22 +1,18 @@
 import base64
-import glob
 import logging
 import os
-import re
 import shutil
-import subprocess
-import time
+import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Union
+from typing import List
 
-from fastapi import FastAPI, HTTPException, File, UploadFile, Header, Request, Body
-from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, UploadFile, Request, Body
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from movie_maker.config import ImageConfig
-from fastapi.responses import StreamingResponse
 from gcs import BucketManager
 from movie_maker import MovieMaker, BrowserConfig, MovieConfig
 
@@ -110,17 +106,17 @@ def create_movie(url: str, lang: str, max_page_height: int, width: int = 1280, h
 
 
 @app.post("/api/create_image_movie/")
-async def create_image_movie(files: List[UploadFile], width: int = 1280, height: int = 720) -> dict:
+async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict:
     """
     Merge images and create a movie.
     :param files: List of image files
     :param width: Browser width
-    :param height: Browser height
     :param max_page_height: Max scroll height
     :param scroll_each:
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
+    # TODO image_dir to uuid
     image_dir = Path('image') / datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')
     image_dir.mkdir(exist_ok=True, parents=True)
     image_config = ImageConfig(image_dir)
@@ -176,16 +172,16 @@ async def receive_image(request: Request, body: bytes = Body(...)):
 
 
 @app.get("/api/create_github_movie/")
-def create_github_movie(url: str, targets: str, width: int = 1280, height: int = 720, limit_height: int = 50000,
-                        scroll_each: int = 200, catch: bool = True) -> dict:
+def create_github_movie(url: str, targets: str, width: int = 1280, height: int = 720, page_height: int = 50000,
+                        scroll: int = 200, catch: bool = True) -> dict:
     """
     Download github repository, convert file into HTML, and take a screenshot.
     :param url: URL to take a screenshot
     :param targets: target file list to take a screenshot
     :param width: Browser width
     :param height: Browser height
-    :param limit_height: Max scroll height
-    :param scroll_each:
+    :param page_height: Max scroll height
+    :param scroll:
     :param catch: if catch is true, check saved movie is suitable.
     :return: GitHub repository page URL
     """
@@ -193,7 +189,7 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    browser_config = BrowserConfig(url, width, height, limit_height, scroll_each, targets=targets)
+    browser_config = BrowserConfig(url, width, height, page_height, scroll, targets=targets)
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if catch and movie_path.exists():
         url = bucket_manager.get_public_file_url(str(movie_path))
