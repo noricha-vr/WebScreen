@@ -8,13 +8,10 @@ const pageHeightLabel = document.getElementById('page_height_label');
 const pageHeightSlider = document.getElementById('page_height_slider');
 
 async function fetchMovieUrl() {
-    let settings = {
-        url: encodeURI(document.getElementById('url').value),
-        width: document.getElementById('width').value,
-        height: document.getElementById('height').value,
-    }
-    let request_url = `/api/create_movie/?url=${settings.url}&page_height=${pageHeightSlider.value}` +
-        `&width=${settings.width}&height=${settings.height}&lang=${navigator.language}`;
+    url = encodeURI(document.getElementById('url').value)
+    widthHeight = document.querySelector('input[name="width_height"]:checked').value.split('x');
+    let request_url = `/api/create_movie/?url=${url}&page_height=${pageHeightSlider.value}` +
+        `&width=${widthHeight[0]}&height=${widthHeight[1]}&lang=${navigator.language}`;
     console.log(`Requesting ${request_url}`);
     return await fetch(request_url, {
         method: 'GET',

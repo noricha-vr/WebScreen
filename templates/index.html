@@ -20,12 +20,19 @@
                                 id="page_height_label">5000</span>px</label>
                         <input type="range" class="form-range" id="page_height_slider" name="max_page_height"
                                min="2000" max="25000" value="5000">
-                        <div class="form-group mt-3">
-                            <label for="width">ブラウザのサイズ（横×縦）:</label><br/>
-                            <input type="number" class="form-inline border" id="width" name="width"
-                                   value="1280"> x
-                            <input type="number" class="form-inline border" id="height" name="height"
-                                   value="720">
+                        <div>ブラウザのサイズ:</div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="width_height" id="16-9" value="1280x720"
+                                   checked>
+                            <label class="form-check-label" for="16-9">
+                                16:9
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="width_height" id="4-3" value="1024x768">
+                            <label class="form-check-label" for="4-3">
+                                4:3
+                            </label>
                         </div>
                     </div>
                 </form>
