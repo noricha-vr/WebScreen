@@ -70,7 +70,7 @@ async def favicon() -> FileResponse:
 
 
 @app.get("/api/create_movie/")
-def create_movie(url: str, lang: str, max_page_height: int, width: int = 1280, height: int = 720) -> dict:
+def create_movie(url: str, lang: str, page_height: int, width: int = 1280, height: int = 720) -> dict:
     """
     Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
     1. create hash of URL, scroll_px, width, height. max_height.
@@ -81,14 +81,14 @@ def create_movie(url: str, lang: str, max_page_height: int, width: int = 1280, h
     :param lang: language
     :param width: Browser width
     :param height: Browser height
-    :param max_page_height: Max scroll height
+    :param page_height: Max scroll height
     :return: Download URL
     """
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
     scroll = int(height // 3)
-    browser_config = BrowserConfig(url, width, height, max_page_height, scroll, lang=lang)
+    browser_config = BrowserConfig(url, width, height, page_height, scroll, lang=lang)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if movie_path.exists():
