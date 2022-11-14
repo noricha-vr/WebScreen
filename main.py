@@ -70,7 +70,8 @@ async def favicon() -> FileResponse:
 
 
 @app.get("/api/create_movie/")
-def create_movie(url: str, lang: str, page_height: int, width: int = 1280, height: int = 720) -> dict:
+def create_movie(url: str, lang: str, page_height: int,
+                 width: int = 1280, height: int = 720, catch: bool = True) -> dict:
     """
     Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
     1. create hash of URL, scroll_px, width, height. max_height.
