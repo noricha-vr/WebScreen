@@ -2,6 +2,7 @@
 const submitButton = document.getElementById('submit');
 const loadingImage = document.getElementById('loading');
 const inputUrl = document.getElementById('url');
+const pasteButton = document.getElementById('paste_button');
 const movieUrlElement = document.getElementById('movie_url');
 const copyButton = document.getElementById('copy');
 const resultArea = document.getElementById('result');
@@ -55,3 +56,8 @@ function copyToClipboard() {
     });
 }
 
+function pasteFromClipboard(targetTextElement) {
+    navigator.clipboard.readText().then(text => {
+        targetTextElement.value = text;
+    });
+}
