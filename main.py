@@ -134,6 +134,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
     movie_config = MovieConfig(output_image_dir, movie_path, width=width)
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
+    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 7
     return {'url': url, 'delete_at': delete_at}
 
 
