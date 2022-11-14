@@ -4,16 +4,16 @@ const loadingImage = document.getElementById('loading');
 const movieUrlElement = document.getElementById('movie_url');
 const copyButton = document.getElementById('copy');
 const resultArea = document.getElementById('result');
-
+const pageHeightLabel = document.getElementById('page_height_label');
+const pageHeightSlider = document.getElementById('page_height_slider');
 
 async function fetchMovieUrl() {
     let settings = {
         url: encodeURI(document.getElementById('url').value),
-        max_page_height: document.getElementById('max_page_height').value,
         width: document.getElementById('width').value,
         height: document.getElementById('height').value,
     }
-    let request_url = `/api/create_movie/?url=${settings.url}&max_page_height=${settings.max_page_height}` +
+    let request_url = `/api/create_movie/?url=${settings.url}&page_height=${pageHeightSlider.value}` +
         `&width=${settings.width}&height=${settings.height}&lang=${navigator.language}`;
     console.log(`Requesting ${request_url}`);
     return await fetch(request_url, {
