@@ -89,6 +89,7 @@ def create_movie(url: str, lang: str, max_page_height: int, width: int = 1280, h
     bucket_manager = BucketManager(BUCKET_NAME)
     scroll = int(height // 3)
     browser_config = BrowserConfig(url, width, height, max_page_height, scroll, lang=lang)
+    logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if movie_path.exists():
         url = bucket_manager.get_public_file_url(str(movie_path))
@@ -189,6 +190,7 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
     browser_config = BrowserConfig(url, width, height, page_height, scroll, targets=targets)
+    logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if catch and movie_path.exists():
         url = bucket_manager.get_public_file_url(str(movie_path))
