@@ -16,6 +16,7 @@ async function fetchMovieUrl() {
 function addEventListeners() {
     submitButton.addEventListener('click', submit);
     copyButton.addEventListener('click', copyToClipboard);
+    inputUrl.addEventListener('focus', selectAllText);
 }
 
 addEventListeners();
