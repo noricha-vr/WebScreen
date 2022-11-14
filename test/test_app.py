@@ -43,10 +43,11 @@ def test_create_movie(url, max_page_height, width, height, lang):
     assert response.json().get('url').startswith("https://storage.googleapis.com/")
 
 
-@pytest.mark.parametrize(('url', 'images'), [
-    ('https://www.google.com/', ['test_image/01.png', 'test_image/02.png', 'test_image/03.png']),
+@pytest.mark.parametrize(('images'), [
+    (['test_image/01.png', 'test_image/02.png', 'test_image/03.png']),
 ])
-def test_create_image_movie(url, images):
+# this test can't run. status code is 400.
+def test_create_image_movie(images):
     files = {}
     for i, image in enumerate(images):
         files[f'file_{i}'] = [image, open(image, 'rb'), 'image/png']
@@ -71,10 +72,6 @@ def test_create_image_movie(url, images):
 ])
 def test_create_github_movie(url, targets):
     url = f"/api/create_github_movie/?url={url}&targets={targets}"
-    print(url)
     response = client.get(url)
-    # show error message if the movie is not created.
-    print(response.text)
-    response = response.history[0]
-    assert response.status_code == 303
-    assert "https://storage.googleapis.com/" in response.headers.get('location')
+    assert response.status_code == 200
+    assert response.json().get('url').startswith("https://storage.googleapis.com/")
