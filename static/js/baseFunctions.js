@@ -1,11 +1,16 @@
 'use static';
 const submitButton = document.getElementById('submit');
 const loadingImage = document.getElementById('loading');
+const inputUrl = document.getElementById('url');
 const movieUrlElement = document.getElementById('movie_url');
 const copyButton = document.getElementById('copy');
 const resultArea = document.getElementById('result');
 const pageHeightLabel = document.getElementById('page_height_label');
 const pageHeightSlider = document.getElementById('page_height_slider');
+
+function selectAllText(e) {
+    e.target.setSelectionRange(0, e.target.value.length);
+}
 
 async function fetchMovieUrl() {
     // abstract
