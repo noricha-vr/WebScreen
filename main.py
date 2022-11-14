@@ -92,7 +92,7 @@ def create_movie(url: str, lang: str, page_height: int,
     browser_config = BrowserConfig(url, width, height, page_height, scroll, lang=lang)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
-    if movie_path.exists():
+    if movie_path.exists() and catch:
         url = bucket_manager.get_public_file_url(str(movie_path))
         return {'url': url}
     try:
