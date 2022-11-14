@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Web Screen|VRChatでウェブページを見る{% endblock %}
+{% block title %}Web Screen|VRChatの動画プレイヤーでウェブページを表示! URL→動画変換システム{% endblock %}
 {% block content %}
 <div class="container">
     <section class="section mt-5">
@@ -21,14 +21,14 @@
                         <input type="range" class="form-range" id="page_height_slider" name="max_page_height"
                                min="2000" max="25000" value="5000">
                         <div>ブラウザのサイズ:</div>
-                        <div class="form-check">
+                        <div class="form-check form-check-inline">
                             <input class="form-check-input" type="radio" name="width_height" id="16-9" value="1280x720"
                                    checked>
                             <label class="form-check-label" for="16-9">
                                 16:9
                             </label>
                         </div>
-                        <div class="form-check">
+                        <div class="form-check form-check-inline">
                             <input class="form-check-input" type="radio" name="width_height" id="4-3" value="1024x768">
                             <label class="form-check-label" for="4-3">
                                 4:3
