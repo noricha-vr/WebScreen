@@ -18,6 +18,9 @@ function addEventListeners() {
     pageHeightSlider.addEventListener('change', (e) => {
         pageHeightLabel.textContent = e.target.value;
     });
+    pasteButton.addEventListener('click', () => {
+        pasteFromClipboard(inputUrl);
+    });
 }
 
 addEventListeners();
