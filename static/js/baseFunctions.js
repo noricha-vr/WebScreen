@@ -8,14 +8,8 @@ const pageHeightLabel = document.getElementById('page_height_label');
 const pageHeightSlider = document.getElementById('page_height_slider');
 
 async function fetchMovieUrl() {
-    url = encodeURI(document.getElementById('url').value)
-    widthHeight = document.querySelector('input[name="width_height"]:checked').value.split('x');
-    let request_url = `/api/create_movie/?url=${url}&page_height=${pageHeightSlider.value}` +
-        `&width=${widthHeight[0]}&height=${widthHeight[1]}&lang=${navigator.language}`;
-    console.log(`Requesting ${request_url}`);
-    return await fetch(request_url, {
-        method: 'GET',
-    });
+    // abstract
+    throw new Error('Not implemented');
 }
 
 
@@ -25,7 +19,7 @@ async function submit() {
     resultArea.className = 'visually-hidden';
     // show loading button. remove visually-hidden class
     loadingImage.className = '';
-    copyButton.textContent = 'Copy';
+    copyButton.textContent = '動画のURLをコピー';
     // fetch movie url
     let response = await fetchMovieUrl()
     // show submit button
@@ -56,10 +50,3 @@ function copyToClipboard() {
     });
 }
 
-function addEventListeners() {
-    submitButton.addEventListener('click', submit);
-    copyButton.addEventListener('click', copyToClipboard);
-    pageHeightSlider.addEventListener('change', (e) => {
-        pageHeightLabel.textContent = e.target.value;
-    });
-}
