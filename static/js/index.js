@@ -1,12 +1,10 @@
 'use static';
 
 async function fetchMovieUrl() {
-    let url = document.getElementById('url').value;
-    let targets = document.getElementById('targets').value;
+    let url = encodeURI(document.getElementById('url').value)
     let widthHeight = document.querySelector('input[name="width_height"]:checked').value.split('x');
-    let cache = document.getElementById('catch').checked;
-    let request_url = `/api/create_github_movie/?url=${url}&targets=${targets}` +
-        `&width=${widthHeight[0]}&height=${widthHeight[1]}&catch=${cache}`;
+    let request_url = `/api/create_movie/?url=${url}&page_height=${pageHeightSlider.value}` +
+        `&width=${widthHeight[0]}&height=${widthHeight[1]}&lang=${navigator.language}`;
     console.log(`Requesting ${request_url}`);
     return await fetch(request_url, {
         method: 'GET',
@@ -16,6 +14,9 @@ async function fetchMovieUrl() {
 function addEventListeners() {
     submitButton.addEventListener('click', submit);
     copyButton.addEventListener('click', copyToClipboard);
+    pageHeightSlider.addEventListener('change', (e) => {
+        pageHeightLabel.textContent = e.target.value;
+    });
 }
 
 addEventListeners();

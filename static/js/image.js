@@ -1,16 +1,18 @@
 'use static';
 
 async function fetchMovieUrl() {
-    let settings = {
-        width: document.getElementById('width').value,
-        height: document.getElementById('height').value,
-    }
-    let request_url = `/api/create_image_movie/?width=${settings.width}&height=${settings.height}`;
+    let widthHeight = document.querySelector('input[name="width_height"]:checked').value.split('x');
+    let request_url = `/api/create_image_movie/?width=${widthHeight[0]}&height=${widthHeight[1]}`;
     console.log(`Requesting ${request_url}`);
     return await fetch(request_url, {
         method: 'POST',
-        //Uncaught (in promise) TypeError: Failed to construct 'FormData': parameter 1 is not of type 'HTMLFormElement'.
-        //body: new FormData(document.getElementById('image_form')),
         body: new FormData(document.getElementById('image_form')),
     });
 }
+
+function addEventListeners() {
+    submitButton.addEventListener('click', submit);
+    copyButton.addEventListener('click', copyToClipboard);
+}
+
+addEventListeners();

@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
-{% block title %}Web Screen|VRChatでGithubリポジトリのソースコードを表示{% endblock %}
+{% block title %}Web Screen|VRChatの動画プレイヤーに動画化したGitHubのソースコードを表示できます{% endblock %}
 {% block content %}
 <div class="container">
     <section class="section mt-5">
         <div class="row justify-content-md-center">
             <div class="col mt-3">
                 <h1 class="h1 mb-5">Web Screen</h1>
-                <h2 class="h3 mb-3">動画化したいGitHubプロジェクトのURLを貼り付けてください</h2>
+                <h2 class="h4 mb-3">VRChatの動画プレイヤーにGitHubのソースコードを表示できます</h2>
+                <h3 class="h5 mb-3">動画化したいGitHubプロジェクトのURLを貼り付けてください</h3>
             </div>
         </div>
         <form class="row g-3 justify-content-md-center" method="get" action="/api/create_github_movie/">
@@ -16,17 +17,23 @@
                        placeholder="https://github.com/noricha-vr/source_converter">
                 <label for="targets" class="">表示したいファイル名やファイルタイプをカンマ区切りで入力してください</label>
                 <input type="text" class="form-control border border-dark" id="targets" name="targets"
-                       value="README.md,*.py">
-                <div class="form-group mt-3">
-                    <label for="width">ブラウザサイズ（横×縦）</label>
-                    <input type="number" class="form-inline border" id="width" name="width"
-                           value="1280"> x
-                    <label for="width" class="visually-hidden">ブラウザサイズ（横×縦）</label>
-                    <input type="number" class="form-inline border" id="height" name="height"
-                           value="720">
-                    <label for="catch">キャッシュ</label>
-                    <input type="checkbox" class="form-inline border" id="catch" name="catch" checked>
+                       value="README.md,Dockerfile,*.py,*js,*html,*.yaml,*.json">
+                <div class="mt-3">ブラウザのサイズ:</div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="width_height" id="16-9" value="1280x720"
+                           checked>
+                    <label class="form-check-label" for="16-9">
+                        16:9
+                    </label>
                 </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="width_height" id="4-3" value="1024x768">
+                    <label class="form-check-label" for="4-3">
+                        4:3
+                    </label>
+                </div>
+                <label for="catch">キャッシュ</label>
+                <input type="checkbox" class="form-inline border" id="catch" name="catch" checked>
             </div>
         </form>
         {% include 'result.html' %}
@@ -37,5 +44,4 @@
 {% block script %}
 <script src="/static/js/baseFunctions.js"></script>
 <script src="/static/js/github.js"></script>
-<script>addEventListeners()</script>
 {% endblock %}
