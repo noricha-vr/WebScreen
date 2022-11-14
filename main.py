@@ -94,7 +94,7 @@ def create_movie(url: str, lang: str, page_height: int,
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if movie_path.exists() and catch:
         url = bucket_manager.get_public_file_url(str(movie_path))
-        return {'url': url}
+        return {'url': url, 'delete_at': None}
     try:
         image_dir = MovieMaker.take_screenshots(browser_config)
     except Exception as e:
@@ -104,7 +104,8 @@ def create_movie(url: str, lang: str, page_height: int,
     MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
-    return {'url': url}
+    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 7
+    return {'url': url, 'delete_at': delete_at}
 
 
 @app.post("/api/create_image_movie/")
@@ -133,7 +134,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
     movie_config = MovieConfig(output_image_dir, movie_path, width=width)
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
-    return {'url': url}
+    return {'url': url, 'delete_at': delete_at}
 
 
 @app.get("/desktop/{session_id}/")
@@ -195,11 +196,12 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if catch and movie_path.exists():
         url = bucket_manager.get_public_file_url(str(movie_path))
-        return {'url': url}
+        return {'url': url, 'delete_at': None}
     # Download the repository.
     image_dir = MovieMaker.take_screenshots_github_files(browser_config)
     movie_config = MovieConfig(image_dir, movie_path, width=width)
     MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
-    return {'url': url}
+    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 7
+    return {'url': url, 'delete_at': delete_at}
