@@ -62,4 +62,7 @@ function copyToClipboard() {
 function addEventListeners() {
     submitButton.addEventListener('click', submit);
     copyButton.addEventListener('click', copyToClipboard);
+    pageHeightSlider.addEventListener('change', (e) => {
+        pageHeightLabel.textContent = e.target.value;
+    });
 }
