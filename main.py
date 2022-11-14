@@ -111,21 +111,20 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
     Merge images and create a movie.
     :param files: List of image files
     :param width: Browser width
-    :param max_page_height: Max scroll height
-    :param scroll_each:
+    :param page_height: Max scroll height
+    :param scroll: Scroll height
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
-    # TODO image_dir to uuid
-    image_dir = Path('image') / datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')
+    name = str(uuid.uuid4())
+    image_dir = Path('image') / name
     image_dir.mkdir(exist_ok=True, parents=True)
     image_config = ImageConfig(image_dir)
-    movie_path = Path(f"movie/{image_config.hash}.mp4")
-
-    print(f"image_dir: {image_dir.absolute()}")
+    movie_path = Path(f"movie/{name}.mp4")
+    logger.info(f"image_dir: {image_dir.absolute()}")
     for f in files:
         image_path = str(image_dir.joinpath(f.filename).absolute())
-        print(f"image_path: {image_path}")
+        logger.info(f"image_path: {image_path}")
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
     output_image_dir = MovieMaker.format_images(image_config)
