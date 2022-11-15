@@ -33,7 +33,7 @@ async function submit() {
         // save result to cookie
         data.name = data.url;
         if (inputUrl !== null) {
-            data.name = inputUrl.value;
+            data.name = inputUrl.value.replaceAll('=', '-');
         }
         saveResult(data);
         // add result to page
