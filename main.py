@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from movie_maker.config import ImageConfig
+from pydantic import BaseModel
 
 from gcs import BucketManager
 from movie_maker import MovieMaker, BrowserConfig, MovieConfig
@@ -70,9 +71,17 @@ async def favicon() -> FileResponse:
     return FileResponse((STATIC_DIR / 'favicon.ico'))
 
 
-@app.get("/api/create_movie/")
-def create_movie(url: str, lang: str, page_height: int,
-                 width: int = 1280, height: int = 720, catch: bool = True) -> dict:
+class BrowserSetting(BaseModel):
+    url: str
+    lang: str
+    page_height: int
+    width: int
+    height: int
+    catch: bool
+
+
+@app.post("/api/create_movie/")
+def create_movie(browser_setting: BrowserSetting) -> dict:
     """
     Take a screenshot of the given URL. The screenshot is saved in the GCS. Return the file of download URL.
     1. create hash of URL, scroll_px, width, height. max_height.
@@ -86,22 +95,23 @@ def create_movie(url: str, lang: str, page_height: int,
     :param page_height: Max scroll height
     :return: Download URL
     """
-    if len(url) == 0:
+    if len(browser_setting.url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    scroll = int(height // 3)
-    browser_config = BrowserConfig(url, width, height, page_height, scroll, lang=lang)
+    scroll = int(browser_setting.height // 3)
+    browser_config = BrowserConfig(browser_setting.url, browser_setting.width, browser_setting.height,
+                                   browser_setting.page_height, scroll, lang=browser_setting.lang)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
-    if movie_path.exists() and catch:
+    if movie_path.exists() and browser_setting.catch:
         url = bucket_manager.get_public_file_url(str(movie_path))
         return {'url': url, 'delete_at': None}
     try:
         image_dir = MovieMaker.take_screenshots(browser_config)
     except Exception as e:
-        logger.error(f'Failed to make movie.  url: {url} {e}')
+        logger.error(f'Failed to make movie.  url: {browser_setting.url} {e}')
         raise HTTPException(status_code=500, detail="Failed to make movie.")
-    movie_config = MovieConfig(image_dir, movie_path, width=width)
+    movie_config = MovieConfig(image_dir, movie_path, width=browser_setting.width)
     MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
