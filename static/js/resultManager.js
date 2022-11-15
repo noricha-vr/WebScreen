@@ -34,7 +34,9 @@ function saveResult(result) {
         return;
     }
     let expires = new Date(result.delete_at * 1000);
-    document.cookie = `${result.name}=${result.url}; expires=${expires.toUTCString()}; path=/`;
+    let cookie = `${result.name}=${result.url}; expires=${expires.toUTCString()}; path=/`;
+    console.log(`Saving result in cookie: ${cookie}`);
+    document.cookie = cookie;
 }
 
 function addResultsToPage() {
@@ -45,6 +47,9 @@ function addResultsToPage() {
     // Get all cookies
     let cookies = document.cookie.split(';').reverse();
     for (let cookie of cookies) {
+        if (cookie.length === 0) {
+            continue;
+        }
         let [key, value] = cookie.split('=');
         // check if value starts with http
         if (value.startsWith('http')) {
