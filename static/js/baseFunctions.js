@@ -50,8 +50,17 @@ async function submit() {
 }
 
 
-function copyToClipboard() {
-    let copyText = movieUrlElement.href;
+function copyToClipboard(e) {
+    // Find out what number the parent element of target is
+    let target = e.target.parentNode;
+    let targetNumber = 0;
+    while (target = target.previousElementSibling) {
+        targetNumber++;
+    }
+    console.log(`targetNumber: ${targetNumber}`);
+    // copy target value of element to clipboard
+    let targetResult = document.getElementsByName('result')[targetNumber];
+    let copyText = targetResult.getElementsByTagName('a')[0];
     navigator.clipboard.writeText(copyText).then(r => {
         console.log('copied');
         copyButton.textContent = 'Copied!';
@@ -72,3 +81,32 @@ function saveResult(result) {
     let expires = new Date(result.delete_at * 1000);
     document.cookie = `${result.url}=${result.url}; expires=${expires.toUTCString()}; path=/`;
 }
+
+function addResultsToPage() {
+    /*
+    If there are results in cookie, add them to page.
+     */
+    let resultsElement = document.getElementById('results');
+    let resultElement = document.getElementsByName('result')[0];
+    // Get all cookies
+    let cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        let [key, value] = cookie.split('=');
+        // check if value starts with http
+        if (value.startsWith('http')) {
+            console.log(`key: ${key}, value: ${value}`);
+            // clone result element, then set key and value.
+            let newResult = resultElement.cloneNode(true);
+            newResult.classList.remove('visually-hidden');
+            let aTag = newResult.getElementsByTagName('a')[0]
+            aTag.href = value;
+            aTag.textContent = key.substring(0, 90);
+            // add copy button event listener
+            let copyButton = newResult.getElementsByTagName('button')[0];
+            copyButton.addEventListener('click', copyToClipboard);
+            resultsElement.appendChild(newResult);
+        }
+    }
+}
+
+window.onload = addResultsToPage;
