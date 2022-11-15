@@ -88,15 +88,13 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
     2. check if the movie file exists.
     3. if the movie file exists, return the download url.
     4. if the movie file does not exist, take a screenshot and save it to the GCS.
-    :param url: URL to take a screenshot
-    :param lang: language
-    :param width: Browser width
-    :param height: Browser height
-    :param page_height: Max scroll height
+    :param browser_setting:
     :return: Download URL
     """
     if len(browser_setting.url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
+    if browser_setting.url.startswith("http") is False:
+        raise HTTPException(status_code=400, detail="URL is not valid. Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
     scroll = int(browser_setting.height // 3)
     browser_config = BrowserConfig(browser_setting.url, browser_setting.width, browser_setting.height,
@@ -110,7 +108,7 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
         image_dir = MovieMaker.take_screenshots(browser_config)
     except Exception as e:
         logger.error(f'Failed to make movie.  url: {browser_setting.url} {e}')
-        raise HTTPException(status_code=500, detail="Failed to make movie.")
+        raise HTTPException(status_code=500, detail="Failed to create movie.")
     movie_config = MovieConfig(image_dir, movie_path, width=browser_setting.width)
     MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
