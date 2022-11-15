@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import List
 
 from fastapi import FastAPI, HTTPException, UploadFile, Request, Body
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from movie_maker.config import ImageConfig
+
 from gcs import BucketManager
 from movie_maker import MovieMaker, BrowserConfig, MovieConfig
 
@@ -147,7 +148,8 @@ def send_desktop_movie(session_id: str):
     """
     movie_path = Path(f"movie/{session_id}.mp4")
     if not movie_path.exists():
-        return FileResponse('movie/not_found.mp4')
+        not_found_movie = 'https://storage.googleapis.com/noricha-public/web-screen/movie/not_found.mp4'
+        return RedirectResponse(url=not_found_movie)
     return FileResponse(movie_path)
 
 
@@ -191,6 +193,8 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     targets = targets.split(",")
     if len(url) == 0:
         raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
+    if url.startswith("https://github.com/") is False or len(url.split('/')) >= 5:
+        raise HTTPException(status_code=400, detail="URL is not GitHub repository.")
     bucket_manager = BucketManager(BUCKET_NAME)
     browser_config = BrowserConfig(url, width, height, page_height, scroll, targets=targets)
     logger.info(f"browser_config: {browser_config}")
