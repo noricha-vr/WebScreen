@@ -15,8 +15,9 @@ async function fetchMovieUrl() {
         'height': height,
         'catch': cache,
     }
+    console.log(`data: ${data}`);
     let request_url = '/api/create_movie/';
-    header = {
+    let header = {
         'Content-Type': 'application/json',
     }
     return await fetch(request_url, {
