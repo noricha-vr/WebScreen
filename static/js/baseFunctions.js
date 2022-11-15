@@ -22,10 +22,8 @@ async function fetchMovieUrl() {
 async function submit() {
     // Hide submit button and result area.
     submitButton.className = 'visually-hidden';
-    resultArea.className = 'visually-hidden';
     // show loading button. remove visually-hidden class
     loadingImage.className = '';
-    copyButton.textContent = 'Copy';
     // fetch movie url
     let response = await fetchMovieUrl()
     // show submit button
@@ -39,11 +37,10 @@ async function submit() {
         console.log(`data: ${JSON.stringify(data)}`);
         // save result to cookie
         saveResult(data);
-        // set movie_url
-        movieUrlElement.href = data.url;
-        movieUrlElement.textContent = data.url;
-        // show movie_url
-        resultArea.className = '';
+        // add result to page
+        let newResult = createResultNode(data.url, data.url);
+        let resultsElement = document.getElementById('results');
+        resultsElement.insertBefore(newResult, resultsElement.firstChild);
     } else {
         alert('error');
     }
@@ -87,26 +84,35 @@ function addResultsToPage() {
     If there are results in cookie, add them to page.
      */
     let resultsElement = document.getElementById('results');
-    let resultElement = document.getElementsByName('result')[0];
     // Get all cookies
-    let cookies = document.cookie.split(';');
+    let cookies = document.cookie.split(';').reverse();
     for (let cookie of cookies) {
         let [key, value] = cookie.split('=');
         // check if value starts with http
         if (value.startsWith('http')) {
-            console.log(`key: ${key}, value: ${value}`);
             // clone result element, then set key and value.
-            let newResult = resultElement.cloneNode(true);
-            newResult.classList.remove('visually-hidden');
-            let aTag = newResult.getElementsByTagName('a')[0]
-            aTag.href = value;
-            aTag.textContent = key.substring(0, 90);
-            // add copy button event listener
-            let copyButton = newResult.getElementsByTagName('button')[0];
-            copyButton.addEventListener('click', copyToClipboard);
+            let newResult = createResultNode(key, value);
             resultsElement.appendChild(newResult);
         }
     }
+}
+
+function createResultNode(text, href) {
+    /*
+    Create result node.
+     */
+    let resultElement = document.getElementsByName('result')[0];
+    // clone result element. Remove visually-hidden.
+    let newResult = resultElement.cloneNode(true);
+    newResult.classList.remove('visually-hidden');
+    // set text and href
+    let aTag = newResult.getElementsByTagName('a')[0]
+    aTag.href = href;
+    aTag.textContent = text.substring(0, 90);
+    // add copy button event listener
+    let copyButton = newResult.getElementsByTagName('button')[0];
+    copyButton.addEventListener('click', copyToClipboard);
+    return newResult;
 }
 
 window.onload = addResultsToPage;
