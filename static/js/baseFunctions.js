@@ -37,6 +37,8 @@ async function submit() {
         // set url to movie_url
         let data = await response.json()
         console.log(`data: ${JSON.stringify(data)}`);
+        // save result to cookie
+        saveResult(data);
         // set movie_url
         movieUrlElement.href = data.url;
         movieUrlElement.textContent = data.url;
@@ -60,4 +62,13 @@ function pasteFromClipboard(targetTextElement) {
     navigator.clipboard.readText().then(text => {
         targetTextElement.value = text;
     });
+}
+
+
+function saveResult(result) {
+    /*
+    Save result in cookie.
+     */
+    let expires = new Date(result.delete_at * 1000);
+    document.cookie = `${result.url}=${result.url}; expires=${expires.toUTCString()}; path=/`;
 }
