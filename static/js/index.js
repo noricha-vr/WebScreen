@@ -5,13 +5,24 @@ async function fetchMovieUrl() {
     if (!url.startsWith('http')) {
         return new Response('Invalid URL', {status: 400});
     }
-    let widthHeight = document.querySelector('input[name="width_height"]:checked').value.split('x');
+    let [width, height] = document.querySelector('input[name="width_height"]:checked').value.split('x');
     let cache = document.getElementById('catch').checked;
-    let request_url = `/api/create_movie/?url=${url}&page_height=${pageHeightSlider.value}` +
-        `&width=${widthHeight[0]}&height=${widthHeight[1]}&lang=${navigator.language}&catch=${cache}`;
-    console.log(`Requesting ${request_url}`);
+    let data = {
+        'url': url,
+        'lang': navigator.language,
+        'page_height': pageHeightSlider.value,
+        'width': width,
+        'height': height,
+        'catch': cache,
+    }
+    let request_url = '/api/create_movie/';
+    header = {
+        'Content-Type': 'application/json',
+    }
     return await fetch(request_url, {
-        method: 'GET',
+        method: 'POST',
+        headers: header,
+        body: JSON.stringify(data),
     });
 }
 
