@@ -20,16 +20,14 @@ async function fetchMovieUrl() {
 
 
 async function submit() {
-    // Hide submit button and result area.
-    submitButton.className = 'visually-hidden';
-    // show loading button. remove visually-hidden class
-    loadingImage.className = '';
+    // Hide submit button and result area. Show loading image.
+    submitButton.classList.add('visually-hidden');
+    loadingImage.classList.remove('visually-hidden');
     // fetch movie url
     let response = await fetchMovieUrl()
-    // show submit button
-    submitButton.className = 'btn btn-primary';
-    // hide loading button
-    loadingImage.className = 'visually-hidden';
+    // show result area and copy button.
+    submitButton.classList.remove('visually-hidden');
+    loadingImage.classList.add('visually-hidden');
 
     if (response.status === 200) {
         // set url to movie_url
@@ -75,6 +73,10 @@ function saveResult(result) {
     /*
     Save result in cookie.
      */
+    if (result.delete_at === null) {
+        console.log(`Saving result in cookie: ${result.url}`);
+        return;
+    }
     let expires = new Date(result.delete_at * 1000);
     document.cookie = `${result.url}=${result.url}; expires=${expires.toUTCString()}; path=/`;
 }
