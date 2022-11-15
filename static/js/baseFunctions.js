@@ -25,7 +25,7 @@ async function submit() {
     resultArea.className = 'visually-hidden';
     // show loading button. remove visually-hidden class
     loadingImage.className = '';
-    copyButton.textContent = '動画のURLをコピー';
+    copyButton.textContent = 'Copy';
     // fetch movie url
     let response = await fetchMovieUrl()
     // show submit button
