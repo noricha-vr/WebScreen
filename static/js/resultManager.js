@@ -34,7 +34,7 @@ function saveResult(result) {
         return;
     }
     let expires = new Date(result.delete_at * 1000);
-    document.cookie = `${result.url}=${result.url}; expires=${expires.toUTCString()}; path=/`;
+    document.cookie = `${result.name}=${result.url}; expires=${expires.toUTCString()}; path=/`;
 }
 
 function addResultsToPage() {

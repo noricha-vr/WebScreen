@@ -31,9 +31,13 @@ async function submit() {
         let data = await response.json()
         console.log(`data: ${JSON.stringify(data)}`);
         // save result to cookie
+        data.name = data.url;
+        if (inputUrl !== null) {
+            data.name = inputUrl.value;
+        }
         saveResult(data);
         // add result to page
-        let newResult = createResultNode(data.url, data.url);
+        let newResult = createResultNode(data.name, data.url);
         let resultsElement = document.getElementById('results');
         resultsElement.insertBefore(newResult, resultsElement.firstChild);
     } else {
