@@ -3,8 +3,6 @@ const submitButton = document.getElementById('submit');
 const loadingImage = document.getElementById('loading');
 const inputUrl = document.getElementById('url');
 const pasteButton = document.getElementById('paste_button');
-const movieUrlElement = document.getElementById('movie_url');
-const resultArea = document.getElementById('result');
 const pageHeightLabel = document.getElementById('page_height_label');
 const pageHeightSlider = document.getElementById('page_height_slider');
 
@@ -35,7 +33,11 @@ async function submit() {
         // save result to cookie
         saveResult(data);
         // add result to page
-        let newResult = createResultNode(data.url, data.url);
+        let text = data.url;
+        if (inputUrl !== null) {
+            text = inputUrl.value;
+        }
+        let newResult = createResultNode(text, data.url);
         let resultsElement = document.getElementById('results');
         resultsElement.insertBefore(newResult, resultsElement.firstChild);
     } else {
