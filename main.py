@@ -7,18 +7,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-
-from fastapi import FastAPI, HTTPException, UploadFile, Request, Body
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+import uvicorn
+from fastapi import Body, FastAPI, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
 from pydantic import BaseModel
 
 from gcs import BucketManager
-from movie_maker import MovieMaker, BrowserConfig, MovieConfig
-
 from util import image2mp4
 
 logger = logging.getLogger('uvicorn')
@@ -93,9 +92,11 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
     :return: Download URL
     """
     if len(browser_setting.url) == 0:
-        raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
+        raise HTTPException(
+            status_code=400, detail="URL is empty.Please set URL.")
     if browser_setting.url.startswith("http") is False:
-        raise HTTPException(status_code=400, detail="URL is not valid. Please set URL.")
+        raise HTTPException(
+            status_code=400, detail="URL is not valid. Please set URL.")
     bucket_manager = BucketManager(BUCKET_NAME)
     scroll = int(browser_setting.height // 3)
     browser_config = BrowserConfig(browser_setting.url, browser_setting.width, browser_setting.height,
@@ -110,7 +111,8 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
     except Exception as e:
         logger.error(f'Failed to make movie.  url: {browser_setting.url} {e}')
         raise HTTPException(status_code=500, detail="Failed to create movie.")
-    movie_config = MovieConfig(image_dir, movie_path, width=browser_setting.width)
+    movie_config = MovieConfig(
+        image_dir, movie_path, width=browser_setting.width)
     MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
@@ -179,7 +181,8 @@ async def receive_image(request: Request, body: bytes = Body(...)):
     image_data = str(body).split(',')[1]
     image_path = Path(f"image/{token}/desktop.png")
     image_path.parent.mkdir(exist_ok=True, parents=True)
-    with open(image_path, "wb") as f: f.write(base64.b64decode(bytes(image_data, 'utf-8')))
+    with open(image_path, "wb") as f:
+        f.write(base64.b64decode(bytes(image_data, 'utf-8')))
     image2mp4(str(image_path.parent), str(temp_movie_path))
     temp_movie_path.rename(movie_path)
     return {"message": f"success. URL: /api/receive-image/{token}/"}
@@ -201,11 +204,14 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     """
     targets = targets.split(",")
     if len(url) == 0:
-        raise HTTPException(status_code=400, detail="URL is empty.Please set URL.")
+        raise HTTPException(
+            status_code=400, detail="URL is empty.Please set URL.")
     if url.startswith("https://github.com/") is False or len(url.split('/')) >= 5:
-        raise HTTPException(status_code=400, detail="URL is not GitHub repository.")
+        raise HTTPException(
+            status_code=400, detail="URL is not GitHub repository.")
     bucket_manager = BucketManager(BUCKET_NAME)
-    browser_config = BrowserConfig(url, width, height, page_height, scroll, targets=targets)
+    browser_config = BrowserConfig(
+        url, width, height, page_height, scroll, targets=targets)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if catch and movie_path.exists():
@@ -219,3 +225,7 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
     delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 7
     return {'url': url, 'delete_at': delete_at}
+
+
+if __name__ == '__main__':
+    uvicorn.run(app, host="0.0.0.0", port=8000)
