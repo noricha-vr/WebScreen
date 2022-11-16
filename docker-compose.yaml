@@ -2,7 +2,7 @@ version: '3'
 services:
   web_screen:
     container_name: 'web_screen'
-    image: 'web_screen'
+    build: .
     volumes:
       - .:/app
       - ./drivers:/root/.wdm/drivers/
@@ -12,6 +12,7 @@ services:
       - PORT=8080
       - ALLOW_HOST=0.0.0.0
       - BUCKET_NAME=vrchat
+
 #    networks:
 #      - my_network
 #networks:
