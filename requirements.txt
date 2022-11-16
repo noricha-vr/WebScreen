@@ -1,4 +1,4 @@
-git+https://github.com/noricha-vr/MovieMaker.git@09a056f17708a817c685a9d6b6f4857aecf0c2aa
+git+https://github.com/noricha-vr/MovieMaker.git@c039910241538cb0a0782d6df72f99a54c4a82f9
 fastapi==0.87.0
 google-cloud-storage==2.5.0
 Jinja2==3.1.2
