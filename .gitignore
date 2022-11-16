@@ -8,3 +8,4 @@ credentials.json
 /test/project/
 /test/html/
 /image/
+.DS_Store
