@@ -8,8 +8,7 @@ Also, in the future I would like to display input images, pdfs and the user's de
 ```bash
 git clone git+https://github.com/noricha-vr/screen_capture.git web_screen
 cd web_screen
-docker build -t web_screen .
-docker network create my_network
+docker compose build
 docker-compose up
 ```
 
