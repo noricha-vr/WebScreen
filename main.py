@@ -198,7 +198,7 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     :param width: Browser width
     :param height: Browser height
     :param page_height: Max scroll height
-    :param scroll:
+    :param scroll: scroll height
     :param catch: if catch is true, check saved movie is suitable.
     :return: GitHub repository page URL
     """
