@@ -2,6 +2,8 @@ import base64
 import logging
 import os
 import shutil
+import subprocess
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -21,14 +23,14 @@ from gcs import BucketManager
 from util import image2mp4
 
 logger = logging.getLogger('uvicorn')
+DEBUG = os.getenv('DEBUG') == 'True'
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
 ROOT_DIR = Path(os.path.dirname(__file__))
 STATIC_DIR = ROOT_DIR / "static"
 
 templates = Jinja2Templates(directory=ROOT_DIR / "templates")
-
-app = FastAPI(debug=True)
+app = FastAPI(debug=DEBUG)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 origins = [
@@ -193,32 +195,51 @@ async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('desktop_share.html', {'request': request})
 
 
-@app.get("/screen-recording/")
+@app.get("/recode-screen/")
 def recode_desktop(request: Request) -> templates.TemplateResponse:
     """
-    Recode user desktop or window. Then post the movie to /api/recode_desktop
+    Recode user desktop or window. Then post the movie to /api/save-movie/
     """
     return templates.TemplateResponse('screen-recording.html', {'request': request})
 
 
 @app.post("/api/save-movie/")
-def recode_desktop(request: Request,  body: bytes = Body(...)) -> dict:
+def recode_desktop(file: bytes = File()) -> dict:
     """
-    Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
-    body is posted by canvas.toDataURL().
-    :param request:
-    :param body: base64 image.
+    Save movie file. Convert movie for VRChat format. Upload Movie file on GCS. Return download url.
+    :param file: base64 movie.
     :return: message
     """
-    token = request.headers.get('session_id')
-    if token is None:
-        raise HTTPException(status_code=400, detail="session_id is empty.")
-    movie_path = Path(f"movie/{token}.mp4")
-    temp_movie_path = Path(f"movie/{token}_temp.mp4")
-    # save blob to mp4
-    with open(temp_movie_path, "wb") as f:
-        f.write(body)
-    return {"message": f"success."}
+    def to_vrc_movie(movie_config) -> None:
+        """
+        Create image_dir files to movie.
+        :param movie_config:
+        :return None:
+        """
+        subprocess.call(['ffmpeg',
+                         # Select image_dir/*.file_type
+                         '-i', f'{movie_config.input_image_dir}',
+                         '-vf', f"scale='min({movie_config.width},iw)':-2",  # iw is input width, -2 is auto height
+                         '-c:v', 'h264',  # codec
+                         '-pix_fmt', 'yuv420p',  # pixel format (color space)
+                         '-preset', movie_config.encode_speed,
+                         '-tune', 'stillimage',  # tune for still image
+                         '-y',  # overwrite output file
+                         f'{movie_config.output_movie_path}'])
+    if file:
+        temp_movie_path = Path(f"movie/{uuid.uuid4()}_temp.mp4")
+        movie_path = Path(f"movie/{uuid.uuid4()}.mp4")
+        with open(temp_movie_path, "wb") as f:
+            f.write(file)
+        start = time.time()
+        _movie_config = MovieConfig(temp_movie_path, movie_path, width=1280)
+        to_vrc_movie(_movie_config)
+        logger.info(f"to_vrc_movie: {time.time() - start}")
+        bucket_manager = BucketManager(BUCKET_NAME)
+        url = bucket_manager.to_public_url(str(movie_path))
+        logger.info(f"url: {url}")
+        return {"url": url}
+    return {"message": "not found file."}
 
 
 @app.get("/api/create_github_movie/")
@@ -261,4 +282,5 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
 
 
 if __name__ == '__main__':
+    # reload = True
     uvicorn.run(app, host="0.0.0.0", port=8000)

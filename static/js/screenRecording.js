@@ -1,16 +1,8 @@
 const videoElem = document.getElementById("video");
-const logElem = document.getElementById("log");
 const startElem = document.getElementById("start");
 const stopElem = document.getElementById("stop");
 const mineType = 'video/mp4';
 let mediaRecorder = null;
-
-let displayMediaOptions = {
-    video: {
-        cursor: "always"
-    },
-    audio: false
-};
 
 // Set event listeners for the start and stop buttons
 startElem.addEventListener("click", function (evt) {
@@ -34,9 +26,7 @@ async function recordScreen() {
 function createRecorder(stream, mimeType) {
     // the stream data is stored in this array
     let recordedChunks = [];
-
     const mediaRecorder = new MediaRecorder(stream);
-
     mediaRecorder.ondataavailable = function (e) {
         if (e.data.size > 0) {
             recordedChunks.push(e.data);
@@ -55,8 +45,10 @@ async function uploadMovie(recordedChunks) {
     const blob = new Blob(recordedChunks, {
         type: mineType
     });
-    let objectURL = URL.createObjectURL(blob);
-    console.log(`Post movie size: ${objectURL.length / 1024} KB`);
+    let file = new File([blob], "test.mp4");
+    console.log(`Post movie size: ${file.size / 1024} KB, type: ${file.type} name: ${file.name}`);
+    const formData = new FormData();
+    formData.append("file", file);  // ファイル内容を詰める
     let header = {
         'session_id': localStorage.getItem("uuid"),
     }
@@ -64,8 +56,12 @@ async function uploadMovie(recordedChunks) {
     let res = await fetch(url, {
         method: 'POST',
         headers: header,
-        body: objectURL,
+        body: formData
     })
+    if(res.ok){
+        let data = await res.json();
+        console.log(`${data.url} is uploaded`);
+    }
     console.log(`upload result: ${res.ok}`);
     URL.revokeObjectURL(blob); // clear from memory
 }
