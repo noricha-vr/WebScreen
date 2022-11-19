@@ -70,9 +70,15 @@ async function uploadMovie(recordedChunks) {
 async function startRecording() {
     let stream = await recordScreen();
     let mimeType = mineType;
+    startElem.classList.add('visually-hidden');
+    stopElem.classList.remove('visually-hidden');
+    videoElem.srcObject = stream;
     mediaRecorder = createRecorder(stream, mimeType);
 }
 
 function stopRecording() {
+    startElem.classList.remove('visually-hidden');
+    stopElem.classList.add('visually-hidden');
     mediaRecorder.stop();
+    videoElem.srcObject = null;
 }

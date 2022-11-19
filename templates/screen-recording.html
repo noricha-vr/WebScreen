@@ -10,32 +10,28 @@
                 <h1 class="h1 mb-5">Web Screen(Beta)</h1>
                 <h2 class="h4 mb-3">画面録画をして、VRChatの動画プレイヤーに共有できます</h2>
             </div>
-
         </div>
         <div>
             <p>※ この機能はベータ版です。</p>
-            <p>1.録画したい画面を選んでください</p>
-            <p>
-                <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
-            </p>
-            <p class="mt-3">
-                共有を開始したらこのURLをVRChatの動画プレイヤーに貼り付けてください<br />
-                <a id="player_url"></a><br />
-                ※ ブラウザでは動画が再生されません。VRChatの動画プレイヤーで再生してください。
-            </p>
-            <p class="mt-3">
-                <button class="btn btn-danger" id="stop">停止</button>
-            </p>
+            <div id="start-recording" class="">
+                <p>録画ボタンを押して、録画したい画面を選んでください</p>
+                <p>
+                    <button class="btn btn-primary" id="start">録画開始</button>&nbsp;
+                    <button class="btn btn-danger visually-hidden" id="stop">停止</button>
+                </p>
+            </div>
+            <div id="stop-recording" class="">
+                <div class="progress visually-hidden">
+                    <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
+                         aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+                </div>
+                <video id="video" width="400px" height="300px" autoplay></video>
+            </div>
         </div>
-        <hr />
-
-        <h2>Video</h2>
-        <video id="video" width="400px" height="300px" autoplay></video>
-        <script src="/static/js/screenRecording.js"></script>
-        <script src="/static/js/baseFunctions.js"></script>
         {% include 'result.html' %}
     </section>
 </div>
-
+<script src="/static/js/screenRecording.js"></script>
+<script src="/static/js/baseFunctions.js"></script>
 
 {% endblock %}
