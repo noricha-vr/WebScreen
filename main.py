@@ -128,8 +128,6 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
     Merge images and create a movie.
     :param files: List of image files
     :param width: Browser width
-    :param page_height: Max scroll height
-    :param scroll: Scroll height
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
@@ -238,7 +236,7 @@ def recode_desktop(file: bytes = File()) -> dict:
         bucket_manager = BucketManager(BUCKET_NAME)
         url = bucket_manager.to_public_url(str(movie_path))
         logger.info(f"url: {url}")
-        return {"url": url}
+        return {"url": url, "delete_at": datetime.now().timestamp() + 60 * 60 * 24 * 7}
     return {"message": "not found file."}
 
 

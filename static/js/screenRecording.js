@@ -1,6 +1,7 @@
 const videoElem = document.getElementById("video");
 const startElem = document.getElementById("start");
 const stopElem = document.getElementById("stop");
+const progressAreaElm = document.getElementById("progress-bar-area");
 const mineType = 'video/mp4';
 let mediaRecorder = null;
 
@@ -20,7 +21,6 @@ async function recordScreen() {
         video: { mediaSource: "screen" }
     });
 }
-
 function createRecorder(stream, mimeType) {
     // the stream data is stored in this array
     let recordedChunks = [];
@@ -31,8 +31,13 @@ function createRecorder(stream, mimeType) {
         }
     };
     mediaRecorder.onstop = async function (e) {
+        progressAreaElm.classList.remove('visually-hidden');
+        let progress = startProgressBar(getIntervalSpeed());
         this.stream.getTracks().forEach(track => track.stop());
         await uploadMovie(recordedChunks);
+        stopProgressBar(progress);
+        progressAreaElm.classList.add('visually-hidden');
+        startElem.classList.remove('visually-hidden');
         recordedChunks = [];
     };
     let interval = 200; // For every 200ms the stream data will be stored in a separate chunk.
@@ -56,9 +61,13 @@ async function uploadMovie(recordedChunks) {
     if(res.ok){
         let data = await res.json();
         console.log(`movie url: ${data.url}`);
+        let date = new Date();
+        // data.name is `ScreenRecoding-YYYY-MM-DD-HH-MM-SS`
+        data.name = `ScreenRecoding-${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`+
+            `--${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}`;
         saveResult(data);
         // add result to page
-        let newResult = createResultNode(`ScreenRecoding-${new Date().getTime()}`, data.url);
+        let newResult = createResultNode(data.name, data.url);
         changeButtonColor(newResult);
         let resultsElement = document.getElementById('results');
         resultsElement.insertBefore(newResult, resultsElement.firstChild);
@@ -77,8 +86,7 @@ async function startRecording() {
 }
 
 function stopRecording() {
-    startElem.classList.remove('visually-hidden');
-    stopElem.classList.add('visually-hidden');
     mediaRecorder.stop();
     videoElem.srcObject = null;
+    stopElem.classList.add('visually-hidden');
 }
