@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List
 
 import uvicorn
-from fastapi import Body, FastAPI, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,7 +28,7 @@ STATIC_DIR = ROOT_DIR / "static"
 
 templates = Jinja2Templates(directory=ROOT_DIR / "templates")
 
-app = FastAPI()
+app = FastAPI(debug=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 origins = [
@@ -186,6 +186,39 @@ async def receive_image(request: Request, body: bytes = Body(...)):
     image2mp4(str(image_path.parent), str(temp_movie_path))
     temp_movie_path.rename(movie_path)
     return {"message": f"success. URL: /api/receive-image/{token}/"}
+
+
+@app.get("/desktop/")
+async def read_index(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('desktop_share.html', {'request': request})
+
+
+@app.get("/screen-recording/")
+def recode_desktop(request: Request) -> templates.TemplateResponse:
+    """
+    Recode user desktop or window. Then post the movie to /api/recode_desktop
+    """
+    return templates.TemplateResponse('screen-recording.html', {'request': request})
+
+
+@app.post("/api/save-movie/")
+def recode_desktop(request: Request,  body: FileResponse = Form(...)) -> dict:
+    """
+    Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
+    body is posted by canvas.toDataURL().
+    :param request:
+    :param body: base64 image.
+    :return: message
+    """
+    token = request.headers.get('session_id')
+    if token is None:
+        raise HTTPException(status_code=400, detail="session_id is empty.")
+    movie_path = Path(f"movie/{token}.mp4")
+    temp_movie_path = Path(f"movie/{token}_temp.mp4")
+    # save blob to mp4
+    with open(temp_movie_path, "wb") as f:
+        f.write(body)
+    return {"message": f"success."}
 
 
 @app.get("/api/create_github_movie/")
