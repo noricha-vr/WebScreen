@@ -14,8 +14,6 @@ stopElem.addEventListener("click", function (evt) {
     stopRecording();
 }, false);
 
-let interval = null;
-
 async function recordScreen() {
     return await navigator.mediaDevices.getDisplayMedia({
         audio: true,
@@ -32,12 +30,13 @@ function createRecorder(stream, mimeType) {
             recordedChunks.push(e.data);
         }
     };
-    mediaRecorder.onstop = async function () {
-        // saveFile(recordedChunks);
+    mediaRecorder.onstop = async function (e) {
+        this.stream.getTracks().forEach(track => track.stop());
         await uploadMovie(recordedChunks);
         recordedChunks = [];
     };
-    mediaRecorder.start(200); // For every 200ms the stream data will be stored in a separate chunk.
+    let interval = 200; // For every 200ms the stream data will be stored in a separate chunk.
+    mediaRecorder.start(interval);
     return mediaRecorder;
 }
 
@@ -48,19 +47,21 @@ async function uploadMovie(recordedChunks) {
     let file = new File([blob], "test.mp4");
     console.log(`Post movie size: ${file.size / 1024} KB, type: ${file.type} name: ${file.name}`);
     const formData = new FormData();
-    formData.append("file", file);  // ファイル内容を詰める
-    let header = {
-        'session_id': localStorage.getItem("uuid"),
-    }
+    formData.append("file", file);
     let url = `/api/save-movie/`;
     let res = await fetch(url, {
         method: 'POST',
-        headers: header,
         body: formData
     })
     if(res.ok){
         let data = await res.json();
-        console.log(`${data.url} is uploaded`);
+        console.log(`movie url: ${data.url}`);
+        saveResult(data);
+        // add result to page
+        let newResult = createResultNode(`ScreenRecoding-${new Date().getTime()}`, data.url);
+        changeButtonColor(newResult);
+        let resultsElement = document.getElementById('results');
+        resultsElement.insertBefore(newResult, resultsElement.firstChild);
     }
     console.log(`upload result: ${res.ok}`);
     URL.revokeObjectURL(blob); // clear from memory
@@ -74,35 +75,4 @@ async function startRecording() {
 
 function stopRecording() {
     mediaRecorder.stop();
-}
-
-function dumpOptionsInfo() {
-    const videoTrack = videoElem.srcObject.getVideoTracks()[0];
-
-    console.info("Track settings:");
-    console.info(JSON.stringify(videoTrack.getSettings(), null, 2));
-    console.info("Track constraints:");
-    console.info(JSON.stringify(videoTrack.getConstraints(), null, 2));
-}
-
-
-function uuidv4() {
-    return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
-        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-    );
-}
-
-window.onload = function () {
-    let uuid = localStorage.getItem("uuid");
-    if (uuid === null) {
-        uuid = uuidv4();
-        localStorage.setItem("uuid", uuid);
-        console.log(`created uuid`);
-    }
-    console.log(`current uuid: ${uuid}`);
-    document.getElementsByName("uuid").forEach(e => e.innerText = uuid);
-    document.getElementsByName("origin").forEach(e => e.innerText = location.origin);
-    let url = `${location.origin}/desktop/${uuid}/`;
-    document.getElementById("player_url").innerText = url;
-    document.getElementById("player_url").href = url;
 }
