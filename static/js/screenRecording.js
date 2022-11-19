@@ -62,9 +62,9 @@ async function uploadMovie(recordedChunks) {
         let data = await res.json();
         console.log(`movie url: ${data.url}`);
         let date = new Date();
-        // data.name is `ScreenRecoding-YYYY-MM-DD-HH-MM-SS`
-        data.name = `ScreenRecoding-${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`+
-            `--${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}`;
+        // data.name is `ScreenRecoding_YYYY-MM-DD_HH-MM-SS`
+        data.name = `ScreenRecoding_${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`+
+            `_${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}`;
         saveResult(data);
         // add result to page
         let newResult = createResultNode(data.name, data.url);

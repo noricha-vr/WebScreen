@@ -218,6 +218,7 @@ def recode_desktop(file: bytes = File()) -> dict:
                          # Select image_dir/*.file_type
                          '-i', f'{movie_config.input_image_dir}',
                          '-vf', f"scale='min({movie_config.width},iw)':-2",  # iw is input width, -2 is auto height
+                         # '-vf', 'mpdecimate,setpts=N/FRAME_RATE/TB', # Remove duplicate frames. It's too short movie.
                          '-c:v', 'h264',  # codec
                          '-pix_fmt', 'yuv420p',  # pixel format (color space)
                          '-preset', movie_config.encode_speed,
