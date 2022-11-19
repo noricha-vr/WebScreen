@@ -56,37 +56,19 @@ async function uploadMovie(recordedChunks) {
         type: mineType
     });
     let objectURL = URL.createObjectURL(blob);
-    var reader = new FileReader();
-    reader.readAsDataURL(objectURL);
-    reader.onload = async function (e) {
-        console.log('DataURL:', e.target.result);
-        let res = await postMovie('/api/save-movie/', reader);
-        console.log(`upload result: ${res.ok}`);
-        URL.revokeObjectURL(blob); // clear from memory
-    };
-}
-// After some time stop the recording by 
-async function postMovie(url, movie) {
+    console.log(`Post movie size: ${objectURL.length / 1024} KB`);
     let header = {
         'session_id': localStorage.getItem("uuid"),
     }
-    console.log(`Post movie size: ${movie.length / 1024} KB`);
-    let formData = new FormData();
-    formData.append('movie', movie);
-    let res = await fetch(url, formData, {
+    let url = `/api/save-movie/`;
+    let res = await fetch(url, {
         method: 'POST',
         headers: header,
-        responseType: 'blob',
+        body: objectURL,
     })
-    return res;
+    console.log(`upload result: ${res.ok}`);
+    URL.revokeObjectURL(blob); // clear from memory
 }
-
-let formData = new FormData();
-formData.append('movie', 'test.mp4');
-let res = fetch('/api/save-movie/', formData, {
-    method: 'POST',
-})
-console.log(`upload result: ${res.ok}`);
 
 async function startRecording() {
     let stream = await recordScreen();

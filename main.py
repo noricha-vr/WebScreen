@@ -202,7 +202,7 @@ def recode_desktop(request: Request) -> templates.TemplateResponse:
 
 
 @app.post("/api/save-movie/")
-def recode_desktop(request: Request,  body: FileResponse = Form(...)) -> dict:
+def recode_desktop(request: Request,  body: bytes = Body(...)) -> dict:
     """
     Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
     body is posted by canvas.toDataURL().
