@@ -7,17 +7,17 @@ async function fetchMovieUrl() {
     let cache = document.getElementById('catch').checked;
     let request_url = `/api/create_github_movie/`
     console.log(`Requesting ${request_url}`);
-    let data = {
+    let data = JSON.stringify({
         "url": url,
         "targets": targets,
         "width": width,
         "height": height,
-        "cache": cache == true ? 1 : 0,
-    }
-    console.log(`data: ${JSON.stringify(data)}`);
-    return await fetch(request_url ,{
+        "cache": cache === true ? 1 : 0,
+    })
+    console.log(`POST data: ${data}`);
+    return await fetch(request_url, {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: data,
         headers: {
             'Content-Type': 'application/json',
         },

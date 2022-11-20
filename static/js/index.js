@@ -7,15 +7,15 @@ async function fetchMovieUrl() {
     }
     let [width, height] = document.querySelector('input[name="width_height"]:checked').value.split('x');
     let cache = document.getElementById('catch').checked;
-    let data = {
+    let data = JSON.stringify({
         'url': url,
         'lang': navigator.language,
         'page_height': pageHeightSlider.value,
         'width': width,
         'height': height,
-        'catch': cache,
-    }
-    console.log(`data: ${data}`);
+        'catch': cache === true ? 1 : 0,
+    })
+    console.log(`POST data: ${data}`);
     let request_url = '/api/create_movie/';
     let header = {
         'Content-Type': 'application/json',
@@ -23,7 +23,7 @@ async function fetchMovieUrl() {
     return await fetch(request_url, {
         method: 'POST',
         headers: header,
-        body: JSON.stringify(data),
+        body: data,
     });
 }
 

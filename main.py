@@ -2,7 +2,6 @@ import base64
 import logging
 import os
 import shutil
-import subprocess
 import time
 import uuid
 from datetime import datetime
@@ -17,9 +16,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
-from pydantic import BaseModel
 
 from gcs import BucketManager
+from models import BrowserSetting, GithubSetting
 from util import image2mp4
 
 logger = logging.getLogger('uvicorn')
@@ -71,15 +70,6 @@ async def read_index(request: Request) -> templates.TemplateResponse:
 @app.get("/favicon.ico")
 async def favicon() -> FileResponse:
     return FileResponse((STATIC_DIR / 'favicon.ico'))
-
-
-class BrowserSetting(BaseModel):
-    url: str
-    lang: str
-    page_height: int
-    width: int
-    height: int
-    catch: bool
 
 
 @app.post("/api/create_movie/")
@@ -224,17 +214,6 @@ def recode_desktop(file: bytes = File()) -> dict:
         return {"url": url, "delete_at": datetime.now().timestamp() + 60 * 60 * 24 * 7}
     return {"message": "not found file."}
 
-class GithubSetting(BaseModel):
-    url: str
-    targets: str
-    width: int
-    height: int
-    cache: bool = True
-    page_height: int = 50000
-
-@app.post("/api/test/")
-def test_post(github_setting: GithubSetting):
-    return github_setting.dict()
 
 @app.post("/api/create_github_movie/")
 def create_github_movie(github_setting: GithubSetting) -> dict:
@@ -259,7 +238,8 @@ def create_github_movie(github_setting: GithubSetting) -> dict:
     bucket_manager = BucketManager(BUCKET_NAME)
     scroll = github_setting.height // 3
     browser_config = BrowserConfig(
-        github_setting.url, github_setting.width, github_setting.height, github_setting.page_height, scroll, targets=targets)
+        github_setting.url, github_setting.width, github_setting.height, github_setting.page_height, scroll,
+        targets=targets)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if github_setting.cache and movie_path.exists():
