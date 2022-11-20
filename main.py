@@ -208,31 +208,14 @@ def recode_desktop(file: bytes = File()) -> dict:
     :param file: base64 movie.
     :return: message
     """
-    def to_vrc_movie(movie_config) -> None:
-        """
-        Create image_dir files to movie.
-        :param movie_config:
-        :return None:
-        """
-        subprocess.call(['ffmpeg',
-                         # Select image_dir/*.file_type
-                         '-i', f'{movie_config.input_image_dir}',
-                         '-vf', f"scale='min({movie_config.width},iw)':-2",  # iw is input width, -2 is auto height
-                         # '-vf', 'mpdecimate,setpts=N/FRAME_RATE/TB', # Remove duplicate frames. It's too short movie.
-                         '-c:v', 'h264',  # codec
-                         '-pix_fmt', 'yuv420p',  # pixel format (color space)
-                         '-preset', movie_config.encode_speed,
-                         '-tune', 'stillimage',  # tune for still image
-                         '-y',  # overwrite output file
-                         f'{movie_config.output_movie_path}'])
     if file:
         temp_movie_path = Path(f"movie/{uuid.uuid4()}_temp.mp4")
         movie_path = Path(f"movie/{uuid.uuid4()}.mp4")
         with open(temp_movie_path, "wb") as f:
             f.write(file)
         start = time.time()
-        _movie_config = MovieConfig(temp_movie_path, movie_path, width=1280)
-        to_vrc_movie(_movie_config)
+        movie_config = MovieConfig(temp_movie_path, movie_path, width=1280, encode_speed='ultrafast')
+        MovieMaker.to_vrc_movie(movie_config)
         logger.info(f"to_vrc_movie: {time.time() - start}")
         bucket_manager = BucketManager(BUCKET_NAME)
         url = bucket_manager.to_public_url(str(movie_path))
