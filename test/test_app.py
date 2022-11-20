@@ -3,7 +3,6 @@ import os
 import shutil
 
 import pytest
-from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from main import app
 
@@ -37,8 +36,11 @@ def test_index():
             1000, 1280, 720, 'ja_JP'),
 ])
 def test_create_movie(url, max_page_height, width, height, lang):
-    response = client.get(
-        f"/api/create_movie/?url={url}&max_page_height={max_page_height}&width={width}&height={height}&lang={lang}")
+    response = client.post(
+        f"/api/create_movie/",
+        json={"url": url, "max_page_height": max_page_height, "width": width,
+              "height": height, "lang": lang,
+              }, )
     assert response.status_code == 200
     assert response.json().get('url').startswith("https://storage.googleapis.com/")
 
