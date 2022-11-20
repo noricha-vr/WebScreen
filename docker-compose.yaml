@@ -1,8 +1,9 @@
 version: '3.2'
 services:
   web_screen:
-    container_name: 'web_screen'
     build: .
+    image: 'web_screen'
+    container_name: 'web_screen'
     volumes:
       - .:/app
       - ./drivers:/root/.wdm/drivers/
