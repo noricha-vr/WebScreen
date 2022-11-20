@@ -134,7 +134,8 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
     name = str(uuid.uuid4())
     image_dir = Path('image') / name
     image_dir.mkdir(exist_ok=True, parents=True)
-    image_config = ImageConfig(image_dir)
+    output_image_dir = Path('image') / f'{name}_output'
+    image_config = ImageConfig(image_dir, output_image_dir)
     movie_path = Path(f"movie/{name}.mp4")
     logger.info(f"image_dir: {image_dir.absolute()}")
     for f in files:
@@ -142,7 +143,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
         logger.info(f"image_path: {image_path}")
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
-    output_image_dir = MovieMaker.format_images(image_config)
+    MovieMaker.format_images(image_config)
     movie_config = MovieConfig(output_image_dir, movie_path, width=width)
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
