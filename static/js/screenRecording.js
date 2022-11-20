@@ -8,7 +8,6 @@ let mediaRecorder = null;
 // Set event listeners for the start and stop buttons
 startElem.addEventListener("click", function (evt) {
     startRecording();
-    // testStartCapture();
 }, false);
 
 stopElem.addEventListener("click", function (evt) {
@@ -34,7 +33,8 @@ function createRecorder(stream, mimeType) {
         progressAreaElm.classList.remove('visually-hidden');
         let progress = startProgressBar(getIntervalSpeed());
         this.stream.getTracks().forEach(track => track.stop());
-        await uploadMovie(recordedChunks);
+        let res = await uploadMovie(recordedChunks);
+        await saveAndShowResult(res);
         stopProgressBar(progress);
         progressAreaElm.classList.add('visually-hidden');
         startElem.classList.remove('visually-hidden');
@@ -46,7 +46,7 @@ function createRecorder(stream, mimeType) {
 }
 
 async function uploadMovie(recordedChunks) {
-    const blob = new Blob(recordedChunks, {
+    let blob = new Blob(recordedChunks, {
         type: mineType
     });
     let file = new File([blob], "test.mp4");
@@ -58,11 +58,16 @@ async function uploadMovie(recordedChunks) {
         method: 'POST',
         body: formData
     })
+    URL.revokeObjectURL(blob); // clear from memory
+    return res;
+}
+
+async function saveAndShowResult(res) {
     if(res.ok){
         let data = await res.json();
         console.log(`movie url: ${data.url}`);
         let date = new Date();
-        // data.name is `ScreenRecoding_YYYY-MM-DD_HH-MM-SS`
+        // data.name format is `ScreenRecoding_YYYY-MM-DD_HH-MM-SS`
         data.name = `ScreenRecoding_${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`+
             `_${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}`;
         saveResult(data);
@@ -71,9 +76,9 @@ async function uploadMovie(recordedChunks) {
         changeButtonColor(newResult);
         let resultsElement = document.getElementById('results');
         resultsElement.insertBefore(newResult, resultsElement.firstChild);
+    }else{
+        alert('Error: ' + res.status);
     }
-    console.log(`upload result: ${res.ok}`);
-    URL.revokeObjectURL(blob); // clear from memory
 }
 
 async function startRecording() {
