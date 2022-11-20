@@ -224,10 +224,20 @@ def recode_desktop(file: bytes = File()) -> dict:
         return {"url": url, "delete_at": datetime.now().timestamp() + 60 * 60 * 24 * 7}
     return {"message": "not found file."}
 
+class GithubSetting(BaseModel):
+    url: str
+    targets: str
+    width: int
+    height: int
+    cache: bool = True
+    page_height: int = 50000
 
-@app.get("/api/create_github_movie/")
-def create_github_movie(url: str, targets: str, width: int = 1280, height: int = 720, page_height: int = 50000,
-                        scroll: int = 200, catch: bool = True) -> dict:
+@app.post("/api/test/")
+def test_post(github_setting: GithubSetting):
+    return github_setting.dict()
+
+@app.post("/api/create_github_movie/")
+def create_github_movie(github_setting: GithubSetting) -> dict:
     """
     Download github repository, convert file into HTML, and take a screenshot.
     :param url: URL to take a screenshot
@@ -239,24 +249,25 @@ def create_github_movie(url: str, targets: str, width: int = 1280, height: int =
     :param catch: if catch is true, check saved movie is suitable.
     :return: GitHub repository page URL
     """
-    targets = targets.split(",")
-    if len(url) == 0:
+    targets = github_setting.targets.split(",")
+    if len(github_setting.url) == 0:
         raise HTTPException(
             status_code=400, detail="URL is empty.Please set URL.")
-    if url.startswith("https://github.com/") is False or len(url.split('/')) >= 5:
+    if github_setting.url.startswith("https://github.com/") is False:
         raise HTTPException(
             status_code=400, detail="URL is not GitHub repository.")
     bucket_manager = BucketManager(BUCKET_NAME)
+    scroll = github_setting.height // 3
     browser_config = BrowserConfig(
-        url, width, height, page_height, scroll, targets=targets)
+        github_setting.url, github_setting.width, github_setting.height, github_setting.page_height, scroll, targets=targets)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
-    if catch and movie_path.exists():
+    if github_setting.cache and movie_path.exists():
         url = bucket_manager.get_public_file_url(str(movie_path))
         return {'url': url, 'delete_at': None}
     # Download the repository.
     image_dir = MovieMaker.take_screenshots_github_files(browser_config)
-    movie_config = MovieConfig(image_dir, movie_path, width=width)
+    movie_config = MovieConfig(image_dir, movie_path, width=github_setting.width)
     MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))

@@ -28,10 +28,10 @@ async function submit() {
     submitButton.classList.remove('visually-hidden');
     progressBar.parentNode.classList.add('visually-hidden');
 
-    if (response.status === 200) {
+    if (response.ok) {
         // set url to movie_url
         let data = await response.json()
-        console.log(`data: ${JSON.stringify(data)}`);
+        console.log(`Response data: ${JSON.stringify(data)}`);
         // save result to cookie
         data.name = data.url;
         if (inputUrl !== null) {
