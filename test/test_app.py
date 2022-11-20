@@ -71,7 +71,8 @@ def test_create_image_movie(images):
     ("https://github.com/noricha-vr/source_converter", '*.md,*.py'),
 ])
 def test_create_github_movie(url, targets):
-    url = f"/api/create_github_movie/?url={url}&targets={targets}"
-    response = client.get(url)
+    request_url = f"/api/create_github_movie/"
+    response = client.post(request_url, headers={"Content-Type": "application/json"},
+                           json={"url": url, "targets": targets, "width": 1280, "height": 720, "cache": 1})
     assert response.status_code == 200
     assert response.json().get('url').startswith("https://storage.googleapis.com/")
