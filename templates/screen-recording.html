@@ -3,42 +3,41 @@
 {% block content %}
 
 
-<div class="container">
-    <section class="section mt-5">
-        <div class="row justify-content-md-center">
-            <div class="col mt-3">
-                <h1 class="h1 mb-5">Web Screen(Beta)</h1>
-                <h2 class="h4 mb-3">画面録画をして、VRChatの動画プレイヤーに共有できます</h2>
-            </div>
-        </div>
-        <div>
-            <div id="start-recording" class="">
-                <p>
-                    <button class="btn btn-primary" id="start">録画開始</button>&nbsp;
-                    <button class="btn btn-danger visually-hidden" id="stop">停止</button>
-                </p>
-                <p>
-                    録画ボタンを押して、録画したい画面を選んでください<br/>
-                    停止ボタンを押すと、ファイルアップロードとVRChat用の変換処理が始まります。
-                </p>
-                <p>
-                    ※ この機能はベータ版です。<br/>
-                    処理にかかる時間は回線速度、動画の大きさ、時間によって異なります。<br/>
-                    今は10秒程度の短い録画時間で利用できます。<br/>
-                </p>
-                <div class="visually-hidden" id="progress-bar-area">
-                <div class="progress">
-                    <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
-                         aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
-                </div>
+    <div class="container">
+        <section class="section mt-5">
+            <div class="row justify-content-md-center">
+                <div class="col mt-3">
+                    <h1 class="h1 mb-5">Web Screen(Beta)</h1>
+                    <h2 class="h4 mb-3">画面録画をして、VRChatの動画プレイヤーに共有できます</h2>
                 </div>
             </div>
-            <video id="video" class="visually-hidden" width="400px" height="300px" autoplay></video>
-        </div>
-        {% include 'result.html' %}
-    </section>
-</div>
-<script src="/static/js/screenRecording.js"></script>
-<script src="/static/js/baseFunctions.js"></script>
+            <div>
+                <div id="start-recording" class="">
+                    <p>
+                        <button class="btn btn-primary" id="start">録画開始</button>&nbsp;
+                        <button class="btn btn-danger visually-hidden" id="stop">停止</button>
+                    </p>
+                    <p>
+                        録画ボタンを押して、録画したい画面を選んでください<br/>
+                        停止ボタンを押すと、ファイルアップロードとVRChat用の変換処理が始まります。
+                    </p>
+                    <p>
+                        ※ 処理にかかる時間は回線速度、動画の大きさ、時間によって異なります。<br/>
+                        ※ 動画のサイズが大きくなるため、1〜2分程度の短い動画でご利用ください。<br/>
+                    </p>
+                    <div class="visually-hidden" id="progress-bar-area">
+                        <div class="progress">
+                            <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
+                                 aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                <video id="video" class="visually-hidden" width="400px" height="300px" autoplay></video>
+            </div>
+            {% include 'result.html' %}
+        </section>
+    </div>
+    <script src="/static/js/screenRecording.js"></script>
+    <script src="/static/js/baseFunctions.js"></script>
 
 {% endblock %}
