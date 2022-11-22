@@ -108,7 +108,7 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
     MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
-    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 7
+    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
     return {'url': url, 'delete_at': delete_at}
 
 
@@ -137,7 +137,7 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
     movie_config = MovieConfig(output_image_dir, movie_path, width=width)
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
-    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 7
+    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
     return {'url': url, 'delete_at': delete_at}
 
 
@@ -153,6 +153,11 @@ def send_desktop_movie(session_id: str):
         not_found_movie = 'https://storage.googleapis.com/noricha-public/web-screen/movie/not_found.mp4'
         return RedirectResponse(url=not_found_movie)
     return FileResponse(movie_path)
+
+
+@app.get("/replace/movie/")
+def replace_movie():
+    return FileResponse(Path('movie/replace/video.m3u8'))
 
 
 @app.post('/api/receive-image/')
@@ -211,7 +216,7 @@ def recode_desktop(file: bytes = File()) -> dict:
         bucket_manager = BucketManager(BUCKET_NAME)
         url = bucket_manager.to_public_url(str(movie_path))
         logger.info(f"url: {url}")
-        return {"url": url, "delete_at": datetime.now().timestamp() + 60 * 60 * 24 * 7}
+        return {"url": url, "delete_at": datetime.now().timestamp() + 60 * 60 * 24 * 14}
     return {"message": "not found file."}
 
 
@@ -251,7 +256,7 @@ def create_github_movie(github_setting: GithubSetting) -> dict:
     MovieMaker.image_to_movie(movie_config)
     # Upload to GCS
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
-    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 7
+    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
     return {'url': url, 'delete_at': delete_at}
 
 
