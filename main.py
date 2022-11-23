@@ -189,8 +189,8 @@ async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('desktop_share.html', {'request': request})
 
 
-@app.get("/recode-screen/")
-def recode_desktop(request: Request) -> templates.TemplateResponse:
+@app.get("/record-screen/")
+def record_desktop(request: Request) -> templates.TemplateResponse:
     """
     Recode user desktop or window. Then post the movie to /api/save-movie/
     """
