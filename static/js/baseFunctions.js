@@ -85,3 +85,16 @@ function changeButtonColor(element) {
         button.classList.remove(button_color);
     }, 10000);
 }
+
+function selectActiveMenu() {
+    let naviItems = document.getElementsByClassName('nav-link');
+    for (let item of naviItems) {
+        if (item.href === location.href) {
+            item.classList.add('active');
+        }
+    }
+}
+
+window.onload = () => {
+    selectActiveMenu();
+}
