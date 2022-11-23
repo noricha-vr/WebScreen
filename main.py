@@ -184,9 +184,9 @@ async def receive_image(request: Request, body: bytes = Body(...)):
     return {"message": f"success. URL: /api/receive-image/{token}/"}
 
 
-@app.get("/desktop/")
+@app.get("/streaming/")
 async def read_index(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('desktop_share.html', {'request': request})
+    return templates.TemplateResponse('streaming.html', {'request': request})
 
 
 @app.get("/record-screen/")
