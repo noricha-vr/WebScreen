@@ -155,11 +155,6 @@ def send_desktop_movie(session_id: str):
     return FileResponse(movie_path)
 
 
-@app.get("/replace/movie/")
-def replace_movie():
-    return FileResponse(Path('movie/replace/video.m3u8'))
-
-
 @app.post('/api/receive-image/')
 async def receive_image(request: Request, body: bytes = Body(...)):
     """
