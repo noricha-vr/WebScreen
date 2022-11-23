@@ -1,50 +1,63 @@
 {% extends 'base.html' %}
 {% block title %}Web Screen|VRChatでGithubリポジトリのソースコードを表示{% endblock %}
+{% block meta_tag %}
+    <meta property="og:url" content="https://web-screen.net/desktop/"/>
+    <meta name="description"
+          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
+          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
+          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
+    <meta property="og:description"
+          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
+          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
+          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
+    <meta property="og:image"
+          content="https://storage.googleapis.com/noricha-public/web-screen/image/web-screen-og-image.png"/>
+{% endblock %}
 {% block content %}
 
 
-<div class="container">
-    <section class="section mt-5">
-        <div class="row justify-content-md-center">
-            <div class="col mt-3">
-                <h1 class="h1 mb-5">Web Screen(Beta)</h1>
-                <h2 class="h4 mb-3">VRChatの動画プレイヤーに画面共有できます</h2>
+    <div class="container">
+        <section class="section mt-5">
+            <div class="row justify-content-md-center">
+                <div class="col mt-3">
+                    <h1 class="h1 mb-5">Web Screen(Beta)</h1>
+                    <h2 class="h4 mb-3">VRChatの動画プレイヤーに画面共有できます</h2>
+                </div>
+
             </div>
+            <p>この機能はベータ版です。パソコンの画面は動画プレイヤーに表示されますが、ストリーミング再生されません。
+                URLをリクエストした瞬間の画面が表示されます。動画プレイヤーでURLを再読込するとその瞬間の画面に更新されます。<br/>
+                ※ ストリーミング表示できるようにアップデート中です。</p>
+            <p>1.共有したい画面を選んでください</p>
+            <p>
+                <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
+                <button class="btn btn-danger" id="stop">停止</button>
+            </p>
+            <p class="mt-3 mb-3">
+                共有を開始したらこのURLをVRChatの動画プレイヤーに貼り付けてください<br/>
+                <a id="player_url"></a><br/>
+                ※ ブラウザでは動画が再生されません。VRChatの動画プレイヤーで再生してください。
+            </p>
+            <hr/>
 
-        </div>
-        <p>この機能はベータ版です。パソコンの画面は動画プレイヤーに表示されますが、ストリーミング再生されません。
-            URLをリクエストした瞬間の画面が表示されます。動画プレイヤーでURLを再読込するとその瞬間の画面に更新されます。<br/>
-            ※ ストリーミング表示できるようにアップデート中です。</p>
-        <p>1.共有したい画面を選んでください</p>
-        <p>
-            <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
-            <button class="btn btn-danger" id="stop">停止</button>
-        </p>
-        <p class="mt-3 mb-3">
-            共有を開始したらこのURLをVRChatの動画プレイヤーに貼り付けてください<br/>
-            <a id="player_url"></a><br/>
-            ※ ブラウザでは動画が再生されません。VRChatの動画プレイヤーで再生してください。
-        </p>
-        <hr/>
-
-        <h2>Video</h2>
-        <video id="video" width="400px" height="300px" autoplay></video>
-        <h2>Canvas</h2>
-        <canvas id="canvas" width="400px" height="300px"></canvas>
-        <h2>Image</h2>
-        <img id="photo" alt="The screen capture will appear in this box.">
-        <br>
+            <h2>Video</h2>
+            <video id="video" width="400px" height="300px" autoplay></video>
+            <h2>Canvas</h2>
+            <canvas id="canvas" width="400px" height="300px"></canvas>
+            <h2>Image</h2>
+            <img id="photo" alt="The screen capture will appear in this box.">
+            <br>
 
 
-        <!--        <strong>Log:</strong>-->
-        <br>
-        <pre id="log"></pre>
+            <!--        <strong>Log:</strong>-->
+            <br>
+            <pre id="log"></pre>
 
-        <script src="/static/js/desktopCapture.js"></script>
-        <script src="/static/js/baseFunctions.js"></script>
-        <!--        {% include 'result.html' %}-->
-    </section>
-</div>
+            <script src="/static/js/desktopCapture.js"></script>
+            <script src="/static/js/baseFunctions.js"></script>
+            <!--        {% include 'result.html' %}-->
+        </section>
+    </div>
 
 
 {% endblock %}
