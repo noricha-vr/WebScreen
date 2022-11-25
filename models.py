@@ -8,6 +8,7 @@ class BrowserSetting(BaseModel):
     lang: str = 'en-US'
     catch: bool = True
     page_height: int = 50000
+    wait_time: int = 1
 
 
 class GithubSetting(BaseModel):

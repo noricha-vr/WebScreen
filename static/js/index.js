@@ -7,12 +7,14 @@ async function fetchMovieUrl() {
     }
     let [width, height] = document.querySelector('input[name="width_height"]:checked').value.split('x');
     let cache = document.getElementById('catch').checked;
+    let wait_time = parseInt(document.querySelector('input[name="wait_time"]:checked').value);
     let data = JSON.stringify({
         'url': url,
         'lang': navigator.language,
         'page_height': pageHeightSlider.value,
         'width': width,
         'height': height,
+        'wait_time': wait_time,
         'catch': cache === true ? 1 : 0,
     })
     console.log(`POST data: ${data}`);

@@ -97,4 +97,5 @@ function selectActiveMenu() {
 
 window.onload = () => {
     selectActiveMenu();
+    addResultsToPage();
 }
