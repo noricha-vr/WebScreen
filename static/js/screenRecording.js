@@ -10,16 +10,19 @@ startElem.addEventListener("click", function (evt) {
     startRecording();
 }, false);
 
+// TODO add stopRecording on default stop button.
 stopElem.addEventListener("click", function (evt) {
     stopRecording();
 }, false);
 
 async function recordScreen() {
+    // TODO check screen recording support audio or not.
     return await navigator.mediaDevices.getDisplayMedia({
         audio: true,
-        video: { mediaSource: "screen" }
+        video: {mediaSource: "screen"}
     });
 }
+
 function createRecorder(stream, mimeType) {
     // the stream data is stored in this array
     let recordedChunks = [];
@@ -52,6 +55,7 @@ async function uploadMovie(recordedChunks) {
     let file = new File([blob], "test.mp4");
     console.log(`Post movie size: ${file.size / 1024} KB, type: ${file.type} name: ${file.name}`);
     const formData = new FormData();
+    // TODO append audio true or false;
     formData.append("file", file);
     let url = `/api/save-movie/`;
     let res = await fetch(url, {
@@ -63,12 +67,12 @@ async function uploadMovie(recordedChunks) {
 }
 
 async function saveAndShowResult(res) {
-    if(res.ok){
+    if (res.ok) {
         let data = await res.json();
         console.log(`movie url: ${data.url}`);
         let date = new Date();
         // data.name format is `ScreenRecoding_YYYY-MM-DD_HH-MM-SS`
-        data.name = `ScreenRecoding_${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`+
+        data.name = `ScreenRecoding_${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` +
             `_${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}`;
         saveResult(data);
         // add result to page
@@ -76,7 +80,7 @@ async function saveAndShowResult(res) {
         changeButtonColor(newResult);
         let resultsElement = document.getElementById('results');
         resultsElement.insertBefore(newResult, resultsElement.firstChild);
-    }else{
+    } else {
         alert('Error: ' + res.status);
     }
 }
@@ -86,12 +90,10 @@ async function startRecording() {
     let mimeType = mineType;
     startElem.classList.add('visually-hidden');
     stopElem.classList.remove('visually-hidden');
-    videoElem.srcObject = stream;
     mediaRecorder = createRecorder(stream, mimeType);
 }
 
 function stopRecording() {
     mediaRecorder.stop();
-    videoElem.srcObject = null;
     stopElem.classList.add('visually-hidden');
 }
