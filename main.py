@@ -193,26 +193,6 @@ def record_desktop(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('screen-recording.html', {'request': request})
 
 
-def to_vrc_movie(movie_config) -> None:
-    """
-    Create image_dir files to movie.
-    :param movie_config:
-    :return None:
-    """
-    # TODO remove '-strict -2' when no sound movie.
-    command = ['ffmpeg',
-               '-i', f'{movie_config.input_image_dir}',
-               # '-vf', f"scale='min({movie_config.width},iw)':-2",  # iw is input width, -2 is auto height
-               '-c:v', 'copy',  # codec
-               '-c:a', 'copy',  # audio codec
-               '-strict', '-2',  # for mp4
-               '-pix_fmt', 'yuv420p',  # pixel format (color space)
-               '-y',  # overwrite output file
-               f'{movie_config.output_movie_path}']
-    logger.info(f'command: {command}')
-    subprocess.call(command)
-
-
 # TODO add audio parameter
 @app.post("/api/save-movie/")
 def recode_desktop(file: bytes = File()) -> dict:
@@ -227,8 +207,10 @@ def recode_desktop(file: bytes = File()) -> dict:
         with open(temp_movie_path, "wb") as f:
             f.write(file)
         start = time.time()
-        movie_config = MovieConfig(temp_movie_path, movie_path, width=1280, encode_speed='ultrafast')
-        to_vrc_movie(movie_config)
+        movie_config = MovieConfig(
+            temp_movie_path, movie_path, width=1280, encode_speed='ultrafast')
+        movie_config.has_audio = True
+        MovieMaker.to_vrc_movie(movie_config)
         logger.info(f"to_vrc_movie: {time.time() - start}")
         bucket_manager = BucketManager(BUCKET_NAME)
         url = bucket_manager.to_public_url(str(movie_path))
