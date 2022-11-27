@@ -93,7 +93,8 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
     bucket_manager = BucketManager(BUCKET_NAME)
     scroll = int(browser_setting.height // 3)
     browser_config = BrowserConfig(browser_setting.url, browser_setting.width, browser_setting.height,
-                                   browser_setting.page_height, scroll, lang=browser_setting.lang)
+                                   browser_setting.page_height, scroll, lang=browser_setting.lang,
+                                   wait_time=browser_setting.wait_time)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if movie_path.exists() and browser_setting.catch:
