@@ -20,7 +20,7 @@ from movie_maker.config import ImageConfig
 
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
-from util import image2mp4
+from util import image2mp4, pdf_to_image
 
 logger = logging.getLogger('uvicorn')
 DEBUG = os.getenv('DEBUG') == 'True'
@@ -51,6 +51,11 @@ app.add_middleware(
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('index.html', {'request': request})
+
+
+@app.get("/pdf/")
+async def read_index(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('pdf.html', {'request': request})
 
 
 @app.get("/image/")
@@ -155,6 +160,31 @@ def send_desktop_movie(session_id: str):
         not_found_movie = 'https://storage.googleapis.com/noricha-public/web-screen/movie/not_found.mp4'
         return RedirectResponse(url=not_found_movie)
     return FileResponse(movie_path)
+
+
+@app.post('/api/pdf-to-movie/')
+async def pdf_to_movie(pdf_file: UploadFile = File(...), width: int = Form(), height: int = Form()):
+    """
+    Convert PDF to movie.
+    :param pdf_file: PDF file
+    :param width: movie width
+    :param height: movie height
+    """
+    bucket_manager = BucketManager(BUCKET_NAME)
+    name = str(uuid.uuid4())
+    image_dir = Path('image') / name
+    image_dir.mkdir(exist_ok=True, parents=True)
+    movie_path = Path(f"movie/{name}.mp4")
+    pdf_path = Path('pdf') / f'{name}.pdf'
+    pdf_path.mkdir(exist_ok=True, parents=True)
+    with open(pdf_path, "wb") as f:
+        pdf_to_image(f.read(), image_dir)
+        # shutil.copyfileobj(pdf_file.file, buffer)
+    movie_config = MovieConfig(image_dir, movie_path, width=width, encode_speed='slow')
+    MovieMaker.image_to_movie(movie_config)
+    url = bucket_manager.to_public_url(str(movie_path))
+    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
+    return {'url': url, 'delete_at': delete_at}
 
 
 @app.post('/api/receive-image/')
