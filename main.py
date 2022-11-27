@@ -194,7 +194,6 @@ def record_desktop(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('screen-recording.html', {'request': request})
 
 
-# TODO add audio parameter
 @app.post("/api/save-movie/")
 def recode_desktop(file: bytes = File()) -> dict:
     """
@@ -210,7 +209,6 @@ def recode_desktop(file: bytes = File()) -> dict:
         start = time.time()
         movie_config = MovieConfig(
             temp_movie_path, movie_path, width=1280, encode_speed='ultrafast')
-        movie_config.has_audio = True
         MovieMaker.to_vrc_movie(movie_config)
         logger.info(f"to_vrc_movie: {time.time() - start}")
         bucket_manager = BucketManager(BUCKET_NAME)
