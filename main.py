@@ -148,20 +148,6 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
     return {'url': url, 'delete_at': delete_at}
 
 
-@app.get("/desktop/{session_id}/")
-def send_desktop_movie(session_id: str):
-    """
-    Get movie which file name is 'movie/{session_id}.mp4.
-    :param session_id:
-    :return: movie file
-    """
-    movie_path = Path(f"movie/{session_id}.mp4")
-    if not movie_path.exists():
-        not_found_movie = 'https://storage.googleapis.com/noricha-public/web-screen/movie/not_found.mp4'
-        return RedirectResponse(url=not_found_movie)
-    return FileResponse(movie_path)
-
-
 @app.post('/api/pdf-to-movie/')
 async def pdf_to_movie(pdf_file: UploadFile = File(...), width: int = Form(), height: int = Form()):
     """
@@ -178,11 +164,25 @@ async def pdf_to_movie(pdf_file: UploadFile = File(...), width: int = Form(), he
     pdf_path = Path('pdf') / f'{name}.pdf'
     pdf_path.mkdir(exist_ok=True, parents=True)
     pdf_to_image(pdf_file.file.read(), image_dir)
-    movie_config = MovieConfig(image_dir, movie_path, width=width, encode_speed='slow')
+    movie_config = MovieConfig(image_dir, movie_path, width=width, height=height, encode_speed='slow')
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
     delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
     return {'url': url, 'delete_at': delete_at}
+
+
+@app.get("/desktop/{session_id}/")
+def send_desktop_movie(session_id: str):
+    """
+    Get movie which file name is 'movie/{session_id}.mp4.
+    :param session_id:
+    :return: movie file
+    """
+    movie_path = Path(f"movie/{session_id}.mp4")
+    if not movie_path.exists():
+        not_found_movie = 'https://storage.googleapis.com/noricha-public/web-screen/movie/not_found.mp4'
+        return RedirectResponse(url=not_found_movie)
+    return FileResponse(movie_path)
 
 
 @app.post('/api/receive-image/')
