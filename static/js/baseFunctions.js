@@ -76,7 +76,7 @@ function stopProgressBar(progress) {
 }
 
 function changeButtonColor(element) {
-    let button_color = 'btn-primary';
+    let button_color = 'btn-danger';
     let button = element.querySelector('button');
     button.classList.remove('btn-outline-primary');
     button.classList.add(button_color);
