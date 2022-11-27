@@ -119,7 +119,7 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
     return {'url': url, 'delete_at': delete_at}
 
 
-@app.post("/api/create_image_movie/")
+@app.post("/api/image-to-movie/")
 async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict:
     """
     Merge images and create a movie.
@@ -177,9 +177,7 @@ async def pdf_to_movie(pdf_file: UploadFile = File(...), width: int = Form(), he
     movie_path = Path(f"movie/{name}.mp4")
     pdf_path = Path('pdf') / f'{name}.pdf'
     pdf_path.mkdir(exist_ok=True, parents=True)
-    with open(pdf_path, "wb") as f:
-        pdf_to_image(f.read(), image_dir)
-        # shutil.copyfileobj(pdf_file.file, buffer)
+    pdf_to_image(pdf_file.file.read(), image_dir)
     movie_config = MovieConfig(image_dir, movie_path, width=width, encode_speed='slow')
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
