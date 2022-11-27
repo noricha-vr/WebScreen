@@ -120,11 +120,12 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
 
 
 @app.post("/api/image-to-movie/")
-async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict:
+async def create_image_movie(images: List[UploadFile], width: int = Form(), height: int = Form()) -> dict:
     """
     Merge images and create a movie.
-    :param files: List of image files
+    :param images: List of image files
     :param width: Browser width
+    :param height: Browser height
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
@@ -135,13 +136,13 @@ async def create_image_movie(files: List[UploadFile], width: int = 1280) -> dict
     image_config = ImageConfig(image_dir, output_image_dir)
     movie_path = Path(f"movie/{name}.mp4")
     logger.info(f"image_dir: {image_dir.absolute()}")
-    for f in files:
-        image_path = str(image_dir.joinpath(f.filename).absolute())
+    for image in images:
+        image_path = str(image_dir.joinpath(image.filename).absolute())
         logger.info(f"image_path: {image_path}")
         with open(image_path, "wb") as buffer:
-            shutil.copyfileobj(f.file, buffer)
+            shutil.copyfileobj(image.file, buffer)
     MovieMaker.format_images(image_config)
-    movie_config = MovieConfig(output_image_dir, movie_path, width=width)
+    movie_config = MovieConfig(output_image_dir, movie_path, width=width, height=height)
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
     delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
