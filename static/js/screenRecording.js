@@ -40,6 +40,7 @@ function createRecorder(stream, mimeType) {
         await saveAndShowResult(res);
         stopProgressBar(progress);
         progressAreaElm.classList.add('visually-hidden');
+        stopElem.classList.add('visually-hidden');
         startElem.classList.remove('visually-hidden');
         recordedChunks = [];
     };
@@ -55,7 +56,6 @@ async function uploadMovie(recordedChunks) {
     let file = new File([blob], "test.mp4");
     console.log(`Post movie size: ${file.size / 1024} KB, type: ${file.type} name: ${file.name}`);
     const formData = new FormData();
-    // TODO append audio true or false;
     formData.append("file", file);
     let url = `/api/save-movie/`;
     let res = await fetch(url, {
@@ -95,5 +95,4 @@ async function startRecording() {
 
 function stopRecording() {
     mediaRecorder.stop();
-    stopElem.classList.add('visually-hidden');
 }
