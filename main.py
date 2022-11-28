@@ -2,7 +2,6 @@ import base64
 import logging
 import os
 import shutil
-import subprocess
 import time
 import uuid
 from datetime import datetime
@@ -120,12 +119,10 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
 
 
 @app.post("/api/image-to-movie/")
-async def create_image_movie(images: List[UploadFile], width: int = Form(), height: int = Form()) -> dict:
+async def create_image_movie(images: List[UploadFile]) -> dict:
     """
     Merge images and create a movie.
     :param images: List of image files
-    :param width: Browser width
-    :param height: Browser height
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
@@ -142,7 +139,7 @@ async def create_image_movie(images: List[UploadFile], width: int = Form(), heig
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
     MovieMaker.format_images(image_config)
-    movie_config = MovieConfig(output_image_dir, movie_path, width=width, height=height)
+    movie_config = MovieConfig(output_image_dir, movie_path)
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
     delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
@@ -150,12 +147,11 @@ async def create_image_movie(images: List[UploadFile], width: int = Form(), heig
 
 
 @app.post('/api/pdf-to-movie/')
-async def pdf_to_movie(pdf: UploadFile = File(...), width: int = Form(), height: int = Form()):
+async def pdf_to_movie(pdf: UploadFile = File()) -> dict:
     """
     Convert PDF to movie.
     :param pdf: PDF file
-    :param width: movie width
-    :param height: movie height
+    :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
     name = str(uuid.uuid4())
@@ -165,7 +161,7 @@ async def pdf_to_movie(pdf: UploadFile = File(...), width: int = Form(), height:
     pdf_path = Path('pdf') / f'{name}.pdf'
     pdf_path.mkdir(exist_ok=True, parents=True)
     pdf_to_image(pdf.file.read(), image_dir)
-    movie_config = MovieConfig(image_dir, movie_path, width=width, height=height, encode_speed='slow')
+    movie_config = MovieConfig(image_dir, movie_path, encode_speed='slow')
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
     delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14

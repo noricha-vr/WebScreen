@@ -76,11 +76,18 @@ function stopProgressBar(progress) {
 }
 
 function changeButtonColor(element) {
-    let button_color = 'btn-danger';
+    let button_color = 'btn-primary';
+    let div_classes = ['bg-warning', 'rounded', 'p-2'];
     let button = element.querySelector('button');
     button.classList.remove('btn-outline-primary');
     button.classList.add(button_color);
+    div_classes.forEach((c) => {
+        element.classList.add(c)
+    });
     setTimeout(() => {
+        div_classes.forEach((c) => {
+            element.classList.remove(c)
+        });
         button.classList.add('btn-outline-primary');
         button.classList.remove(button_color);
     }, 10000);
