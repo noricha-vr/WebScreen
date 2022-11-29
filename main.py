@@ -265,9 +265,10 @@ def create_github_movie(github_setting: GithubSetting) -> dict:
             status_code=400, detail="URL is not GitHub repository.")
     bucket_manager = BucketManager(BUCKET_NAME)
     scroll = github_setting.height // 3
+    wait_time = 0  # local file don't need to wait.
     browser_config = BrowserConfig(
         github_setting.url, github_setting.width, github_setting.height, github_setting.page_height, scroll,
-        targets=targets)
+        targets=targets, wait_time=wait_time)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
     if github_setting.cache and movie_path.exists():
