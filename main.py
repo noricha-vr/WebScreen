@@ -67,9 +67,14 @@ async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('desktop_share.html', {'request': request})
 
 
-@app.get("/github")
+@app.get("/github/")
 async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('github.html', {'request': request})
+
+
+@app.get("/privacy/")
+async def privacy(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('privacy.html', {'request': request})
 
 
 @app.get("/favicon.ico")
