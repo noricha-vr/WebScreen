@@ -77,7 +77,7 @@ function stopProgressBar(progress) {
 
 function changeButtonColor(element) {
     let button_color = 'btn-primary';
-    let div_classes = ['bg-warning', 'rounded', 'p-2'];
+    let div_classes = ['bg-warning', 'rounded', 'alert', 'alert-primary'];
     let button = element.querySelector('button');
     button.classList.remove('btn-outline-primary');
     button.classList.add(button_color);
@@ -102,7 +102,15 @@ function selectActiveMenu() {
     }
 }
 
+function showResultMessage() {
+    let results = document.getElementById('results');
+    if (results.children.length > 1) {
+        document.getElementById('result-message').classList.remove('visually-hidden');
+    }
+}
+
 window.onload = () => {
     selectActiveMenu();
     addResultsToPage();
+    showResultMessage();
 }
