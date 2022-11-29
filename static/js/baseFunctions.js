@@ -77,7 +77,7 @@ function stopProgressBar(progress) {
 
 function changeButtonColor(element) {
     let button_color = 'btn-primary';
-    let div_classes = ['bg-warning', 'rounded', 'alert', 'alert-primary'];
+    let div_classes = ['alert', 'alert-primary'];
     let button = element.querySelector('button');
     button.classList.remove('btn-outline-primary');
     button.classList.add(button_color);
@@ -90,7 +90,7 @@ function changeButtonColor(element) {
         });
         button.classList.add('btn-outline-primary');
         button.classList.remove(button_color);
-    }, 10000);
+    }, 20000);
 }
 
 function selectActiveMenu() {
