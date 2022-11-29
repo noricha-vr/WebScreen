@@ -72,11 +72,6 @@ async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('github.html', {'request': request})
 
 
-@app.get("/privacy/")
-async def privacy(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('privacy.html', {'request': request})
-
-
 @app.get("/favicon.ico")
 async def favicon() -> FileResponse:
     return FileResponse((STATIC_DIR / 'favicon.ico'))
