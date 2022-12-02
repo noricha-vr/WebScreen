@@ -46,52 +46,54 @@
     </script>
 </head>
 <body>
-<main>
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="/">Web Screen</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item">
-                            <a class="nav-link" aria-current="page" href="/">URL</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link " href="/record-screen/">Record</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/pdf/">PDF</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/image/">Image</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-white" href="/streaming/">Streaming</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-white" href="/github/">GitHub</a>
-                        </li>
+<header>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">Web Screen</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
+                    aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" aria-current="page" href="/">URL</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link " href="/record-screen/">Record</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/pdf/">PDF</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/image/">Image</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="/streaming/">Streaming</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="/github/">GitHub</a>
+                    </li>
 
-                    </ul>
+                </ul>
 
-                </div>
             </div>
-        </nav>
-    </header>
+        </div>
+    </nav>
+</header>
 
-    {% block content %}
+{% block content %}
 
-    {% endblock %}
+{% endblock %}
 
-    <footer>
-
-    </footer>
-</main>
+<footer style="background-color: darkgrey;">
+    <div class="container text-center">
+        <a href="https://sites.google.com/view/vrc-personal-development/oss%E9%9B%86%E4%BC%9A" class="text-white"
+           style="text-decoration:none;" target="_blank">Powered by OSS集会</a>
+    </div>
+    {% block script %}{% endblock %}
+</footer>
 
 <!-- Optional JavaScript; choose one of the two! -->
 
@@ -106,11 +108,4 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF" crossorigin="anonymous"></script>
 -->
 </body>
-<footer style="background-color: darkgrey;">
-    <div class="container text-center">
-        <a href="https://sites.google.com/view/vrc-personal-development/oss%E9%9B%86%E4%BC%9A" class="text-white"
-           style="text-decoration:none;" target="_blank">Powered by OSS集会</a>
-    </div>
-    {% block script %}{% endblock %}
-</footer>
 </html>
