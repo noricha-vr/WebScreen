@@ -61,6 +61,7 @@ async function uploadMovie(recordedChunks) {
     console.log(`Post movie size: ${file.size / 1024} KB, type: ${file.type} name: ${file.name}`);
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("session_id", 'test');
     let url = `/api/stream/`;
     let res = await fetch(url, {
         method: 'POST',

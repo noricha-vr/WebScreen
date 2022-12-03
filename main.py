@@ -299,7 +299,7 @@ def to_m3u8(movie_path: Path):
 
 
 @app.post("/api/stream/")
-async def stream(file: bytes = File()):
+async def stream(file: bytes = File(), session_id: str = Form(...)) -> dict:
     """
     Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
     :param request:
