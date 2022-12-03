@@ -292,14 +292,14 @@ def to_m3u8(movie_path: Path):
     :return: m3u8 file path
     """
     m3u8_path = movie_path.parent / f"{movie_path.stem}.m3u8"
-    command = f"ffmpeg -i {movie_path} -c copy -map 0 -f segment -segment_time 5 -segment_list {m3u8_path} -segment_format mpegts {movie_path.parent}/segment_%03d.ts"
+    command = f"ffmpeg -i {movie_path} -c copy -map 0 -f segment -segment_time 5 -segment_list_type hls -hls_start_number_source datetime -movflags +faststart -hls_playlist_type event -segment_list_size 0 -segment_list {m3u8_path} -segment_format mpegts {movie_path.parent}/segment_%03d.ts"
     logger.info(f"command: {command}")
     subprocess.run(command, shell=True)
     return m3u8_path
 
 
 @app.post("/api/stream/")
-async def stream(file: bytes = File(), session_id: str = Form(...)) -> dict:
+def stream(file: bytes = File(), session_id: str = Form(...)) -> dict:
     """
     Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
     :param request:
@@ -317,8 +317,14 @@ async def stream(file: bytes = File(), session_id: str = Form(...)) -> dict:
             f.write(file)
         # Convert movie to .m3u8 file.
         movie_config = MovieConfig(movie_path, movie_dir / "video.m3u8")
-        to_m3u8(movie_path)
-        return {"message": "success"}
+        movie_path = to_m3u8(movie_path)
+        # movie_path から #EXT-X-ENDLIST の1行を消す
+        with open(movie_path, "r") as f:
+            lines = f.readlines()
+        with open(movie_path, "w") as f:
+            for line in lines:
+                if line.startswith("#EXT-X-ENDLIST") is False:
+                    f.write(line)
 
 
 if __name__ == '__main__':
