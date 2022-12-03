@@ -2,6 +2,7 @@ import base64
 import logging
 import os
 import shutil
+import subprocess
 import time
 import uuid
 from datetime import datetime
@@ -282,6 +283,41 @@ def create_github_movie(github_setting: GithubSetting) -> dict:
     url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
     delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
     return {'url': url, 'delete_at': delete_at}
+
+
+def to_m3u8(movie_path: Path):
+    """
+    Convert mp4 to m3u8.
+    :param movie_path:
+    :return: m3u8 file path
+    """
+    m3u8_path = movie_path.parent / f"{movie_path.stem}.m3u8"
+    command = f"ffmpeg -i {movie_path} -c copy -map 0 -f segment -segment_time 5 -segment_list {m3u8_path} -segment_format mpegts {movie_path.parent}/segment_%03d.ts"
+    logger.info(f"command: {command}")
+    subprocess.run(command, shell=True)
+    return m3u8_path
+
+
+@app.post("/api/stream/")
+async def stream(request: Request, movie: bytes = Form(), session_id: str = Form(...)):
+    """
+    Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
+    :param request:
+    :param movie: movie file
+    :param session_id: session id
+    :return: message
+    """
+
+    if movie:
+        movie_dir = Path(f"movie/{session_id}")
+        movie_dir.mkdir(exist_ok=True, parents=True)
+        movie_path = movie_dir / "video.mp4"
+        with open(movie_path, "wb") as f:
+            f.write(movie)
+        # Convert movie to .m3u8 file.
+        movie_config = MovieConfig(movie_path, movie_dir / "video.m3u8")
+        MovieMaker.to_m3u8(movie_config)
+        return {"message": "success"}
 
 
 if __name__ == '__main__':
