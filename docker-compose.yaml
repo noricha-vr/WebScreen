@@ -13,6 +13,7 @@ services:
       - PORT=8080
       - ALLOW_HOST=0.0.0.0
       - BUCKET_NAME=vrchat
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
 
 #    networks:
 #      - my_network

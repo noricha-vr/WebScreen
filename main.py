@@ -299,24 +299,25 @@ def to_m3u8(movie_path: Path):
 
 
 @app.post("/api/stream/")
-async def stream(request: Request, movie: bytes = Form(), session_id: str = Form(...)):
+async def stream(file: bytes = File()):
     """
     Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
     :param request:
-    :param movie: movie file
+    :param file: movie file
     :param session_id: session id
     :return: message
     """
+    session_id = 'test'
 
-    if movie:
+    if file:
         movie_dir = Path(f"movie/{session_id}")
         movie_dir.mkdir(exist_ok=True, parents=True)
         movie_path = movie_dir / "video.mp4"
         with open(movie_path, "wb") as f:
-            f.write(movie)
+            f.write(file)
         # Convert movie to .m3u8 file.
         movie_config = MovieConfig(movie_path, movie_dir / "video.m3u8")
-        MovieMaker.to_m3u8(movie_config)
+        to_m3u8(movie_path)
         return {"message": "success"}
 
 

@@ -10,7 +10,6 @@ startElem.addEventListener("click", function (evt) {
     startRecording();
 }, false);
 
-// TODO add stopRecording on default stop button.
 stopElem.addEventListener("click", function (evt) {
     stopRecording();
 }, false);
@@ -62,7 +61,7 @@ async function uploadMovie(recordedChunks) {
     console.log(`Post movie size: ${file.size / 1024} KB, type: ${file.type} name: ${file.name}`);
     const formData = new FormData();
     formData.append("file", file);
-    let url = `/api/save-movie/`;
+    let url = `/api/stream/`;
     let res = await fetch(url, {
         method: 'POST',
         body: formData
