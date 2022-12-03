@@ -30,7 +30,7 @@ function createRecorder(stream, mimeType) {
         if (e.data.size > 0) {
             recordedChunks.push(e.data);
         }
-        if (recordedChunks.length > 0 && recordedChunks.length % 100 === 0) {
+        if (recordedChunks.length > 0 && recordedChunks.length % 50 === 0) {
             console.log('uploading...');
             uploadMovie(recordedChunks);
             recordedChunks = [];

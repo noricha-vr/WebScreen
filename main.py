@@ -291,8 +291,34 @@ def to_m3u8(movie_path: Path):
     :param movie_path:
     :return: m3u8 file path
     """
-    m3u8_path = movie_path.parent / f"{movie_path.stem}.m3u8"
-    command = f"ffmpeg -i {movie_path} -c copy -map 0 -f segment -segment_time 5 -segment_list_type hls -hls_start_number_source datetime -movflags +faststart -hls_playlist_type event -segment_list_size 0 -segment_list {m3u8_path} -segment_format mpegts {movie_path.parent}/segment_%03d.ts"
+    m3u8_path = movie_path.parent / f"video.m3u8"
+    if m3u8_path.exists():
+        command = f"ffmpeg -i {movie_path} " \
+                  f"-c copy -map 0 " \
+                  f"-f segment -segment_time_delta 0 " \
+                  f"-segment_list_type hls " \
+                  f"-movflags +faststart " \
+                  f"-preset veryfast " \
+                  f"-hls_playlist_type event " \
+                  f"-hls_flags append_list " \
+                  f"-segment_list_size 0 " \
+                  f"-segment_list {m3u8_path} " \
+                  f"-segment_format mpegts " \
+                  f"{movie_path.parent}/segment_%03d.ts"
+    else:
+        command = f"ffmpeg -i {movie_path} " \
+                  f"-c copy -map 0 " \
+                  f"-f segment -segment_time_delta 0 " \
+                  f"-segment_list_type hls " \
+                  f"-movflags +faststart  " \
+                  f"-preset veryfast " \
+                  f"-hls_playlist_type event " \
+                  f"-hls_list_size 10 " \
+                  f"-segment_list_size 0 " \
+                  f"-segment_list {m3u8_path} " \
+                  f"-segment_format mpegts " \
+                  f"{movie_path.parent}/segment_%03d.ts"
+
     logger.info(f"command: {command}")
     subprocess.run(command, shell=True)
     return m3u8_path
@@ -312,19 +338,20 @@ def stream(file: bytes = File(), session_id: str = Form(...)) -> dict:
     if file:
         movie_dir = Path(f"movie/{session_id}")
         movie_dir.mkdir(exist_ok=True, parents=True)
-        movie_path = movie_dir / "video.mp4"
+        movie_path = movie_dir / f"{str(time.time())[:10]}.mp4"
+
         with open(movie_path, "wb") as f:
             f.write(file)
         # Convert movie to .m3u8 file.
         movie_config = MovieConfig(movie_path, movie_dir / "video.m3u8")
         movie_path = to_m3u8(movie_path)
         # movie_path から #EXT-X-ENDLIST の1行を消す
-        with open(movie_path, "r") as f:
-            lines = f.readlines()
-        with open(movie_path, "w") as f:
-            for line in lines:
-                if line.startswith("#EXT-X-ENDLIST") is False:
-                    f.write(line)
+        # with open(movie_path, "r") as f:
+        #     lines = f.readlines()
+        # with open(movie_path, "w") as f:
+        #     for line in lines:
+        #         if line.startswith("#EXT-X-ENDLIST") is False:
+        #             f.write(line)
 
 
 if __name__ == '__main__':
