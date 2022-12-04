@@ -30,15 +30,10 @@ async function recordScreen() {
 }
 
 function createRecorder(stream, mimeType) {
+    let is_first = true;
+    const uuid = uuidv4();
     // the stream data is stored in this array
     const mediaRecorder = new MediaRecorder(stream);
-    // enable debug information
-    mediaRecorder.debug = true;
-    // set the event handler for the 'debug' event
-    mediaRecorder.ondebug = function (event) {
-        console.log(event.data);
-    };
-
     // upload the recorded data to the server
     let recordedChunks = [];
     mediaRecorder.ondataavailable = async (e) => {
@@ -48,7 +43,7 @@ function createRecorder(stream, mimeType) {
         }
         if (recordedChunks.length > 0 && recordedChunks.length % 50 === 0) {
             console.log('uploading...');
-            await uploadMovie(recordedChunks);
+            await uploadMovie(recordedChunks, uuid, is_first);
             recordedChunks = [];
         }
     };
@@ -57,7 +52,6 @@ function createRecorder(stream, mimeType) {
         let progress = startProgressBar(getIntervalSpeed());
         this.stream.getTracks().forEach(track => track.stop());
         let res = await uploadMovie(recordedChunks);
-        await saveAndShowResult(res);
         stopProgressBar(progress);
         progressAreaElm.classList.add('visually-hidden');
         stopElem.classList.add('visually-hidden');
@@ -69,15 +63,12 @@ function createRecorder(stream, mimeType) {
     return mediaRecorder;
 }
 
-async function uploadMovie(recordedChunks) {
-    let blob = new Blob(recordedChunks, {
-        type: mineType
-    });
-    let file = new File([blob], "test.mp4");
-    console.log(`Post movie size: ${file.size / 1024} KB, type: ${file.type} name: ${file.name}`);
+async function uploadMovie(recordedChunks, uuid, is_first) {
+    console.log(`Post movie size: ${recordedChunks.length / 1024 / 1024} MB`);
     const formData = new FormData();
-    formData.append("file", file);
-    formData.append("session_id", 'test');
+    formData.append("chunk", recordedChunks);
+    formData.append("uuid", uuid);
+    formData.append("is_first", is_first);
     let url = `/api/stream/`;
     let res = await fetch(url, {
         method: 'POST',
@@ -85,25 +76,6 @@ async function uploadMovie(recordedChunks) {
     })
     URL.revokeObjectURL(blob); // clear from memory
     return res;
-}
-
-async function saveAndShowResult(res) {
-    if (res.ok) {
-        let data = await res.json();
-        console.log(`movie url: ${data.url}`);
-        let date = new Date();
-        // data.name format is `ScreenRecoding_YYYY-MM-DD_HH-MM-SS`
-        data.name = `ScreenRecoding_${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` +
-            `_${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}`;
-        saveResult(data);
-        // add result to page
-        let newResult = createResultNode(data.name, data.url);
-        changeButtonColor(newResult);
-        let resultsElement = document.getElementById('results');
-        resultsElement.insertBefore(newResult, resultsElement.firstChild);
-    } else {
-        alert('Error: ' + res.status);
-    }
 }
 
 async function startRecording() {
