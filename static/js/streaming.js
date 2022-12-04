@@ -7,6 +7,7 @@ let mediaRecorder = null;
 
 // Set event listeners for the start and stop buttons
 startElem.addEventListener("click", function (evt) {
+    console.log('start recording');
     startRecording();
 }, false);
 
@@ -17,22 +18,37 @@ stopElem.addEventListener("click", function (evt) {
 async function recordScreen() {
     return await navigator.mediaDevices.getDisplayMedia({
         audio: true,
-        video: {mediaSource: "screen"}
+        video: {
+            cursor: "always",
+            displaySurface: "monitor",
+            frameRate: 24,
+            height: 720,
+            mediaSource: "screen",
+            width: 1280,
+        }
     });
 }
 
 function createRecorder(stream, mimeType) {
     // the stream data is stored in this array
     const mediaRecorder = new MediaRecorder(stream);
+    // enable debug information
+    mediaRecorder.debug = true;
+    // set the event handler for the 'debug' event
+    mediaRecorder.ondebug = function (event) {
+        console.log(event.data);
+    };
+
+    // upload the recorded data to the server
     let recordedChunks = [];
-    // 5秒ごとに動画をアップロードする
-    mediaRecorder.ondataavailable = (e) => {
+    mediaRecorder.ondataavailable = async (e) => {
+        console.log(`data available, size: ${e.data.size}`);
         if (e.data.size > 0) {
             recordedChunks.push(e.data);
         }
         if (recordedChunks.length > 0 && recordedChunks.length % 50 === 0) {
             console.log('uploading...');
-            uploadMovie(recordedChunks);
+            await uploadMovie(recordedChunks);
             recordedChunks = [];
         }
     };
