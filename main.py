@@ -305,7 +305,7 @@ def to_m3u8(movie_path: Path, m3u8_path: Path):
               f"-segment_format mpegts " \
               f"{movie_path.parent}/segment_%03d.ts"
 
-    command = "ffmpeg -i video.mp4 -c:v copy -c:a copy -f hls -hls_time 9 -hls_playlist_type vod -hls_segment_filename video%3d.ts video.m3u8"
+    command = f"ffmpeg -i {movie_path} -c:v copy -c:a copy -f hls -hls_flags split_by_time -hls_time 3  -hls_flags append_list   -hls_playlist_type vod  -hls_list_size 10 -hls_segment_filename {movie_path.parent}/video%3d.ts {m3u8_path}"
 
     logger.info(f"command: {command}")
     subprocess.run(command, shell=True)
