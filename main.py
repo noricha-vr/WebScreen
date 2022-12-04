@@ -311,29 +311,23 @@ def to_m3u8(movie_path: Path, m3u8_path: Path):
 
 
 @app.post("/api/stream/")
-def stream(file: bytes = File(), session_id: str = Form(...)) -> dict:
+def stream(file: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form()) -> dict:
     """
     Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
-    :param request:
     :param file: movie file
-    :param session_id: session id
+    :param uuid: session id
+    :param is_first: if is_first is true, delete old movie file.
     :return: message
     """
-    session_id = 'test'
 
     if file:
-        movie_dir = Path(f"movie/{session_id}")
+        movie_dir = Path(f"movie/{uuid}")
         movie_dir.mkdir(exist_ok=True, parents=True)
         movie_path = movie_dir / f"video.mp4"
-        # 動画データを1つのファイルに書き込む
-        if movie_path.exists():
-            # 既存のファイルが存在する場合
-            with open(movie_path, "ab") as f:
-                f.write(file)
-        else:
-            # 既存のファイルが存在しない場合
-            with open(movie_path, "wb") as f:
-                f.write(file)
+        # write movie file.
+        mode = "ab" if movie_path.exists() else "wb"
+        with open(movie_path, mode) as f:
+            f.write(file.file.read())
         # Convert movie to .m3u8 file.
         m3u8_path = movie_path.parent / f"video.m3u8"
         to_m3u8(movie_path, m3u8_path)
@@ -344,6 +338,7 @@ def stream(file: bytes = File(), session_id: str = Form(...)) -> dict:
         #     for line in lines:
         #         if line.startswith("#EXT-X-ENDLIST") is False:
         #             f.write(line)
+    return {"message": "ok"}
 
 
 if __name__ == '__main__':

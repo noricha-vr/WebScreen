@@ -21,7 +21,7 @@ async function recordScreen() {
         video: {
             cursor: "always",
             displaySurface: "monitor",
-            frameRate: 24,
+            frameRate: 30,
             height: 720,
             mediaSource: "screen",
             width: 1280,
@@ -44,6 +44,7 @@ function createRecorder(stream, mimeType) {
         if (recordedChunks.length > 0 && recordedChunks.length % 50 === 0) {
             console.log('uploading...');
             await uploadMovie(recordedChunks, uuid, is_first);
+            is_first = false;
             recordedChunks = [];
         }
     };
@@ -64,9 +65,11 @@ function createRecorder(stream, mimeType) {
 }
 
 async function uploadMovie(recordedChunks, uuid, is_first) {
+    const blob = new Blob(recordedChunks, {type: mineType});
+    let file = new File([blob], "test.mp4");
     console.log(`Post movie size: ${recordedChunks.length / 1024 / 1024} MB`);
     const formData = new FormData();
-    formData.append("chunk", recordedChunks);
+    formData.append("file", file, file.name);
     formData.append("uuid", uuid);
     formData.append("is_first", is_first);
     let url = `/api/stream/`;
@@ -74,7 +77,6 @@ async function uploadMovie(recordedChunks, uuid, is_first) {
         method: 'POST',
         body: formData
     })
-    URL.revokeObjectURL(blob); // clear from memory
     return res;
 }
 
@@ -84,6 +86,12 @@ async function startRecording() {
     startElem.classList.add('visually-hidden');
     stopElem.classList.remove('visually-hidden');
     mediaRecorder = createRecorder(stream, mimeType);
+}
+
+function uuidv4() {
+    return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
 }
 
 function stopRecording() {
