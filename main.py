@@ -285,39 +285,25 @@ def create_github_movie(github_setting: GithubSetting) -> dict:
     return {'url': url, 'delete_at': delete_at}
 
 
-def to_m3u8(movie_path: Path):
+def to_m3u8(movie_path: Path, m3u8_path: Path):
     """
     Convert mp4 to m3u8.
     :param movie_path:
     :return: m3u8 file path
     """
-    m3u8_path = movie_path.parent / f"video.m3u8"
-    if m3u8_path.exists():
-        command = f"ffmpeg -i {movie_path} " \
-                  f"-c copy -map 0 " \
-                  f"-f segment -segment_time_delta 0 " \
-                  f"-segment_list_type hls " \
-                  f"-movflags +faststart " \
-                  f"-preset veryfast " \
-                  f"-hls_playlist_type event " \
-                  f"-hls_flags append_list " \
-                  f"-segment_list_size 0 " \
-                  f"-segment_list {m3u8_path} " \
-                  f"-segment_format mpegts " \
-                  f"{movie_path.parent}/segment_%03d.ts"
-    else:
-        command = f"ffmpeg -i {movie_path} " \
-                  f"-c copy -map 0 " \
-                  f"-f segment -segment_time_delta 0 " \
-                  f"-segment_list_type hls " \
-                  f"-movflags +faststart  " \
-                  f"-preset veryfast " \
-                  f"-hls_playlist_type event " \
-                  f"-hls_list_size 10 " \
-                  f"-segment_list_size 0 " \
-                  f"-segment_list {m3u8_path} " \
-                  f"-segment_format mpegts " \
-                  f"{movie_path.parent}/segment_%03d.ts"
+    command = f"ffmpeg -i {movie_path} " \
+              f"-c copy -map 0 " \
+              f"-f segment -segment_time_delta 0 " \
+              f"-segment_list_type hls " \
+              f"-movflags +faststart " \
+              f"-preset veryfast " \
+              f"-nostdin " \
+              f"-hls_playlist_type event " \
+              f"-hls_flags append_list " \
+              f"-segment_list_size 0 " \
+              f"-segment_list {m3u8_path} " \
+              f"-segment_format mpegts " \
+              f"{movie_path.parent}/segment_%03d.ts"
 
     logger.info(f"command: {command}")
     subprocess.run(command, shell=True)
@@ -338,13 +324,19 @@ def stream(file: bytes = File(), session_id: str = Form(...)) -> dict:
     if file:
         movie_dir = Path(f"movie/{session_id}")
         movie_dir.mkdir(exist_ok=True, parents=True)
-        movie_path = movie_dir / f"{str(time.time())[:10]}.mp4"
-
-        with open(movie_path, "wb") as f:
-            f.write(file)
+        movie_path = movie_dir / f"video.mp4"
+        # 動画データを1つのファイルに書き込む
+        if movie_path.exists():
+            # 既存のファイルが存在する場合
+            with open(movie_path, "ab") as f:
+                f.write(file)
+        else:
+            # 既存のファイルが存在しない場合
+            with open(movie_path, "wb") as f:
+                f.write(file)
         # Convert movie to .m3u8 file.
-        movie_config = MovieConfig(movie_path, movie_dir / "video.m3u8")
-        movie_path = to_m3u8(movie_path)
+        m3u8_path = movie_path.parent / f"video.m3u8"
+        to_m3u8(movie_path, m3u8_path)
         # movie_path から #EXT-X-ENDLIST の1行を消す
         # with open(movie_path, "r") as f:
         #     lines = f.readlines()
