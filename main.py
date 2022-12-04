@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 import time
-import uuid
+from uuid import uuid4
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -127,7 +127,7 @@ async def create_image_movie(images: List[UploadFile]) -> dict:
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
-    name = str(uuid.uuid4())
+    name = str(uuid4())
     image_dir = Path('image') / name
     image_dir.mkdir(exist_ok=True, parents=True)
     output_image_dir = Path('image') / f'{name}_output'
@@ -155,7 +155,7 @@ async def pdf_to_movie(pdf: UploadFile = File()) -> dict:
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
-    name = str(uuid.uuid4())
+    name = str(uuid4())
     image_dir = Path('image') / name
     image_dir.mkdir(exist_ok=True, parents=True)
     movie_path = Path(f"movie/{name}.mp4")
@@ -228,8 +228,8 @@ def recode_desktop(file: bytes = File()) -> dict:
     :return: message
     """
     if file:
-        temp_movie_path = Path(f"movie/{uuid.uuid4()}_temp.mp4")
-        movie_path = Path(f"movie/{uuid.uuid4()}.mp4")
+        temp_movie_path = Path(f"movie/{uuid4()}_temp.mp4")
+        movie_path = Path(f"movie/{uuid4()}.mp4")
         with open(temp_movie_path, "wb") as f:
             f.write(file)
         start = time.time()
