@@ -305,39 +305,41 @@ def to_m3u8(movie_path: Path, m3u8_path: Path):
               f"-segment_format mpegts " \
               f"{movie_path.parent}/segment_%03d.ts"
 
+    command = "ffmpeg -i video.mp4 -c:v copy -c:a copy -f hls -hls_time 9 -hls_playlist_type vod -hls_segment_filename video%3d.ts video.m3u8"
+
     logger.info(f"command: {command}")
     subprocess.run(command, shell=True)
     return m3u8_path
 
 
 @app.post("/api/stream/")
-def stream(file: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form()) -> dict:
+def stream(movie: UploadFile = Form(), uuid: str = Form()) -> dict:
     """
     Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
-    :param file: movie file
+    :param movie: movie file
     :param uuid: session id
-    :param is_first: if is_first is true, delete old movie file.
     :return: message
     """
 
-    if file:
-        movie_dir = Path(f"movie/{uuid}")
-        movie_dir.mkdir(exist_ok=True, parents=True)
-        movie_path = movie_dir / f"video.mp4"
-        # write movie file.
-        mode = "ab" if movie_path.exists() else "wb"
-        with open(movie_path, mode) as f:
-            f.write(file.file.read())
-        # Convert movie to .m3u8 file.
-        m3u8_path = movie_path.parent / f"video.m3u8"
-        to_m3u8(movie_path, m3u8_path)
-        # movie_path から #EXT-X-ENDLIST の1行を消す
-        # with open(movie_path, "r") as f:
-        #     lines = f.readlines()
-        # with open(movie_path, "w") as f:
-        #     for line in lines:
-        #         if line.startswith("#EXT-X-ENDLIST") is False:
-        #             f.write(line)
+    if not movie:
+        raise HTTPException(status_code=400, detail="Movie file is empty.")
+    movie_dir = Path(f"movie/{uuid}")
+    movie_dir.mkdir(exist_ok=True, parents=True)
+    movie_path = movie_dir / f"video.mp4"
+    # write movie file.
+    mode = "ab" if movie_path.exists() else "wb"
+    with open(movie_path, mode) as f:
+        f.write(movie.file.read())
+    # Convert movie to .m3u8 file.
+    m3u8_path = movie_path.parent / f"video.m3u8"
+    to_m3u8(movie_path, m3u8_path)
+    # movie_path から #EXT-X-ENDLIST の1行を消す
+    # with open(movie_path, "r") as f:
+    #     lines = f.readlines()
+    # with open(movie_path, "w") as f:
+    #     for line in lines:
+    #         if line.startswith("#EXT-X-ENDLIST") is False:
+    #             f.write(line)
     return {"message": "ok"}
 
 

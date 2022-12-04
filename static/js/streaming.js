@@ -2,7 +2,6 @@ const videoElem = document.getElementById("video");
 const startElem = document.getElementById("start");
 const stopElem = document.getElementById("stop");
 const progressAreaElm = document.getElementById("progress-bar-area");
-const mineType = 'video/mp4';
 let mediaRecorder = null;
 
 // Set event listeners for the start and stop buttons
@@ -29,7 +28,7 @@ async function recordScreen() {
     });
 }
 
-function createRecorder(stream, mimeType) {
+function createRecorder(stream) {
     let is_first = true;
     const uuid = uuidv4();
     // the stream data is stored in this array
@@ -64,14 +63,14 @@ function createRecorder(stream, mimeType) {
     return mediaRecorder;
 }
 
-async function uploadMovie(recordedChunks, uuid, is_first) {
+async function uploadMovie(recordedChunks, uuid) {
+    const mineType = 'video/mp4';
     const blob = new Blob(recordedChunks, {type: mineType});
     let file = new File([blob], "test.mp4");
     console.log(`Post movie size: ${recordedChunks.length / 1024 / 1024} MB`);
     const formData = new FormData();
-    formData.append("file", file, file.name);
+    formData.append("movie", file, file.name);
     formData.append("uuid", uuid);
-    formData.append("is_first", is_first);
     let url = `/api/stream/`;
     let res = await fetch(url, {
         method: 'POST',
@@ -82,10 +81,9 @@ async function uploadMovie(recordedChunks, uuid, is_first) {
 
 async function startRecording() {
     let stream = await recordScreen();
-    let mimeType = mineType;
     startElem.classList.add('visually-hidden');
     stopElem.classList.remove('visually-hidden');
-    mediaRecorder = createRecorder(stream, mimeType);
+    mediaRecorder = createRecorder(stream);
 }
 
 function uuidv4() {
