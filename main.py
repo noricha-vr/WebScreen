@@ -305,11 +305,27 @@ def to_m3u8(movie_path: Path, m3u8_path: Path):
               f"-segment_format mpegts " \
               f"{movie_path.parent}/segment_%03d.ts"
 
-    command = f"ffmpeg -i {movie_path} -c:v copy -c:a copy -f hls -hls_flags split_by_time -hls_time 3  -hls_flags append_list   -hls_playlist_type vod  -hls_list_size 10 -hls_segment_filename {movie_path.parent}/video%3d.ts {m3u8_path}"
+    command = f"ffmpeg -i {movie_path} -c:v copy -c:a copy " \
+              f"-f hls -hls_flags split_by_time -hls_time 9 " \
+              f"-hls_flags append_list " \
+              f"-hls_playlist_type event  " \
+              f"-hls_list_size 10 " \
+              f"-hls_segment_filename {movie_path.parent}/video%3d.ts {m3u8_path}"
 
     logger.info(f"command: {command}")
     subprocess.run(command, shell=True)
     return m3u8_path
+
+
+@app.get("/api/stream/{token}/")
+def get_stream(token: str):
+    """
+    Get m3u8 file.
+    :param token:
+    :return:
+    """
+    m3u8_path = Path(f"movie/{token}.m3u8")
+    return FileResponse(m3u8_path)
 
 
 @app.post("/api/stream/")
@@ -340,7 +356,9 @@ def stream(movie: UploadFile = Form(), uuid: str = Form()) -> dict:
     #     for line in lines:
     #         if line.startswith("#EXT-X-ENDLIST") is False:
     #             f.write(line)
-    return {"message": "ok"}
+    url = f'https://storage.googleapis.com/{BUCKET_NAME}/{movie_path.parent.name}/video.m3u8'
+    url = f'/api/stream/{uuid}/'
+    return {"message": "ok", 'url': f"/api/stream/{uuid}/"}
 
 
 if __name__ == '__main__':
