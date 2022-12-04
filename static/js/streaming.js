@@ -40,7 +40,7 @@ function createRecorder(stream) {
         if (e.data.size > 0) {
             recordedChunks.push(e.data);
         }
-        if (recordedChunks.length > 0 && recordedChunks.length % 50 === 0) {
+        if (recordedChunks.length > 0 && recordedChunks.length % 10 === 0) {
             console.log('uploading...');
             await uploadMovie(recordedChunks, uuid, is_first);
             is_first = false;
@@ -52,6 +52,9 @@ function createRecorder(stream) {
         let progress = startProgressBar(getIntervalSpeed());
         this.stream.getTracks().forEach(track => track.stop());
         let res = await uploadMovie(recordedChunks);
+        let data = await res.json();
+        console.log(JSON.stringify(data));
+        videoElem.href = data.url;
         stopProgressBar(progress);
         progressAreaElm.classList.add('visually-hidden');
         stopElem.classList.add('visually-hidden');
