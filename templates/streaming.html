@@ -25,24 +25,30 @@
                 </div>
 
             </div>
-            <p>この機能はベータ版です。パソコンの画面は動画プレイヤーに表示されますが、ストリーミング再生されません。
-                URLをリクエストした瞬間の画面が表示されます。動画プレイヤーでURLを再読込するとその瞬間の画面に更新されます。<br/>
-                ※ ストリーミング表示できるようにアップデート中です。</p>
-            <p>1.共有したい画面を選んでください</p>
+            <p>この機能はベータ版です。</p>
+            <p>1. 共有したい画面を選んでください</p>
             <p>
                 <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
-                <button class="btn btn-danger" id="stop">停止</button>
+                <button class="btn btn-danger visually-hidden" id="stop">停止</button>
             </p>
-            <p class="mt-3 mb-3">
-                共有を開始したらこのURLをVRChatの動画プレイヤーに貼り付けてください<br/>
-                <a id="player_url" rel="nofollow"></a><br/>
-                ※ ブラウザでは動画が再生されません。VRChatの動画プレイヤーで再生してください。
+            <p class="mt-3">
+                2. 共有を開始したら下のURLをコピーして、VRChatの動画プレイヤーの「Live」を選択して、貼り付けてください。<br/>
             </p>
-            <hr/>
-
-            <div id="player">
-                URL: <a href="" id="streaming-url" target="_blank"></a>
+            <div class="mb-3 row" name=" result">
+                <button for="url" name="copy_button"
+                        onclick="copyStreamingURL()" class="btn btn-outline-primary col-2 col-form-label">
+                    Copy
+                </button>
+                <div class="col-10">
+                    <a href="" id="streaming-url" target="_blank" class="col-8 form-control-plaintext" name="movie_url">
+                    </a>
+                </div>
             </div>
+            <p class="mt-3 mb-3">
+                ※ 読み込み直後はエラーが出ます。しばらくすると動画が再生されます。<br/>
+                安定しないことがありますが、時間が経つと安定します。<br/>
+                録画を開始してから再生されるまでの時間の分だけ遅延が発生します。<br/>
+            </p>
 
             <script src="/static/js/baseFunctions.js"></script>
             <script src="/static/js/streaming.js"></script>

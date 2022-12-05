@@ -1,7 +1,6 @@
 const videoElem = document.getElementById("video");
 const startElem = document.getElementById("start");
 const stopElem = document.getElementById("stop");
-const progressAreaElm = document.getElementById("progress-bar-area");
 let mediaRecorder = null;
 
 // Set event listeners for the start and stop buttons
@@ -31,7 +30,6 @@ async function recordScreen() {
 function createRecorder(stream) {
     let is_first = true;
     const uuid = uuidv4();
-    showStreamingURL(uuid);
     // the stream data is stored in this array
     const mediaRecorder = new MediaRecorder(stream);
     // upload the recorded data to the server
@@ -44,20 +42,18 @@ function createRecorder(stream) {
         if (recordedChunks.length > 0 && recordedChunks.length % 10 === 0) {
             console.log('uploading...');
             await uploadMovie(recordedChunks, uuid, is_first);
-            is_first = false;
+            if (is_first === true) {
+                showStreamingURL(uuid);
+                is_first = false;
+            }
             recordedChunks = [];
         }
     };
     mediaRecorder.onstop = async function (e) {
-        progressAreaElm.classList.remove('visually-hidden');
-        let progress = startProgressBar(getIntervalSpeed());
         this.stream.getTracks().forEach(track => track.stop());
         let res = await uploadMovie(recordedChunks);
         let data = await res.json();
         console.log(JSON.stringify(data));
-        videoElem.href = data.url;
-        stopProgressBar(progress);
-        progressAreaElm.classList.add('visually-hidden');
         stopElem.classList.add('visually-hidden');
         startElem.classList.remove('visually-hidden');
         recordedChunks = [];
@@ -101,6 +97,11 @@ function showStreamingURL(uuid) {
     let link = document.getElementById('streaming-url');
     link.href = url;
     link.textContent = url;
+}
+
+function copyStreamingURL() {
+    const copyText = document.getElementById("streaming-url");
+    navigator.clipboard.writeText(copyText.href);
 }
 
 function stopRecording() {
