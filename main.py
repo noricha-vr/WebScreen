@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
+from starlette.responses import StreamingResponse
 
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
@@ -317,15 +318,20 @@ def to_m3u8(movie_path: Path, m3u8_path: Path):
     return m3u8_path
 
 
-@app.get("/api/stream/{token}/")
-def get_stream(token: str):
+@app.get("/api/stream/{uuid}/")
+def get_stream(uuid: str):
     """
     Get m3u8 file.
-    :param token:
+    :param uuid:
     :return:
     """
-    m3u8_path = Path(f"movie/{token}.m3u8")
-    return FileResponse(m3u8_path)
+    some_file_path = f"movie/{uuid}/video.mp4"
+
+    def iterfile():
+        with open(some_file_path, mode="rb") as file_like:
+            yield from file_like
+
+    return StreamingResponse(iterfile(), media_type="video/mp4")
 
 
 @app.post("/api/stream/")
@@ -348,7 +354,7 @@ def stream(movie: UploadFile = Form(), uuid: str = Form()) -> dict:
         f.write(movie.file.read())
     # Convert movie to .m3u8 file.
     m3u8_path = movie_path.parent / f"video.m3u8"
-    to_m3u8(movie_path, m3u8_path)
+    # to_m3u8(movie_path, m3u8_path)
     # movie_path から #EXT-X-ENDLIST の1行を消す
     # with open(movie_path, "r") as f:
     #     lines = f.readlines()
