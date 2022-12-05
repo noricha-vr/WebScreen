@@ -286,46 +286,19 @@ def create_github_movie(github_setting: GithubSetting) -> dict:
     return {'url': url, 'delete_at': delete_at}
 
 
-def to_m3u8(movie_path: Path, m3u8_path: Path):
-    """
-    Convert mp4 to m3u8.
-    :param movie_path:
-    :return: m3u8 file path
-    """
-    command = f"ffmpeg -i {movie_path} " \
-              f"-c copy -map 0 " \
-              f"-f segment -segment_time_delta 0 " \
-              f"-segment_list_type hls " \
-              f"-movflags +faststart " \
-              f"-preset veryfast " \
-              f"-nostdin " \
-              f"-hls_playlist_type event " \
-              f"-hls_flags append_list " \
-              f"-segment_list_size 0 " \
-              f"-segment_list {m3u8_path} " \
-              f"-segment_format mpegts " \
-              f"{movie_path.parent}/segment_%03d.ts"
-
-    command = f"ffmpeg -i {movie_path} -c:v copy -c:a copy " \
-              f"-f hls -hls_flags split_by_time -hls_time 9 " \
-              f"-hls_flags append_list " \
-              f"-hls_playlist_type event  " \
-              f"-hls_list_size 10 " \
-              f"-hls_segment_filename {movie_path.parent}/video%3d.ts {m3u8_path}"
-
-    logger.info(f"command: {command}")
-    subprocess.run(command, shell=True)
-    return m3u8_path
-
-
-@app.get("/api/stream/{uuid}/")
+@app.get("/stream/{uuid}/")
 def get_stream(uuid: str):
     """
     Get m3u8 file.
     :param uuid:
     :return:
     """
-    some_file_path = f"movie/{uuid}/video.mp4"
+    some_file_path = Path(f"movie/{uuid}/video.mp4")
+    for i in range(20):
+        if some_file_path.exists(): break
+        time.sleep(1)
+    if some_file_path.exists() is False:
+        raise HTTPException(status_code=404, detail="File not found")
 
     def iterfile():
         with open(some_file_path, mode="rb") as file_like:
@@ -352,19 +325,8 @@ def stream(movie: UploadFile = Form(), uuid: str = Form()) -> dict:
     mode = "ab" if movie_path.exists() else "wb"
     with open(movie_path, mode) as f:
         f.write(movie.file.read())
-    # Convert movie to .m3u8 file.
-    m3u8_path = movie_path.parent / f"video.m3u8"
-    # to_m3u8(movie_path, m3u8_path)
-    # movie_path から #EXT-X-ENDLIST の1行を消す
-    # with open(movie_path, "r") as f:
-    #     lines = f.readlines()
-    # with open(movie_path, "w") as f:
-    #     for line in lines:
-    #         if line.startswith("#EXT-X-ENDLIST") is False:
-    #             f.write(line)
-    url = f'https://storage.googleapis.com/{BUCKET_NAME}/{movie_path.parent.name}/video.m3u8'
     url = f'/api/stream/{uuid}/'
-    return {"message": "ok", 'url': f"/api/stream/{uuid}/"}
+    return {"message": "ok", 'url': url}
 
 
 if __name__ == '__main__':
