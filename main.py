@@ -293,18 +293,18 @@ def get_stream(uuid: str):
     :param uuid:
     :return:
     """
-    some_file_path = Path(f"movie/{uuid}/video.mp4")
+    movie_path = Path(f"movie/{uuid}/video.mp4")
     for i in range(20):
-        if some_file_path.exists(): break
+        if movie_path.exists(): break
         time.sleep(1)
-    if some_file_path.exists() is False:
+    if movie_path.exists() is False:
         raise HTTPException(status_code=404, detail="File not found")
 
-    def iterfile():
-        with open(some_file_path, mode="rb") as file_like:
-            yield from file_like
+    def gen_movie():
+        with open(movie_path, mode="rb") as file:
+            yield from file
 
-    return StreamingResponse(iterfile(), media_type="video/mp4")
+    return StreamingResponse(gen_movie(), media_type="video/mp4")
 
 
 @app.post("/api/stream/")
