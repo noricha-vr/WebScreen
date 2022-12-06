@@ -6,7 +6,8 @@ FROM python:3.10-buster
 RUN apt-get update && apt-get install -y \
     curl unzip \
     ffmpeg \
-    fonts-takao-* fonts-wqy-microhei fonts-tlwg-loma
+    poppler \
+    fonts-takao-* fonts-wqy-microhei fonts-unfonts-core
 
 # Install Chrome
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \

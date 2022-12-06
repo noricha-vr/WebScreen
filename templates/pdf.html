@@ -30,17 +30,35 @@
                     <label for="files" class="visually-hidden">PDF</label>
                     <input type="file" multiple class="form-control border border-dark" id="files" name="files"
                            placeholder="https://">
-                    <div class="mt-3 text-center">
-                        <div id="submit" class="btn btn-primary d-block">動画を作成</div>
+                    <div class="mt-3">
+                        <div>1ページの表示時間:</div>
+                        <div class="form-check-inline">
+                            <input class="form-check-input" type="radio" name="frame_sec" id="1"
+                                   value="1"
+                                   checked>
+                            <label class="form-check-label" for="1">
+                                1秒
+                            </label>
+                        </div>
+                        <div class="form-check-inline">
+                            <input class="form-check-input" type="radio" name="frame_sec" id="2"
+                                   value="2">
+                            <label class="form-check-label" for="2">
+                                2秒
+                            </label>
+                        </div>
                     </div>
-                    <div class=" progress visually-hidden">
-                        <div class="progress-bar bg-info" role="progressbar" id="progress_bar"
-                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
-                    </div>
-                    <div class="mt-4 text-center">
-                        推奨スライドシステム:
-                        <a href="https://booth.pm/ja/items/4141632" target="_blank">UnaSlides</a>
-                    </div>
+                </div>
+                <div class="mt-3 text-center">
+                    <div id="submit" class="btn btn-primary d-block">動画を作成</div>
+                </div>
+                <div class=" progress visually-hidden">
+                    <div class="progress-bar bg-info" role="progressbar" id="progress_bar"
+                         aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+                </div>
+                <div class="mt-4 text-center">
+                    おすすめのスライドシステム:
+                    <a href="https://booth.pm/ja/items/4141632" target="_blank">UnaSlides</a>
                 </div>
             </form>
             {% include 'result.html' %}

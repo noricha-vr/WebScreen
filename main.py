@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List
 
 import uvicorn
+from PIL.Image import Image
 from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -148,11 +149,27 @@ async def create_image_movie(images: List[UploadFile]) -> dict:
     return {'url': url, 'delete_at': delete_at}
 
 
+def add_frames(image_dir: Path, frame_sec: int) -> None:
+    """
+    Add frames to the image directory. Image file format is png.
+    :param image_dir: Image directory
+    :param frame_sec: Frame rate
+    :return: None
+    """
+    image_paths = sorted(image_dir.glob("*.png"))
+    for image_path in image_paths:
+        image = Image.open(image_path)
+        image.save(image_path, "PNG", optimize=True, quality=95)
+        for i in range(frame_sec):
+            shutil.copy(image_path, image_path.parent / f"{image_path.stem}_{i}.png")
+
+
 @app.post('/api/pdf-to-movie/')
-async def pdf_to_movie(pdf: UploadFile = File()) -> dict:
+async def pdf_to_movie(pdf: UploadFile = File(), frame_sec: int = Form(...)) -> dict:
     """
     Convert PDF to movie.
     :param pdf: PDF file
+    :param frame_sec: Frame par second
     :return: Download URL
     """
     bucket_manager = BucketManager(BUCKET_NAME)
@@ -163,6 +180,7 @@ async def pdf_to_movie(pdf: UploadFile = File()) -> dict:
     pdf_path = Path('pdf') / f'{name}.pdf'
     pdf_path.mkdir(exist_ok=True, parents=True)
     pdf_to_image(pdf.file.read(), image_dir)
+    add_frames(image_dir, frame_sec)
     movie_config = MovieConfig(image_dir, movie_path, encode_speed='slow')
     MovieMaker.image_to_movie(movie_config)
     url = bucket_manager.to_public_url(str(movie_path))
