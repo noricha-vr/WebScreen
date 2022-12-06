@@ -158,6 +158,9 @@ def add_frames(image_dir: Path, frame_sec: int) -> None:
     :param frame_sec: Frame rate
     :return: None
     """
+    max_frame_sec = 2
+    if frame_sec > max_frame_sec:
+        frame_sec = max_frame_sec
     image_paths = sorted(image_dir.glob("*.png"))
     for image_path in image_paths:
         for i in range(frame_sec - 1):
