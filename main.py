@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
+import PIL.Image
+import cv2
 import uvicorn
 from PIL.Image import Image
 from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, Form, File
@@ -158,9 +160,7 @@ def add_frames(image_dir: Path, frame_sec: int) -> None:
     """
     image_paths = sorted(image_dir.glob("*.png"))
     for image_path in image_paths:
-        image = Image.open(image_path)
-        image.save(image_path, "PNG", optimize=True, quality=95)
-        for i in range(frame_sec):
+        for i in range(frame_sec - 1):
             shutil.copy(image_path, image_path.parent / f"{image_path.stem}_{i}.png")
 
 

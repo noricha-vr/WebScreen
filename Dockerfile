@@ -6,7 +6,7 @@ FROM python:3.10-buster
 RUN apt-get update && apt-get install -y \
     curl unzip \
     ffmpeg \
-    poppler \
+    poppler-utils \
     fonts-takao-* fonts-wqy-microhei fonts-unfonts-core
 
 # Install Chrome

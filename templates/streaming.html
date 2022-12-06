@@ -26,26 +26,34 @@
 
             </div>
             <p>この機能はベータ版です。</p>
-            <p>1. 共有したい画面を選んでください</p>
+            <p>1. 共有ボタンを押して、共有したい画面を選択してください。</p>
             <p>
                 <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
                 <button class="btn btn-danger visually-hidden" id="stop">停止</button>
             </p>
             <p class="mt-3">
-                2. 共有を開始したら下のURLをコピーして、VRChatの動画プレイヤーの「Live」を選択して、貼り付けてください。<br/>
+                2. 共有を開始したら下のURLをコピーします。
             </p>
-            <div class="mb-3 row" name=" result">
-                <button for="url" name="copy_button"
-                        onclick="copyStreamingURL()" class="btn btn-outline-primary col-2 col-form-label">
-                    Copy
-                </button>
+            <div class="mb-3 row form-inline" name=" result">
+                <div class="col-2">
+                    <button for="url" name="copy_button"
+                            onclick="copyStreamingURL()" class="btn btn-outline-primary col-form-label w-100">
+                        Copy
+                    </button>
+                </div>
                 <div class="col-10">
-                    <a href="" id="streaming-url" target="_blank" class="col-8 form-control-plaintext" name="movie_url">
+                    <a href="" id="streaming-url" target="_blank" class="col-8 form-control-plaintext"
+                       name="movie_url">
                     </a>
                 </div>
             </div>
-            <p class="mt-3 mb-3">
-                【注意】<br/>
+            <p class="mt-3">
+                3. VRChatの動画プレイヤーの「Live」を選択して、貼り付けてください。<br/>
+            </p>
+            <div class="mt-5 mb-3 h5">
+                【注意】
+            </div>
+            <p>
                 読み込み直後はエラーが出ます。しばらくすると動画が再生されます。<br/>
                 安定しないことがありますが、時間が経つと安定します。<br/>
                 固まった時はリロードすると初めから再生されます。<br/>
