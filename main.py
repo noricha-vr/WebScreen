@@ -321,17 +321,21 @@ async def get_stream(uuid: str):
 
     def gen_movie():
         error_count = 0
+        max_error_count = 100
+        sleep_range = 0.2
+        chunk_size = 1024
         with open(movie_path, mode="rb") as file:
             # Read 1MB at a time
-            while error_count < 6:
-                data = file.read(1024)
+            while error_count < max_error_count:
+                data = file.read(chunk_size)
                 if not data:
                     # wait for file update.
-                    time.sleep(5)
+                    time.sleep(sleep_range)
                     error_count += 1
                 else:
                     error_count = 0
                     yield data
+        yield data
 
     return StreamingResponse(gen_movie(), media_type="video/mp4")
 
