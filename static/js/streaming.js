@@ -35,7 +35,7 @@ function createRecorder(stream) {
     // upload the recorded data to the server
     let recordedChunks = [];
     let chunk_size = 10;
-    let max_chunk_size = 100;
+    let max_chunk_size = 50;
     mediaRecorder.ondataavailable = async (e) => {
         if (e.data.size > 0) {
             recordedChunks.push(e.data);
