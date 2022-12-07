@@ -306,7 +306,7 @@ def create_github_movie(github_setting: GithubSetting) -> dict:
 
 
 @app.get("/stream/{uuid}/")
-def get_stream(uuid: str):
+async def get_stream(uuid: str):
     """
     Get m3u8 file.
     :param uuid:
