@@ -320,14 +320,17 @@ async def get_stream(uuid: str):
         raise HTTPException(status_code=404, detail="File not found")
 
     def gen_movie():
+        error_count = 0
         with open(movie_path, mode="rb") as file:
             # Read 1MB at a time
-            while True:
+            while error_count < 6:
                 data = file.read(1024)
                 if not data:
                     # wait for file update.
                     time.sleep(5)
+                    error_count += 1
                 else:
+                    error_count = 0
                     yield data
 
     return StreamingResponse(gen_movie(), media_type="video/mp4")
