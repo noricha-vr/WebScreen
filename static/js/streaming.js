@@ -1,15 +1,15 @@
-const videoElem = document.getElementById("video");
-const startElem = document.getElementById("start");
-const stopElem = document.getElementById("stop");
+const startButton = document.getElementById("start");
+const stopButton = document.getElementById("stop");
+const copyText = document.getElementById("streaming-url");
 let mediaRecorder = null;
 
 // Set event listeners for the start and stop buttons
-startElem.addEventListener("click", function (evt) {
+startButton.addEventListener("click", function (evt) {
     console.log('start recording');
     startRecording();
 }, false);
 
-stopElem.addEventListener("click", function (evt) {
+stopButton.addEventListener("click", function (evt) {
     stopRecording();
 }, false);
 
@@ -34,23 +34,18 @@ function createRecorder(stream) {
     const mediaRecorder = new MediaRecorder(stream);
     // upload the recorded data to the server
     let recordedChunks = [];
-    let chunk_size = 3;
-    let max_chunk_size = 60;
+    let chunk_size = 10;
     mediaRecorder.ondataavailable = async (e) => {
         if (e.data.size > 0) {
             recordedChunks.push(e.data);
         }
         if (recordedChunks.length > 0 && recordedChunks.length % chunk_size === 0) {
             console.log('uploading...');
-            uploadMovie(recordedChunks, uuid, is_first);
+            uploadMovie(recordedChunks.slice(), uuid, is_first);
             if (is_first === true) {
                 showStreamingURL(uuid);
                 is_first = false;
             }
-            if (chunk_size < max_chunk_size) {
-                chunk_size += 3;
-            }
-            console.log(`chunk_size: ${chunk_size}`);
             recordedChunks = [];
         }
     };
@@ -59,8 +54,9 @@ function createRecorder(stream) {
         let res = await uploadMovie(recordedChunks);
         let data = await res.json();
         console.log(JSON.stringify(data));
-        stopElem.classList.add('visually-hidden');
-        startElem.classList.remove('visually-hidden');
+        stopButton.classList.add('visually-hidden');
+        startButton.classList.remove('visually-hidden');
+        copyText.textContent = '';
         recordedChunks = [];
     };
     let interval = 200; // For every 200ms the stream data will be stored in a separate chunk.
@@ -86,8 +82,8 @@ async function uploadMovie(recordedChunks, uuid) {
 
 async function startRecording() {
     let stream = await recordScreen();
-    startElem.classList.add('visually-hidden');
-    stopElem.classList.remove('visually-hidden');
+    startButton.classList.add('visually-hidden');
+    stopButton.classList.remove('visually-hidden');
     mediaRecorder = createRecorder(stream);
 }
 
@@ -105,7 +101,6 @@ function showStreamingURL(uuid) {
 }
 
 function copyStreamingURL() {
-    const copyText = document.getElementById("streaming-url");
     navigator.clipboard.writeText(copyText.href);
 }
 

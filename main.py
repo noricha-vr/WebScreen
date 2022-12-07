@@ -321,7 +321,14 @@ def get_stream(uuid: str):
 
     def gen_movie():
         with open(movie_path, mode="rb") as file:
-            yield from file
+            # Read 1MB at a time
+            while True:
+                data = file.read(1024)
+                if not data:
+                    # wait for file update.
+                    time.sleep(5)
+                else:
+                    yield data
 
     return StreamingResponse(gen_movie(), media_type="video/mp4")
 
