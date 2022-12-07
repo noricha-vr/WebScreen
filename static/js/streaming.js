@@ -48,7 +48,7 @@ function createRecorder(stream) {
                 is_first = false;
             }
             if (chunk_size < max_chunk_size) {
-                chunk_size += 5;
+                chunk_size += 20;
             }
             recordedChunks = [];
         }
