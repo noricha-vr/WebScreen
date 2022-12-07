@@ -34,18 +34,23 @@ function createRecorder(stream) {
     const mediaRecorder = new MediaRecorder(stream);
     // upload the recorded data to the server
     let recordedChunks = [];
+    let chunk_size = 3;
+    let max_chunk_size = 60;
     mediaRecorder.ondataavailable = async (e) => {
-        console.log(`data available, size: ${e.data.size}`);
         if (e.data.size > 0) {
             recordedChunks.push(e.data);
         }
-        if (recordedChunks.length > 0 && recordedChunks.length % 10 === 0) {
+        if (recordedChunks.length > 0 && recordedChunks.length % chunk_size === 0) {
             console.log('uploading...');
-            await uploadMovie(recordedChunks, uuid, is_first);
+            uploadMovie(recordedChunks, uuid, is_first);
             if (is_first === true) {
                 showStreamingURL(uuid);
                 is_first = false;
             }
+            if (chunk_size < max_chunk_size) {
+                chunk_size += 3;
+            }
+            console.log(`chunk_size: ${chunk_size}`);
             recordedChunks = [];
         }
     };
@@ -66,8 +71,8 @@ function createRecorder(stream) {
 async function uploadMovie(recordedChunks, uuid) {
     const mineType = 'video/mp4';
     const blob = new Blob(recordedChunks, {type: mineType});
-    let file = new File([blob], "test.mp4");
-    console.log(`Post movie size: ${recordedChunks.length / 1024 / 1024} MB`);
+    let file = new File([blob], "video.mp4");
+    console.log(`Post movie size: ${file.size / 1024} KB`);
     const formData = new FormData();
     formData.append("movie", file, file.name);
     formData.append("uuid", uuid);
