@@ -359,7 +359,7 @@ def delete_movie() -> dict:
     movie_dir = Path("movie")
     deleted_files = []
     _1_hour_ago = time.time() - 60 * 60
-    for file in movie_dir.glob("**/*"):
+    for file in movie_dir.glob("**/*.mp4"):
         if file.is_dir():
             # if directory is empty, delete the directory.
             if len(list(file.glob("*"))) == 0: file.rmdir()
