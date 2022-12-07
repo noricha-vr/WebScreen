@@ -27,6 +27,6 @@ def pdf_to_image(pdf_bytes: bytes, image_dir: Path) -> None:
     :param image_dir: image directory path.
     :return: None
     """
-    image_paths = [image_path for image_path in pdf2image.convert_from_bytes(pdf_bytes)]
-    for i, image_path in enumerate(image_paths):
-        image_path.save(image_dir / f"{str(i).zfill(3)}.png")
+    images = [image_path for image_path in pdf2image.convert_from_bytes(pdf_bytes)]
+    for i, image in enumerate(images):
+        image.save(image_dir / f"{str(i).zfill(3)}.png")
