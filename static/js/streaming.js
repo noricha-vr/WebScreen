@@ -46,7 +46,9 @@ function createRecorder(stream) {
             if (is_first === true) {
                 showStreamingURL(uuid);
                 is_first = false;
-                chunk_size = max_chunk_size;
+            }
+            if (chunk_size < max_chunk_size) {
+                chunk_size += 5;
             }
             recordedChunks = [];
         }
