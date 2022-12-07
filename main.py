@@ -350,6 +350,27 @@ def stream(movie: UploadFile = Form(), uuid: str = Form()) -> dict:
     return {"message": "ok", 'url': url}
 
 
+@app.get("/api/delete-movie/")
+def delete_movie() -> dict:
+    """
+    Delete movie files in movie directory. If file age is over 1 hour, delete the file.
+    :return: message and deleted file list.
+    """
+    movie_dir = Path("movie")
+    deleted_files = []
+    _1_hour_ago = time.time() - 60 * 60
+    for file in movie_dir.glob("**/*"):
+        if file.is_dir():
+            # if directory is empty, delete the directory.
+            if len(list(file.glob("*"))) == 0: file.rmdir()
+            deleted_files.append(str(file))
+            continue
+        if file.stat().st_mtime < _1_hour_ago:
+            file.unlink()
+            deleted_files.append(str(file))
+    return {"message": "ok", "deleted_files": deleted_files}
+
+
 if __name__ == '__main__':
     # reload = True
     uvicorn.run(app, host="0.0.0.0", port=8000)
