@@ -42,7 +42,7 @@ function createRecorder(stream) {
         }
         if (recordedChunks.length > 0 && recordedChunks.length % chunk_size === 0) {
             console.log('uploading...');
-            uploadMovie(recordedChunks.slice(), uuid, is_first);
+            uploadMovie(recordedChunks.slice(), uuid);
             if (is_first === true) {
                 showStreamingURL(uuid);
                 is_first = false;
@@ -55,7 +55,7 @@ function createRecorder(stream) {
     };
     mediaRecorder.onstop = async function (e) {
         this.stream.getTracks().forEach(track => track.stop());
-        let res = await uploadMovie(recordedChunks);
+        let res = await uploadMovie(recordedChunks, uuid);
         let data = await res.json();
         console.log(JSON.stringify(data));
         stopButton.classList.add('visually-hidden');
