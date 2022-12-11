@@ -15,7 +15,7 @@ stopButton.addEventListener("click", function (evt) {
 
 async function recordScreen() {
     return await navigator.mediaDevices.getDisplayMedia({
-        audio: true,
+        audio: {stereo: true},
         video: {
             cursor: "always",
             displaySurface: "monitor",
@@ -85,7 +85,7 @@ function uuidv4() {
 }
 
 function showStreamingURL(uuid) {
-    let url = `${window.location.origin}/stream/${uuid}`;
+    let url = `${window.location.origin}/stream/${uuid}/`;
     let link = document.getElementById('streaming-url');
     link.href = url;
     link.textContent = url;
