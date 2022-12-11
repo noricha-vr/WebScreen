@@ -50,7 +50,7 @@ function createRecorder(stream) {
         startButton.classList.remove('visually-hidden');
         copyText.textContent = '';
     };
-    let interval = 1000; // For every 1000ms the stream data will be stored in a separate chunk.
+    let interval = 200; // For every 1000ms the stream data will be stored in a separate chunk.
     mediaRecorder.start(interval);
     return mediaRecorder;
 }
