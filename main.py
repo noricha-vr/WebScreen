@@ -106,9 +106,9 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
                                    wait_time=browser_setting.wait_time)
     logger.info(f"browser_config: {browser_config}")
     movie_path = Path(f"movie/{browser_config.hash}.mp4")
-    if movie_path.exists() and browser_setting.catch:
-        url = bucket_manager.get_public_file_url(str(movie_path))
-        return {'url': url, 'delete_at': None}
+    # if movie_path.exists() and browser_setting.catch:
+    #     url = bucket_manager.get_public_file_url(str(movie_path))
+    #     return {'url': url, 'delete_at': None}
     try:
         image_dir = MovieMaker.take_screenshots(browser_config)
     except Exception as e:
