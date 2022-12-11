@@ -33,35 +33,22 @@ function createRecorder(stream) {
     // the stream data is stored in this array
     const mediaRecorder = new MediaRecorder(stream);
     // upload the recorded data to the server
-    let recordedChunks = [];
-    let chunk_size = 10;
-    let max_chunk_size = 50;
     mediaRecorder.ondataavailable = async (e) => {
-        if (e.data.size > 0) {
-            recordedChunks.push(e.data);
-        }
-        if (recordedChunks.length > 0 && recordedChunks.length % chunk_size === 0) {
-            console.log('uploading...');
-            uploadMovie(recordedChunks.slice(), uuid);
-            if (is_first === true) {
-                showStreamingURL(uuid);
-                is_first = false;
-            }
-            if (chunk_size < max_chunk_size) {
-                chunk_size += 20;
-            }
-            recordedChunks = [];
+        console.log('uploading...');
+        uploadMovie([e.data], uuid);
+        if (is_first === true) {
+            showStreamingURL(uuid);
+            is_first = false;
         }
     };
     mediaRecorder.onstop = async function (e) {
         this.stream.getTracks().forEach(track => track.stop());
-        let res = await uploadMovie(recordedChunks, uuid);
+        let res = await uploadMovie([e.data], uuid);
         let data = await res.json();
         console.log(JSON.stringify(data));
         stopButton.classList.add('visually-hidden');
         startButton.classList.remove('visually-hidden');
         copyText.textContent = '';
-        recordedChunks = [];
     };
     let interval = 200; // For every 200ms the stream data will be stored in a separate chunk.
     mediaRecorder.start(interval);
