@@ -181,7 +181,7 @@ async def pdf_to_movie(pdf: UploadFile = File(), frame_sec: int = Form(...)) -> 
     image_dir = Path('image') / name
     image_dir.mkdir(exist_ok=True, parents=True)
     movie_path = Path(f"movie/{name}.mp4")
-    movie_path.mkdir(exist_ok=True, parents=True)
+    movie_path.parent.mkdir(exist_ok=True, parents=True)
     pdf_to_image(pdf.file.read(), image_dir)
     add_frames(image_dir, frame_sec)
     movie_config = MovieConfig(image_dir, movie_path, encode_speed='slow')
