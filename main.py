@@ -137,6 +137,7 @@ async def create_image_movie(images: List[UploadFile]) -> dict:
     output_image_dir = Path('image') / f'{name}_output'
     image_config = ImageConfig(image_dir, output_image_dir)
     movie_path = Path(f"movie/{name}.mp4")
+    movie_path.mkdir(exist_ok=True, parents=True)
     logger.info(f"image_dir: {image_dir.absolute()}")
     for image in images:
         image_path = str(image_dir.joinpath(image.filename).absolute())
@@ -180,6 +181,7 @@ async def pdf_to_movie(pdf: UploadFile = File(), frame_sec: int = Form(...)) -> 
     image_dir = Path('image') / name
     image_dir.mkdir(exist_ok=True, parents=True)
     movie_path = Path(f"movie/{name}.mp4")
+    movie_path.mkdir(exist_ok=True, parents=True)
     pdf_to_image(pdf.file.read(), image_dir)
     add_frames(image_dir, frame_sec)
     movie_config = MovieConfig(image_dir, movie_path, encode_speed='slow')
@@ -216,6 +218,7 @@ async def receive_image(request: Request, body: bytes = Body(...)):
     if token is None:
         raise HTTPException(status_code=400, detail="session_id is empty.")
     movie_path = Path(f"movie/{token}.mp4")
+    movie_path.mkdir(exist_ok=True, parents=True)
     temp_movie_path = Path(f"movie/{token}_temp.mp4")
     image_data = str(body).split(',')[1]
     image_path = Path(f"image/{token}/desktop.png")
