@@ -137,7 +137,7 @@ async def create_image_movie(images: List[UploadFile]) -> dict:
     output_image_dir = Path('image') / f'{name}_output'
     image_config = ImageConfig(image_dir, output_image_dir)
     movie_path = Path(f"movie/{name}.mp4")
-    movie_path.mkdir(exist_ok=True, parents=True)
+    movie_path.parent.mkdir(exist_ok=True, parents=True)
     logger.info(f"image_dir: {image_dir.absolute()}")
     for image in images:
         image_path = str(image_dir.joinpath(image.filename).absolute())
