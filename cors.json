@@ -1,0 +1,14 @@
+[
+  {
+    "origin": [
+      "https://web-screen.net"
+    ],
+    "method": [
+      "GET"
+    ],
+    "responseHeader": [
+      "Content-Type"
+    ],
+    "maxAgeSeconds": 300
+  }
+]

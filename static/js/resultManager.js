@@ -18,6 +18,32 @@ function copyToClipboard(e) {
     });
 }
 
+function downloadMovie(e) {
+    /*
+    Download movie from server.
+     */
+    // Find out what number the parent element of target is
+    let target = e.target.parentNode;
+    let targetNumber = 0;
+    while (target = target.previousElementSibling) {
+        targetNumber++;
+    }
+    console.log(`targetNumber: ${targetNumber}`);
+    // copy target value of element to clipboard
+    let targetResult = document.getElementsByName('result')[targetNumber];
+    let copyText = targetResult.getElementsByTagName('a')[0];
+    let url = copyText.href;
+    let words = copyText.textContent.split('/');
+    fetch(url).then(r => {
+        r.blob().then(blob => {
+            let a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = words[words.length - 1];
+            a.click();
+        });
+    });
+}
+
 function pasteFromClipboard(targetTextElement) {
     navigator.clipboard.readText().then(text => {
         targetTextElement.value = text;
@@ -75,6 +101,8 @@ function createResultNode(text, href) {
     // add copy button event listener
     let copyButton = newResult.getElementsByTagName('button')[0];
     copyButton.addEventListener('click', copyToClipboard);
+    let donwloadButton = newResult.getElementsByTagName('button')[1];
+    donwloadButton.addEventListener('click', downloadMovie);
     return newResult;
 }
 
