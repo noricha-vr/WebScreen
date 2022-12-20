@@ -360,11 +360,13 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
 
     def upload_hls_files():
         wait_time = 0
+        wait_range = 1
         end_time = 15
+
         uploaded_ts_list = []
         buket_manager = BucketManager(BUCKET_NAME)
         while wait_time < end_time:
-            time.sleep(1)
+            time.sleep(wait_range)
             ts_list = [str(p) for p in movie_dir.glob("*.ts")]
             ts_list.sort()
             for ts in ts_list:
@@ -376,7 +378,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
                 logger.info(f"upload ts file: {ts}")
                 uploaded_ts_list.append(ts)
                 wait_time = 0
-            wait_time += 1
+            wait_time += wait_range
 
     if not movie:
         raise HTTPException(status_code=400, detail="Movie file is empty.")
