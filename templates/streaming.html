@@ -26,14 +26,9 @@
 
             </div>
             <p>この機能はベータ版です。</p>
-            <p>1. 共有ボタンを押して、「デスクトップ全体」を選択してください。
-            <p>
-            <p>
-                他の画面は共有できないことが多いです。<br/>
-                デスクトップも共有できないときがあります。</p>
-            <p>
-                <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
-                <button class="btn btn-danger visually-hidden" id="stop">停止</button>
+            <p>1. 共有ボタンを押して、「デスクトップ全体」か「ウィンドウ」を選択してください。「Chromeタブ」は動作しません。</p>
+            <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
+            <button class="btn btn-danger visually-hidden" id="stop">停止</button>
             </p>
             <p class="mt-3">
                 2. 共有を開始したら下のURLをコピーします。
@@ -55,31 +50,12 @@
                 3. VRChatの動画プレイヤーの「Live」を選択して、貼り付けてください。
             </p>
             <p>
-                iwaSyncで「PlayBack failed due to unknown error」と表示される事がよくあります。<br/>
-                その場合はリロードボタンが表示されるまで待つと、画面が表示されることがあります。<br/>
-                リロードボタンが表示されたときは、ストリーミングを停止して、もう一度ストリーミングを開始すると表示されることがあります。
+                iwaSyncで「Invalid URL」と表示された場合は、もう一度URLを入れてください。<br/>
+                それでも表示されない場合は、もう一度共有を行ってください。<br/>
+                ストリーミング可能な時間は10分です。10分経過すると自動的にストリーミングが終了します。<br/>
+                遅延が小さいとストリーミング中に画面が映らなくなることがあります。遅延が大きくなるほど表示が安定します。<br/>
+                スマホの画面は共有できません。<br/>
             </p>
-            <div class="mt-5 mb-3 h5">
-                【注意】
-            </div>
-            <ul>
-                <li>
-                    読み込み直後はエラーが出ます。しばらくすると動画が再生されます。
-                </li>
-                <li>
-                    固まった時はリロードすると初めから再生されます。
-                </li>
-                <li>
-                    録画を開始してから再生されるまでの時間の分だけ遅延が発生します。
-                </li>
-                <li>
-                    ストリーミングが途中で止まることがあります。その場合は再度共有を開始してください。
-                </li>
-                <li>
-                    スマホの画面共有はできません。
-                </li>
-            </ul>
-
             <script src="/static/js/baseFunctions.js"></script>
             <script src="/static/js/streaming.js"></script>
             {% include 'result.html' %}
