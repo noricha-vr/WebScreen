@@ -388,11 +388,17 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
     with open(movie_path, mode) as f:
         f.write(movie.file.read())
     if not is_first: return {"message": "success"}
+    # select file server.
+    use_gcs = True
+    if use_gcs:
+        # upload to GCS
+        Thread(target=upload_hls_files).start()
+        base_url = f"https://storage.googleapis.com/vrchat/movie/{uuid}/"
+    else:
+        origin = request.headers["origin"]
+        base_url = f"{origin}/movie/{uuid}/"
     # convert to m3u8 file.
     output_path = movie_dir / "video.m3u8"
-    origin = request.headers["origin"]
-    base_url = f"https://storage.googleapis.com/vrchat/movie/{uuid}/"
-    Thread(target=upload_hls_files).start()
     to_m3u8(movie_path, output_path, base_url)
     url = f'/api/stream/{uuid}/'
     return {"message": "ok", 'url': url}
