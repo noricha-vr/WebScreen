@@ -62,7 +62,7 @@ function createRecorder(stream) {
 }
 
 async function uploadMovie(recordedChunks, uuid, is_first) {
-    const mineType = 'video/mp4';
+    const mineType = 'video/webm';
     const blob = new Blob(recordedChunks, {type: mineType});
     let file = new File([blob], "video.mp4");
     console.log(`Post movie size: ${file.size / 1024} KB`);
