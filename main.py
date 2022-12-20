@@ -359,6 +359,11 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
     """
 
     def upload_hls_files():
+        # TODO wait export movie file.
+        """
+        open m3u8 file then check .ts files.
+        If fined .ts file, upload to GCS.
+        """
         wait_time = 0
         wait_range = 1
         end_time = 15
@@ -367,16 +372,17 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         buket_manager = BucketManager(BUCKET_NAME)
         while wait_time < end_time:
             time.sleep(wait_range)
-            ts_list = [str(p) for p in movie_dir.glob("*.ts")]
-            ts_list.sort()
-            for ts in ts_list:
-                if ts in uploaded_ts_list: continue
-                # if ts file size is 0, wait for file update.
-                if os.path.getsize(ts) == 0: continue
-                buket_manager.upload_file(ts, ts)
-                buket_manager.make_public(ts)
-                logger.info(f"upload ts file: {ts}")
-                uploaded_ts_list.append(ts)
+            if not output_path.exists(): continue
+            with open(output_path, "r") as f:
+                lines = f.readlines()
+                for line in lines:
+                    if not line.endswith(".ts"): continue
+                    ts_file = line.split('/')[-1]
+                    if ts_file in uploaded_ts_list: continue
+                    ts_path = Path(f"movie/{uuid}/{ts_file}")
+                    if ts_path.exists():
+                        buket_manager.upload_file(str(ts_path), str(ts_path))
+                        uploaded_ts_list.append(line)
                 wait_time = 0
             wait_time += wait_range
 
@@ -391,7 +397,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         f.write(movie.file.read())
     if not is_first: return {"message": "success"}
     # select file server.
-    use_gcs = True
+    use_gcs = False
     if use_gcs:
         # upload to GCS
         Thread(target=upload_hls_files).start()
@@ -420,7 +426,8 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
               f'-c:v copy ' \
               f'-r 24 ' \
               f'-c:a aac -b:a 128k -strict -2 ' \
-              f'-f hls -hls_time 3 ' \
+              f'-f hls ' \
+              f'-hls_time 3 ' \
               f"-hls_flags delete_segments " \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
               f'-hls_base_url {base_url} ' \
