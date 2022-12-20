@@ -16,7 +16,7 @@ class BucketManager:
         self.storage_client = google.cloud.storage.Client()
         self.bucket = self.storage_client.get_bucket(self.bucket_name)
 
-    def has_file(self, file_name: str) -> bool:
+    def exists(self, file_name: str) -> bool:
         """
         Check if a file exists in the bucket.
         :param file_name:

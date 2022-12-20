@@ -21,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 from movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
 from starlette.responses import StreamingResponse
+from threading import Thread
 
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
@@ -357,6 +358,24 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
     :return: message
     """
 
+    def upload_hls_files():
+        wait_time = 0
+        end_time = 15
+        uploaded_ts_list = []
+        buket_manager = BucketManager(BUCKET_NAME)
+        while wait_time < end_time:
+            time.sleep(1)
+            ts_list = [str(p) for p in movie_dir.glob("*.ts")]
+            ts_list.sort()
+            for ts in ts_list:
+                if ts in uploaded_ts_list: continue
+                # if ts file size is 0, wait for file update.
+                if os.path.getsize(ts) == 0: continue
+                buket_manager.upload_file(ts, ts)
+                logger.info(f"upload: {ts}->{ts}")
+                uploaded_ts_list.append(ts)
+            wait_time += 1
+
     if not movie:
         raise HTTPException(status_code=400, detail="Movie file is empty.")
     movie_dir = Path(f"movie/{uuid}")
@@ -371,6 +390,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
     output_path = movie_dir / "video.m3u8"
     origin = request.headers["origin"]
     base_url = f"{origin}/movie/{uuid}/"
+    Thread(target=upload_hls_files).start()
     to_m3u8(movie_path, output_path, base_url)
     url = f'/api/stream/{uuid}/'
     return {"message": "ok", 'url': url}
