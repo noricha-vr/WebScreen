@@ -32,10 +32,12 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
 ROOT_DIR = Path(os.path.dirname(__file__))
 STATIC_DIR = ROOT_DIR / "static"
+MOVIE_DIR = ROOT_DIR / "movie"
 
 templates = Jinja2Templates(directory=ROOT_DIR / "templates")
 app = FastAPI(debug=DEBUG)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/movie", StaticFiles(directory=MOVIE_DIR), name="movie")
 
 origins = [
     os.environ.get("ALLOW_HOST", None)
@@ -365,23 +367,27 @@ def stream(movie: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form
         f.write(movie.file.read())
     if not is_first: return {"message": "success"}
     # convert to m3u8 file.
-    # to_m3u8(movie_config=MovieConfig(movie_path, movie_dir / "video.m3u8"))
+    to_m3u8(movie_path, movie_dir / "video.m3u8")
     url = f'/api/stream/{uuid}/'
     return {"message": "ok", 'url': url}
 
 
-def to_m3u8(movie_config: MovieConfig):
+def to_m3u8(input_path: Path, output_path: Path, buffer_sec=3):
     """
     Convert mp4 file to m3u8 file.
     :param movie_config:
     :return:
     """
-    movie_path = movie_config.input_image_dir
-    m3u8_path = movie_config.output_movie_path
-    if m3u8_path.exists():
+    if output_path.exists():
         return
+    time.sleep(buffer_sec)
     # Convert to m3u8 file.
-    command = f"ffmpeg -re -i {movie_path} -c:v libx264 -c:a aac -strict -2 -f hls -hls_time 1 {m3u8_path}"
+    command = f'ffmpeg -re -i {input_path} ' \
+              f'-c:v copy ' \
+              f'-c:a aac -strict -2 ' \
+              f'-f hls -hls_time 1 ' \
+              f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
+              f'{output_path}'
     logger.info(f"command: {command}")
     subprocess.run(command, shell=True, check=True)
 
