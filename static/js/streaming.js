@@ -92,7 +92,7 @@ function uuidv4() {
 }
 
 function showStreamingURL(uuid) {
-    let url = `${window.location.origin}/stream/${uuid}/`;
+    let url = `${window.location.origin}/movie/${uuid}/video.m3u8`;
     let link = document.getElementById('streaming-url');
     link.href = url;
     link.textContent = url;
