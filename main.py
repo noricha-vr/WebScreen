@@ -372,8 +372,10 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
                 # if ts file size is 0, wait for file update.
                 if os.path.getsize(ts) == 0: continue
                 buket_manager.upload_file(ts, ts)
-                logger.info(f"upload: {ts}->{ts}")
+                buket_manager.make_public(ts)
+                logger.info(f"upload ts file: {ts}")
                 uploaded_ts_list.append(ts)
+                wait_time = 0
             wait_time += 1
 
     if not movie:
@@ -389,7 +391,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
     # convert to m3u8 file.
     output_path = movie_dir / "video.m3u8"
     origin = request.headers["origin"]
-    base_url = f"{origin}/movie/{uuid}/"
+    base_url = f"https://storage.googleapis.com/vrchat/movie/{uuid}/"
     Thread(target=upload_hls_files).start()
     to_m3u8(movie_path, output_path, base_url)
     url = f'/api/stream/{uuid}/'
