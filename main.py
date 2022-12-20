@@ -382,7 +382,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         raise HTTPException(status_code=400, detail="Movie file is empty.")
     movie_dir = Path(f"movie/{uuid}")
     movie_dir.mkdir(exist_ok=True, parents=True)
-    movie_path = movie_dir / f"video.webm"
+    movie_path = movie_dir / f"video.mp4"
     # write movie file.
     mode = "ab" if movie_path.exists() else "wb"
     with open(movie_path, mode) as f:
