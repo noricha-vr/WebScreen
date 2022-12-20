@@ -347,9 +347,10 @@ async def get_stream(uuid: str):
 
 
 @app.post("/api/stream/")
-def stream(movie: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form()) -> dict:
+def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form()) -> dict:
     """
     Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
+    :param request: Request
     :param movie: movie file
     :param uuid: session id
     :param is_first: if is_first is true, create movie directory.
@@ -367,12 +368,15 @@ def stream(movie: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form
         f.write(movie.file.read())
     if not is_first: return {"message": "success"}
     # convert to m3u8 file.
-    to_m3u8(movie_path, movie_dir / "video.m3u8")
+    output_path = movie_dir / "video.m3u8"
+    origin = request.headers["origin"]
+    base_url = f"https://{origin}/movie/{uuid}/"
+    to_m3u8(movie_path, output_path, base_url)
     url = f'/api/stream/{uuid}/'
     return {"message": "ok", 'url': url}
 
 
-def to_m3u8(input_path: Path, output_path: Path, buffer_sec=3):
+def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
     """
     Convert mp4 file to m3u8 file.
     :param movie_config:
@@ -384,9 +388,10 @@ def to_m3u8(input_path: Path, output_path: Path, buffer_sec=3):
     # Convert to m3u8 file.
     command = f'ffmpeg -re -i {input_path} ' \
               f'-c:v copy ' \
-              f'-c:a aac -strict -2 ' \
+              f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls -hls_time 1 ' \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
+              f'-hls_base_url {base_url} ' \
               f'{output_path}'
     logger.info(f"command: {command}")
     subprocess.run(command, shell=True, check=True)
