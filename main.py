@@ -370,7 +370,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
     # convert to m3u8 file.
     output_path = movie_dir / "video.m3u8"
     origin = request.headers["origin"]
-    base_url = f"https://{origin}/movie/{uuid}/"
+    base_url = f"{origin}/movie/{uuid}/"
     to_m3u8(movie_path, output_path, base_url)
     url = f'/api/stream/{uuid}/'
     return {"message": "ok", 'url': url}
