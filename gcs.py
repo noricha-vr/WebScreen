@@ -16,11 +16,21 @@ class BucketManager:
         self.storage_client = google.cloud.storage.Client()
         self.bucket = self.storage_client.get_bucket(self.bucket_name)
 
+    def has_file(self, file_name: str) -> bool:
+        """
+        Check if a file exists in the bucket.
+        :param file_name:
+        :return bool:
+        """
+        blob = self.bucket.get_blob(str(file_name))
+        return blob is not None
+
     def upload_file(self, file_path: str, file_name: str) -> None:
         """
         Uploads a file to the bucket.
         :param file_path:
         :param file_name:
+        :param overwirte:
         :return None:
         """
         blob = self.bucket.blob(str(file_name))
