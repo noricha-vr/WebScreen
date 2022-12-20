@@ -382,7 +382,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         raise HTTPException(status_code=400, detail="Movie file is empty.")
     movie_dir = Path(f"movie/{uuid}")
     movie_dir.mkdir(exist_ok=True, parents=True)
-    movie_path = movie_dir / f"video.mp4"
+    movie_path = movie_dir / f"video.webm"
     # write movie file.
     mode = "ab" if movie_path.exists() else "wb"
     with open(movie_path, mode) as f:
@@ -416,13 +416,14 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
     # Convert to m3u8 file.
     command = f'ffmpeg -re -i {input_path} ' \
               f'-c:v copy ' \
+              f'-r 24 ' \
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls -hls_time 3 ' \
               f"-hls_flags delete_segments " \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
               f'-hls_base_url {base_url} ' \
               f'{output_path}'
-    logger.info(f"command: {command}")
+    logger.info(f"ffmpeg command: {command}")
     subprocess.run(command, shell=True, check=True)
 
 
