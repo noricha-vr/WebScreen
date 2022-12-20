@@ -31,12 +31,17 @@ async function recordScreen() {
 function createRecorder(stream) {
     let is_first = true;
     const uuid = uuidv4();
+    const options = {
+        audioBitsPerSecond: 128000,
+        videoBitsPerSecond: 2500000,
+        mimeType: "video/webm;codecs=h264",
+    };
     // the stream data is stored in this array
-    const mediaRecorder = new MediaRecorder(stream);
+    const mediaRecorder = new MediaRecorder(stream, options);
     // upload the recorded data to the server
     mediaRecorder.ondataavailable = async (e) => {
         console.log('uploading...');
-        uploadMovie([e.data], uuid);
+        uploadMovie([e.data], uuid, is_first);
         if (is_first === true) {
             showStreamingURL(uuid);
             is_first = false;
@@ -56,7 +61,7 @@ function createRecorder(stream) {
     return mediaRecorder;
 }
 
-async function uploadMovie(recordedChunks, uuid) {
+async function uploadMovie(recordedChunks, uuid, is_first) {
     const mineType = 'video/mp4';
     const blob = new Blob(recordedChunks, {type: mineType});
     let file = new File([blob], "video.mp4");
@@ -64,6 +69,7 @@ async function uploadMovie(recordedChunks, uuid) {
     const formData = new FormData();
     formData.append("movie", file, file.name);
     formData.append("uuid", uuid);
+    formData.append("is_first", is_first);
     let url = `/api/stream/`;
     let res = await fetch(url, {
         method: 'POST',

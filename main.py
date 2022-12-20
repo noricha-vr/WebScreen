@@ -345,11 +345,12 @@ async def get_stream(uuid: str):
 
 
 @app.post("/api/stream/")
-def stream(movie: UploadFile = Form(), uuid: str = Form()) -> dict:
+def stream(movie: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form()) -> dict:
     """
     Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
     :param movie: movie file
     :param uuid: session id
+    :param is_first: if is_first is true, create movie directory.
     :return: message
     """
 
@@ -362,8 +363,27 @@ def stream(movie: UploadFile = Form(), uuid: str = Form()) -> dict:
     mode = "ab" if movie_path.exists() else "wb"
     with open(movie_path, mode) as f:
         f.write(movie.file.read())
+    if not is_first: return {"message": "success"}
+    # convert to m3u8 file.
+    # to_m3u8(movie_config=MovieConfig(movie_path, movie_dir / "video.m3u8"))
     url = f'/api/stream/{uuid}/'
     return {"message": "ok", 'url': url}
+
+
+def to_m3u8(movie_config: MovieConfig):
+    """
+    Convert mp4 file to m3u8 file.
+    :param movie_config:
+    :return:
+    """
+    movie_path = movie_config.input_image_dir
+    m3u8_path = movie_config.output_movie_path
+    if m3u8_path.exists():
+        return
+    # Convert to m3u8 file.
+    command = f"ffmpeg -re -i {movie_path} -c:v libx264 -c:a aac -strict -2 -f hls -hls_time 1 {m3u8_path}"
+    logger.info(f"command: {command}")
+    subprocess.run(command, shell=True, check=True)
 
 
 @app.get("/api/delete-movie/")
