@@ -124,7 +124,7 @@ def create_movie(browser_setting: BrowserSetting) -> dict:
 
 
 @app.post("/api/image-to-movie/")
-async def create_image_movie(images: List[UploadFile]) -> dict:
+async def image_to_movie(images: List[UploadFile]) -> dict:
     """
     Merge images and create a movie.
     :param images: List of image files
@@ -138,11 +138,13 @@ async def create_image_movie(images: List[UploadFile]) -> dict:
     image_config = ImageConfig(image_dir, output_image_dir)
     movie_path = Path(f"movie/{name}.mp4")
     logger.info(f"image_dir: {image_dir.absolute()}")
+    # Save image
     for image in images:
         image_path = str(image_dir.joinpath(image.filename).absolute())
         logger.info(f"image_path: {image_path}")
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
+    # Convert image size and save as PNG
     MovieMaker.format_images(image_config)
     movie_config = MovieConfig(output_image_dir, movie_path)
     MovieMaker.image_to_movie(movie_config)
