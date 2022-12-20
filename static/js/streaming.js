@@ -1,6 +1,8 @@
 const startButton = document.getElementById("start");
 const stopButton = document.getElementById("stop");
 const copyText = document.getElementById("streaming-url");
+const copyButton = document.getElementById('copy-button');
+
 let mediaRecorder = null;
 
 // Set event listeners for the start and stop buttons
@@ -45,6 +47,8 @@ function createRecorder(stream) {
         if (is_first === true) {
             showStreamingURL(uuid);
             is_first = false;
+            copyButton.classList.remove('visually-hidden');
+            copyButton.addEventListener('click', copyStreamingURL);
         }
     };
     mediaRecorder.onstop = async function (e) {
@@ -52,6 +56,7 @@ function createRecorder(stream) {
         let res = await uploadMovie([e.data], uuid);
         let data = await res.json();
         console.log(JSON.stringify(data));
+        copyButton.classList.add('visually-hidden');
         stopButton.classList.add('visually-hidden');
         startButton.classList.remove('visually-hidden');
         copyText.textContent = '';
@@ -100,6 +105,12 @@ function showStreamingURL(uuid) {
 
 function copyStreamingURL() {
     navigator.clipboard.writeText(copyText.href);
+    // change the button text to "Copied!" for 10 seconds
+    copyButton.textContent = 'Copied!';
+    setTimeout(function () {
+        copyButton.textContent = 'Copy';
+    }, 10000);
+
 }
 
 function stopRecording() {
