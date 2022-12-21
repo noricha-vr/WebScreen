@@ -61,7 +61,7 @@ function createRecorder(stream) {
         startButton.classList.remove('visually-hidden');
         copyText.textContent = '';
     };
-    let interval = 300; // movie upload interval
+    let interval = 200; // movie upload interval
     mediaRecorder.start(interval);
     return mediaRecorder;
 }
