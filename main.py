@@ -359,7 +359,6 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
     """
 
     def upload_hls_files():
-        # TODO wait export movie file.
         """
         open m3u8 file then check .ts files.
         If fined .ts file, upload to GCS.
@@ -386,9 +385,9 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
                         buket_manager.make_public(str(ts_path))
                         uploaded_ts_list.append(ts_file)
                         logger.info(f'new uploaded ts_file: {ts_file}')
-                    logger.info(f'uploaded_ts_list: {uploaded_ts_list}')
-                wait_time = 0
+                        wait_time = 0
             wait_time += wait_range
+            logger.info(f'wait_time: {wait_time}')
 
     if not movie:
         raise HTTPException(status_code=400, detail="Movie file is empty.")
@@ -432,8 +431,8 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
               f'-r 30 ' \
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls ' \
-              f'-hls_time 3 ' \
-              f'-hls_list_size 10 ' \
+              f'-hls_time 2 ' \
+              f'-hls_list_size 0 ' \
               f"-hls_flags delete_segments " \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
               f'-hls_base_url {base_url} ' \
