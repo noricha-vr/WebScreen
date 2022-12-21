@@ -428,6 +428,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
     time.sleep(buffer_sec)
     # Convert to m3u8 file.
     command = f'ffmpeg -re -i {input_path} ' \
+              f'-movflags faststart ' \
               f'-c:v copy ' \
               f'-r 30 ' \
               f'-c:a aac -b:a 128k -strict -2 ' \
