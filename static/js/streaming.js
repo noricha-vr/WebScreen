@@ -21,7 +21,7 @@ async function recordScreen() {
         video: {
             cursor: "always",
             displaySurface: "monitor",
-            frameRate: 24,
+            frameRate: 30,
             height: 720,
             mediaSource: "screen",
             width: 1280,
@@ -56,10 +56,7 @@ function createRecorder(stream) {
         let res = await uploadMovie([e.data], uuid);
         let data = await res.json();
         console.log(JSON.stringify(data));
-        copyButton.classList.add('visually-hidden');
-        stopButton.classList.add('visually-hidden');
-        startButton.classList.remove('visually-hidden');
-        copyText.textContent = '';
+
     };
     let interval = 200; // movie upload interval
     mediaRecorder.start(interval);
@@ -114,5 +111,9 @@ function copyStreamingURL() {
 }
 
 function stopRecording() {
+    copyButton.classList.add('visually-hidden');
+    stopButton.classList.add('visually-hidden');
+    startButton.classList.remove('visually-hidden');
+    copyText.textContent = '';
     mediaRecorder.stop();
 }

@@ -401,7 +401,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         f.write(movie.file.read())
     if not is_first: return {"message": "success"}
     # select file server.
-    use_gcs = True
+    use_gcs = False
     if use_gcs:
         # upload to GCS
         Thread(target=upload_hls_files).start()
