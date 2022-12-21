@@ -401,7 +401,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         f.write(movie.file.read())
     if not is_first: return {"message": "success"}
     # select file server.
-    use_gcs = False
+    use_gcs = True
     if use_gcs:
         # upload to GCS
         Thread(target=upload_hls_files).start()
@@ -433,6 +433,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls ' \
               f'-hls_time 3 ' \
+              f'-hls_list_size 0 ' \
               f"-hls_flags delete_segments " \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
               f'-hls_base_url {base_url} ' \
