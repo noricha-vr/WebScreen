@@ -2,7 +2,7 @@ const startButton = document.getElementById("start");
 const stopButton = document.getElementById("stop");
 const copyText = document.getElementById("streaming-url");
 const copyButton = document.getElementById('copy-button');
-
+const setupText = document.getElementById('setup-message');
 let mediaRecorder = null;
 
 // Set event listeners for the start and stop buttons
@@ -82,6 +82,7 @@ async function uploadMovie(recordedChunks, uuid, is_first) {
 
 async function startRecording() {
     let stream = await recordScreen();
+    setupCountdown();
     startButton.classList.add('visually-hidden');
     stopButton.classList.remove('visually-hidden');
     mediaRecorder = createRecorder(stream);
@@ -93,6 +94,26 @@ function uuidv4() {
         (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
     );
 }
+
+
+function setupCountdown() {
+    /*
+    * Set up a countdown timer to start recording after 15 seconds.
+     */
+    setupText.classList.remove('visually-hidden');
+    let text = '動画が再生できるようになるまであと ';
+    let count = 15;
+    let timer = setInterval(function () {
+        setupText.textContent = `${text} ${count}秒`;
+        count--;
+        if (count < 0) {
+            clearInterval(timer);
+            setupText.textContent = '0';
+            setupText.classList.add('visually-hidden');
+        }
+    }, 1000);
+}
+
 
 function showStreamingURL(uuid) {
     let url = `${window.location.origin}/movie/${uuid}/video.m3u8`;
