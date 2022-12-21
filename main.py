@@ -313,42 +313,25 @@ def create_github_movie(github_setting: GithubSetting) -> dict:
     return {'url': url, 'delete_at': delete_at}
 
 
-@app.get("/stream/{uuid}/")
-async def get_stream(uuid: str):
+@app.get("/stream/{uuid}/{file_name}")
+async def get_stream(uuid: str, file_name: str):
     """
     Get m3u8 file.
     :param uuid:
+    :param file_name:
     :return:
     """
-    movie_path = Path(f"movie/{uuid}/video.mp4")
-    for i in range(20):
-        if movie_path.exists(): break
-        time.sleep(1)
-    if movie_path.exists() is False:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    def gen_movie():
-        error_count = 0
-        max_error_count = 50
-        sleep_range = 0.2
-        with open(movie_path, mode="rb") as file:
-            # Read 1MB at a time
-            while error_count < max_error_count:
-                data = file.read()
-                if not data:
-                    # wait for file update.
-                    time.sleep(sleep_range)
-                    error_count += 1
-                else:
-                    error_count = 0
-                    yield data
-        yield data
-
-    return StreamingResponse(gen_movie(), media_type="video/mp4")
+    movie_path = Path(f"movie/{uuid}/{file_name}")
+    bucket_manager = BucketManager(BUCKET_NAME)
+    url = bucket_manager.get_public_file_url(str(movie_path))
+    logger.info(f'url: {url}')
+    if url is None:
+        return FileResponse(movie_path)
+    return RedirectResponse(url)
 
 
 @app.post("/api/stream/")
-def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form()) -> dict:
+def post_stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form()) -> dict:
     """
     Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
     :param request: Request
@@ -399,15 +382,11 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
     with open(movie_path, mode) as f:
         f.write(movie.file.read())
     if not is_first: return {"message": "success"}
-    # select file server.
-    use_gcs = False
-    if use_gcs:
-        # upload to GCS
-        Thread(target=upload_hls_files).start()
-        base_url = f"https://storage.googleapis.com/vrchat/movie/{uuid}/"
-    else:
-        origin = request.headers["origin"]
-        base_url = f"{origin}/movie/{uuid}/"
+
+    # upload to GCS
+    Thread(target=upload_hls_files).start()
+    origin = request.headers["origin"]
+    base_url = f"{origin}/stream/{uuid}/"
     # convert to m3u8 file.
     output_path = movie_dir / "video.m3u8"
     # to_m3u8(movie_path, output_path, base_url)
@@ -428,7 +407,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
     # Convert to m3u8 file.
     command = f'ffmpeg -re -i {input_path} ' \
               f'-c:v copy ' \
-              f'-r 30 ' \
+              f'-r 24 ' \
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls ' \
               f'-hls_time 2 ' \
