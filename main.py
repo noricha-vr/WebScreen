@@ -429,7 +429,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
     # Convert to m3u8 file.
     command = f'ffmpeg -re -i {input_path} ' \
               f'-c:v copy ' \
-              f'-r 24 ' \
+              f'-r 30 ' \
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls ' \
               f'-hls_time 3 ' \
