@@ -324,8 +324,9 @@ async def get_stream(uuid: str, file_name: str):
     movie_path = Path(f"movie/{uuid}/{file_name}")
     bucket_manager = BucketManager(BUCKET_NAME)
     url = bucket_manager.get_public_file_url(str(movie_path))
-    logger.info(f'url: {url}')
+    logger.info(f'ts file url: {url}')
     if url is None:
+        logger.info(f'use local ts file: {movie_path}')
         return FileResponse(movie_path)
     return RedirectResponse(url)
 
@@ -370,7 +371,6 @@ def post_stream(request: Request, movie: UploadFile = Form(), uuid: str = Form()
                         logger.info(f'new uploaded ts_file: {ts_file}')
                         wait_time = 0
             wait_time += wait_range
-            logger.info(f'wait_time: {wait_time}')
 
     if not movie:
         raise HTTPException(status_code=400, detail="Movie file is empty.")
