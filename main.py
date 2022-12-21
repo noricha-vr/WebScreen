@@ -411,7 +411,8 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         base_url = f"{origin}/movie/{uuid}/"
     # convert to m3u8 file.
     output_path = movie_dir / "video.m3u8"
-    to_m3u8(movie_path, output_path, base_url)
+    # to_m3u8(movie_path, output_path, base_url)
+    Thread(target=to_m3u8, args=(movie_path, output_path, base_url)).start()
     url = f'/api/stream/{uuid}/'
     return {"message": "ok", 'url': url}
 
@@ -438,6 +439,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
               f'{output_path}'
     logger.info(f"ffmpeg command: {command}")
     subprocess.run(command, shell=True, check=True)
+    logger.info(f'ffmpeg command: {command} is finished.')
 
 
 @app.get("/api/delete-movie/")
