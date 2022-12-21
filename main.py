@@ -433,7 +433,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls ' \
               f'-hls_time 3 ' \
-              f'-hls_list_size 0 ' \
+              f'-hls_list_size 10 ' \
               f"-hls_flags delete_segments " \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
               f'-hls_base_url {base_url} ' \
