@@ -379,13 +379,13 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
                     line = line.strip()
                     if not line.endswith(".ts"): continue
                     ts_file = line.split('/')[-1]
-                    logger.info(f'ts_file: {ts_file}')
                     if ts_file in uploaded_ts_list: continue
                     ts_path = Path(f"movie/{uuid}/{ts_file}")
                     if ts_path.exists():
                         buket_manager.upload_file(str(ts_path), str(ts_path))
                         buket_manager.make_public(str(ts_path))
                         uploaded_ts_list.append(ts_file)
+                        logger.info(f'new uploaded ts_file: {ts_file}')
                     logger.info(f'uploaded_ts_list: {uploaded_ts_list}')
                 wait_time = 0
             wait_time += wait_range
