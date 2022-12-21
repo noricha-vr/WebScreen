@@ -364,8 +364,8 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         If fined .ts file, upload to GCS.
         """
         wait_time = 0
-        wait_range = 1
-        end_time = 15
+        wait_range = 0.1
+        end_time = 10
 
         uploaded_ts_list = []
         buket_manager = BucketManager(BUCKET_NAME)
@@ -400,7 +400,7 @@ def stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_
         f.write(movie.file.read())
     if not is_first: return {"message": "success"}
     # select file server.
-    use_gcs = True
+    use_gcs = False
     if use_gcs:
         # upload to GCS
         Thread(target=upload_hls_files).start()
@@ -432,7 +432,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls ' \
               f'-hls_time 2 ' \
-              f'-hls_list_size 0 ' \
+              f'-hls_list_size 10 ' \
               f"-hls_flags delete_segments " \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
               f'-hls_base_url {base_url} ' \

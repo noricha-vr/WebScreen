@@ -85,6 +85,7 @@ async function startRecording() {
     startButton.classList.add('visually-hidden');
     stopButton.classList.remove('visually-hidden');
     mediaRecorder = createRecorder(stream);
+    setTimeout(stopRecording, 1000 * 60 * 10)
 }
 
 function uuidv4() {
