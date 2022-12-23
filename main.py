@@ -416,6 +416,8 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
               f"-hls_flags delete_segments " \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
               f'-hls_base_url {base_url} ' \
+              f'-timeout 0.1 ' \
+              f'-flags +global_header ' \
               f'{output_path}'
     logger.info(f"ffmpeg command: {command}")
     subprocess.run(command, shell=True, check=True)
