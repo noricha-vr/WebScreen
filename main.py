@@ -412,7 +412,6 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=3):
               f'-f hls ' \
               f'-hls_playlist_type event ' \
               f'-hls_time 2 ' \
-              f'-hls_list_size 10 ' \
               f"-hls_flags delete_segments " \
               f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
               f'-hls_base_url {base_url} ' \
