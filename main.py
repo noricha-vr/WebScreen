@@ -25,7 +25,7 @@ from threading import Thread
 
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
-from util import image2mp4, pdf_to_image
+from util import image2mp4, pdf_to_image, to_m3u8
 
 logger = logging.getLogger('uvicorn')
 DEBUG = os.getenv('DEBUG') == 'True'
@@ -342,42 +342,6 @@ def post_stream(request: Request, movie: UploadFile = Form(), uuid: str = Form()
     :return: message
     """
 
-    def upload_hls_files():
-        """
-        open m3u8 file then check .ts files.
-        If fined .ts file, upload to GCS.
-        """
-        wait_time = 0
-        wait_range = 0.1
-        end_time = 10
-
-        uploaded_ts_list = []
-        buket_manager = BucketManager(BUCKET_NAME)
-        while wait_time < end_time:
-            time.sleep(wait_range)
-            if not output_path.exists(): continue
-            with open(output_path, "r") as f:
-                lines = f.readlines()
-                for line in lines:
-                    line = line.strip()
-                    if not line.endswith(".ts"): continue
-                    ts_file = line.split('/')[-1]
-                    if ts_file in uploaded_ts_list:
-                        # if ts_file create_at over 10 seconds, overwrite blank file.
-                        if time.time() - os.path.getctime(output_path.parent / ts_file) > 10:
-                            logger.info(f'Overwrite blank file. {ts_file}')
-                            with open(output_path.parent / ts_file, 'wb') as f:
-                                f.write(b'')
-                        continue
-                    ts_path = Path(f"movie/{uuid}/{ts_file}")
-                    if ts_path.exists():
-                        buket_manager.upload_file(str(ts_path), str(ts_path))
-                        buket_manager.make_public(str(ts_path))
-                        uploaded_ts_list.append(ts_file)
-                        logger.info(f'new uploaded ts_file: {ts_file}')
-                        wait_time = 0
-            wait_time += wait_range
-
     if not movie:
         raise HTTPException(status_code=400, detail="Movie file is empty.")
     movie_dir = Path(f"movie/{uuid}")
@@ -390,48 +354,54 @@ def post_stream(request: Request, movie: UploadFile = Form(), uuid: str = Form()
     if not is_first: return {"message": "success"}
 
     # upload to GCS
-    Thread(target=upload_hls_files).start()
+    output_path = movie_dir / "video.m3u8"
+    Thread(target=upload_hls_files, args=(output_path, uuid)).start()
     origin = request.headers["origin"]
     base_url = f"{origin}/stream/{uuid}/"
     # convert to m3u8 file.
-    output_path = movie_dir / "video.m3u8"
     # to_m3u8(movie_path, output_path, base_url)
     Thread(target=to_m3u8, args=(movie_path, output_path, base_url)).start()
     url = f'/api/stream/{uuid}/'
     return {"message": "ok", 'url': url}
 
 
-def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
+def upload_hls_files(output_path: Path, uuid: str):
     """
-    Caution! This works only Desktop Sharing.
-    Convert mp4 file to m3u8 file.
-    :param input_path: mp4 file path
+    open m3u8 file then check .ts files.
+    If fined .ts file, upload to GCS.
     :param output_path: m3u8 file path
-    :param base_url: base url
-    :param buffer_sec: buffer seconds
-    :return:
+    :param uuid: session id
     """
-    if output_path.exists():
-        return
-    time.sleep(buffer_sec)
-    # Convert to m3u8 file.
-    command = f'ffmpeg -re -i {input_path} ' \
-              f'-c:v copy ' \
-              f'-r 24 ' \
-              f'-c:a aac -b:a 128k -strict -2 ' \
-              f'-f hls ' \
-              f'-hls_playlist_type event ' \
-              f'-hls_time 2 ' \
-              f'-hls_list_size 10 ' \
-              f"-hls_flags delete_segments " \
-              f'-hls_segment_filename "{output_path.parent}/video%3d.ts" ' \
-              f'-hls_base_url {base_url} ' \
-              f'-timeout 0.1 ' \
-              f'-flags +global_header ' \
-              f'{output_path}'
-    logger.info(f"ffmpeg command: {command}")
-    subprocess.run(command, shell=True, check=True)
-    logger.info(f'ffmpeg command: {command} is finished.')
+    wait_time = 0
+    wait_range = 0.1
+    end_time = 10
+
+    uploaded_ts_list = []
+    buket_manager = BucketManager(BUCKET_NAME)
+    while wait_time < end_time:
+        time.sleep(wait_range)
+        if not output_path.exists(): continue
+        with open(output_path, "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.strip()
+                if not line.endswith(".ts"): continue
+                ts_file = line.split('/')[-1]
+                if ts_file in uploaded_ts_list:
+                    # if ts_file create_at over 10 seconds, overwrite blank file.
+                    if time.time() - os.path.getctime(output_path.parent / ts_file) > 10:
+                        logger.info(f'Overwrite blank file. {ts_file}')
+                        with open(output_path.parent / ts_file, 'wb') as f:
+                            f.write(b'')
+                    continue
+                ts_path = Path(f"movie/{uuid}/{ts_file}")
+                if ts_path.exists():
+                    buket_manager.upload_file(str(ts_path), str(ts_path))
+                    buket_manager.make_public(str(ts_path))
+                    uploaded_ts_list.append(ts_file)
+                    logger.info(f'new uploaded ts_file: {ts_file}')
+                    wait_time = 0
+        wait_time += wait_range
 
 
 @app.get("/api/delete-movie/")
