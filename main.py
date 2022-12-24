@@ -323,12 +323,12 @@ async def get_stream(uuid: str, file_name: str):
     """
     movie_path = Path(f"movie/{uuid}/{file_name}")
     bucket_manager = BucketManager(BUCKET_NAME)
-    url = bucket_manager.get_public_file_url(str(movie_path))
-    logger.info(f'ts file url: {url}')
-    if url is None:
-        logger.info(f'use local ts file: {movie_path}')
+    if bucket_manager.exists(str(movie_path)):
+        url = bucket_manager.get_public_file_url(str(movie_path))
+        return RedirectResponse(url)
+    else:
+        logger.info(f'Return local ts file. {movie_path}')
         return FileResponse(movie_path)
-    return RedirectResponse(url)
 
 
 @app.post("/api/stream/")
@@ -407,7 +407,6 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
     # Convert to m3u8 file.
     command = f'ffmpeg -re -i {input_path} ' \
               f'-c:v copy ' \
-              f'-r 24 ' \
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls ' \
               f'-hls_playlist_type event ' \
