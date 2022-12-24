@@ -21,7 +21,7 @@ async function recordScreen() {
         video: {
             cursor: "always",
             displaySurface: "monitor",
-            frameRate: 30,
+            frameRate: 24,
             height: 720,
             mediaSource: "screen",
             width: 1280,

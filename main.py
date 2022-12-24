@@ -407,6 +407,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
     # Convert to m3u8 file.
     command = f'ffmpeg -re -i {input_path} ' \
               f'-c:v copy ' \
+              f'-r 24 ' \
               f'-c:a aac -b:a 128k -strict -2 ' \
               f'-f hls ' \
               f'-hls_playlist_type event ' \
