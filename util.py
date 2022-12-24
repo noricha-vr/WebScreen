@@ -10,7 +10,23 @@ import shutil
 
 from gcs import BucketManager
 
-logger = logging.getLogger(__name__)
+
+def setup_logger(name, logfile='LOGFILENAME.txt'):
+    _logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+
+    # create console handler with a INFO log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch_formatter = logging.Formatter('%(levelname)s - %(asctime)s - %(message)s', '%Y-%m-%d %H:%M:%S')
+    ch.setFormatter(ch_formatter)
+
+    # add the handlers to the logger
+    _logger.addHandler(ch)
+    return _logger
+
+
+logger = setup_logger(__name__)
 
 
 def add_frames(image_dir: Path, frame_sec: int) -> None:
@@ -67,9 +83,10 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5) ->
                '-timeout', '0.1',
                '-flags', '+global_header',
                str(output_path)]
-    logger.info(f"ffmpeg command: {command}")
+    command_str = ' '.join(command)
+    logger.info(f"ffmpeg command: {command_str}")
     subprocess.call(command)
-    logger.info(f'ffmpeg command: {command} is finished.')
+    logger.info(f"ffmpeg command: {command_str}")
 
 
 def upload_hls_files(output_path: Path, uuid: str, bucket_manager: BucketManager) -> None:
