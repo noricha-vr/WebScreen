@@ -2,36 +2,31 @@ import glob
 import subprocess
 import time
 from pathlib import Path
-import cv2
 import os
 import pdf2image
 import logging
+
+import shutil
 
 from gcs import BucketManager
 
 logger = logging.getLogger(__name__)
 
 
-def image2mp4(image_dir: str, movie_path: str, fps: int = 1) -> None:
+def add_frames(image_dir: Path, frame_sec: int) -> None:
     """
-    Convert image to mp4 file.
-    :param image_dir: image directory path
-    :param movie_path: output mp4 file path
-    :param fps: frame per second
+    Add frames to the image directory. Image file format is png.
+    :param image_dir: Image directory
+    :param frame_sec: Frame rate
+    :return: None
     """
-    fps = 1 / fps
-    image_files = sorted(glob.glob(f"{image_dir}/*.png"))
-
-    height, width, _ = cv2.imread(image_files[0]).shape[:3]
-    video_writer = cv2.VideoWriter(
-        str(movie_path),
-        cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),
-        fps, (width, height))
-
-    for image_file in image_files:
-        img = cv2.imread(image_file)
-        video_writer.write(img)
-    video_writer.release()
+    max_frame_sec = 2
+    if frame_sec > max_frame_sec:
+        frame_sec = max_frame_sec
+    image_paths = sorted(image_dir.glob("*.png"))
+    for image_path in image_paths:
+        for i in range(frame_sec - 1):
+            shutil.copy(image_path, image_path.parent / f"{image_path.stem}_{i}.png")
 
 
 def pdf_to_image(pdf_bytes: bytes, image_dir: Path) -> None:

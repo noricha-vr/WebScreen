@@ -1,18 +1,12 @@
-import base64
 import logging
 import os
 import shutil
-import subprocess
 import time
 from uuid import uuid4
 from datetime import datetime
 from pathlib import Path
 from typing import List
-
-import PIL.Image
-import cv2
 import uvicorn
-from PIL.Image import Image
 from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -20,12 +14,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
-from starlette.responses import StreamingResponse
 from threading import Thread
 
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
-from util import image2mp4, pdf_to_image, to_m3u8, upload_hls_files
+from util import pdf_to_image, to_m3u8, upload_hls_files, add_frames
 
 logger = logging.getLogger('uvicorn')
 DEBUG = os.getenv('DEBUG') == 'True'
@@ -155,22 +148,6 @@ async def image_to_movie(images: List[UploadFile]) -> dict:
     url = bucket_manager.to_public_url(str(movie_path))
     delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
     return {'url': url, 'delete_at': delete_at}
-
-
-def add_frames(image_dir: Path, frame_sec: int) -> None:
-    """
-    Add frames to the image directory. Image file format is png.
-    :param image_dir: Image directory
-    :param frame_sec: Frame rate
-    :return: None
-    """
-    max_frame_sec = 2
-    if frame_sec > max_frame_sec:
-        frame_sec = max_frame_sec
-    image_paths = sorted(image_dir.glob("*.png"))
-    for image_path in image_paths:
-        for i in range(frame_sec - 1):
-            shutil.copy(image_path, image_path.parent / f"{image_path.stem}_{i}.png")
 
 
 @app.post('/api/pdf-to-movie/')
