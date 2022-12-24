@@ -109,9 +109,22 @@ function showResultMessage() {
     }
 }
 
+function showBrowserErrorMessage() {
+    // Google ChromeかMicrosoft Edgeかどうかを判定する正規表現
+    var supportedBrowsersRegex = /Chrome|Edge/i;
+
+    // 現在のブラウザがGoogle ChromeかMicrosoft Edgeであるかどうかを判定
+    var isSupportedBrowser = supportedBrowsersRegex.test(navigator.userAgent);
+
+    // 現在のブラウザがGoogle ChromeかMicrosoft Edgeでない場合は、#support-browser要素を表示する
+    if (!isSupportedBrowser) {
+        document.getElementById('support-browser').classList.remove('visually-hidden');
+    }
+}
 
 window.onload = () => {
     selectActiveMenu();
     addResultsToPage();
     showResultMessage();
+    showBrowserErrorMessage();
 }
