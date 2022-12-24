@@ -273,8 +273,13 @@ async def get_stream(uuid: str, file_name: str):
     :param file_name:
     :return:
     """
-    movie_path = Path(f"movie/{uuid}/{file_name}")
+    mp4_file = Path(f"movie/{uuid}/{file_name}")
     bucket_manager = BucketManager(BUCKET_NAME)
+    # if mp4_file modified time is over 3 min, return 404.
+    if (datetime.now() - datetime.fromtimestamp(mp4_file.stat().st_mtime)).seconds > 60:
+        bucket_manager.make_private(str(mp4_file))
+        raise HTTPException(status_code=404, detail="File not found")
+    movie_path = Path(f"movie/{uuid}/{file_name}")
     if bucket_manager.exists(str(movie_path)):
         url = bucket_manager.get_public_file_url(str(movie_path))
         return RedirectResponse(url)
