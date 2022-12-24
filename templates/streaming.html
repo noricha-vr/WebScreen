@@ -30,13 +30,14 @@
                 Google Chrome か Microsoft Edge をご利用ください。
             </div>
             <p>この機能はベータ版です。</p>
-            <p>1. 共有ボタンを押して、<span class="text-danger">「デスクトップ全体」</span>を選択してください。<br/>
-                ※「ウィンドウ」はすぐに動かなくなり、「Chromeタブ」は動作しません「デスクトップ全体」が一番安定します。</p>
-            <button class="btn btn-primary" id="start">共有開始</button>&nbsp;
-            <button class="btn btn-danger visually-hidden" id="stop">停止</button>
+
+            <p>1. 「画面共有」ボタンを押して、<span class="text-danger">「デスクトップ全体」</span>を選択してください。<br/>
+                ※「ウィンドウ」「Chromeタブ」は動作しません。</p>
+            <button class="btn btn-primary" id="start">画面共有</button>&nbsp;
+            <button class="btn btn-danger visually-hidden" id="stop">共有停止</button>
             </p>
             <p class="mt-3">
-                2. 共有を開始したら下のURLをコピーします。
+                2. 画面共有を開始したら下のURLをコピーします。
             </p>
             <div class="mb-3 row form-inline" name=" result">
                 <div class="col-2">
@@ -55,6 +56,13 @@
                 3. VRChatの動画プレイヤーの「Live」を選択して、貼り付けてください。
             </p>
             <p id="setup-message" class="visually-hidden"></p>
+            <div class="coll">
+                <h2 class="h4">操作方法</h2>
+                <video controls muted class="img-fluid"
+                       src="https://storage.googleapis.com/noricha-public/web-screen/movie/how-to-use-streaming.mp4"
+                       alt="how to share the screen">
+                </video>
+            </div>
             <p>
                 iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。<br/>
                 それでも表示されない場合は、共有を停止してから再度共有を行ってください。<br/>
