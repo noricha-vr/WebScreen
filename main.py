@@ -210,31 +210,6 @@ def send_desktop_movie(session_id: str):
     return FileResponse(movie_path)
 
 
-@app.post('/api/receive-image/')
-async def receive_image(request: Request, body: bytes = Body(...)):
-    """
-    Upload image file and convert to mp4. Movie file is saved in 'movie/{session_id}.mp4'. Header has `session_id`.
-    body is posted by canvas.toDataURL().
-    :param request:
-    :param body: base64 image.
-    :return: message
-    """
-    token = request.headers.get('session_id')
-    if token is None:
-        raise HTTPException(status_code=400, detail="session_id is empty.")
-    movie_path = Path(f"movie/{token}.mp4")
-    movie_path.mkdir(exist_ok=True, parents=True)
-    temp_movie_path = Path(f"movie/{token}_temp.mp4")
-    image_data = str(body).split(',')[1]
-    image_path = Path(f"image/{token}/desktop.png")
-    image_path.parent.mkdir(exist_ok=True, parents=True)
-    with open(image_path, "wb") as f:
-        f.write(base64.b64decode(bytes(image_data, 'utf-8')))
-    image2mp4(str(image_path.parent), str(temp_movie_path))
-    temp_movie_path.rename(movie_path)
-    return {"message": f"success. URL: /api/receive-image/{token}/"}
-
-
 @app.get("/streaming/")
 async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('streaming.html', {'request': request})
