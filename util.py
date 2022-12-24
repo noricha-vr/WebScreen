@@ -12,7 +12,13 @@ from gcs import BucketManager
 logger = logging.getLogger(__name__)
 
 
-def image2mp4(image_dir: str, movie_path: str, fps: int = 1):
+def image2mp4(image_dir: str, movie_path: str, fps: int = 1) -> None:
+    """
+    Convert image to mp4 file.
+    :param image_dir: image directory path
+    :param movie_path: output mp4 file path
+    :param fps: frame per second
+    """
     fps = 1 / fps
     image_files = sorted(glob.glob(f"{image_dir}/*.png"))
 
@@ -40,7 +46,7 @@ def pdf_to_image(pdf_bytes: bytes, image_dir: Path) -> None:
         image.save(image_dir / f"{str(i).zfill(3)}.png")
 
 
-def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
+def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5) -> None:
     """
     Caution! This works only Desktop Sharing.
     Convert mp4 file to m3u8 file.
@@ -48,7 +54,7 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
     :param output_path: m3u8 file path
     :param base_url: base url
     :param buffer_sec: buffer seconds
-    :return:
+    :return: None
     """
     if output_path.exists():
         return
@@ -73,13 +79,14 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
     logger.info(f'ffmpeg command: {command} is finished.')
 
 
-def upload_hls_files(output_path: Path, uuid: str, bucket_manager: BucketManager):
+def upload_hls_files(output_path: Path, uuid: str, bucket_manager: BucketManager) -> None:
     """
     open m3u8 file then check .ts files.
     If fined .ts file, upload to GCS.
     :param output_path: m3u8 file path
     :param uuid: session id
     :param bucket_manager: BucketManager instance
+    :return: None
     """
     wait_time = 0
     wait_range = 0.1
