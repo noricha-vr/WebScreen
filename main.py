@@ -362,7 +362,13 @@ def post_stream(request: Request, movie: UploadFile = Form(), uuid: str = Form()
                     line = line.strip()
                     if not line.endswith(".ts"): continue
                     ts_file = line.split('/')[-1]
-                    if ts_file in uploaded_ts_list: continue
+                    if ts_file in uploaded_ts_list:
+                        # if ts_file create_at over 10 seconds, overwrite blank file.
+                        if time.time() - os.path.getctime(output_path.parent / ts_file) > 10:
+                            logger.info(f'Overwrite blank file. {ts_file}')
+                            with open(output_path.parent / ts_file, 'wb') as f:
+                                f.write(b'')
+                        continue
                     ts_path = Path(f"movie/{uuid}/{ts_file}")
                     if ts_path.exists():
                         buket_manager.upload_file(str(ts_path), str(ts_path))
