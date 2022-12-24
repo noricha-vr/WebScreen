@@ -403,8 +403,12 @@ def post_stream(request: Request, movie: UploadFile = Form(), uuid: str = Form()
 
 def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
     """
+    Caution! This works only Desktop Sharing.
     Convert mp4 file to m3u8 file.
-    :param movie_config:
+    :param input_path: mp4 file path
+    :param output_path: m3u8 file path
+    :param base_url: base url
+    :param buffer_sec: buffer seconds
     :return:
     """
     if output_path.exists():
