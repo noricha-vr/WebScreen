@@ -1,6 +1,7 @@
-from pathlib import Path
-
 import google.cloud.storage
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BucketManager:

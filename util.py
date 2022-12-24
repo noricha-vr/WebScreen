@@ -3,8 +3,11 @@ import subprocess
 import time
 from pathlib import Path
 import cv2
+import os
 import pdf2image
 import logging
+
+from gcs import BucketManager
 
 logger = logging.getLogger(__name__)
 
@@ -68,3 +71,42 @@ def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5):
     logger.info(f"ffmpeg command: {command}")
     subprocess.run(command, shell=True, check=True)
     logger.info(f'ffmpeg command: {command} is finished.')
+
+
+def upload_hls_files(output_path: Path, uuid: str, bucket_manager: BucketManager):
+    """
+    open m3u8 file then check .ts files.
+    If fined .ts file, upload to GCS.
+    :param output_path: m3u8 file path
+    :param uuid: session id
+    :param bucket_manager: BucketManager instance
+    """
+    wait_time = 0
+    wait_range = 0.1
+    end_time = 10
+
+    uploaded_ts_list = []
+    while wait_time < end_time:
+        time.sleep(wait_range)
+        if not output_path.exists(): continue
+        with open(output_path, "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.strip()
+                if not line.endswith(".ts"): continue
+                ts_file = line.split('/')[-1]
+                if ts_file in uploaded_ts_list:
+                    # if ts_file create_at over 10 seconds, overwrite blank file.
+                    if time.time() - os.path.getctime(output_path.parent / ts_file) > 10:
+                        logger.info(f'Overwrite blank file. {ts_file}')
+                        with open(output_path.parent / ts_file, 'wb') as f:
+                            f.write(b'')
+                    continue
+                ts_path = Path(f"movie/{uuid}/{ts_file}")
+                if ts_path.exists():
+                    bucket_manager.upload_file(str(ts_path), str(ts_path))
+                    bucket_manager.make_public(str(ts_path))
+                    uploaded_ts_list.append(ts_file)
+                    logger.info(f'new uploaded ts_file: {ts_file}')
+                    wait_time = 0
+        wait_time += wait_range
