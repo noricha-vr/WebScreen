@@ -13,7 +13,7 @@ from gcs import BucketManager
 
 def setup_logger(name, logfile='LOGFILENAME.txt'):
     _logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    _logger.setLevel(logging.DEBUG)
 
     # create console handler with a INFO log level
     ch = logging.StreamHandler()
