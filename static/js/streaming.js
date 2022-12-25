@@ -1,6 +1,6 @@
 const startButton = document.getElementById("start");
 const stopButton = document.getElementById("stop");
-const copyText = document.getElementById("streaming-url");
+const streaming_url = document.getElementById("streaming-url");
 const copyButton = document.getElementById('copy-button');
 const setupText = document.getElementById('setup-message');
 let mediaRecorder = null;
@@ -107,24 +107,24 @@ function setupCountdown() {
     let timer = setInterval(function () {
         setupText.textContent = `${text} ${count}秒`;
         count--;
-        if (count < 0) {
-            clearInterval(timer);
-            setupText.textContent = '0';
-            setupText.classList.add('visually-hidden');
-        }
+        fetch(streaming_url.textContent).then((res) => {
+            if (res.status === 200) {
+                clearInterval(timer);
+                setupText.textContent = '0';
+                setupText.classList.add('visually-hidden');
+            }
+        })
     }, 1000);
 }
 
 
 function showStreamingURL(uuid) {
     let url = `${window.location.origin}/movie/${uuid}/video.m3u8`;
-    let link = document.getElementById('streaming-url');
-    // link.href = url;
-    link.textContent = url;
+    streaming_url.textContent = url;
 }
 
 function copyStreamingURL() {
-    navigator.clipboard.writeText(copyText.textContent);
+    navigator.clipboard.writeText(streaming_url.textContent);
     // change the button text to "Copied!" for 10 seconds
     copyButton.textContent = 'Copied!';
     setTimeout(function () {
@@ -137,6 +137,6 @@ function stopRecording() {
     copyButton.classList.add('visually-hidden');
     stopButton.classList.add('visually-hidden');
     startButton.classList.remove('visually-hidden');
-    copyText.textContent = '';
+    streaming_url.textContent = '';
     mediaRecorder.stop();
 }
