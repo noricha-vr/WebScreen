@@ -103,21 +103,14 @@ function setupCountdown() {
     /*
     * Set up a countdown timer to start recording after 15 seconds.
      */
-    setupText.classList.remove('visually-hidden');
     progressAreaElm.classList.remove('visually-hidden');
     let progress = startProgressBar(20);
-    let text = '動画が再生できるようになるまであと ';
-    let count = 15;
     let timer = setInterval(function () {
-        setupText.textContent = `${text} ${count}秒`;
-        count--;
         fetch(streaming_url.textContent).then((res) => {
             if (res.status === 200) {
                 clearInterval(timer);
-                setupText.textContent = '0';
-                setupText.classList.add('visually-hidden');
-                progressAreaElm.classList.add('visually-hidden');
                 stopProgressBar(progress);
+                progressAreaElm.classList.add('visually-hidden');
             }
         })
     }, 1000);
