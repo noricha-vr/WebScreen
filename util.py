@@ -114,7 +114,9 @@ def upload_hls_files(output_path: Path, uuid: str, bucket_manager: BucketManager
                 ts_file = line.split('/')[-1]
                 if ts_file in uploaded_ts_list:
                     # if ts_file create_at over 10 seconds, overwrite blank file.
-                    if time.time() - os.path.getctime(output_path.parent / ts_file) > 10:
+                    file_age = time.time() - os.path.getctime(output_path.parent / ts_file)
+                    file_size = os.path.getsize(output_path.parent / ts_file)
+                    if file_age > 10 and file_size != 0:
                         logger.info(f'Overwrite blank file. {ts_file}')
                         with open(output_path.parent / ts_file, 'wb') as f:
                             f.write(b'')
