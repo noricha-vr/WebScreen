@@ -36,9 +36,17 @@
             <button class="btn btn-primary" id="start">画面共有</button>&nbsp;
             <button class="btn btn-danger visually-hidden" id="stop">共有停止</button>
             </p>
+            <div class="visually-hidden" id="progress-bar-area">
+                起動中
+                <div class="progress">
+                    <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
+                         aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+                </div>
+            </div>
             <p class="mt-3">
                 2. 画面共有を開始したら下のURLをコピーします。
             </p>
+
             <div class="mb-3 row form-inline" name=" result">
                 <div class="col-2">
                     <button for="url" name="copy_button" id="copy-button"
@@ -52,6 +60,7 @@
                     </span>
                 </div>
             </div>
+
             <p class="mt-3">
                 3. VRChatの動画プレイヤーの「Live」を選択して、貼り付けてください。
             </p>

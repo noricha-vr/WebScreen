@@ -3,6 +3,8 @@ const stopButton = document.getElementById("stop");
 const streaming_url = document.getElementById("streaming-url");
 const copyButton = document.getElementById('copy-button');
 const setupText = document.getElementById('setup-message');
+const progressAreaElm = document.getElementById("progress-bar-area");
+
 let mediaRecorder = null;
 
 
@@ -102,6 +104,8 @@ function setupCountdown() {
     * Set up a countdown timer to start recording after 15 seconds.
      */
     setupText.classList.remove('visually-hidden');
+    progressAreaElm.classList.remove('visually-hidden');
+    let progress = startProgressBar(20);
     let text = '動画が再生できるようになるまであと ';
     let count = 15;
     let timer = setInterval(function () {
@@ -112,6 +116,8 @@ function setupCountdown() {
                 clearInterval(timer);
                 setupText.textContent = '0';
                 setupText.classList.add('visually-hidden');
+                progressAreaElm.classList.add('visually-hidden');
+                stopProgressBar(progress);
             }
         })
     }, 1000);
