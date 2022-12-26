@@ -1,22 +1,5 @@
-function copyToClipboard(e) {
-    // Find out what number the parent element of target is
-    let target = e.target.parentNode;
-    let targetNumber = 0;
-    while (target = target.previousElementSibling) {
-        targetNumber++;
-    }
-    console.log(`targetNumber: ${targetNumber}`);
-    // copy target value of element to clipboard
-    let targetResult = document.getElementsByName('result')[targetNumber];
-    let copyText = targetResult.getElementsByTagName('a')[0];
-    navigator.clipboard.writeText(copyText).then(r => {
-        console.log('copied');
-        e.target.textContent = 'Copied!';
-        setTimeout(() => {
-            e.target.textContent = 'Copy';
-        }, 2000);
-    });
-}
+'use static';
+
 
 function downloadMovie(e) {
     /*
@@ -44,25 +27,12 @@ function downloadMovie(e) {
     });
 }
 
-function pasteFromClipboard(targetTextElement) {
-    navigator.clipboard.readText().then(text => {
-        targetTextElement.value = text;
-    });
-}
 
-
-function saveResult(result) {
-    /*
-    Save result in cookie.
-     */
-    if (result.delete_at === null) {
-        console.log(`Saving result in cookie: ${result.url}`);
-        return;
+function showResultMessage() {
+    let results = document.getElementById('results');
+    if (results.children.length > 1) {
+        document.getElementById('result-message').classList.remove('visually-hidden');
     }
-    let expires = new Date(result.delete_at * 1000);
-    let cookie = `${result.name}=${result.url}; expires=${expires.toUTCString()}; path=/`;
-    console.log(`Saving result in cookie: ${cookie}`);
-    document.cookie = cookie;
 }
 
 function addResultsToPage() {
