@@ -54,6 +54,13 @@
                                         10秒
                                     </label>
                                 </div>
+                                <div class="form-check-inline">
+                                    <input class="form-check-input" type="radio" name="wait_time" id="wait-15"
+                                           value="15">
+                                    <label class="form-check-label" for="wait-15">
+                                        15秒
+                                    </label>
+                                </div>
                             </div>
 
                         </div>
@@ -85,19 +92,19 @@
                         </div>
 
                         <div class="mt-3 text-center">
-                            <div id="submit" class="btn btn-primary d-block">動画を作成</div>
+                            <div id="submit" class="btn btn-primary d-block">動画に変換</div>
                         </div>
                         <div class="progress visually-hidden">
                             <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
                                  aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
                         </div>
                     </form>
-                    {% include 'result.html' %}
+                    {% include 'output-area.html' %}
                 </div>
 
             </div>
         </section>
-        <section>
+        <section class="mt-5">
             <div class="row">
                 <div class="col">
                     <div class="h4">
