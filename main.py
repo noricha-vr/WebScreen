@@ -53,6 +53,11 @@ async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('home.html', {'request': request})
 
 
+@app.get("/how-to/", response_class=HTMLResponse)
+async def read_index(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('how-to.html', {'request': request})
+
+
 @app.get("/web/", response_class=HTMLResponse)
 async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('web.html', {'request': request})
