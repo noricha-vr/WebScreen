@@ -24,10 +24,7 @@
                     <h2 class="h4 mb-3">VRChatの動画プレイヤーに画面共有できます</h2>
                 </div>
             </div>
-            <div class="text-danger visually-hidden mb-2" id="support-browser">
-                お使いのブラウザではVRChatへの画面共有機能はご利用いただけません。<br/>
-                Google Chrome か Microsoft Edge をご利用ください。
-            </div>
+            {% include 'browser-error-message.html' %}
             <p>この機能はベータ版です。</p>
 
             <p>1. 「画面共有」ボタンを押して、<strong>「デスクトップ全体」</strong>を選択してください。<br/>
@@ -61,8 +58,8 @@
             </div>
 
             <p class="mt-3">
-                3. VRChatの動画プレイヤーの「Live」を選択して、URLの欄に貼り付けてください。<br>
-                貼り付けボタンはURL入力画面のキーボードの右下にあります。
+                3. VRChatの動画プレイヤーの「LIVE」を選択して、URLの欄に貼り付けてください。<br>
+                ※ 貼り付けボタンはURL入力画面のキーボードの右下にあります。
             </p>
 
             {% include 'how-to/streaming.html' %}
