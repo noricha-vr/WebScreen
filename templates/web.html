@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}Web Screen|VRChatの動画プレイヤー用にウェブページを動画化できます{% endblock %}
+{% block content %}
+    <div class="container">
+        <section class="section mt-5">
+            <div class="row justify-content-md-center">
+                <div class="col mt-3">
+                    <h1 class="h1 mb-5">Web Screen(Beta)</h1>
+                    <h2 class="h4 mb-3">VRChatの動画プレイヤー用にウェブページを動画化します</h2>
+                    <h3 class="h5 mb-3">動画化したいページのURLを貼り付けてください</h3>
+                </div>
+            </div>
+            <div class="row g-3 justify-content-md-center">
+                <div class="col-12">
+                    <form class="form">
+                        <div class="mb-3 row">
+                            <div for="url" id="paste_button" class="btn btn-secondary col-3 col-sm-2 col-form-label">
+                                貼り付け
+                            </div>
+                            <div class="col-9 col-sm-10">
+                                <input type="url" class="col-10 form-control  border border-dark" id="url" name="url"
+                                       placeholder="https://">
+                            </div>
+                        </div>
+                        <label for="page_height_slider" class="form-label mt-3">ページの長さ（最大）<span
+                                id="page_height_label">5000</span>px</label>
+                        <input type="range" class="form-range" id="page_height_slider" name="max_page_height" min="2000"
+                               max="25000" value="5000">
+
+                        <div class="row">
+
+                            <div class="col">
+                                <div>待ち時間: (ページの読み込みが正しくできなかった時は秒数を長くしてください。）</div>
+                                <div class="form-check-inline">
+                                    <input class="form-check-input" type="radio" name="wait_time" id="wait-1"
+                                           value="1" checked>
+                                    <label class="form-check-label" for="wait-1">
+                                        1秒
+                                    </label>
+                                </div>
+
+                                <div class="form-check-inline">
+                                    <input class="form-check-input" type="radio" name="wait_time" id="wait-5"
+                                           value="5">
+                                    <label class="form-check-label" for="wait-5">
+                                        5秒
+                                    </label>
+                                </div>
+
+                                <div class="form-check-inline">
+                                    <input class="form-check-input" type="radio" name="wait_time" id="wait-10"
+                                           value="10">
+                                    <label class="form-check-label" for="wait-10">
+                                        10秒
+                                    </label>
+                                </div>
+                            </div>
+
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-3">
+
+                                <div>ブラウザのサイズ:</div>
+                                <div class="form-check-inline">
+                                    <input class="form-check-input" type="radio" name="width_height" id="16-9"
+                                           value="1280x720"
+                                           checked>
+                                    <label class="form-check-label" for="16-9">
+                                        16:9
+                                    </label>
+                                </div>
+                                <div class="form-check-inline">
+                                    <input class="form-check-input" type="radio" name="width_height" id="4-3"
+                                           value="1024x768">
+                                    <label class="form-check-label" for="4-3">
+                                        4:3
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-9 visually-hidden">
+                                <div for="catch">キャッシュ:</div>
+                                <input type="checkbox" class="form-inline border" id="catch" name="catch" checked>
+
+                            </div>
+                        </div>
+
+                        <div class="mt-3 text-center">
+                            <div id="submit" class="btn btn-primary d-block">動画を作成</div>
+                        </div>
+                        <div class="progress visually-hidden">
+                            <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
+                                 aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+                        </div>
+                    </form>
+                    {% include 'result.html' %}
+                </div>
+
+            </div>
+        </section>
+        <section>
+            <div class="row">
+                <div class="col">
+                    <div class="h4">
+                        注意事項
+                    </div>
+                    <div>
+                        <ul>
+                            <li>
+                                アップロードした、画像やPDFファイルはサーバーに保存されません。
+                            </li>
+                            <li>
+                                動画ファイルは14日間サーバーに保存されます。
+                            </li>
+                            <li>
+                                動画ファイルはURLを知っている人であれば誰でもダウンロードできます。
+                            </li>
+                            <li>
+                                動画の内容について解析を行うことはありません。
+                            </li>
+                            <li>
+                                のりちゃんが無償で提供するものであり、変換サービスのサービスレベルに保証はありません。
+                            </li>
+                            <li>
+                                本サービスを利用することで生じたいかなる損害についても補償致しかねます。
+                            </li>
+                            <li>
+                                本サービスは、個人、法人、団体を問わず無償でご利用いただけます。
+                            </li>
+                            <li>
+                                最新情報は<a href="https://twitter.com/search?q=%23WebScreen" target="_blank">
+                                #WebScreen</a>をご確認ください。
+                            </li>
+                            <li>
+                                その他、不明点がありましたら、<a href="https://twitter.com/noricha_vr" target="_blank">
+                                のりちゃん</a>までお問い合わせください。<br/>
+                            </li>
+                            <li>
+                                エラー報告をいただけると喜びます。
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script src="/static/js/baseFunctions.js"></script>
+    <script src="/static/js/index.js"></script>
+{% endblock %}
+
+{% block style %}
+    <script>addEventListeners()</script>
+{% endblock %}

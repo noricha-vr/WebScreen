@@ -98,6 +98,7 @@ function selectActiveMenu() {
     for (let item of naviItems) {
         if (item.href === location.href) {
             item.classList.add('active');
+            item.classList.remove('text-dark');
         }
     }
 }
