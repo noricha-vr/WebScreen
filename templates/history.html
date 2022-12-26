@@ -7,23 +7,26 @@
                 <div class="col mt-3">
                     <h1 class="h1 mb-5 text-center">履歴</h1>
                     <div class="text-center">
-                        <div id="result-message" class="mb-3 visually-hidden">
-                            「コピー」して、VRChatのプレイヤーにペーストしてください。URLを選択すると動画を確認できます。
+                        <div id="result-message" class="mb-5 visually-hidden">
+                            過去に動画化したURLを「コピー」して、VRChatのプレイヤーに表示できます。<br/>
+                            また、動画ファイルをダウンロードすることで自分のパソコンにファイルを保存したり、Twitterに投稿できます。<br/>
+                            履歴は動画を作成してから14日で消えます。
                         </div>
                         <div id="results">
                             <div class="mb-3 row visually-hidden" name="result">
-                                <button for="url" name="copy_button"
-                                        class="btn btn-outline-primary col-1 col-form-label">
+                                <button for="url" name="copy_button" style="margin-right: 10px; margin-left: 5px"
+                                        class="btn btn-outline-primary col-auto col-md-1 col-form-label mr-2">
                                     Copy
                                 </button>
-                                <div class="col-9">
-                                    <a href="" target="_blank" class="form-control-plaintext" name="movie_url">
-                                    </a>
-                                </div>
+
                                 <button for="url" name="copy_button"
                                         class="btn btn-outline-secondary col-auto col-form-label">
                                     Download
                                 </button>
+                                <div class="col-auto">
+                                    <a href="" target="_blank" class="form-control-plaintext" name="movie_url">
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
