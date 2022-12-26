@@ -5,6 +5,10 @@ const pasteButton = document.getElementById('paste_button');
 const pageHeightLabel = document.getElementById('page_height_label');
 const pageHeightSlider = document.getElementById('page_height_slider');
 const progressBar = document.getElementById('progress_bar');
+const outputArea = document.querySelector('#output-area');
+const output_url = document.querySelector('#output-url');
+const output_url_copy_button = document.querySelector('#copy-output-url-button');
+
 
 function selectAllText(e) {
     e.target.setSelectionRange(0, e.target.value.length);
@@ -38,11 +42,16 @@ async function submit() {
             data.name = inputUrl.value.replaceAll('=', '-');
         }
         saveResult(data);
+        // show result
+        outputArea.classList.remove('visually-hidden');
+        output_url_copy_button.addEventListener('click', copyToClipboard);
+        output_url.href = data.url;
+        output_url.textContent = data.name;
         // add result to page
-        let newResult = createResultNode(data.name, data.url);
-        changeButtonColor(newResult);
-        let resultsElement = document.getElementById('results');
-        resultsElement.insertBefore(newResult, resultsElement.firstChild);
+        // let newResult = createResultNode(data.name, data.url);
+        // changeButtonColor(newResult);
+        // let resultsElement = document.getElementById('results');
+        // resultsElement.insertBefore(newResult, resultsElement.firstChild);
     } else {
         alert('error');
     }
