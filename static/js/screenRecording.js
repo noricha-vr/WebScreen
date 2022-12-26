@@ -16,7 +16,6 @@ stopElem.addEventListener("click", function (evt) {
 }, false);
 
 async function recordScreen() {
-    // TODO check screen recording support audio or not.
     return await navigator.mediaDevices.getDisplayMedia({
         audio: true,
         video: {mediaSource: "screen"}
