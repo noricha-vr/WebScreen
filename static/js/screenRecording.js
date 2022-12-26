@@ -75,7 +75,7 @@ async function saveAndShowResult(res) {
             `_${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}`;
         saveResult(data);
         outputArea.classList.remove('visually-hidden');
-        output_url_copy_button.addEventListener('click', copyToClipboard);
+        output_url_copy_button.addEventListener('click', copy_output_url);
         output_url.href = data.url;
         output_url.textContent = data.name;
 
