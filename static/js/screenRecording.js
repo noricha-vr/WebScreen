@@ -74,11 +74,11 @@ async function saveAndShowResult(res) {
         data.name = `ScreenRecoding_${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` +
             `_${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}`;
         saveResult(data);
-        // add result to page
-        let newResult = createResultNode(data.name, data.url);
-        changeButtonColor(newResult);
-        let resultsElement = document.getElementById('results');
-        resultsElement.insertBefore(newResult, resultsElement.firstChild);
+        outputArea.classList.remove('visually-hidden');
+        output_url_copy_button.addEventListener('click', copyToClipboard);
+        output_url.href = data.url;
+        output_url.textContent = data.name;
+
     } else {
         alert('Error: ' + res.status);
     }

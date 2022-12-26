@@ -25,7 +25,7 @@
                     <h3 class="h5 mb-3">動画化したい画像を選択してください</h3>
                 </div>
             </div>
-            <form class="row g-3 justify-content-md-center" id="image_form" enctype="multipart/form-data">
+            <form class="row g-3 justify-content-md-center mb-5" id="image_form" enctype="multipart/form-data">
                 <div class="col-12">
                     <label for="files" class="visually-hidden">画像</label>
                     <input type="file" accept="image/*" multiple class="form-control border border-dark" id="files"
@@ -42,7 +42,7 @@
                     </div>
                 </div>
             </form>
-            {% include 'result.html' %}
+            {% include 'output-area.html' %}
         </section>
     </div>
 {% endblock %}
