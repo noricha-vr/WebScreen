@@ -10,39 +10,20 @@ const output_url = document.querySelector('#output-url');
 const output_url_copy_button = document.querySelector('#copy-output-url-button');
 
 
-function selectAllText(e) {
-    e.target.setSelectionRange(0, e.target.value.length);
-}
-
 async function fetchMovieUrl() {
     // abstract
     throw new Error('Not implemented');
 }
 
 
-function copyToClipboard(e) {
-    // Find out what number the parent element of target is
-    let target = e.target.parentNode;
-    let targetNumber = 0;
-    while (target = target.previousElementSibling) {
-        targetNumber++;
-    }
-    console.log(`targetNumber: ${targetNumber}`);
-    // copy target value of element to clipboard
-    let targetResult = document.getElementsByName('result')[targetNumber];
-    let copyText = targetResult.getElementsByTagName('a')[0];
-    navigator.clipboard.writeText(copyText).then(r => {
+function copy_output_url(e) {
+    let url = document.querySelector('#output-url').href;
+    navigator.clipboard.writeText(url).then(r => {
         console.log('copied');
         e.target.textContent = 'Copied!';
         setTimeout(() => {
             e.target.textContent = 'Copy';
         }, 2000);
-    });
-}
-
-function pasteFromClipboard(targetTextElement) {
-    navigator.clipboard.readText().then(text => {
-        targetTextElement.value = text;
     });
 }
 
@@ -70,7 +51,7 @@ async function submit() {
         saveResult(data);
         // show result
         outputArea.classList.remove('visually-hidden');
-        output_url_copy_button.addEventListener('click', copyToClipboard);
+        output_url_copy_button.addEventListener('click', copy_output_url);
         output_url.href = data.url;
         output_url.textContent = data.name;
     } else {
@@ -133,21 +114,6 @@ function selectActiveMenu() {
     }
 }
 
-
-function saveResult(result) {
-    /*
-    Save result in cookie.
-     */
-    if (result.delete_at === null) {
-        console.log(`Saving result in cookie: ${result.url}`);
-        return;
-    }
-    let expires = new Date(result.delete_at * 1000);
-    let cookie = `${result.name}=${result.url}; expires=${expires.toUTCString()}; path=/`;
-    console.log(`Saving result in cookie: ${cookie}`);
-    document.cookie = cookie;
-}
-
 function showBrowserErrorMessage() {
     // Google ChromeかMicrosoft Edgeかどうかを判定する正規表現
     var supportedBrowsersRegex = /Chrome|Edge/i;
@@ -163,7 +129,5 @@ function showBrowserErrorMessage() {
 
 window.onload = () => {
     selectActiveMenu();
-    // addResultsToPage();
-    // showResultMessage();
     showBrowserErrorMessage();
 }
