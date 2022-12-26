@@ -29,8 +29,10 @@
 
             <p>1. 「画面共有」ボタンを押して、<strong>「デスクトップ全体」</strong>を選択してください。<br/>
                 ※「ウィンドウ」「Chromeタブ」は動作しません。</p>
-            <button class="btn btn-primary" id="start">画面共有</button>
-            <button class="btn btn-danger visually-hidden" id="stop">共有停止</button>
+            <div class="">
+                <button class="btn btn-primary" id="start">画面共有</button>
+                <button class="btn btn-danger visually-hidden" id="stop">共有停止</button>
+            </div>
             </p>
             <div class="visually-hidden" id="progress-bar-area">
                 ストリーミングサーバー起動中。プログレスバーが消えるとVRChatの動画プレイヤーで動画を再生できるようになります。
@@ -82,6 +84,7 @@
                     スマホの画面は共有できません。<br/>
                 </p>
             </div>
+            <script src="/static/js/util.js"></script>
             <script src="/static/js/baseFunctions.js"></script>
             <script src="/static/js/streaming.js"></script>
         </section>
