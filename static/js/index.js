@@ -18,7 +18,7 @@ async function fetchMovieUrl() {
         'catch': cache === true ? 1 : 0,
     })
     console.log(`POST data: ${data}`);
-    let request_url = '/api/create_movie/';
+    let request_url = '/api/url-to-movie/';
     let header = {
         'Content-Type': 'application/json',
     }
