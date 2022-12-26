@@ -65,21 +65,26 @@
                 貼り付けボタンはURL入力画面のキーボードの右下にあります。
             </p>
 
-            <div class="coll">
-                <h2 class="h4">操作方法</h2>
+            {% include 'how-to/streaming.html' %}
+
+            <div class="mt-5">
+                <h2 class="h3 text-center mb-3">動画説明</h2>
                 <video controls muted class="img-fluid"
                        src="https://storage.googleapis.com/noricha-public/web-screen/movie/how-to-use-streaming.mp4"
                        alt="how to share the screen">
                 </video>
             </div>
-            <p>
-                iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。<br/>
-                それでも表示されない場合は、共有を停止してから再度共有を行ってください。<br/>
-                ストリーミング可能な時間は30分です。30分経過すると自動的にストリーミングが終了します。<br/>
-                ストリーミング中に画面が映らなくなることがあります。リロードするか、もう一度画面共有を行ってください。<br/>
-                20〜50秒の遅延があります。<br/>
-                スマホの画面は共有できません。<br/>
-            </p>
+            <div class="mt-5">
+                <h2 class="h3 text-center mb-3">ポイント</h2>
+                <p>
+                    iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。<br/>
+                    それでも表示されない場合は、共有を停止してから再度共有を行ってください。<br/>
+                    ストリーミング可能な時間は30分です。30分経過すると自動的にストリーミングが終了します。<br/>
+                    ストリーミング中に画面が映らなくなることがあります。リロードするか、もう一度画面共有を行ってください。<br/>
+                    20〜50秒の遅延があります。<br/>
+                    スマホの画面は共有できません。<br/>
+                </p>
+            </div>
             <script src="/static/js/baseFunctions.js"></script>
             <script src="/static/js/streaming.js"></script>
         </section>
