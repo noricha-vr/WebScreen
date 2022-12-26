@@ -1,6 +1,26 @@
 'use static';
 
 
+function copyToClipboard(e) {
+    // Find out what number the parent element of target is
+    let target = e.target.parentNode;
+    let targetNumber = 0;
+    while (target = target.previousElementSibling) {
+        targetNumber++;
+    }
+    console.log(`targetNumber: ${targetNumber}`);
+    // copy target value of element to clipboard
+    let targetResult = document.getElementsByName('result')[targetNumber];
+    let copyText = targetResult.getElementsByTagName('a')[0];
+    navigator.clipboard.writeText(copyText).then(r => {
+        console.log('copied');
+        e.target.textContent = 'Copied!';
+        setTimeout(() => {
+            e.target.textContent = 'Copy';
+        }, 2000);
+    });
+}
+
 function downloadMovie(e) {
     /*
     Download movie from server.
