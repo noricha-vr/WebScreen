@@ -76,3 +76,7 @@ function createResultNode(text, href) {
     return newResult;
 }
 
+window.onload = () => {
+    addResultsToPage();
+    showResultMessage();
+}
