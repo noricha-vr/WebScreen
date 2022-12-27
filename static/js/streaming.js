@@ -95,6 +95,11 @@ async function startRecording() {
     setupCountdown();
     startButton.classList.add('visually-hidden');
     stopButton.classList.remove('visually-hidden');
+    outputArea.classList.remove('visually-hidden');
+    let url = `${window.location.origin}/movie/${uuid}/video.m3u8`;
+    output_url_copy_button.addEventListener('click', copy_output_url);
+    output_url.href = url;
+    output_url.textContent = url;
     mediaRecorder = createRecorder(stream);
     setTimeout(stopRecording, 1000 * 60 * 30)
 }

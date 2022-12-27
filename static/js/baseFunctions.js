@@ -49,15 +49,21 @@ async function submit() {
             data.name = inputUrl.value.replaceAll('=', '-');
         }
         saveResult(data);
-        // show result
-        outputArea.classList.remove('visually-hidden');
-        output_url_copy_button.addEventListener('click', copy_output_url);
-        output_url.href = data.url;
-        output_url.textContent = data.name;
+        showOutPut(data.name, data.url);
     } else {
-        alert('error');
+        let data = await response.json()
+        console.log(`Response data: ${JSON.stringify(data)}`);
+        alert(`Error: ${JSON.stringify(data)}\nPlease try again.`);
     }
 }
+
+function showOutPut(text, url) {
+    outputArea.classList.remove('visually-hidden');
+    output_url_copy_button.addEventListener('click', copy_output_url);
+    output_url.href = url;
+    output_url.textContent = text;
+}
+
 
 function getIntervalSpeed() {
     let speed = 50;
