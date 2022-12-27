@@ -12,11 +12,12 @@ function copyToClipboard(e) {
     navigator.clipboard.writeText(input.textContent).then(r => {
         console.log(`copied: ${input.textContent}`);
         e.target.textContent = 'Copied!';
-        setTimeout(() => {
-            e.target.textContent = 'Copy';
-        }, 2000);
+        return new Promise(resolve => setTimeout(resolve, 2000));
+    }).then(() => {
+        e.target.textContent = 'Copy';
     });
 }
+
 
 function downloadMovie(e) {
     /*
@@ -31,6 +32,8 @@ function downloadMovie(e) {
             a.href = URL.createObjectURL(blob);
             a.download = words[words.length - 1];
             a.click();
+        }).then(() => {
+            URL.revokeObjectURL(a.href);
         });
     });
 }
