@@ -36,32 +36,19 @@
                     <button class="btn btn-danger btn-lg visually-hidden" id="stop">共有停止</button>
                 </div>
 
-                <div class="visually-hidden" id="progress-bar-area">
-                    ストリーミングサーバー起動中。プログレスバーが消えるとVRChatの動画プレイヤーで動画を再生できるようになります。
+                <div class="visually-hidden m-3" id="progress-bar-area">
+                    ストリーミングサーバー起動中。<br/>
+                    プログレスバーが消えるとVRChatの動画プレイヤーで再生できるようになります。
                     <div class="progress">
                         <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
                              aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
                     </div>
                 </div>
+
             </div>
             {% include 'output-area.html' %}
-            <div class="mb-3 row form-inline" name=" result">
-                <div class="col-2">
-                    <button for="url" name="copy_button" id="copy-button"
-                            class="btn btn-outline-primary visually-hidden col-form-label w-100">
-                        Copy
-                    </button>
-                </div>
-                <div class="col-10">
-                    <span id="streaming-url" target="_blank" class="col-8 form-control-plaintext"
-                          name="movie_url">
-                    </span>
-                </div>
-            </div>
-
-            <p class="mt-3">
-                3. VRChatの動画プレイヤーの「LIVE」を選択して、URLの欄に貼り付けてください。<br>
-                ※ 貼り付けボタンはURL入力画面のキーボードの右下にあります。
+            <p class="mt-3 text-center" id="output-message">
+                VRChatの動画プレイヤーの「LIVE」を選択して、URLを貼り付けてください。<br>
             </p>
 
             {% include 'how-to/streaming.html' %}
@@ -74,13 +61,15 @@
                 </video>
             </div>
             <div class="mt-5">
-                <h2 class="h3 text-center mb-3">ポイント</h2>
+                <h2 class="h3 text-center mb-3">画面共有のポイント</h2>
                 <p>
+                    映像に20〜50秒の遅延があります。<br/>
                     iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。<br/>
                     それでも表示されない場合は、共有を停止してから再度共有を行ってください。<br/>
-                    ストリーミング可能な時間は30分です。30分経過すると自動的にストリーミングが終了します。<br/>
-                    ストリーミング中に画面が映らなくなることがあります。リロードするか、もう一度画面共有を行ってください。<br/>
-                    20〜50秒の遅延があります。<br/>
+                    共有終了時は「共有終了」を押してください。<br/>
+                    画面共有可能な時間は30分です。30分経過すると自動で終了します。
+                    ストリーミング中に映像が映らなくなったり、固まったり、表示がおかしくなることがあります。<br/>
+                    リロードするか、もう一度画面共有を行ってください。iwaSyncのリロードはローカルです。<br/>
                     スマホの画面は共有できません。<br/>
                 </p>
             </div>

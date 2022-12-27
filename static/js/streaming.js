@@ -1,8 +1,5 @@
 const startButton = document.getElementById("start");
 const stopButton = document.getElementById("stop");
-const streaming_url = document.getElementById("streaming-url");
-const copyButton = document.getElementById('copy-button');
-const setupText = document.getElementById('setup-message');
 const progressAreaElm = document.getElementById("progress-bar-area");
 
 let mediaRecorder = null;
@@ -48,6 +45,7 @@ function createRecorder(stream) {
         videoBitsPerSecond: 2500000,
         mimeType: "video/webm;codecs=h264",
     };
+
     // the stream data is stored in this array
     const mediaRecorder = new MediaRecorder(stream, options);
     // upload the recorded data to the server
@@ -55,10 +53,9 @@ function createRecorder(stream) {
         console.log('uploading...');
         uploadMovie([e.data], uuid, is_first);
         if (is_first === true) {
-            showStreamingURL(uuid);
+            let url = `${window.location.origin}/movie/${uuid}/video.m3u8`;
+            showOutPut(url, url);
             is_first = false;
-            copyButton.classList.remove('visually-hidden');
-            copyButton.addEventListener('click', copyStreamingURL);
         }
     };
     mediaRecorder.onstop = async function (e) {
@@ -96,10 +93,6 @@ async function startRecording() {
     startButton.classList.add('visually-hidden');
     stopButton.classList.remove('visually-hidden');
     outputArea.classList.remove('visually-hidden');
-    let url = `${window.location.origin}/movie/${uuid}/video.m3u8`;
-    output_url_copy_button.addEventListener('click', copy_output_url);
-    output_url.href = url;
-    output_url.textContent = url;
     mediaRecorder = createRecorder(stream);
     setTimeout(stopRecording, 1000 * 60 * 30)
 }
@@ -111,13 +104,15 @@ function setupCountdown() {
     progressAreaElm.classList.remove('visually-hidden');
     let progress = startProgressBar(20);
     let timer = setInterval(function () {
-        fetch(streaming_url.textContent).then((res) => {
+        fetch(output_url.textContent).then((res) => {
             if (res.status === 200) {
                 clearInterval(timer);
                 stopProgressBar(progress);
                 progressAreaElm.classList.add('visually-hidden');
             }
-        })
+        }).catch((err) => {
+            console.log(err);
+        });
     }, 1000);
 }
 
@@ -127,20 +122,10 @@ function showStreamingURL(uuid) {
     streaming_url.textContent = url;
 }
 
-function copyStreamingURL() {
-    navigator.clipboard.writeText(streaming_url.textContent);
-    // change the button text to "Copied!" for 10 seconds
-    copyButton.textContent = 'Copied!';
-    setTimeout(function () {
-        copyButton.textContent = 'Copy';
-    }, 10000);
-
-}
-
 function stopRecording() {
-    copyButton.classList.add('visually-hidden');
+    outputArea.classList.add('visually-hidden');
     stopButton.classList.add('visually-hidden');
     startButton.classList.remove('visually-hidden');
-    streaming_url.textContent = '';
+    output_url.textContent = '';
     mediaRecorder.stop();
 }
