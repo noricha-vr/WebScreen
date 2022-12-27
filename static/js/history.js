@@ -1,19 +1,16 @@
 'use static';
 
+function getInputElement(e) {
+    let rowElm = e.target.parentNode.parentNode;
+    return rowElm.getElementsByTagName('input')[0];
+}
+
 
 function copyToClipboard(e) {
-    // Find out what number the parent element of target is
-    let target = e.target.parentNode;
-    let targetNumber = 0;
-    while (target = target.previousElementSibling) {
-        targetNumber++;
-    }
-    console.log(`targetNumber: ${targetNumber}`);
+    let input = getInputElement(e)
     // copy target value of element to clipboard
-    let targetResult = document.getElementsByName('result')[targetNumber];
-    let copyText = targetResult.getElementsByTagName('a')[0];
-    navigator.clipboard.writeText(copyText).then(r => {
-        console.log('copied');
+    navigator.clipboard.writeText(input.textContent).then(r => {
+        console.log(`copied: ${input.textContent}`);
         e.target.textContent = 'Copied!';
         setTimeout(() => {
             e.target.textContent = 'Copy';
@@ -25,18 +22,9 @@ function downloadMovie(e) {
     /*
     Download movie from server.
      */
-    // Find out what number the parent element of target is
-    let target = e.target.parentNode;
-    let targetNumber = 0;
-    while (target = target.previousElementSibling) {
-        targetNumber++;
-    }
-    console.log(`targetNumber: ${targetNumber}`);
-    // copy target value of element to clipboard
-    let targetResult = document.getElementsByName('result')[targetNumber];
-    let copyText = targetResult.getElementsByTagName('a')[0];
-    let url = copyText.href;
-    let words = copyText.textContent.split('/');
+    let input = getInputElement(e);
+    let url = input.textContent;
+    let words = input.value.split('/');
     fetch(url).then(r => {
         r.blob().then(blob => {
             let a = document.createElement('a');
@@ -45,14 +33,6 @@ function downloadMovie(e) {
             a.click();
         });
     });
-}
-
-
-function showResultMessage() {
-    let results = document.getElementById('results');
-    if (results.children.length > 1) {
-        document.getElementById('result-message').classList.remove('visually-hidden');
-    }
 }
 
 function addResultsToPage() {
@@ -85,9 +65,10 @@ function createResultNode(text, href) {
     let newResult = resultElement.cloneNode(true);
     newResult.classList.remove('visually-hidden');
     // set text and href
-    let aTag = newResult.getElementsByTagName('a')[0]
-    aTag.href = href;
-    aTag.textContent = text.substring(0, 90);
+    let aTag = newResult.getElementsByTagName('input')[0]
+    // aTag.href = href;
+    aTag.value = text.substring(0, 90);
+    aTag.textContent = href;
     // add copy button event listener
     let copyButton = newResult.getElementsByTagName('button')[0];
     copyButton.addEventListener('click', copyToClipboard);
@@ -98,5 +79,4 @@ function createResultNode(text, href) {
 
 window.onload = () => {
     addResultsToPage();
-    showResultMessage();
 }

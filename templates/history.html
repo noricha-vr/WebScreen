@@ -1,36 +1,46 @@
 {% extends 'base.html' %}
 {% block title %}履歴 Web Screen|VRChatの動画プレイヤー用に変換した動画の履歴{% endblock %}
 {% block content %}
+
     <div class="container">
         <section class="section mt-5 mb-5">
-            <div class="row justify-content-md-center">
+            <div class="row mb-4">
+                <div class="col text-center">
+                    <h1 class="h1 mb-3">履歴</h1>
+                    <h2 class="h5">過去に動画化したURLを「コピー」して<br/>
+                        VRChatのプレイヤーに表示できます。
+                    </h2>
+                </div>
+            </div>
+            <div class="row justify-content-md-center text-center">
                 <div class="col mt-3">
-                    <h1 class="h1 mb-5 text-center">履歴</h1>
-                    <div class="text-center">
-                        <div id="result-message" class="mb-5 visually-hidden">
-                            過去に動画化したURLを「コピー」して、VRChatのプレイヤーに表示できます。<br/>
-                            また、動画ファイルをダウンロードすることで自分のパソコンにファイルを保存したり、Twitterに投稿できます。<br/>
-                            履歴は動画を作成してから14日で消えます。
-                        </div>
-                        <div id="results">
-                            <div class="mb-3 row visually-hidden" name="result">
-                                <button for="url" name="copy_button" style="margin-right: 10px; margin-left: 5px"
-                                        class="btn btn-outline-primary col-auto col-md-1 col-form-label mr-2">
+                    <div id="results">
+                        <div class="mb-3 row visually-hidden" name="result">
+                            <div class="col-2">
+                                <button name="copy_button" style="margin-right: 10px; margin-left: 5px"
+                                        class="btn btn-outline-primary w-100">
                                     Copy
                                 </button>
-
-                                <button for="url" name="copy_button"
-                                        class="btn btn-outline-secondary col-auto col-form-label">
+                            </div>
+                            <div class="col-3 col-md-2">
+                                <button name="copy_button"
+                                        class="btn btn-outline-secondary w-100">
                                     Download
                                 </button>
-                                <div class="col-auto">
-                                    <a href="" target="_blank" class="form-control-plaintext" name="movie_url">
-                                    </a>
-                                </div>
+                            </div>
+                            <div class="col-7 col-md-8">
+                                <input type="text" name="movie_url"
+                                       value="" name="url" class="form-control"
+                                       onclick="window.open(this.textContent, '_blank');"
+                                       readonly>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+            <div class="row">
+                履歴は動画を作成してから14日で消えます。
+                動画ファイルをダウンロードすることで自分のパソコンにファイルを保存したり、Twitterに投稿できます。
             </div>
         </section>
     </div>
