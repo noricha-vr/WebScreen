@@ -1,7 +1,7 @@
 const startButton = document.getElementById("start");
 const stopButton = document.getElementById("stop");
 const progressAreaElm = document.getElementById("progress-bar-area");
-
+const outputMessage = document.querySelector('#output-message');
 let mediaRecorder = null;
 
 
@@ -55,6 +55,8 @@ function createRecorder(stream) {
         if (is_first === true) {
             let url = `${window.location.origin}/movie/${uuid}/video.m3u8`;
             showOutPut(url, url);
+            outputMessage.classList.remove('visually-hidden');
+            outputMessage.textContent = 'VRChatの動画プレイヤーの「LIVE」を選択してURLを貼り付けてください。';
             is_first = false;
         }
     };
@@ -127,5 +129,6 @@ function stopRecording() {
     stopButton.classList.add('visually-hidden');
     startButton.classList.remove('visually-hidden');
     output_url.textContent = '';
+    outputMessage.classList.add('visually-hidden');
     mediaRecorder.stop();
 }
