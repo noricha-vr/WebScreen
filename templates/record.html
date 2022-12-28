@@ -24,11 +24,15 @@
                     <h2 class="h6 text-secondary">パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます</h2>
                 </div>
             </div>
-            <div>
-                <div id="start-recording" class="text-center">
+            <div class="row bg-light border p-5 rounded shadow">
+                <div id="start-recording" class="col text-center">
                     <p>
                         <button class="btn btn-primary btn-lg mt-3" id="start">録画開始</button>&nbsp;
                         <button class="btn btn-danger btn-lg mt-3 visually-hidden" id="stop">録画停止</button>
+                    </p>
+                    <p>
+                        「録画開始」を押して録画したい画面を選択します。<br>
+                        「録画停止」を押すと動画のアップロードが始まります。
                     </p>
                     <div class="visually-hidden" id="progress-bar-area">
                         <div class="progress">
@@ -37,13 +41,9 @@
                         </div>
                     </div>
                 </div>
-                {#                <video id="video" class="visually-hidden" width="400px" height="300px" autoplay></video>#}
+                {% include 'output-area.html' %}
             </div>
-            {% include 'output-area.html' %}
             {% include 'how-to/record.html' %}
-            <p>
-                停止ボタンを押すと、ファイルアップロードとVRChat用の変換処理が始まります。
-            </p>
             <p>
                 ※ スマホでの録画はできません。<br/>
                 ※ 処理にかかる時間は回線速度、動画の大きさ、録画時間によって異なります。<br/>
