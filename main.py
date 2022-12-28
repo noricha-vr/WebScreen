@@ -50,7 +50,7 @@ app.add_middleware(
 
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('web.html', {'request': request})
+    return templates.TemplateResponse('home.html', {'request': request})
 
 
 @app.get("/how-to/", response_class=HTMLResponse)
