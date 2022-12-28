@@ -1,0 +1,34 @@
+
+.nav-pills .nav-link.active, .nav-pills .show > .nav-link {
+    color: #fff;
+    background-color: #783ed2;
+}
+
+.btn-primary {
+    background-color: #783ed2;
+    border-color: #8b64c6;
+}
+
+.btn-primary:hover {
+    background-color: #511ab3;
+    border-color: #5a29b1;
+}
+
+.btn-outline-primary {
+    color: #783ed2;
+    border-color: #783ed2;
+}
+
+.btn-outline-primary:hover {
+    background-color: #783ed2;
+    border-color: #783ed2;
+}
+
+.btn-primary:active {
+    background-color: #783ed2;
+    border-color: #783ed2;
+}
+
+.bg-info {
+    background-color: #783ed3 !important;
+}
