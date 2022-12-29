@@ -25,28 +25,33 @@
                 </div>
             </div>
             {% include 'browser-error-message.html' %}
-            <div class="text-center">
+            <div class="row bg-light border p-5 rounded shadow">
 
-                <p class="mb-4">この機能はベータ版です。<br/>
-                    「画面共有」ボタンを押して、<strong>「デスクトップ全体」</strong>を選択してください。<br/>
-                    ※「ウィンドウ」「Chromeタブ」は動作しません。
-                </p>
-                <div class="">
-                    <button class="btn btn-primary btn-lg" id="start">画面共有</button>
-                    <button class="btn btn-danger btn-lg visually-hidden" id="stop">共有停止</button>
-                </div>
-
-                <div class="visually-hidden m-3" id="progress-bar-area">
-                    ストリーミングサーバー起動中。<br/>
-                    プログレスバーが消えるとVRChatの動画プレイヤーで再生できるようになります。
-                    <div class="progress">
-                        <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
-                             aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+                <div class="text-center">
+                    <div class="mb-2">この機能はベータ版です</div>
+                    <div class="mb-3">
+                        <button class="btn btn-primary btn-lg" id="start">画面共有</button>
+                        <button class="btn btn-danger btn-lg visually-hidden" id="stop">共有停止</button>
                     </div>
-                </div>
+                    <p class="mb-3">
+                        「画面共有」ボタンを押して、<strong>「デスクトップ全体」</strong>を選択してください。<br/>
+                        ※「ウィンドウ」「Chromeタブ」は動作しません。
+                    </p>
 
+                    <div class="visually-hidden m-3" id="progress-bar-area">
+                        <div class="mb-2">
+                            ストリーミングサーバー起動中。<br/>
+                            プログレスバーが消えるとVRChatの動画プレイヤーで再生できるようになります。
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
+                                 aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                </div>
+                {% include 'output-area.html' %}
             </div>
-            {% include 'output-area.html' %}
             {% include 'how-to/streaming.html' %}
 
             <div class="p-5 mt-3 bg-light">
