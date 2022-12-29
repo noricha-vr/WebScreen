@@ -4,7 +4,7 @@ FROM python:3.10-buster
 
 # Install necessary packages
 RUN apt-get update && apt-get install -y \
-    curl unzip \
+    curl unzip gettext \
     ffmpeg \
     poppler-utils \
     fonts-takao-* fonts-wqy-microhei fonts-unfonts-core
@@ -27,7 +27,7 @@ RUN python -m pip install --upgrade pip && pip install -r requirements.txt
 # Set and move to APP_HOME
 ENV APP_HOME /app
 WORKDIR $APP_HOME
-
+ENV PYTHONPATH $APP_HOME
 # Copy local code to the container image
 COPY . .
 

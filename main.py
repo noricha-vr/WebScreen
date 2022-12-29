@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import sys
 import time
 from uuid import uuid4
 from datetime import datetime
@@ -12,9 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import PackageLoader, Environment
 from movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
 from threading import Thread
+from api.end_point import api_router
+from utils.middlewares import add_middlewares
 
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
@@ -32,6 +36,8 @@ templates = Jinja2Templates(directory=ROOT_DIR / "templates")
 app = FastAPI(debug=DEBUG)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/movie", StaticFiles(directory=MOVIE_DIR), name="movie")
+add_middlewares(app)  # translation
+app.include_router(api_router)  # include api router
 
 origins = [
     os.environ.get("ALLOW_HOST", None)
@@ -47,44 +53,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from utils.i18n import trans
+from fastapi import APIRouter
 
-@app.get("/", response_class=HTMLResponse)
-async def read_index(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('home.html', {'request': request})
+# @app.get("/", response_class=HTMLResponse)
+# async def home(request: Request) -> templates.TemplateResponse:
+#     return templates.TemplateResponse('home.html', {'request': request})
 
 
-@app.get("/how-to/", response_class=HTMLResponse)
-async def read_index(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('how-to.html', {'request': request})
+from fastapi import FastAPI
 
 
 @app.get("/history/", response_class=HTMLResponse)
-async def read_index(request: Request) -> templates.TemplateResponse:
+async def history(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('history.html', {'request': request})
 
 
 @app.get("/web/", response_class=HTMLResponse)
-async def read_index(request: Request) -> templates.TemplateResponse:
+async def web(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('web.html', {'request': request})
 
 
 @app.get("/pdf/")
-async def read_index(request: Request) -> templates.TemplateResponse:
+async def pdf(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('pdf.html', {'request': request})
 
 
 @app.get("/image/")
-async def read_index(request: Request) -> templates.TemplateResponse:
+async def image(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('image.html', {'request': request})
 
 
 @app.get("/desktop/")
-async def read_index(request: Request) -> templates.TemplateResponse:
+async def desktop(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('desktop_share.html', {'request': request})
 
 
 @app.get("/github/")
-async def read_index(request: Request) -> templates.TemplateResponse:
+async def github(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('github.html', {'request': request})
 
 
