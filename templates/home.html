@@ -10,6 +10,10 @@
             margin-right: 2px;
             margin-left: 2px;
         }
+
+        a {
+            text-decoration: none;
+        }
     </style>
     <div class="">
         <div class="px-4 my-5 py-3 text-center" style="margin-top: 3rem; padding-top: 3rem;">
@@ -18,35 +22,36 @@
                 <p class="h6 text-secondary mb-4">
                     WebScreenはVRChatの動画プレーヤーに<br/>
                     Webページや、写真、PDFを表示するための動画変換システムです。<br/>
-                <p>
+                <div>
                     <a href="/web/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/web.png"
-                             class="top-icon">
+                             class="top-icon" alt="webページを動画に変換">
                     </a>
                     <a href="/image/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/image.png"
-                             class="top-icon">
+                             class="top-icon" alt="画像を動画に変換">
                     </a>
                     <a href="/pdf/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/pdf.png"
-                             class="top-icon">
+                             class="top-icon" alt="PDFを画像に変換">
                     </a>
                     <a href="/record/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/record.png"
-                             class="top-icon">
+                             class="top-icon" alt="画面録画をして、VRChatに共有">
                     </a>
                     <a href="/streaming/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/streaming.png"
-                             class="top-icon">
+                             class="top-icon" alt="VRChatに画面共有">
                     </a>
-                </p>
+                </div>
             </div>
         </div>
 
         <div class="row bg-light p-5">
             <div class="col-md-7">
-                <h2 class="fw-bold"> Webページを動画に変換
-                </h2>
+                <a href="/web/" class="text-dark">
+                    <h2 class="fw-bold"> Webページを動画に変換</h2>
+                </a>
                 <p class="lead">
                     Webページを動画に変換することで、VRChat内で動画プレイヤーを使ってそのページを表示することができます。<br>
                     また、シークバーを使うことでページ内をスクロールすることができます。<br/>
@@ -61,7 +66,10 @@
         </div>
         <div class="row p-5">
             <div class="col-md-7 order-md-2">
-                <h2 class="fw-bold">写真を動画に変換</h2>
+                <a href="/image/" class="text-dark">
+                    <h2 class="fw-bold">写真を動画に変換</h2>
+                </a>
+
                 <p class="lead">ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。</p>
             </div>
             <div class="col-md-5 order-md-1">
@@ -73,8 +81,9 @@
         </div>
         <div class="row p-5 bg-light">
             <div class="col-md-7">
-                <h2 class="fw-bold"> PDFを動画に変換
-                </h2>
+                <a href="/pdf/" class="text-dark">
+                    <h2 class="fw-bold">PDFを動画に変換</h2>
+                </a>
                 <p class="lead">
                     パワーポイントやGoogleスライドをPDFで書き出して、動画に変換すれば動画プレイヤーやスライドシステムでプレゼンを開始。
                 </p>
@@ -88,7 +97,9 @@
         </div>
         <div class="row p-5">
             <div class="col-md-7 order-md-2">
-                <h2 class="fw-bold">パソコンの画面を録画</h2>
+                <a href="/record/" class="text-dark">
+                    <h2 class="fw-bold">パソコンの画面を録画</h2>
+                </a>
                 <p class="lead">自分のパソコンの特定の画面をVRChat内でみんなに見せたり、VRChatの録画映像をみんなで見たり、ログインが必要なWebページを共有するのにも使えます。</p>
             </div>
             <div class="col-md-5 order-md-1">
@@ -100,7 +111,9 @@
         </div>
         <div class="row p-5 bg-light">
             <div class="col-md-7">
-                <h2 class="fw-bold">VRChatのビデオプレーヤーに画面共有</h2>
+                <a href="/streaming/" class="text-dark">
+                    <h2 class="fw-bold">VRChatのビデオプレーヤーに画面共有</h2>
+                </a>
                 <p class="lead">
                     自分のパソコンの画面をVRChatの動画プレイヤーにストリーミング。作業の様子を共有したり、パソコンの画面を見ながらの説明や紹介にも使えます。
                 </p>
@@ -114,7 +127,9 @@
         </div>
         <div class="row p-5 pb-0">
             <div class="col-md-7 order-md-2">
-                <h2 class="fw-bold">履歴を確認</h2>
+                <a href="/history/" class="text-dark">
+                    <h2 class="fw-bold">履歴を確認</h2>
+                </a>
                 <p class="lead">履歴からは、過去14間に変換した動画のリンクやダウンロードが行えます。ダウンロードした動画はTwitterなどに投稿して共有できます。</p>
             </div>
             <div class="col-md-5 order-md-1">
