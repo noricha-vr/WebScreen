@@ -58,32 +58,25 @@ from fastapi import APIRouter
 # async def home(request: Request) -> templates.TemplateResponse:
 #     return templates.TemplateResponse('home.html', {'request': request})
 
-from fastapi_babel import _
+from i18n import babel
 from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
-from fastapi_babel import Babel
-from fastapi_babel import BabelConfigs
+from fastapi_babel import _
 
-configs = BabelConfigs(
-    ROOT_DIR=__file__,
-    BABEL_DEFAULT_LOCALE="en",
-    BABEL_TRANSLATION_DIRECTORY="lang",
-)
-logger.info(f"configs: {configs.__dict__}")
-babel = Babel(configs)
 babel.install_jinja(templates)
-
 app.add_middleware(I18nMiddleware, babel=babel)
+
+DEFAULT_LANGUAGE = "en"
+SUPPORTED_LANGUAGE = ["ja", "en", "zh", "ko"]
 
 
 @app.get("/items/{id}", response_class=HTMLResponse)
 async def read_item(request: Request, id: str):
     babel.locale = "en"
-    en_text = _("Hello World")
-    logger.info(en_text)
-
+    logger.info(_("こんにちは"))
+    babel.locale = "ja"
+    logger.info(_("こんにちは"))
     babel.locale = "fa"
-    fa_text = _("Hello World")
-    logger.info(fa_text)
+    logger.info(_("こんにちは"))
     return templates.TemplateResponse('item.html', {'request': request, 'id': id})
 
 

@@ -1,0 +1,38 @@
+# Persian translations for PROJECT.
+# Copyright (C) 2022 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2022.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2022-12-30 06:33+0000\n"
+"PO-Revision-Date: 2022-12-30 06:33+0000\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: fa\n"
+"Language-Team: fa <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.11.0\n"
+
+#: main.py:81 main.py:83 templates/item.html:10
+msgid "こんにちは"
+msgstr "Bonjur "
+
+#: templates/welcome.html:11
+msgid "IBM QRadar Application : Hello World"
+msgstr ""
+
+#: templates/welcome.html:15
+msgid ""
+"Hello! and Welcome to the first Qradar app served from the "
+"AppFramework/Docker instance on your console"
+msgstr ""
+
+#: templates/welcome.html:19
+msgid "Hello World"
+msgstr ""
+

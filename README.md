@@ -55,8 +55,7 @@ docker-compose down
 ## Useful translation commands
 
 ```bash
- pybabel extract -F babel.cfg -k lazy_gettext -o locale/messages.pot .
-pybabel init -i locale/messages.pot -d locale -l ja
-pybabel init -i locale/messages.pot -d locale -l en
-pybabel compile -d locale
+pybabel extract -F babel.cfg -o messages.pot .
+pybabel init -i messages.pot -d lang -l en
+pybabel compile -d lang
 ```

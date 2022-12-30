@@ -2,7 +2,7 @@ import gettext
 
 _default_lang = None
 DEFAULT_LANGUAGE = "en"
-SUPPORTED_LANGUAGE = ["de", "en"]
+SUPPORTED_LANGUAGE = ["ja", "en", "zh", "ko"]
 
 
 def active_translation(lang: str):
