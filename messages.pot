@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-30 07:50+0000\n"
+"POT-Creation-Date: 2022-12-30 08:33+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,21 +17,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.11.0\n"
 
-#: main.py:75 main.py:77 main.py:79 templates/item.html:10
+#: main.py:64 main.py:66 main.py:68 templates/item.html:10
 msgid "こんにちは"
 msgstr ""
 
-#: templates/welcome.html:11
-msgid "IBM QRadar Application : Hello World"
+#: main.py:80 templates/home.html:15
+msgid "WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。"
 msgstr ""
 
-#: templates/welcome.html:15
-msgid ""
-"Hello! and Welcome to the first Qradar app served from the "
-"AppFramework/Docker instance on your console"
-msgstr ""
-
-#: templates/welcome.html:19
-msgid "Hello World"
+#: templates/home.html:19
+msgid "webページを動画に変換"
 msgstr ""
 

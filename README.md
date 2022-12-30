@@ -57,5 +57,6 @@ docker-compose down
 ```bash
 pybabel extract -F babel.cfg -o messages.pot .
 pybabel init -i messages.pot -d lang -l en
+pybabel update -i messages.pot -d lang
 pybabel compile -d lang
 ```

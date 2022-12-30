@@ -49,11 +49,6 @@ app.add_middleware(
 )
 
 from utils.i18n import get_lang
-from fastapi import APIRouter
-
-# @app.get("/", response_class=HTMLResponse)
-# async def home(request: Request) -> templates.TemplateResponse:
-#     return templates.TemplateResponse('home.html', {'request': request})
 
 from i18n import babel
 from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
@@ -63,8 +58,8 @@ babel.install_jinja(templates)
 app.add_middleware(I18nMiddleware, babel=babel)
 
 
-@app.get("/items/{id}", response_class=HTMLResponse)
-async def read_item(request: Request, id: str):
+@app.get("/item", response_class=HTMLResponse)
+async def read_item(request: Request):
     babel.locale = "en"
     logger.info(_("こんにちは"))
     babel.locale = "ja"
@@ -72,7 +67,24 @@ async def read_item(request: Request, id: str):
     babel.locale = "fa"
     logger.info(_("こんにちは"))
     babel.locale = get_lang(request)
-    return templates.TemplateResponse('item.html', {'request': request, 'id': id})
+    return templates.TemplateResponse('item.html', {'request': request})
+
+
+from fastapi import APIRouter
+
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request) -> templates.TemplateResponse:
+    babel.locale = "en"
+    logger.info(_("こんにちは"))
+    babel.locale = "ja"
+    logger.info(_("こんにちは"))
+    babel.locale = "fa"
+    logger.info(_("こんにちは"))
+    babel.locale = get_lang(request)
+    babel.locale = "en"
+    logger.info(babel.locale + _("WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。"))
+    return templates.TemplateResponse('home.html', {'request': request})
 
 
 @app.get("/history/", response_class=HTMLResponse)
