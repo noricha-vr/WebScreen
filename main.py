@@ -58,21 +58,6 @@ babel.install_jinja(templates)
 app.add_middleware(I18nMiddleware, babel=babel)
 
 
-@app.get("/item", response_class=HTMLResponse)
-async def read_item(request: Request):
-    babel.locale = "en"
-    logger.info(_("こんにちは"))
-    babel.locale = "ja"
-    logger.info(_("こんにちは"))
-    babel.locale = "fa"
-    logger.info(_("こんにちは"))
-    babel.locale = get_lang(request)
-    return templates.TemplateResponse('item.html', {'request': request})
-
-
-from fastapi import APIRouter
-
-
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> templates.TemplateResponse:
     babel.locale = "en"

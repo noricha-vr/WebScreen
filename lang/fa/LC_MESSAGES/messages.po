@@ -24,7 +24,9 @@ msgstr "Bonjour"
 
 #: main.py:80 templates/home.html:15
 msgid "WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。"
-msgstr "WebScreen est un système de conversion vidéo pour afficher des pages Web, des photos et des PDF sur le lecteur vidéo VRChat."
+msgstr ""
+"WebScreen est un système de conversion vidéo pour afficher des pages Web,"
+" des photos et des PDF sur le lecteur vidéo VRChat."
 
 #: templates/home.html:19
 msgid "webページを動画に変換"
