@@ -13,12 +13,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from jinja2 import PackageLoader, Environment
 from movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
 from threading import Thread
-from api.end_point import api_router
-from utils.middlewares import add_middlewares
 
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
@@ -51,7 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from utils.i18n import trans
+from utils.i18n import get_lang
 from fastapi import APIRouter
 
 # @app.get("/", response_class=HTMLResponse)
@@ -64,16 +61,6 @@ from fastapi_babel import _
 
 babel.install_jinja(templates)
 app.add_middleware(I18nMiddleware, babel=babel)
-
-DEFAULT_LANGUAGE = "en"
-SUPPORTED_LANGUAGE = ["ja", "en", "zh", "ko"]
-
-
-def get_lang(request: Request):
-    lang = request.headers.get("Accept-Language", DEFAULT_LANGUAGE)
-    lang = lang[:2]
-    lang = DEFAULT_LANGUAGE if lang not in SUPPORTED_LANGUAGE else lang
-    return lang
 
 
 @app.get("/items/{id}", response_class=HTMLResponse)

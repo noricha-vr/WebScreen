@@ -1,13 +1,11 @@
 from fastapi import APIRouter
 
-from utils.i18n import trans
-
 router = APIRouter()
 
 
 @router.get("/")
 def home():
-    return trans("Hello World")
+    return {"Hello": "world"}
 
 
 api_router = APIRouter()
