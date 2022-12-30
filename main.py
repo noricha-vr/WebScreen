@@ -69,6 +69,13 @@ DEFAULT_LANGUAGE = "en"
 SUPPORTED_LANGUAGE = ["ja", "en", "zh", "ko"]
 
 
+def get_lang(request: Request):
+    lang = request.headers.get("Accept-Language", DEFAULT_LANGUAGE)
+    lang = lang[:2]
+    lang = DEFAULT_LANGUAGE if lang not in SUPPORTED_LANGUAGE else lang
+    return lang
+
+
 @app.get("/items/{id}", response_class=HTMLResponse)
 async def read_item(request: Request, id: str):
     babel.locale = "en"
@@ -77,6 +84,7 @@ async def read_item(request: Request, id: str):
     logger.info(_("こんにちは"))
     babel.locale = "fa"
     logger.info(_("こんにちは"))
+    babel.locale = get_lang(request)
     return templates.TemplateResponse('item.html', {'request': request, 'id': id})
 
 
