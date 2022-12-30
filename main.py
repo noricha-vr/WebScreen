@@ -64,7 +64,6 @@ async def home(request: Request) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = get_lang(request)
     babel.locale = "en"
-    logger.info(babel.locale + _("WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。"))
     return templates.TemplateResponse('home.html', {'request': request})
 
 
