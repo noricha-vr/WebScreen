@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-30 08:33+0000\n"
+"POT-Creation-Date: 2022-12-30 12:43+0000\n"
 "PO-Revision-Date: 2022-12-30 08:33+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -18,15 +18,88 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.11.0\n"
 
-#: main.py:64 main.py:66 main.py:68 templates/item.html:10
-msgid "こんにちは"
-msgstr ""
-
-#: main.py:80 templates/home.html:15
+#: templates/home.html:15
 msgid "WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。"
 msgstr ""
 
-#: templates/home.html:19
+#: templates/home.html:19 templates/home.html:55 templates/home.html:69
+#: templates/home.html:85 templates/home.html:99 templates/home.html:115
+#: templates/home.html:129
 msgid "webページを動画に変換"
 msgstr ""
+
+#: templates/home.html:23
+msgid "画像を動画に変換"
+msgstr ""
+
+#: templates/home.html:27
+msgid "PDFを画像に変換"
+msgstr ""
+
+#: templates/home.html:31
+msgid "画面録画をして、VRChatに共有"
+msgstr ""
+
+#: templates/home.html:35
+msgid "VRChatに画面共有"
+msgstr ""
+
+#: templates/home.html:44
+msgid "Webページを動画に変換"
+msgstr ""
+
+#: templates/home.html:47
+msgid "Webページを動画に変換することで、VRChat内で動画プレイヤーを使ってそのページを表示することができます。"
+msgstr ""
+
+#: templates/home.html:48
+msgid "また、シークバーを使うことでページ内をスクロールすることができます。"
+msgstr ""
+
+#: templates/home.html:49
+msgid "さらに、Webページを他のユーザーと共有することで、そのページを話題にすることができます。"
+msgstr ""
+
+#: templates/home.html:61
+msgid "写真を動画に変換"
+msgstr ""
+
+#: templates/home.html:64
+msgid "ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。"
+msgstr ""
+
+#: templates/home.html:76
+msgid "PDFを動画に変換"
+msgstr ""
+
+#: templates/home.html:79
+msgid "パワーポイントやGoogleスライドをPDFで書き出して、動画に変換すれば動画プレイヤーやスライドシステムでプレゼンを開始。"
+msgstr ""
+
+#: templates/home.html:92
+msgid "パソコンの画面を録画"
+msgstr ""
+
+#: templates/home.html:94
+msgid "自分のパソコンの特定の画面をVRChat内でみんなに見せたり、VRChatの録画映像をみんなで見たり、ログインが必要なWebページを共有するのにも使えます。"
+msgstr ""
+
+#: templates/home.html:106
+msgid "VRChatのビデオプレーヤーに画面共有"
+msgstr ""
+
+#: templates/home.html:109
+msgid "自分のパソコンの画面をVRChatの動画プレイヤーにストリーミング。作業の様子を共有したり、パソコンの画面を見ながらの説明や紹介にも使えます。"
+msgstr ""
+
+#: templates/home.html:122
+msgid "履歴を確認"
+msgstr ""
+
+#: templates/home.html:124
+msgid "履歴からは、過去14間に変換した動画のリンクやダウンロードが行えます。ダウンロードした動画はTwitterなどに投稿して共有できます。"
+msgstr ""
+
+#~ msgid "こんにちは"
+#~ msgstr ""
 

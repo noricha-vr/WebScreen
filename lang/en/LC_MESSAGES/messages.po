@@ -7,28 +7,124 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-30 08:33+0000\n"
-"PO-Revision-Date: 2022-12-30 08:33+0000\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: en\n"
+"POT-Creation-Date: 2022-12-30 12:43+0000\n"
+"PO-Revision-Date: 2022-12-30 21:53+0900\n"
+"Last-Translator: \n"
 "Language-Team: en <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.11.0\n"
+"X-Generator: Poedit 3.2.2\n"
 
-#: main.py:64 main.py:66 main.py:68 templates/item.html:10
-msgid "こんにちは"
-msgstr "Hello"
-
-#: main.py:80 templates/home.html:15
-msgid "WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。"
+#: templates/home.html:15
+msgid ""
+"WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換シ"
+"ステムです。"
 msgstr ""
-"WebScreen is a video conversion system for displaying web pages, photos "
-"and PDFs on the VRChat video player."
+"WebScreen is a video conversion system for displaying web pages, photos and PDFs on "
+"the VRChat video player."
 
-#: templates/home.html:19
+#: templates/home.html:19 templates/home.html:55 templates/home.html:69
+#: templates/home.html:85 templates/home.html:99 templates/home.html:115
+#: templates/home.html:129
 msgid "webページを動画に変換"
-msgstr ""
+msgstr "Convert web page to video"
 
+#: templates/home.html:23
+msgid "画像を動画に変換"
+msgstr "Convert image to video"
+
+#: templates/home.html:27
+msgid "PDFを画像に変換"
+msgstr "Convert PDF to Image"
+
+#: templates/home.html:31
+msgid "画面録画をして、VRChatに共有"
+msgstr "Make a screen recording and share it to VRChat"
+
+#: templates/home.html:35
+msgid "VRChatに画面共有"
+msgstr "Share screen to VRChat"
+
+#: templates/home.html:44
+msgid "Webページを動画に変換"
+msgstr "Convert web page to video"
+
+#: templates/home.html:47
+msgid ""
+"Webページを動画に変換することで、VRChat内で動画プレイヤーを使ってそのページを表示す"
+"ることができます。"
+msgstr ""
+"Converting a web page to video allows you to view that page using a video player "
+"within VRChat."
+
+#: templates/home.html:48
+msgid "また、シークバーを使うことでページ内をスクロールすることができます。"
+msgstr "You can also use the seek bar to scroll through the page."
+
+#: templates/home.html:49
+msgid ""
+"さらに、Webページを他のユーザーと共有することで、そのページを話題にすることができま"
+"す。"
+msgstr "Additionally, you can share a web page with other users to talk about it."
+
+#: templates/home.html:61
+msgid "写真を動画に変換"
+msgstr "Convert photo to video"
+
+#: templates/home.html:64
+msgid "ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。"
+msgstr ""
+"Take photos taken on a world tour or with friends and watch them together instantly "
+"in VRChat."
+
+#: templates/home.html:76
+msgid "PDFを動画に変換"
+msgstr "Convert PDF to video"
+
+#: templates/home.html:79
+msgid ""
+"パワーポイントやGoogleスライドをPDFで書き出して、動画に変換すれば動画プレイヤーやス"
+"ライドシステムでプレゼンを開始。"
+msgstr ""
+"Export PowerPoint or Google Slides as PDF and convert it to video to start your "
+"presentation in a video player or slide system."
+
+#: templates/home.html:92
+msgid "パソコンの画面を録画"
+msgstr "Record your computer screen"
+
+#: templates/home.html:94
+msgid ""
+"自分のパソコンの特定の画面をVRChat内でみんなに見せたり、VRChatの録画映像をみんなで見"
+"たり、ログインが必要なWebページを共有するのにも使えます。"
+msgstr ""
+"You can also use this to show everyone a specific screen of your computer within "
+"VRChat, watch VRChat recordings together, or share web pages that require a login."
+
+#: templates/home.html:106
+msgid "VRChatのビデオプレーヤーに画面共有"
+msgstr "Screen sharing to VRChat video player"
+
+#: templates/home.html:109
+msgid ""
+"自分のパソコンの画面をVRChatの動画プレイヤーにストリーミング。作業の様子を共有した"
+"り、パソコンの画面を見ながらの説明や紹介にも使えます。"
+msgstr ""
+"Stream your own computer screen to VRChat’s video player. You can use it to share "
+"your work, or to explain or introduce your work while viewing your computer screen."
+
+#: templates/home.html:122
+msgid "履歴を確認"
+msgstr "View history"
+
+#: templates/home.html:124
+msgid ""
+"履歴からは、過去14間に変換した動画のリンクやダウンロードが行えます。ダウンロードした"
+"動画はTwitterなどに投稿して共有できます。"
+msgstr ""
+"From History, you can link to and download videos you have converted in the last 14 "
+"days. Downloaded videos can be posted and shared on Twitter and other social media."
