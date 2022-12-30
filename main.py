@@ -61,9 +61,13 @@ app.add_middleware(I18nMiddleware, babel=babel)
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> templates.TemplateResponse:
+    return RedirectResponse(url=f"/{get_lang(request)}/")
+
+
+@app.get("/{lang}/", response_class=HTMLResponse)
+async def home(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
-    babel.locale = get_lang(request)
-    babel.locale = "en"
+    babel.locale = lang
     return templates.TemplateResponse('home.html', {'request': request})
 
 
