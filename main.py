@@ -36,8 +36,6 @@ templates = Jinja2Templates(directory=ROOT_DIR / "templates")
 app = FastAPI(debug=DEBUG)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/movie", StaticFiles(directory=MOVIE_DIR), name="movie")
-add_middlewares(app)  # translation
-app.include_router(api_router)  # include api router
 
 origins = [
     os.environ.get("ALLOW_HOST", None)
@@ -70,7 +68,8 @@ configs = BabelConfigs(
     BABEL_DEFAULT_LOCALE="en",
     BABEL_TRANSLATION_DIRECTORY="lang",
 )
-babel = Babel(configs=configs)
+logger.info(f"configs: {configs.__dict__}")
+babel = Babel(configs)
 babel.install_jinja(templates)
 
 app.add_middleware(I18nMiddleware, babel=babel)
@@ -78,8 +77,13 @@ app.add_middleware(I18nMiddleware, babel=babel)
 
 @app.get("/items/{id}", response_class=HTMLResponse)
 async def read_item(request: Request, id: str):
-    # show accept-language
-    print(request.headers.get("accept-language"))
+    babel.locale = "en"
+    en_text = _("Hello World")
+    logger.info(en_text)
+
+    babel.locale = "fa"
+    fa_text = _("Hello World")
+    logger.info(fa_text)
     return templates.TemplateResponse('item.html', {'request': request, 'id': id})
 
 
