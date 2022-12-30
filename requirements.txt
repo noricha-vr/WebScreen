@@ -10,3 +10,4 @@ python-multipart==0.0.5
 uvicorn[standard]==0.18.3
 opencv-python==4.6.0.66
 babel==2.11.0
+fastapi-babel==0.0.3

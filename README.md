@@ -51,3 +51,11 @@ docker-compose up
 docker exec -it web_screen bash
 docker-compose down
 ```
+
+## Useful translation commands
+
+```bash
+ pybabel extract -F babel.cfg -k lazy_gettext -o locale/messages.pot .
+    pybabel init -i locale/messages.pot -d locale -l ja
+    pybabel compile -d locale
+```

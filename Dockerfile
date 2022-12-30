@@ -4,7 +4,7 @@ FROM python:3.10-buster
 
 # Install necessary packages
 RUN apt-get update && apt-get install -y \
-    curl unzip gettext \
+    curl unzip gettext python-babel \
     ffmpeg \
     poppler-utils \
     fonts-takao-* fonts-wqy-microhei fonts-unfonts-core
