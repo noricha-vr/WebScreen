@@ -20,8 +20,9 @@ from threading import Thread
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
 from util import pdf_to_image, to_m3u8, upload_hls_files, add_frames
+from utils.setup_logger import get_logger
 
-logger = logging.getLogger('uvicorn')
+logger = get_logger(__name__)
 DEBUG = os.getenv('DEBUG') == 'True'
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
@@ -50,7 +51,7 @@ app.add_middleware(
 
 from utils.i18n import get_lang
 
-from i18n import babel
+from i18n import babel, check_trans
 from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
 from fastapi_babel import _
 
@@ -60,12 +61,7 @@ app.add_middleware(I18nMiddleware, babel=babel)
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> templates.TemplateResponse:
-    babel.locale = "en"
-    logger.info(_("こんにちは"))
-    babel.locale = "ja"
-    logger.info(_("こんにちは"))
-    babel.locale = "fa"
-    logger.info(_("こんにちは"))
+    check_trans(babel)
     babel.locale = get_lang(request)
     babel.locale = "en"
     logger.info(babel.locale + _("WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。"))
