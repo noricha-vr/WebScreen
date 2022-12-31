@@ -54,9 +54,22 @@ docker-compose down
 
 ## Useful translation commands
 
+Initialize the translation file.
+
 ```bash
 pybabel extract -F babel.cfg -o messages.pot .
 pybabel init -i messages.pot -d lang -l en
+```
+
+Update translation files
+
+```bash
+pybabel extract -F babel.cfg -o messages.pot .
 pybabel update -i messages.pot -d lang
+```
+
+Compile translation files
+
+```bash
 pybabel compile -d lang
 ```

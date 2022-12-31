@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-30 12:43+0000\n"
+"POT-Creation-Date: 2022-12-31 01:21+0000\n"
 "PO-Revision-Date: 2022-12-30 08:33+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -17,6 +17,58 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.11.0\n"
+
+#: templates/base.html:5 templates/base.html:15
+msgid "Web Screen|Web、画像、PDFをVRChatで見れる動画に変換"
+msgstr ""
+
+#: templates/base.html:20 templates/base.html:24
+msgid "Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換するサービスです。"
+msgstr ""
+
+#: templates/base.html:21 templates/base.html:25
+msgid "変換された動画のURLを取得できます。動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内でフレンドと共有できます。"
+msgstr ""
+
+#: templates/base.html:22 templates/base.html:26
+msgid "更に、パソコンの画面録画や画面共有もでき便利な機能があります。"
+msgstr ""
+
+#: templates/base.html:53
+msgid "WebScreenトップページ"
+msgstr ""
+
+#: templates/base.html:59
+msgid "ホーム"
+msgstr ""
+
+#: templates/base.html:60
+msgid "Web"
+msgstr ""
+
+#: templates/base.html:61
+msgid "画像"
+msgstr ""
+
+#: templates/base.html:62
+msgid "PDF"
+msgstr ""
+
+#: templates/base.html:63
+msgid "録画"
+msgstr ""
+
+#: templates/base.html:64
+msgid "画面共有"
+msgstr ""
+
+#: templates/base.html:65
+msgid "履歴"
+msgstr ""
+
+#: templates/base.html:77
+msgid "Powered by OSS集会"
+msgstr ""
 
 #: templates/home.html:15
 msgid "WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。"
@@ -101,5 +153,26 @@ msgid "履歴からは、過去14間に変換した動画のリンクやダウ�
 msgstr ""
 
 #~ msgid "こんにちは"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。\n"
+#~ "          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。\n"
+#~ "          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。"
+#~ msgstr ""
+
+#~ msgid "Web Screen|VRChatでウェブページを見る"
+#~ msgstr ""
+
+#~ msgid "Web Screen(VRChat用、画像を動画に変換するサイト)"
+#~ msgstr ""
+
+#~ msgid "Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。"
+#~ msgstr ""
+
+#~ msgid "変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。"
+#~ msgstr ""
+
+#~ msgid "ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。"
 #~ msgstr ""
 

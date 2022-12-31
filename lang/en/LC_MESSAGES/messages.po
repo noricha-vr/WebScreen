@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-30 12:43+0000\n"
-"PO-Revision-Date: 2022-12-30 21:53+0900\n"
+"POT-Creation-Date: 2022-12-31 01:21+0000\n"
+"PO-Revision-Date: 2022-12-31 10:24+0900\n"
 "Last-Translator: \n"
 "Language-Team: en <LL@li.org>\n"
 "Language: en\n"
@@ -18,6 +18,67 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.11.0\n"
 "X-Generator: Poedit 3.2.2\n"
+
+#: templates/base.html:5 templates/base.html:15
+msgid "Web Screen|Web、画像、PDFをVRChatで見れる動画に変換"
+msgstr ""
+"Web Screen|Convert Web, images, and PDFs into video that can be viewed with VRChat"
+
+#: templates/base.html:20 templates/base.html:24
+msgid "Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換するサービスです。"
+msgstr ""
+"Web Screen is a service that converts the Web, images, and PDFs into video that can "
+"be viewed on VRChat."
+
+#: templates/base.html:21 templates/base.html:25
+msgid ""
+"変換された動画のURLを取得できます。動画のURLをVRChat内の動画プレイヤーに貼り付けると"
+"VRChat内でフレンドと共有できます。"
+msgstr ""
+"You can get the URL of the converted video. Paste the video URL into the video "
+"player in VRChat to share it with your friends in VRChat."
+
+#: templates/base.html:22 templates/base.html:26
+msgid "更に、パソコンの画面録画や画面共有もでき便利な機能があります。"
+msgstr ""
+"Furthermore, it has convenient functions such as screen recording and screen "
+"sharing on a PC."
+
+#: templates/base.html:53
+msgid "WebScreenトップページ"
+msgstr "WebScreen Top Page"
+
+#: templates/base.html:59
+msgid "ホーム"
+msgstr "Home"
+
+#: templates/base.html:60
+msgid "Web"
+msgstr "Web"
+
+#: templates/base.html:61
+msgid "画像"
+msgstr "Image"
+
+#: templates/base.html:62
+msgid "PDF"
+msgstr "PDF"
+
+#: templates/base.html:63
+msgid "録画"
+msgstr "Recording"
+
+#: templates/base.html:64
+msgid "画面共有"
+msgstr "ScreenSharing"
+
+#: templates/base.html:65
+msgid "履歴"
+msgstr "History"
+
+#: templates/base.html:77
+msgid "Powered by OSS集会"
+msgstr "Powered by OSS Assembly"
 
 #: templates/home.html:15
 msgid ""

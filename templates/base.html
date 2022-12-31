@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <!-- Title -->
-    <title>{% block title %}{{ _("Web Screen|VRChatでウェブページを見る") }}{% endblock %}</title>
+    <title>{% block title %}{{ _("Web Screen|Web、画像、PDFをVRChatで見れる動画に変換") }}{% endblock %}</title>
     <!-- Required meta tags -->
     <meta charset="utf-8">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,18 +12,18 @@
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta http-equiv="content-language" content="ja">
     <meta name="author" content="noricha">
-    <meta property="og:site_name" content="{{ _("Web Screen(VRChat用、画像を動画に変換するサイト)") }}"/>
+    <meta property="og:site_name" content="{{ _("Web Screen|Web、画像、PDFをVRChatで見れる動画に変換") }}"/>
     <meta property="og:type" content="website"/>
     {% block meta_tag %}
         <meta property="og:url" content="https://web-screen.net/"/>
         <meta name="description"
-              content="{{ _("Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。") }}">
+              content="{{ _("Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換するサービスです。") }}
+          {{ _("変換された動画のURLを取得できます。動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内でフレンドと共有できます。") }}
+          {{ _("更に、パソコンの画面録画や画面共有もでき便利な機能があります。") }}">
         <meta property="og:description"
-              content="{{ _("Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。") }}">
+              content="{{ _("Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換するサービスです。") }}
+          {{ _("変換された動画のURLを取得できます。動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内でフレンドと共有できます。") }}
+          {{ _("更に、パソコンの画面録画や画面共有もでき便利な機能があります。") }}">
         <meta property="og:image"
               content="https://storage.googleapis.com/noricha-public/web-screen/image/web-screen-og-image.png"/>
     {% endblock %}
