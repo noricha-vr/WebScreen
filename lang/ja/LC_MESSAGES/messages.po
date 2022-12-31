@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-31 14:50+0000\n"
+"POT-Creation-Date: 2022-12-31 15:25+0000\n"
 "PO-Revision-Date: 2022-12-30 08:33+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -544,7 +544,7 @@ msgstr ""
 msgid "使い方"
 msgstr ""
 
-#: templates/how-to/image.html:16
+#: templates/how-to/image.html:13 templates/how-to/image.html:16
 msgid "共有したい画像を選択します。"
 msgstr ""
 
@@ -556,48 +556,50 @@ msgstr ""
 msgid "「Shift+クリック」で複数ファイル選択"
 msgstr ""
 
-#: templates/how-to/image.html:32
+#: templates/how-to/image.html:29 templates/how-to/image.html:32
 msgid "「動画を作成」ボタンを押して画像を動画に変換します。"
 msgstr ""
 
-#: templates/how-to/image.html:46 templates/how-to/pdf.html:44
-#: templates/how-to/record.html:45 templates/how-to/web.html:44
+#: templates/how-to/image.html:42 templates/how-to/image.html:46
+#: templates/how-to/pdf.html:40 templates/how-to/pdf.html:44
+#: templates/how-to/record.html:41 templates/how-to/record.html:45
+#: templates/how-to/web.html:40 templates/how-to/web.html:44
 msgid "動画のURLを「Copy」して、VRChatの動画プレイヤーに貼り付けます。"
 msgstr ""
 
-#: templates/how-to/pdf.html:16
+#: templates/how-to/pdf.html:13 templates/how-to/pdf.html:16
 msgid "スライド化したいPDFを選択します。"
 msgstr ""
 
-#: templates/how-to/pdf.html:30
+#: templates/how-to/pdf.html:27 templates/how-to/pdf.html:30
 msgid "「動画を作成」ボタンを押してPDFを動画に変換します。"
 msgstr ""
 
-#: templates/how-to/record.html:16
+#: templates/how-to/record.html:13 templates/how-to/record.html:16
 msgid "「録画開始」を押して、共有したい画面を選択します。"
 msgstr ""
 
-#: templates/how-to/record.html:31
+#: templates/how-to/record.html:28 templates/how-to/record.html:31
 msgid "録画したい画面を表示して、しばらく撮影を続けたら「停止」を押します。"
 msgstr ""
 
-#: templates/how-to/streaming.html:16
+#: templates/how-to/streaming.html:13 templates/how-to/streaming.html:16
 msgid "「画面共有」を押して、「画面全体」を選択します。"
 msgstr ""
 
-#: templates/how-to/streaming.html:30
+#: templates/how-to/streaming.html:27 templates/how-to/streaming.html:30
 msgid "「Copy」を押してURLをコピーします"
 msgstr ""
 
-#: templates/how-to/streaming.html:44
+#: templates/how-to/streaming.html:40 templates/how-to/streaming.html:44
 msgid "VRChatの動画プレイヤーの「LIVE」を選択して、URLを貼り付けます。"
 msgstr ""
 
-#: templates/how-to/web.html:16
+#: templates/how-to/web.html:13 templates/how-to/web.html:16
 msgid "共有したいウェブページを開いて、URLをコピーします。"
 msgstr ""
 
-#: templates/how-to/web.html:30
+#: templates/how-to/web.html:27 templates/how-to/web.html:30
 msgid "WebScreeの「貼り付け」ボタンを押してURLを貼り付けます。"
 msgstr ""
 
