@@ -1,7 +1,7 @@
 from fastapi import Request
 
 DEFAULT_LANGUAGE = "en"
-SUPPORTED_LANGUAGE = ["ja", "en", "zh", "ko"]
+SUPPORTED_LANGUAGE = ["ja", "en"]
 
 
 def get_lang(request: Request):
