@@ -1,18 +1,15 @@
 {% extends 'base.html' %}
-{% block title %}{{ _("Web Screen|画像を動画に変換して、VRChatの動画プレイヤーに表示できます") }}{% endblock %}
+{% block title %}{{ _("Web Screen|画像を動画に変換して、VRChatの動画プレイヤーに表示") }}{% endblock %}
 
 {% block meta_tag %}
-    <meta property="og:url" content="https://web-screen.net/image/"/>
+    <meta property="og:title" content="{{ _("Web Screen|Web、画像、PDFをVRChatで見られる動画に変換") }}"/>
+    <meta property="og:type" content="article"/>
     <meta name="description"
-          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
+          content="{{ _("Web Screenに画像を入力すると動画に変換してくれます。") }}
+          {{ _("変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると画像表示できます。") }}">
     <meta property="og:description"
-          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
-    <meta property="og:image"
-          content="https://storage.googleapis.com/noricha-public/web-screen/image/web-screen-og-image.png"/>
+          content="{{ _("Web Screenに画像を入力すると動画に変換してくれます。") }}
+          {{ _("変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると画像表示できます。") }}">
 {% endblock %}
 
 {% block content %}
@@ -20,13 +17,13 @@
         <section class="section mt-5">
             <div class="row justify-content-md-center">
                 <div class="col mb-4 text-center">
-                    <h1 class="h1 mb-3">{{ _("画像を動画に変換") }}</h1>
-                    <h2 class="h6 text-secondary">{{ _("VRChatの動画プレイヤー用に画像を動画化できます") }}</h2>
+                    <h2 class="h1 mb-3">{{ _("画像を動画に変換") }}</h2>
+                    <h1 class="h6 text-secondary">{{ _("VRChatの動画プレイヤー用に画像を動画化できます") }}</h1>
                 </div>
             </div>
             <form class="row g-3 justify-content-md-center" id="image_form" enctype="multipart/form-data">
                 <div class="col-12 bg-light border col-12 p-5 rounded shadow">
-                    <h3 class="h5 mb-3">{{ _("動画に変換したい画像を選択してください") }}</h3>
+                    <h2 class="h5 mb-3">{{ _("動画に変換したい画像を選択してください") }}</h2>
                     <label for="files" class="visually-hidden">{{ _("画像") }}</label>
                     <input type="file" accept="image/*" multiple class="form-control border border-dark" id="files"
                            name="files"
