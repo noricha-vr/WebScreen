@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Web Screen|VRChatでGithubリポジトリのソースコードを表示{% endblock %}
+{% block title %}{{ _("Web Screen|VRChatでGithubリポジトリのソースコードを表示") }}{% endblock %}
 {% block meta_tag %}
     <meta property="og:url" content="https://web-screen.net/desktop/"/>
     <meta name="description"
@@ -20,28 +20,28 @@
         <section class="section mt-5">
             <div class="row justify-content-md-center">
                 <div class="col mb-4 text-center">
-                    <h1 class="h1 mb-3">VRChatの動画プレイヤーに画面共有</h1>
-                    <h2 class="h6 text-secondary">パソコンの画面をVRChatの動画プレイヤーに画面共有できます</h2>
+                    <h1 class="h1 mb-3">{{ _("VRChatの動画プレイヤーに画面共有") }}</h1>
+                    <h2 class="h6 text-secondary">{{ _("パソコンの画面をVRChatの動画プレイヤーに画面共有できます") }}</h2>
                 </div>
             </div>
             {% include 'browser-error-message.html' %}
             <div class="row bg-light border p-5 rounded shadow">
 
                 <div class="text-center">
-                    <div class="mb-2">この機能はベータ版です</div>
+                    <div class="mb-2">{{ _("この機能はベータ版です") }}</div>
                     <div class="mb-3">
-                        <button class="btn btn-primary btn-lg" id="start">画面共有</button>
-                        <button class="btn btn-danger btn-lg visually-hidden" id="stop">共有停止</button>
+                        <button class="btn btn-primary btn-lg" id="start">{{ _("画面共有") }}</button>
+                        <button class="btn btn-danger btn-lg visually-hidden" id="stop">{{ _("共有停止") }}</button>
                     </div>
                     <p class="mb-3">
-                        「画面共有」ボタンを押して、<strong>「デスクトップ全体」</strong>を選択してください。<br/>
-                        ※「ウィンドウ」「Chromeタブ」は動作しません。
+                        {{ _("「画面共有」ボタンを押して、「デスクトップ全体」を選択してください。") }}<br/>
+                        ※{{ _("「ウィンドウ」「Chromeタブ」は動作しません。") }}
                     </p>
 
                     <div class="visually-hidden m-3" id="progress-bar-area">
                         <div class="mb-2">
-                            ストリーミングサーバー起動中。<br/>
-                            プログレスバーが消えるとVRChatの動画プレイヤーで再生できるようになります。
+                            {{ _("ストリーミングサーバー起動中。") }}<br/>
+                            {{ _("プログレスバーが消えるとVRChatの動画プレイヤーで再生できるようになります。") }}
                         </div>
                         <div class="progress">
                             <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
@@ -55,24 +55,24 @@
             {% include 'how-to/streaming.html' %}
 
             <div class="p-5 mt-3 bg-light">
-                <h2 class="h3 text-center mb-3">動画説明</h2>
+                <h2 class="h3 text-center mb-3">{{ _("動画説明") }}</h2>
                 <video controls muted class="img-fluid"
                        src="https://storage.googleapis.com/noricha-public/web-screen/movie/how-to-use-streaming.mp4"
                        alt="how to share the screen">
                 </video>
             </div>
             <div class="p-5 bg-light">
-                <h2 class="h3 text-center mb-3">画面共有のポイント</h2>
+                <h2 class="h3 text-center mb-3">{{ _("画面共有のポイント") }}</h2>
                 <p>
-                    映像に20〜50秒の遅延があります。<br/>
-                    画面選択時に左下のチェックを入れると音声が共有されます。（左スピーカーのみ）<br/>
-                    iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。<br/>
-                    それでも表示されない場合は、共有を停止してから再度共有を行ってください。<br/>
-                    共有終了時は「共有終了」を押してください。<br/>
-                    画面共有可能な時間は30分です。30分経過すると自動で終了します。
-                    ストリーミング中に映像が映らなくなったり、固まったり、表示がおかしくなることがあります。<br/>
-                    リロードするか、もう一度画面共有を行ってください。iwaSyncのリロードはローカルです。<br/>
-                    スマホの画面は共有できません。<br/>
+                    {{ _("映像に20〜50秒の遅延があります。") }}<br/>
+                    {{ _("画面選択時に左下のチェックを入れると音声が共有されます。（左スピーカーのみ）") }}<br/>
+                    {{ _("iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。") }}<br/>
+                    {{ _("それでも表示されない場合は、共有を停止してから再度共有を行ってください。") }}<br/>
+                    {{ _("共有終了時は「共有終了」を押してください。") }}<br/>
+                    {{ _("画面共有可能な時間は30分です。30分経過すると自動で終了します。") }}
+                    {{ _("ストリーミング中に映像が映らなくなったり、固まったり、表示がおかしくなることがあります。") }}<br/>
+                    {{ _("リロードするか、もう一度画面共有を行ってください。iwaSyncのリロードはローカルです。") }}<br/>
+                    {{ _("スマホの画面は共有できません。") }}<br/>
                 </p>
             </div>
             <script src="/static/js/util.js"></script>

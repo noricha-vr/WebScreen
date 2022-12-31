@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
-{% block title %}Web Screen|VRChatでGithubリポジトリのソースコードを表示{% endblock %}
+{% block title %}{{ _("Web Screen|パソコンの画面録画をしてVRChatに表示できます") }}{% endblock %}
 {% block meta_tag %}
-    <meta property="og:site_name" content="Web Screen(VRChat用、画像を動画に変換するサイト)"/>
     <meta property="og:type" content="website"/>
     <meta property="og:url" content="https://web-screen.net/record-screen/"/>
     <meta name="description"
@@ -20,19 +19,19 @@
         <section class="section mt-5">
             <div class="row justify-content-md-center">
                 <div class="col mb-4 text-center">
-                    <h1 class="h1 mb-3">パソコンの画面を録画</h1>
-                    <h2 class="h6 text-secondary">パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます</h2>
+                    <h1 class="h1 mb-3">{{ _("パソコンの画面を録画") }}</h1>
+                    <h2 class="h6 text-secondary">{{ _("パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます") }}</h2>
                 </div>
             </div>
             <div class="row bg-light border p-5 rounded shadow">
                 <div id="start-recording" class="col text-center">
                     <p>
-                        <button class="btn btn-primary btn-lg mt-3" id="start">録画開始</button>&nbsp;
-                        <button class="btn btn-danger btn-lg mt-3 visually-hidden" id="stop">録画停止</button>
+                        <button class="btn btn-primary btn-lg mt-3" id="start">{{ _("録画開始") }}</button>&nbsp;
+                        <button class="btn btn-danger btn-lg mt-3 visually-hidden" id="stop">{{ _("録画停止") }}</button>
                     </p>
                     <p>
-                        「録画開始」を押して録画したい画面を選択します。<br>
-                        「録画停止」を押すと動画のアップロードが始まります。
+                        {{ _("「録画開始」を押して録画したい画面を選択します。") }}<br>
+                        {{ _("「録画停止」を押すと動画のアップロードが始まります。") }}
                     </p>
                     <div class="visually-hidden" id="progress-bar-area">
                         <div class="progress">
@@ -45,9 +44,9 @@
             </div>
             {% include 'how-to/record.html' %}
             <p>
-                ※ スマホでの録画はできません。<br/>
-                ※ 処理にかかる時間は回線速度、動画の大きさ、録画時間によって異なります。<br/>
-                ※ ファイルサイズが大きくなるため、1〜2分程度の短い動画でご利用ください。<br/>
+                ※ {{ _("スマホでの録画はできません。") }}<br/>
+                ※ {{ _("処理にかかる時間は回線速度、動画の大きさ、録画時間によって異なります。") }}<br/>
+                ※ {{ _("ファイルサイズが大きくなるため、1〜2分程度の短い動画でご利用ください。") }}<br/>
             </p>
         </section>
     </div>
