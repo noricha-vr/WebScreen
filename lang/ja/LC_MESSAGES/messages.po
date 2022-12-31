@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-31 01:21+0000\n"
+"POT-Creation-Date: 2022-12-31 01:45+0000\n"
 "PO-Revision-Date: 2022-12-30 08:33+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -18,8 +18,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.11.0\n"
 
-#: templates/base.html:5 templates/base.html:15
+#: templates/base.html:5
 msgid "Web Screen|Web、画像、PDFをVRChatで見れる動画に変換"
+msgstr ""
+
+#: templates/base.html:15
+msgid "Web Screen|Web、画像、PDFをVRChatで見れる動画に変換！画面録画や画面共有にも対応"
 msgstr ""
 
 #: templates/base.html:20 templates/base.html:24
@@ -46,11 +50,11 @@ msgstr ""
 msgid "Web"
 msgstr ""
 
-#: templates/base.html:61
+#: templates/base.html:61 templates/image.html:30
 msgid "画像"
 msgstr ""
 
-#: templates/base.html:62
+#: templates/base.html:62 templates/pdf.html:30
 msgid "PDF"
 msgstr ""
 
@@ -58,7 +62,7 @@ msgstr ""
 msgid "録画"
 msgstr ""
 
-#: templates/base.html:64
+#: templates/base.html:64 templates/streaming.html:33
 msgid "画面共有"
 msgstr ""
 
@@ -80,7 +84,7 @@ msgstr ""
 msgid "webページを動画に変換"
 msgstr ""
 
-#: templates/home.html:23
+#: templates/home.html:23 templates/image.html:23
 msgid "画像を動画に変換"
 msgstr ""
 
@@ -96,7 +100,7 @@ msgstr ""
 msgid "VRChatに画面共有"
 msgstr ""
 
-#: templates/home.html:44
+#: templates/home.html:44 templates/web.html:9
 msgid "Webページを動画に変換"
 msgstr ""
 
@@ -120,7 +124,7 @@ msgstr ""
 msgid "ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。"
 msgstr ""
 
-#: templates/home.html:76
+#: templates/home.html:76 templates/pdf.html:23
 msgid "PDFを動画に変換"
 msgstr ""
 
@@ -128,7 +132,7 @@ msgstr ""
 msgid "パワーポイントやGoogleスライドをPDFで書き出して、動画に変換すれば動画プレイヤーやスライドシステムでプレゼンを開始。"
 msgstr ""
 
-#: templates/home.html:92
+#: templates/home.html:92 templates/record.html:22
 msgid "パソコンの画面を録画"
 msgstr ""
 
@@ -150,6 +154,194 @@ msgstr ""
 
 #: templates/home.html:124
 msgid "履歴からは、過去14間に変換した動画のリンクやダウンロードが行えます。ダウンロードした動画はTwitterなどに投稿して共有できます。"
+msgstr ""
+
+#: templates/image.html:2
+msgid "Web Screen|画像を動画に変換して、VRChatの動画プレイヤーに表示できます"
+msgstr ""
+
+#: templates/image.html:24
+msgid "VRChatの動画プレイヤー用に画像を動画化できます"
+msgstr ""
+
+#: templates/image.html:29
+msgid "動画に変換したい画像を選択してください"
+msgstr ""
+
+#: templates/image.html:34
+msgid "複数枚選択可能。ドラッグもOK！"
+msgstr ""
+
+#: templates/image.html:35
+msgid "順番を設定するには01、02、03...のようにファイル名を設定してください。"
+msgstr ""
+
+#: templates/image.html:37 templates/pdf.html:53
+msgid "動画を作成"
+msgstr ""
+
+#: templates/pdf.html:2
+msgid "Web Screen|PDFを動画に変換して、VRChatのスライドシステムに表示できます"
+msgstr ""
+
+#: templates/pdf.html:24
+msgid "PDFを動画に変換して、VRChatのスライドシステムに表示できます"
+msgstr ""
+
+#: templates/pdf.html:29
+msgid "動画に変換したいPDFを選択してください"
+msgstr ""
+
+#: templates/pdf.html:35
+msgid "1ページの表示時間"
+msgstr ""
+
+#: templates/pdf.html:63
+msgid "おすすめのスライドシステム"
+msgstr ""
+
+#: templates/record.html:2
+msgid "Web Screen|パソコンの画面録画をしてVRChatに表示できます"
+msgstr ""
+
+#: templates/record.html:23
+msgid "パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます"
+msgstr ""
+
+#: templates/record.html:29
+msgid "録画開始"
+msgstr ""
+
+#: templates/record.html:30
+msgid "録画停止"
+msgstr ""
+
+#: templates/record.html:33
+msgid "「録画開始」を押して録画したい画面を選択します。"
+msgstr ""
+
+#: templates/record.html:34
+msgid "「録画停止」を押すと動画のアップロードが始まります。"
+msgstr ""
+
+#: templates/record.html:47
+msgid "スマホでの録画はできません。"
+msgstr ""
+
+#: templates/record.html:48
+msgid "処理にかかる時間は回線速度、動画の大きさ、録画時間によって異なります。"
+msgstr ""
+
+#: templates/record.html:49
+msgid "ファイルサイズが大きくなるため、1〜2分程度の短い動画でご利用ください。"
+msgstr ""
+
+#: templates/streaming.html:2
+msgid "Web Screen|VRChatでGithubリポジトリのソースコードを表示"
+msgstr ""
+
+#: templates/streaming.html:23
+msgid "VRChatの動画プレイヤーに画面共有"
+msgstr ""
+
+#: templates/streaming.html:24
+msgid "パソコンの画面をVRChatの動画プレイヤーに画面共有できます"
+msgstr ""
+
+#: templates/streaming.html:31
+msgid "この機能はベータ版です"
+msgstr ""
+
+#: templates/streaming.html:34
+msgid "共有停止"
+msgstr ""
+
+#: templates/streaming.html:37
+msgid "「画面共有」ボタンを押して、「デスクトップ全体」を選択してください。"
+msgstr ""
+
+#: templates/streaming.html:38
+msgid "「ウィンドウ」「Chromeタブ」は動作しません。"
+msgstr ""
+
+#: templates/streaming.html:43
+msgid "ストリーミングサーバー起動中。"
+msgstr ""
+
+#: templates/streaming.html:44
+msgid "プログレスバーが消えるとVRChatの動画プレイヤーで再生できるようになります。"
+msgstr ""
+
+#: templates/streaming.html:58
+msgid "動画説明"
+msgstr ""
+
+#: templates/streaming.html:65
+msgid "画面共有のポイント"
+msgstr ""
+
+#: templates/streaming.html:67
+msgid "映像に20〜50秒の遅延があります。"
+msgstr ""
+
+#: templates/streaming.html:68
+msgid "画面選択時に左下のチェックを入れると音声が共有されます。（左スピーカーのみ）"
+msgstr ""
+
+#: templates/streaming.html:69
+msgid "iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。"
+msgstr ""
+
+#: templates/streaming.html:70
+msgid "それでも表示されない場合は、共有を停止してから再度共有を行ってください。"
+msgstr ""
+
+#: templates/streaming.html:71
+msgid "共有終了時は「共有終了」を押してください。"
+msgstr ""
+
+#: templates/streaming.html:72
+msgid "画面共有可能な時間は30分です。30分経過すると自動で終了します。"
+msgstr ""
+
+#: templates/streaming.html:73
+msgid "ストリーミング中に映像が映らなくなったり、固まったり、表示がおかしくなることがあります。"
+msgstr ""
+
+#: templates/streaming.html:74
+msgid "リロードするか、もう一度画面共有を行ってください。iwaSyncのリロードはローカルです。"
+msgstr ""
+
+#: templates/streaming.html:75
+msgid "スマホの画面は共有できません。"
+msgstr ""
+
+#: templates/web.html:2
+msgid "Web Screen|VRChatの動画プレイヤー用にウェブページを動画に変換できます"
+msgstr ""
+
+#: templates/web.html:10
+msgid "ウェブページを動画化し、VRChatの動画プレイヤーで再生できます"
+msgstr ""
+
+#: templates/web.html:15
+msgid "動画化したいWebページのURLを貼り付けてください"
+msgstr ""
+
+#: templates/web.html:19
+msgid "貼り付け"
+msgstr ""
+
+#: templates/web.html:26
+msgid "ページの長さ（最大）"
+msgstr ""
+
+#: templates/web.html:34
+msgid "待ち時間: (ページの読み込みが正しくできなかった時は秒数を長くしてください。）"
+msgstr ""
+
+#: templates/web.html:69
+msgid "動画に変換"
 msgstr ""
 
 #~ msgid "こんにちは"
