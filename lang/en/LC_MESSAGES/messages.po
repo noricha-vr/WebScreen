@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2022-12-31 07:06+0000\n"
-"PO-Revision-Date: 2022-12-31 16:12+0900\n"
+"PO-Revision-Date: 2022-12-31 16:19+0900\n"
 "Last-Translator: \n"
 "Language-Team: en <LL@li.org>\n"
 "Language: en\n"
@@ -25,7 +25,7 @@ msgstr "Web Screen|Convert Web, images and PDFs to video viewable on VRChat! Sup
 
 #: templates/base.html:18
 msgid "https://storage.googleapis.com/noricha-public/web-screen/image/og-image/web-screen-ja.webp"
-msgstr ""
+msgstr "https://storage.googleapis.com/noricha-public/web-screen/image/og-image/web-screen-en.webp"
 
 #: templates/base.html:46
 msgid "WebScreenトップページ"
