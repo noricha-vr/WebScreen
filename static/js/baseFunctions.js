@@ -113,7 +113,6 @@ function changeButtonColor(element) {
 function selectActiveMenu() {
     let naviItems = document.getElementsByClassName('nav-link');
     for (let item of naviItems) {
-        console.log(location.href);
         if (item.href === location.href) {
             item.classList.add('active');
             item.classList.remove('text-dark');
