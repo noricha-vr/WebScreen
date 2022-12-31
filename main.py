@@ -99,6 +99,11 @@ async def github(request: Request) -> templates.TemplateResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/github/")
 
 
+@app.get("/robots.txt/")
+async def robots_txt():
+    return FileResponse("static/robots.txt")
+
+
 @app.get("/{lang}/", response_class=HTMLResponse)
 async def home(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
@@ -153,12 +158,6 @@ async def github(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('github.html', {'request': request})
-
-
-@app.get("/robots.txt/")
-def robots_txt():
-    babel.locale = 'en'
-    return {"message": "User-agent: *\nAllow: /"}
 
 
 @app.get("/favicon.ico")
