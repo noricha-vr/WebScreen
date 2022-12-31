@@ -2,6 +2,7 @@
 {% block title %}{{ _("Web Screen|VRChatの動画プレイヤー用にウェブページを動画に変換") }}{% endblock %}
 {% block meta_tag %}
     <meta property="og:url" content="https://web-screen.net/"/>
+    <meta property="og:title" content="{{ _("Web Screen|Web、画像、PDFをVRChatで見られる動画に変換") }}"/>
     <meta name="description"
           content="{{ _("Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換するサービスです。") }}
           {{ _("このページではWebページを動画に変換できます。") }}
@@ -20,13 +21,13 @@
             <div class="row mb-4">
                 <div class="col text-center">
 
-                    <h1 class="h1 mb-3">{{ _("Webページを動画に変換") }}</h1>
-                    <h2 class="h6 text-secondary">{{ _("ウェブページを動画化し、VRChatの動画プレイヤーで再生できます") }}</h2>
+                    <h2 class="h1 mb-3">{{ _("Webページを動画に変換") }}</h2>
+                    <h1 class="h6 text-secondary">{{ _("ウェブページを動画に変換し、VRChatの動画プレイヤーで再生できます") }}</h1>
                 </div>
             </div>
             <div class="row g-3 justify-content-md-center">
                 <div class="col-12 bg-light border p-5 rounded shadow">
-                    <h3 class="h5 mb-3">{{ _("動画化したいWebページのURLを貼り付けてください") }}</h3>
+                    <h2 class="h5 mb-3">{{ _("動画化したいWebページのURLを貼り付けてください") }}</h2>
                     <form class="form">
                         <div class="mb-3 row" style="margin-left: 0px">
                             <div for="url" id="paste_button" class="btn btn-secondary col-3 col-sm-2 col-form-label">
