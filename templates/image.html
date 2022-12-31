@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Web Screen|VRChatの動画プレイヤーに動画化した画像を表示できます{% endblock %}
+{% block title %}{{ _("Web Screen|画像を動画に変換して、VRChatの動画プレイヤーに表示できます") }}{% endblock %}
 
 {% block meta_tag %}
     <meta property="og:url" content="https://web-screen.net/image/"/>
@@ -20,21 +20,21 @@
         <section class="section mt-5">
             <div class="row justify-content-md-center">
                 <div class="col mb-4 text-center">
-                    <h1 class="h1 mb-3">画像を動画に変換</h1>
-                    <h2 class="h6 text-secondary">VRChatの動画プレイヤー用に画像を動画化できます</h2>
+                    <h1 class="h1 mb-3">{{ _("画像を動画に変換") }}</h1>
+                    <h2 class="h6 text-secondary">{{ _("VRChatの動画プレイヤー用に画像を動画化できます") }}</h2>
                 </div>
             </div>
             <form class="row g-3 justify-content-md-center" id="image_form" enctype="multipart/form-data">
                 <div class="col-12 bg-light border col-12 p-5 rounded shadow">
-                    <h3 class="h5 mb-3">動画化したい画像を選択してください</h3>
-                    <label for="files" class="visually-hidden">画像</label>
+                    <h3 class="h5 mb-3">{{ _("動画に変換したい画像を選択してください") }}</h3>
+                    <label for="files" class="visually-hidden">{{ _("画像") }}</label>
                     <input type="file" accept="image/*" multiple class="form-control border border-dark" id="files"
                            name="files"
                            placeholder="https://">
-                    <div class="mt-1 text-muted">※ 複数枚選択可能。ドラッグもOK！</div>
-                    <div class="mt-1 text-muted">※ 順番を設定するには01、02、03...のようにファイル名を設定してください。</div>
+                    <div class="mt-1 text-muted">※ {{ _("複数枚選択可能。ドラッグもOK！") }}</div>
+                    <div class="mt-1 text-muted">※ {{ _("順番を設定するには01、02、03...のようにファイル名を設定してください。") }}</div>
                     <div class="mt-3 text-center">
-                        <div id="submit" class="btn btn-primary d-block">動画を作成</div>
+                        <div id="submit" class="btn btn-primary d-block">{{ _("動画を作成") }}</div>
                     </div>
                     <div class="progress visually-hidden">
                         <div class="progress-bar bg-info" role="progressbar" id="progress_bar"

@@ -1,29 +1,29 @@
 {% extends 'base.html' %}
-{% block title %}Web Screen|VRChatの動画プレイヤー用にウェブページを動画化できます{% endblock %}
+{% block title %}{{ _("Web Screen|VRChatの動画プレイヤー用にウェブページを動画に変換できます") }}{% endblock %}
 {% block content %}
     <div class="container">
         <section class="section mt-5">
             <div class="row mb-4">
                 <div class="col text-center">
 
-                    <h1 class="h1 mb-3">Webページを動画に変換</h1>
-                    <h2 class="h6 text-secondary">ウェブページを動画化し、VRChatの動画プレイヤーで再生できます</h2>
+                    <h1 class="h1 mb-3">{{ _("Webページを動画に変換") }}</h1>
+                    <h2 class="h6 text-secondary">{{ _("ウェブページを動画化し、VRChatの動画プレイヤーで再生できます") }}</h2>
                 </div>
             </div>
             <div class="row g-3 justify-content-md-center">
                 <div class="col-12 bg-light border p-5 rounded shadow">
-                    <h3 class="h5 mb-3">動画化したいWebページのURLを貼り付けてください</h3>
+                    <h3 class="h5 mb-3">{{ _("動画化したいWebページのURLを貼り付けてください") }}</h3>
                     <form class="form">
                         <div class="mb-3 row" style="margin-left: 0px">
                             <div for="url" id="paste_button" class="btn btn-secondary col-3 col-sm-2 col-form-label">
-                                貼り付け
+                                {{ _("貼り付け") }}
                             </div>
                             <div class="col-9 col-sm-10">
                                 <input type="url" class="col-10 form-control  border border-dark" id="url" name="url"
                                        placeholder="https://">
                             </div>
                         </div>
-                        <label for="page_height_slider" class="form-label mt-3">ページの長さ（最大）<span
+                        <label for="page_height_slider" class="form-label mt-3">{{ _("ページの長さ（最大）") }}<span
                                 id="page_height_label">5000</span>px</label>
                         <input type="range" class="form-range" id="page_height_slider" name="max_page_height" min="2000"
                                max="25000" value="5000">
@@ -31,7 +31,7 @@
                         <div class="row">
 
                             <div class="col">
-                                <div>待ち時間: (ページの読み込みが正しくできなかった時は秒数を長くしてください。）</div>
+                                <div>{{ _("待ち時間: (ページの読み込みが正しくできなかった時は秒数を長くしてください。）") }}</div>
                                 <div class="form-check-inline">
                                     <input class="form-check-input" type="radio" name="wait_time" id="wait-1"
                                            value="1" checked>
@@ -66,7 +66,7 @@
 
                         </div>
                         <div class="mt-3 text-center">
-                            <div id="submit" class="btn btn-primary d-block">動画に変換</div>
+                            <div id="submit" class="btn btn-primary d-block">{{ _("動画に変換") }}</div>
                         </div>
                         <div class="progress visually-hidden">
                             <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
