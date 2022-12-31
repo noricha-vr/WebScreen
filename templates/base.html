@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <!-- Title -->
-    <title>{% block title %}Web Screen|VRChatでウェブページを見る{% endblock %}</title>
+    <title>{% block title %}{{ _("Web Screen|VRChatでウェブページを見る") }}{% endblock %}</title>
     <!-- Required meta tags -->
     <meta charset="utf-8">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,18 +12,18 @@
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta http-equiv="content-language" content="ja">
     <meta name="author" content="noricha">
-    <meta property="og:site_name" content="Web Screen(VRChat用、画像を動画に変換するサイト)"/>
+    <meta property="og:site_name" content="{{ _("Web Screen(VRChat用、画像を動画に変換するサイト)") }}"/>
     <meta property="og:type" content="website"/>
     {% block meta_tag %}
         <meta property="og:url" content="https://web-screen.net/"/>
         <meta name="description"
-              content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
+              content="{{ _("Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
           変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
+          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。") }}">
         <meta property="og:description"
-              content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
+              content="{{ _("Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
           変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
+          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。") }}">
         <meta property="og:image"
               content="https://storage.googleapis.com/noricha-public/web-screen/image/web-screen-og-image.png"/>
     {% endblock %}
@@ -50,20 +50,19 @@
 <body>
 <header>
     <div class=" bg-light text-center">
-        <a href="/" alt="WebScreenトップページ">
+        <a href="/" alt="{{ _("WebScreenトップページ") }}">
             <img src="https://storage.googleapis.com/noricha-public/web-screen/image/header-7.png" class="img-fluid"
                  alt="WebScreenロゴ">
         </a>
     </div>
     <nav class="border-bottom border-top justify-content-center nav nav-pills navbar-light p-1">
-        <a class="nav-link text-dark pb-1 pt-1" href="/">ホーム</a>
-        {#        <a class="nav-link text-dark pb-1 pt-1" href="/how-to/">使い方</a>#}
-        <a class="nav-link text-dark pb-1 pt-1" aria-current="page" href="/web/">Web</a>
-        <a class="nav-link text-dark pb-1 pt-1" href="/image/">画像</a>
-        <a class="nav-link text-dark pb-1 pt-1" href="/pdf/">PDF</a>
-        <a class="nav-link text-dark pb-1 pt-1" href="/record/">録画</a>
-        <a class="nav-link text-dark pb-1 pt-1" href="/streaming/">画面共有</a>
-        <a class="nav-link text-dark pb-1 pt-1" href="/history/">履歴</a>
+        <a class="nav-link text-dark pb-1 pt-1" href="/">{{ _("ホーム") }}</a>
+        <a class="nav-link text-dark pb-1 pt-1" aria-current="page" href="/web/">{{ _("Web") }}</a>
+        <a class="nav-link text-dark pb-1 pt-1" href="/image/">{{ _("画像") }}</a>
+        <a class="nav-link text-dark pb-1 pt-1" href="/pdf/">{{ _("PDF") }}</a>
+        <a class="nav-link text-dark pb-1 pt-1" href="/record/">{{ _("録画") }}</a>
+        <a class="nav-link text-dark pb-1 pt-1" href="/streaming/">{{ _("画面共有") }}</a>
+        <a class="nav-link text-dark pb-1 pt-1" href="/history/">{{ _("履歴") }}</a>
         <a class="nav-link text-white pb-1 pt-1" href="/github/">Git</a>
     </nav>
 </header>
@@ -75,7 +74,7 @@
 <footer style="background-color: darkgrey;" class="mt-5">
     <div class="container text-center">
         <a href="https://sites.google.com/view/vrc-personal-development/oss%E9%9B%86%E4%BC%9A" class="text-white"
-           style="text-decoration:none;" target="_blank">Powered by OSS集会</a>
+           style="text-decoration:none;" target="_blank">{{ _("Powered by OSS集会") }}</a>
     </div>
     {% block script %}{% endblock %}
 </footer>
