@@ -7,27 +7,24 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-31 06:55+0000\n"
-"PO-Revision-Date: 2022-12-31 11:37+0900\n"
+"POT-Creation-Date: 2022-12-31 07:06+0000\n"
+"PO-Revision-Date: 2022-12-31 16:12+0900\n"
 "Last-Translator: \n"
-"Language: en\n"
 "Language-Team: en <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.11.0\n"
+"X-Generator: Poedit 3.2.2\n"
 
 #: templates/base.html:16
 msgid "Web Screen|Web、画像、PDFをVRChatで見れる動画に変換！画面録画や画面共有にも対応"
-msgstr ""
-"Web Screen|Convert Web, images and PDFs to video viewable on VRChat! "
-"Supports screen recording and screen sharing!"
+msgstr "Web Screen|Convert Web, images and PDFs to video viewable on VRChat! Supports screen recording and screen sharing!"
 
 #: templates/base.html:18
-msgid ""
-"https://storage.googleapis.com/noricha-public/web-screen/image/og-image"
-"/web-screen-ja.webp"
+msgid "https://storage.googleapis.com/noricha-public/web-screen/image/og-image/web-screen-ja.webp"
 msgstr ""
 
 #: templates/base.html:46
@@ -54,11 +51,11 @@ msgstr "PDF"
 msgid "画面録画"
 msgstr "ScreenRecording"
 
-#: templates/base.html:58
+#: templates/base.html:58 templates/streaming.html:32
 msgid "画面共有"
 msgstr "ScreenSharing"
 
-#: templates/base.html:59 templates/history.html:9
+#: templates/base.html:59 templates/history.html:21
 msgid "履歴"
 msgstr "History"
 
@@ -110,59 +107,53 @@ msgstr "cash"
 msgid "動画を作成"
 msgstr "Create Video"
 
-#: templates/history.html:2
-msgid "履歴 Web Screen|VRChatの動画プレイヤー用に変換した動画の履歴"
-msgstr "History Web Screen|History of videos converted for VRChat video player"
+#: templates/history.html:2 templates/history.html:4
+msgid "Web Screenの変換履歴を確認"
+msgstr "Check Web Screen’s conversion history"
 
-#: templates/history.html:10
+#: templates/history.html:7 templates/history.html:11
+msgid "Web Screenで変換した動画の履歴を確認できます。"
+msgstr "You can check the history of converted videos on Web Screen."
+
+#: templates/history.html:8 templates/history.html:12
+msgid "変換した動画は14間サーバーに保存されます。"
+msgstr "Converted videos will be stored on the server for 14"
+
+#: templates/history.html:9 templates/history.html:13
+msgid "動画をダウンロードすることで、パソコンに保存したり、Twitterに投稿できます。"
+msgstr "By downloading videos, you can save them to your computer or post them on Twitter."
+
+#: templates/history.html:23
 msgid "過去に動画化したURLを「コピー」して、VRChatのプレイヤーに表示できます。"
-msgstr ""
-"You can “copy” URLs that have been previously animated and display them "
-"in the VRChat player."
+msgstr "You can “copy” URLs that have been previously animated and display them in the VRChat player."
 
-#: templates/history.html:41
+#: templates/history.html:54
 msgid "履歴は動画を作成してから14日で消えます。"
 msgstr "The history will disappear 14 days after the video is created."
 
-#: templates/history.html:42
+#: templates/history.html:55
 msgid "ダウンロードして自分のパソコンに動画を保存したり、Twitterに投稿できます。"
-msgstr ""
-"You can download and save the video to your own computer or post it on "
-"Twitter."
+msgstr "You can download and save the video to your own computer or post it on Twitter."
 
 #: templates/home.html:2 templates/home.html:4
-#, fuzzy
 msgid "Web ScreenでWeb、画像、PDFをVRChatで見られる動画に変換"
-msgstr ""
-"Web Screen|Convert Web, images, and PDFs into video that can be viewed "
-"with VRChat"
+msgstr "Convert Web, images, and PDFs to video viewable on VRChat with Web Screen"
 
 #: templates/home.html:6 templates/home.html:10
-#, fuzzy
 msgid "Web ScreenはWeb、画像、PDFをVRChatで見られる動画に変換できます。"
-msgstr ""
-"Web Screen is a service that converts the Web, images, and PDFs into "
-"video that can be viewed on VRChat."
+msgstr "Web Screen can convert the Web, images, and PDFs into video that can be viewed in VRChat."
 
 #: templates/home.html:7 templates/home.html:11
-#, fuzzy
 msgid "変換された動画のURLを取得でき、動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内で再生できます。"
-msgstr ""
-"You can get the URL of the converted video. Paste the video URL into the "
-"video player in VRChat to share it with your friends in VRChat."
+msgstr "You can obtain the URL of the converted video and paste the video URL into the video player in VRChat to play it in VRChat."
 
 #: templates/home.html:8 templates/home.html:12 templates/web.html:13
 msgid "更に、パソコンの画面録画や画面共有もでき便利な機能があります。"
-msgstr ""
-"Furthermore, it has convenient functions such as screen recording and "
-"screen sharing on a PC."
+msgstr "Furthermore, it has convenient functions such as screen recording and screen sharing on a PC."
 
 #: templates/home.html:26
-#, fuzzy
 msgid "WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換サービスです。"
-msgstr ""
-"WebScreen is a video conversion system for displaying web pages, photos "
-"and PDFs on the VRChat video player."
+msgstr "WebScreen is a video conversion service for displaying web pages, photos, and PDFs in VRChat’s video player."
 
 #: templates/home.html:31 templates/home.html:67 templates/home.html:81
 #: templates/home.html:97 templates/home.html:111 templates/home.html:127
@@ -192,9 +183,7 @@ msgstr "Convert web page to video"
 
 #: templates/home.html:59
 msgid "Webページを動画に変換することで、VRChat内で動画プレイヤーを使ってそのページを表示することができます。"
-msgstr ""
-"Converting a web page to video allows you to view that page using a video"
-" player within VRChat."
+msgstr "Converting a web page to video allows you to view that page using a video player within VRChat."
 
 #: templates/home.html:60
 msgid "また、シークバーを使うことでページ内をスクロールすることができます。"
@@ -210,9 +199,7 @@ msgstr "Convert photo to video"
 
 #: templates/home.html:76
 msgid "ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。"
-msgstr ""
-"Take photos taken on a world tour or with friends and watch them together"
-" instantly in VRChat."
+msgstr "Take photos taken on a world tour or with friends and watch them together instantly in VRChat."
 
 #: templates/home.html:88 templates/pdf.html:21
 msgid "PDFを動画に変換"
@@ -220,9 +207,7 @@ msgstr "Convert PDF to video"
 
 #: templates/home.html:91
 msgid "パワーポイントやGoogleスライドをPDFで書き出して、動画に変換すれば動画プレイヤーやスライドシステムでプレゼンを開始。"
-msgstr ""
-"Export PowerPoint or Google Slides as PDF and convert it to video to "
-"start your presentation in a video player or slide system."
+msgstr "Export PowerPoint or Google Slides as PDF and convert it to video to start your presentation in a video player or slide system."
 
 #: templates/home.html:104 templates/record.html:21
 msgid "パソコンの画面を録画"
@@ -230,10 +215,7 @@ msgstr "Record your computer screen"
 
 #: templates/home.html:106
 msgid "自分のパソコンの特定の画面をVRChat内でみんなに見せたり、VRChatの録画映像をみんなで見たり、ログインが必要なWebページを共有するのにも使えます。"
-msgstr ""
-"You can also use this to show everyone a specific screen of your computer"
-" within VRChat, watch VRChat recordings together, or share web pages that"
-" require a login."
+msgstr "You can also use this to show everyone a specific screen of your computer within VRChat, watch VRChat recordings together, or share web pages that require a login."
 
 #: templates/home.html:118
 msgid "VRChatのビデオプレーヤーに画面共有"
@@ -241,10 +223,7 @@ msgstr "Screen sharing to VRChat video player"
 
 #: templates/home.html:121
 msgid "自分のパソコンの画面をVRChatの動画プレイヤーにストリーミング。作業の様子を共有したり、パソコンの画面を見ながらの説明や紹介にも使えます。"
-msgstr ""
-"Stream your own computer screen to VRChat’s video player. You can use it "
-"to share your work, or to explain or introduce your work while viewing "
-"your computer screen."
+msgstr "Stream your own computer screen to VRChat’s video player. You can use it to share your work, or to explain or introduce your work while viewing your computer screen."
 
 #: templates/home.html:134
 msgid "履歴を確認"
@@ -252,29 +231,23 @@ msgstr "View history"
 
 #: templates/home.html:136
 msgid "履歴からは、過去14間に変換した動画のリンクやダウンロードが行えます。ダウンロードした動画はTwitterなどに投稿して共有できます。"
-msgstr ""
-"From History, you can link to and download videos you have converted in "
-"the last 14 days. Downloaded videos can be posted and shared on Twitter "
-"and other social media."
+msgstr "From History, you can link to and download videos you have converted in the last 14 days. Downloaded videos can be posted and shared on Twitter and other social media."
 
 #: templates/image.html:2 templates/image.html:5
-#, fuzzy
 msgid "Web Screenで画像をVRChatで見られる動画に変換"
-msgstr ""
-"Web Screen|Convert Web, images, and PDFs into video that can be viewed "
-"with VRChat"
+msgstr "Web Screen converts images into video that can be viewed in VRChat"
 
 #: templates/image.html:8 templates/image.html:12
 msgid "Web Screenに画像を入力すると動画に変換してくれます。"
-msgstr ""
+msgstr "If you input an image into Web Screen, it will be converted into a video."
 
 #: templates/image.html:9 templates/image.html:13
 msgid "変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると画像を表示できます。"
-msgstr ""
+msgstr "Paste the URL of the converted video into the video player in VRChat to display the image."
 
 #: templates/image.html:10 templates/image.html:14
 msgid "ワールド巡りをした写真や、フレンドと撮った写真を一緒に見返せます。"
-msgstr ""
+msgstr "You can look back together at the photos you took on your world tour or with your friends."
 
 #: templates/image.html:23
 msgid "VRChatの動画プレイヤー用に画像を動画化できます"
@@ -318,9 +291,7 @@ msgstr "No analysis will be performed on the content of the video."
 
 #: templates/note.html:22
 msgid "のりちゃんが無償で提供するものであり、変換サービスのサービスレベルに保証はありません。"
-msgstr ""
-"Norichan provides this service free of charge and does not guarantee the "
-"service level of the conversion service."
+msgstr "Norichan provides this service free of charge and does not guarantee the service level of the conversion service."
 
 #: templates/note.html:25
 msgid "本サービスを利用することで生じたいかなる損害についても補償致しかねます。"
@@ -328,9 +299,7 @@ msgstr "We will not compensate for any damages caused by the use of this service
 
 #: templates/note.html:28
 msgid "本サービスは、個人、法人、団体を問わず無償でご利用いただけます。"
-msgstr ""
-"This service is available free of charge to any individual, corporation, "
-"or organization."
+msgstr "This service is available free of charge to any individual, corporation, or organization."
 
 #: templates/output-area.html:4
 msgid "下矢印"
@@ -345,11 +314,8 @@ msgid "URLをクリックすると動画を確認できます。"
 msgstr "Click on the URL to see the video."
 
 #: templates/pdf.html:2 templates/pdf.html:5
-#, fuzzy
 msgid "Web ScreenでPDFをVRChatで見られる動画に変換"
-msgstr ""
-"Web Screen|Convert Web, images, and PDFs into video that can be viewed "
-"with VRChat"
+msgstr "Convert PDF to video viewable on VRChat with Web Screen"
 
 #: templates/pdf.html:8 templates/pdf.html:11
 msgid "Web ScreenにPDFを入力すると動画に変換してくれます。"
@@ -384,25 +350,20 @@ msgid "おすすめのスライドシステム"
 msgstr "Recommended sliding systems"
 
 #: templates/record.html:2 templates/record.html:4
-#, fuzzy
 msgid "Web Screenでパソコンの画面録画をしてVRChatに表示"
-msgstr "Web Screen|You can record your computer screen and display it on VRChat"
+msgstr "Record your computer screen with Web Screen and display it on VRChat"
 
 #: templates/record.html:7 templates/record.html:11
-#, fuzzy
 msgid "Web Screenでパソコンの画面録画をしてVRChatに表示できます。"
-msgstr "Web Screen|You can record your computer screen and display it on VRChat"
+msgstr "You can use Web Screen to record your computer screen and display it on VRChat."
 
 #: templates/record.html:8 templates/record.html:12
 msgid "画面を録画して、録画した動画のURLを取得できます。"
 msgstr ""
 
 #: templates/record.html:9 templates/record.html:13
-#, fuzzy
 msgid "動画のURLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。"
-msgstr ""
-"You can get the URL of the converted video. Paste the video URL into the "
-"video player in VRChat to share it with your friends in VRChat."
+msgstr "Paste the URL of the video into the video player in VRChat to share it with your friends in VRChat."
 
 #: templates/record.html:22
 msgid "パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます"
@@ -436,41 +397,121 @@ msgstr "Processing time depends on line speed, video size, and recording time."
 msgid "ファイルサイズが大きくなるため、1〜2分程度の短い動画でご利用ください。"
 msgstr "Due to the large file size, please use short videos of 1-2 minutes."
 
-#: templates/web.html:2 templates/web.html:4
-#, fuzzy
-msgid "Web ScreenでWebページをVRChatで見られる動画に変換"
+#: templates/streaming.html:2 templates/streaming.html:4
+msgid "Web Screenでパソコンの画面をVRChatに共有"
+msgstr "Share your computer screen to VRChat with Web Screen"
+
+#: templates/streaming.html:7 templates/streaming.html:11
+msgid "Web Screenでパソコンの画面をVRChatに共有できます。"
+msgstr "Web Screen allows you to share your computer screen to VRChat."
+
+#: templates/streaming.html:8 templates/streaming.html:12
+msgid "ストリーミング用のURLを取得できます。"
 msgstr ""
-"Web Screen|Convert Web, images, and PDFs into video that can be viewed "
-"with VRChat"
+
+#: templates/streaming.html:9 templates/streaming.html:13
+msgid "URLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。"
+msgstr "Paste the URL into the video player in VRChat to share it with your friends in VRChat."
+
+#: templates/streaming.html:22
+msgid "VRChatの動画プレイヤーに画面共有"
+msgstr "Screen sharing to VRChat video player"
+
+#: templates/streaming.html:23
+msgid "パソコンの画面をVRChatの動画プレイヤーに画面共有できます"
+msgstr "You can share your computer screen to VRChat’s video player."
+
+#: templates/streaming.html:30
+msgid "この機能はベータ版です"
+msgstr "This feature is in beta"
+
+#: templates/streaming.html:33
+msgid "共有停止"
+msgstr "cessation of sharing"
+
+#: templates/streaming.html:36
+msgid "「画面共有」ボタンを押して、「デスクトップ全体」を選択してください。"
+msgstr "Press the “Screen Sharing” button and select “Whole Desktop”."
+
+#: templates/streaming.html:37
+msgid "「ウィンドウ」「Chromeタブ」は動作しません。"
+msgstr "Window” and “Chrome Tab” do not work."
+
+#: templates/streaming.html:42
+msgid "ストリーミングサーバー起動中。"
+msgstr "Streaming server is starting up."
+
+#: templates/streaming.html:43
+msgid "プログレスバーが消えるとVRChatの動画プレイヤーで再生できるようになります。"
+msgstr "When the progress bar disappears, the video can be played in the VRChat video player."
+
+#: templates/streaming.html:57
+msgid "動画説明"
+msgstr "Video description"
+
+#: templates/streaming.html:64
+msgid "画面共有のポイント"
+msgstr "Screen sharing points"
+
+#: templates/streaming.html:66
+msgid "映像に20〜50秒の遅延があります。"
+msgstr "There is a 20-50 second delay in the video."
+
+#: templates/streaming.html:67
+msgid "画面選択時に左下のチェックを入れると音声が共有されます。（左スピーカーのみ）"
+msgstr "Audio will be shared if the lower left checkbox is checked when a screen is selected. (Left speaker only)"
+
+#: templates/streaming.html:68
+msgid "iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。"
+msgstr "If “Invalid URL” is displayed immediately after starting in iwaSync, reload or reenter the URL."
+
+#: templates/streaming.html:69
+msgid "それでも表示されない場合は、共有を停止してから再度共有を行ってください。"
+msgstr "If it still does not appear, stop sharing and try sharing again."
+
+#: templates/streaming.html:70
+msgid "共有終了時は「共有終了」を押してください。"
+msgstr "When you are finished sharing, press “End Sharing”."
+
+#: templates/streaming.html:71
+msgid "画面共有可能な時間は30分です。30分経過すると自動で終了します。"
+msgstr "Screen sharing is available for 30 minutes and will automatically end after 30 minutes."
+
+#: templates/streaming.html:72
+msgid "ストリーミング中に映像が映らなくなったり、固まったり、表示がおかしくなることがあります。"
+msgstr "The video may stop appearing, freeze, or display incorrectly during streaming."
+
+#: templates/streaming.html:73
+msgid "リロードするか、もう一度画面共有を行ってください。iwaSyncのリロードはローカルです。"
+msgstr "Reload or perform screen sharing again. iwaSync reloading is local."
+
+#: templates/streaming.html:74
+msgid "スマホの画面は共有できません。"
+msgstr "The screen of the phone cannot be shared."
+
+#: templates/web.html:2 templates/web.html:4
+msgid "Web ScreenでWebページをVRChatで見られる動画に変換"
+msgstr "Web Screen converts web pages into video that can be viewed in VRChat"
 
 #: templates/web.html:7 templates/web.html:11
 msgid "Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換するサービスです。"
-msgstr ""
-"Web Screen is a service that converts the Web, images, and PDFs into "
-"video that can be viewed on VRChat."
+msgstr "Web Screen is a service that converts the Web, images, and PDFs into video that can be viewed on VRChat."
 
 #: templates/web.html:8
-#, fuzzy
 msgid "このページではWebページを動画に変換できます。"
-msgstr "Convert web page to video"
+msgstr "This page allows you to convert web pages to video."
 
 #: templates/web.html:9
-#, fuzzy
 msgid "変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。"
-msgstr ""
-"You can get the URL of the converted video. Paste the video URL into the "
-"video player in VRChat to share it with your friends in VRChat."
+msgstr "Paste the URL of the converted video into the video player in VRChat to share it with your friends in VRChat."
 
 #: templates/web.html:12
 msgid "変換された動画のURLを取得できます。動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内でフレンドと共有できます。"
-msgstr ""
-"You can get the URL of the converted video. Paste the video URL into the "
-"video player in VRChat to share it with your friends in VRChat."
+msgstr "You can get the URL of the converted video. Paste the video URL into the video player in VRChat to share it with your friends in VRChat."
 
 #: templates/web.html:22
-#, fuzzy
 msgid "ウェブページを動画に変換し、VRChatの動画プレイヤーで再生できます"
-msgstr "Web pages can be animated and played back in VRChat’s video player"
+msgstr "Convert web pages to video for playback in VRChat’s video player"
 
 #: templates/web.html:27
 msgid "動画化したいWebページのURLを貼り付けてください"
@@ -482,9 +523,7 @@ msgstr "Page length (max)"
 
 #: templates/web.html:46
 msgid "待ち時間: (ページの読み込みが正しくできなかった時は秒数を長くしてください。）"
-msgstr ""
-"Latency: (If the page fails to load correctly, increase the number of "
-"seconds.)"
+msgstr "Latency: (If the page fails to load correctly, increase the number of seconds.)"
 
 #: templates/web.html:59
 msgid "5秒"
@@ -539,9 +578,7 @@ msgstr "Press “Start Recording” and select the screen you wish to share."
 
 #: templates/how-to/record.html:31
 msgid "録画したい画面を表示して、しばらく撮影を続けたら「停止」を押します。"
-msgstr ""
-"Display the screen you want to record and press “Stop” after a while of "
-"recording."
+msgstr "Display the screen you want to record and press “Stop” after a while of recording."
 
 #: templates/how-to/streaming.html:16
 msgid "「画面共有」を押して、「画面全体」を選択します。"
@@ -649,3 +686,5 @@ msgstr "Press the “Paste” button on WebScree and paste the URL."
 #~ msgid "Web Screen|VRChatの動画プレイヤー用にウェブページを動画に変換できます"
 #~ msgstr "Web Screen|Convert web pages to video for VRChat video player"
 
+#~ msgid "履歴 Web Screen|VRChatの動画プレイヤー用に変換した動画の履歴"
+#~ msgstr "History Web Screen|History of videos converted for VRChat video player"
