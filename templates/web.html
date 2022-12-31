@@ -23,7 +23,7 @@
                                        placeholder="https://">
                             </div>
                         </div>
-                        <label for="page_height_slider" class="form-label mt-3">{{ _("ページの長さ（最大）") }}<span
+                        <label for="page_height_slider" class="form-label mt-3">{{ _("ページの長さ（最大）") }}:<span
                                 id="page_height_label">5000</span>px</label>
                         <input type="range" class="form-range" id="page_height_slider" name="max_page_height" min="2000"
                                max="25000" value="5000">
@@ -36,7 +36,7 @@
                                     <input class="form-check-input" type="radio" name="wait_time" id="wait-1"
                                            value="1" checked>
                                     <label class="form-check-label" for="wait-1">
-                                        1秒
+                                        {{ _("1秒") }}
                                     </label>
                                 </div>
 
@@ -44,7 +44,7 @@
                                     <input class="form-check-input" type="radio" name="wait_time" id="wait-5"
                                            value="5">
                                     <label class="form-check-label" for="wait-5">
-                                        5秒
+                                        {{ _("5秒") }}
                                     </label>
                                 </div>
 
@@ -52,14 +52,14 @@
                                     <input class="form-check-input" type="radio" name="wait_time" id="wait-10"
                                            value="10">
                                     <label class="form-check-label" for="wait-10">
-                                        10秒
+                                        {{ _("10秒") }}
                                     </label>
                                 </div>
                                 <div class="form-check-inline">
                                     <input class="form-check-input" type="radio" name="wait_time" id="wait-15"
                                            value="15">
                                     <label class="form-check-label" for="wait-15">
-                                        15秒
+                                        {{ _("15秒") }}
                                     </label>
                                 </div>
                             </div>

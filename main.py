@@ -66,32 +66,37 @@ async def home(request: Request) -> templates.TemplateResponse:
 
 @app.get("/web/", response_class=HTMLResponse)
 async def web(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/web/{get_lang(request)}/")
+    return RedirectResponse(url=f"/{get_lang(request)}/web/")
 
 
 @app.get("/image/")
 async def image(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/image/{get_lang(request)}/")
+    return RedirectResponse(url=f"/{get_lang(request)}/image/")
 
 
 @app.get("/pdf/")
 async def pdf(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/pdf/{get_lang(request)}/")
+    return RedirectResponse(url=f"/{get_lang(request)}/pdf/")
 
 
 @app.get("/recording/")
 def recording_desktop(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/recording/{get_lang(request)}/")
+    return RedirectResponse(url=f"/{get_lang(request)}/recording/")
 
 
 @app.get("/streaming/")
 async def read_index(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/streaming/{get_lang(request)}/")
+    return RedirectResponse(url=f"/{get_lang(request)}/streaming/")
 
 
 @app.get("/history/", response_class=HTMLResponse)
 async def history(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/history/{get_lang(request)}/")
+    return RedirectResponse(url=f"/{get_lang(request)}/history/")
+
+
+@app.get("/github/")
+async def github(request: Request) -> templates.TemplateResponse:
+    return RedirectResponse(url=f"/{get_lang(request)}/github/")
 
 
 @app.get("/{lang}/", response_class=HTMLResponse)
@@ -101,57 +106,59 @@ async def home(request: Request, lang: str) -> templates.TemplateResponse:
     return templates.TemplateResponse('home.html', {'request': request})
 
 
-@app.get("/history/{lang}/", response_class=HTMLResponse)
-async def history(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('history.html', {'request': request})
-
-
-@app.get("/web/{lang}/", response_class=HTMLResponse)
+@app.get("/{lang}/web/", response_class=HTMLResponse)
 async def web(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('web.html', {'request': request})
 
 
-@app.get("/pdf/{lang}/")
+@app.get("/{lang}/pdf/")
 async def pdf(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('pdf.html', {'request': request})
 
 
-@app.get("/image/{lang}/")
+@app.get("/{lang}/image/")
 async def image(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('image.html', {'request': request})
 
 
-@app.get("/recording/{lang}/")
+@app.get("/{lang}/recording/")
 def recording_desktop(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('record.html', {'request': request})
 
 
-@app.get("/streaming/{lang}/")
+@app.get("/{lang}/streaming/")
 async def read_index(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('streaming.html', {'request': request})
 
 
+@app.get("/{lang}/history/", response_class=HTMLResponse)
+async def history(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('history.html', {'request': request})
+
+
+@app.get("/{lang}/github/")
+async def github(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('github.html', {'request': request})
+
+
 #
 # @app.get("/desktop/")
 # async def desktop(request: Request) -> templates.TemplateResponse:
 #     return templates.TemplateResponse('desktop_share.html', {'request': request})
-
-
-@app.get("/github/")
-async def github(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('github.html', {'request': request})
 
 
 @app.get("/favicon.ico")

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-31 01:56+0000\n"
+"POT-Creation-Date: 2022-12-31 02:35+0000\n"
 "PO-Revision-Date: 2022-12-30 08:33+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -42,36 +42,96 @@ msgstr ""
 msgid "WebScreenトップページ"
 msgstr ""
 
-#: templates/base.html:59
+#: templates/base.html:60
 msgid "ホーム"
 msgstr ""
 
-#: templates/base.html:60
+#: templates/base.html:62
 msgid "Web"
 msgstr ""
 
-#: templates/base.html:61 templates/image.html:30
+#: templates/base.html:63 templates/image.html:30
 msgid "画像"
 msgstr ""
 
-#: templates/base.html:62 templates/pdf.html:30
+#: templates/base.html:64 templates/pdf.html:30
 msgid "PDF"
 msgstr ""
 
-#: templates/base.html:63
+#: templates/base.html:65
 msgid "画面録画"
 msgstr ""
 
-#: templates/base.html:64 templates/streaming.html:33
+#: templates/base.html:66 templates/streaming.html:33
 msgid "画面共有"
 msgstr ""
 
-#: templates/base.html:65
+#: templates/base.html:67 templates/history.html:9
 msgid "履歴"
 msgstr ""
 
-#: templates/base.html:77
+#: templates/base.html:79
 msgid "Powered by OSS集会"
+msgstr ""
+
+#: templates/browser-error-message.html:2
+msgid "お使いのブラウザではVRChatへの画面共有機能はご利用いただけません。"
+msgstr ""
+
+#: templates/browser-error-message.html:3
+msgid "Google Chrome か Microsoft Edge をご利用ください。"
+msgstr ""
+
+#: templates/github.html:2
+msgid "Web Screen|VRChatの動画プレイヤーに動画化したGitHubのソースコードを表示できます"
+msgstr ""
+
+#: templates/github.html:22
+msgid "Web Screen(Beta)"
+msgstr ""
+
+#: templates/github.html:23
+msgid "VRChatの動画プレイヤーにGitHubのソースコードを表示できます"
+msgstr ""
+
+#: templates/github.html:24
+msgid "動画化したいGitHubプロジェクトのURLを貼り付けてください"
+msgstr ""
+
+#: templates/github.html:31 templates/web.html:19
+msgid "貼り付け"
+msgstr ""
+
+#: templates/github.html:38
+msgid "表示したいファイル名やファイルタイプをカンマ区切りで入力してください"
+msgstr ""
+
+#: templates/github.html:41
+msgid "ブラウザのサイズ"
+msgstr ""
+
+#: templates/github.html:55
+msgid "キャッシュ"
+msgstr ""
+
+#: templates/github.html:58
+msgid "動画を作成"
+msgstr ""
+
+#: templates/history.html:2
+msgid "履歴 Web Screen|VRChatの動画プレイヤー用に変換した動画の履歴"
+msgstr ""
+
+#: templates/history.html:10
+msgid "過去に動画化したURLを「コピー」して、VRChatのプレイヤーに表示できます。"
+msgstr ""
+
+#: templates/history.html:41
+msgid "履歴は動画を作成してから14日で消えます。"
+msgstr ""
+
+#: templates/history.html:42
+msgid "ダウンロードして自分のパソコンに動画を保存したり、Twitterに投稿できます。"
 msgstr ""
 
 #: templates/home.html:15
@@ -176,8 +236,52 @@ msgstr ""
 msgid "順番を設定するには01、02、03...のようにファイル名を設定してください。"
 msgstr ""
 
-#: templates/image.html:37 templates/pdf.html:53
-msgid "動画を作成"
+#: templates/image.html:37 templates/pdf.html:53 templates/web.html:69
+msgid "動画に変換"
+msgstr ""
+
+#: templates/note.html:5
+msgid "注意事項"
+msgstr ""
+
+#: templates/note.html:10
+msgid "アップロードした、画像やPDFファイルはサーバーに保存されません。"
+msgstr ""
+
+#: templates/note.html:13
+msgid "動画ファイルは14日間サーバーに保存されます。"
+msgstr ""
+
+#: templates/note.html:16
+msgid "動画ファイルはURLを知っている人であれば誰でもダウンロードできます。"
+msgstr ""
+
+#: templates/note.html:19
+msgid "動画の内容について解析を行うことはありません。"
+msgstr ""
+
+#: templates/note.html:22
+msgid "のりちゃんが無償で提供するものであり、変換サービスのサービスレベルに保証はありません。"
+msgstr ""
+
+#: templates/note.html:25
+msgid "本サービスを利用することで生じたいかなる損害についても補償致しかねます。"
+msgstr ""
+
+#: templates/note.html:28
+msgid "本サービスは、個人、法人、団体を問わず無償でご利用いただけます。"
+msgstr ""
+
+#: templates/output-area.html:4
+msgid "下矢印"
+msgstr ""
+
+#: templates/output-area.html:16
+msgid "「Copy」してVRChatの動画プレイヤーに貼り付けてください。"
+msgstr ""
+
+#: templates/output-area.html:17
+msgid "URLをクリックすると動画を確認できます。"
 msgstr ""
 
 #: templates/pdf.html:2
@@ -194,6 +298,14 @@ msgstr ""
 
 #: templates/pdf.html:35
 msgid "1ページの表示時間"
+msgstr ""
+
+#: templates/pdf.html:41 templates/web.html:39
+msgid "1秒"
+msgstr ""
+
+#: templates/pdf.html:48
+msgid "2秒"
 msgstr ""
 
 #: templates/pdf.html:63
@@ -328,10 +440,6 @@ msgstr ""
 msgid "動画化したいWebページのURLを貼り付けてください"
 msgstr ""
 
-#: templates/web.html:19
-msgid "貼り付け"
-msgstr ""
-
 #: templates/web.html:26
 msgid "ページの長さ（最大）"
 msgstr ""
@@ -340,8 +448,79 @@ msgstr ""
 msgid "待ち時間: (ページの読み込みが正しくできなかった時は秒数を長くしてください。）"
 msgstr ""
 
-#: templates/web.html:69
-msgid "動画に変換"
+#: templates/web.html:47
+msgid "5秒"
+msgstr ""
+
+#: templates/web.html:55
+msgid "10秒"
+msgstr ""
+
+#: templates/web.html:62
+msgid "15秒"
+msgstr ""
+
+#: templates/how-to/image.html:3 templates/how-to/pdf.html:3
+#: templates/how-to/record.html:3 templates/how-to/streaming.html:3
+#: templates/how-to/web.html:3
+msgid "使い方"
+msgstr ""
+
+#: templates/how-to/image.html:16
+msgid "共有したい画像を選択します。"
+msgstr ""
+
+#: templates/how-to/image.html:17
+msgid "「Ctr+クリック」で複数ファイル個別選択。"
+msgstr ""
+
+#: templates/how-to/image.html:18
+msgid "「Shift+クリック」で複数ファイル選択"
+msgstr ""
+
+#: templates/how-to/image.html:32
+msgid "「動画を作成」ボタンを押して画像を動画に変換します。"
+msgstr ""
+
+#: templates/how-to/image.html:46 templates/how-to/pdf.html:44
+#: templates/how-to/record.html:45 templates/how-to/web.html:44
+msgid "動画のURLを「Copy」して、VRChatの動画プレイヤーに貼り付けます。"
+msgstr ""
+
+#: templates/how-to/pdf.html:16
+msgid "スライド化したいPDFを選択します。"
+msgstr ""
+
+#: templates/how-to/pdf.html:30
+msgid "「動画を作成」ボタンを押してPDFを動画に変換します。"
+msgstr ""
+
+#: templates/how-to/record.html:16
+msgid "「録画開始」を押して、共有したい画面を選択します。"
+msgstr ""
+
+#: templates/how-to/record.html:31
+msgid "録画したい画面を表示して、しばらく撮影を続けたら「停止」を押します。"
+msgstr ""
+
+#: templates/how-to/streaming.html:16
+msgid "「画面共有」を押して、「画面全体」を選択します。"
+msgstr ""
+
+#: templates/how-to/streaming.html:30
+msgid "「Copy」を押してURLをコピーします"
+msgstr ""
+
+#: templates/how-to/streaming.html:44
+msgid "VRChatの動画プレイヤーの「LIVE」を選択して、URLを貼り付けます。"
+msgstr ""
+
+#: templates/how-to/web.html:16
+msgid "共有したいウェブページを開いて、URLをコピーします。"
+msgstr ""
+
+#: templates/how-to/web.html:30
+msgid "WebScreeの「貼り付け」ボタンを押してURLを貼り付けます。"
 msgstr ""
 
 #~ msgid "こんにちは"

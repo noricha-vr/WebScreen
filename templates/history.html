@@ -1,14 +1,13 @@
 {% extends 'base.html' %}
-{% block title %}履歴 Web Screen|VRChatの動画プレイヤー用に変換した動画の履歴{% endblock %}
+{% block title %}{{ _("履歴 Web Screen|VRChatの動画プレイヤー用に変換した動画の履歴") }}{% endblock %}
 {% block content %}
 
     <div class="container">
         <section class="section mt-5 mb-5">
             <div class="row mb-4">
                 <div class="col text-center">
-                    <h1 class="h1 mb-3">履歴</h1>
-                    <h2 class="h6 text-secondary">過去に動画化したURLを「コピー」して<br/>
-                        VRChatのプレイヤーに表示できます。
+                    <h1 class="h1 mb-3">{{ _("履歴") }}</h1>
+                    <h2 class="h6 text-secondary">{{ _("過去に動画化したURLを「コピー」して、VRChatのプレイヤーに表示できます。") }}
                     </h2>
                 </div>
             </div>
@@ -39,8 +38,8 @@
                 </div>
             </div>
             <div class="row">
-                履歴は動画を作成してから14日で消えます。
-                ダウンロードして自分のパソコンに動画を保存したり、Twitterに投稿できます。
+                {{ _("履歴は動画を作成してから14日で消えます。") }}
+                {{ _("ダウンロードして自分のパソコンに動画を保存したり、Twitterに投稿できます。") }}
             </div>
         </section>
     </div>
