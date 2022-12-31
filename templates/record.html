@@ -1,26 +1,25 @@
 {% extends 'base.html' %}
-{% block title %}{{ _("Web Screen|パソコンの画面録画をしてVRChatに表示できます") }}{% endblock %}
+{% block title %}{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示") }}{% endblock %}
 {% block meta_tag %}
-    <meta property="og:type" content="website"/>
-    <meta property="og:url" content="https://web-screen.net/record-screen/"/>
+    <meta property="og:title" content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示") }}"/>
+    <meta property="og:type" content="article"/>
     <meta name="description"
-          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
+          content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示できます。") }}
+          {{ _("画面を録画して、録画した動画のURLを取得できます。") }}
+          {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。") }}">
     <meta property="og:description"
-          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
-    <meta property="og:image"
-          content="https://storage.googleapis.com/noricha-public/web-screen/image/web-screen-og-image.png"/>
+          content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示できます。") }}
+          {{ _("画面を録画して、録画した動画のURLを取得できます。") }}
+          {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。") }}">
 {% endblock %}
+
 {% block content %}
     <div class="container">
         <section class="section mt-5">
             <div class="row justify-content-md-center">
                 <div class="col mb-4 text-center">
-                    <h1 class="h1 mb-3">{{ _("パソコンの画面を録画") }}</h1>
-                    <h2 class="h6 text-secondary">{{ _("パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます") }}</h2>
+                    <h2 class="h1 mb-3">{{ _("パソコンの画面を録画") }}</h2>
+                    <h1 class="h6 text-secondary">{{ _("パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます") }}</h1>
                 </div>
             </div>
             <div class="row bg-light border p-5 rounded shadow">

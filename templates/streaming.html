@@ -1,27 +1,26 @@
 {% extends 'base.html' %}
-{% block title %}{{ _("Web Screen|VRChatでGithubリポジトリのソースコードを表示") }}{% endblock %}
+{% block title %}{{ _("Web Screenでパソコンの画面をVRChatに共有") }}{% endblock %}
 {% block meta_tag %}
-    <meta property="og:url" content="https://web-screen.net/desktop/"/>
+    <meta property="og:title" content="{{ _("Web Screenでパソコンの画面をVRChatに共有") }}"/>
+    <meta property="og:type" content="article"/>
     <meta name="description"
-          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
+          content="{{ _("Web Screenでパソコンの画面をVRChatに共有できます。") }}
+          {{ _("ストリーミング用のURLを取得できます。") }}
+          {{ _("URLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。") }}">
     <meta property="og:description"
-          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
-    <meta property="og:image"
-          content="https://storage.googleapis.com/noricha-public/web-screen/image/web-screen-og-image.png"/>
+          content="{{ _("Web Screenでパソコンの画面をVRChatに共有できます。") }}
+          {{ _("ストリーミング用のURLを取得できます。") }}
+          {{ _("URLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。") }}">
 {% endblock %}
-{% block content %}
 
+{% block content %}
 
     <div class="container">
         <section class="section mt-5">
             <div class="row justify-content-md-center">
                 <div class="col mb-4 text-center">
-                    <h1 class="h1 mb-3">{{ _("VRChatの動画プレイヤーに画面共有") }}</h1>
-                    <h2 class="h6 text-secondary">{{ _("パソコンの画面をVRChatの動画プレイヤーに画面共有できます") }}</h2>
+                    <h2 class="h1 mb-3">{{ _("VRChatの動画プレイヤーに画面共有") }}</h2>
+                    <h1 class="h6 text-secondary">{{ _("パソコンの画面をVRChatの動画プレイヤーに画面共有できます") }}</h1>
                 </div>
             </div>
             {% include 'browser-error-message.html' %}
