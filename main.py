@@ -155,10 +155,10 @@ async def github(request: Request, lang: str) -> templates.TemplateResponse:
     return templates.TemplateResponse('github.html', {'request': request})
 
 
-#
-# @app.get("/desktop/")
-# async def desktop(request: Request) -> templates.TemplateResponse:
-#     return templates.TemplateResponse('desktop_share.html', {'request': request})
+@app.get("/robots.txt/")
+def robots_txt():
+    babel.locale = 'en'
+    return {"message": "User-agent: *\nAllow: /"}
 
 
 @app.get("/favicon.ico")
