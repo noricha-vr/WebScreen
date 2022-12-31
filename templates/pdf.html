@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Web Screen|VRChatのスライドシステム用に画像を動画化できます{% endblock %}
+{% block title %}{{ _("Web Screen|PDFを動画に変換して、VRChatのスライドシステムに表示できます") }}{% endblock %}
 
 {% block meta_tag %}
     <meta property="og:url" content="https://web-screen.net/image/"/>
@@ -20,19 +20,19 @@
         <section class="section mt-5">
             <div class="row justify-content-md-center">
                 <div class="col mb-4 text-center">
-                    <h1 class="h1 mb-3">PDFを動画に変換</h1>
-                    <h2 class="h6 text-secondary">VRChatのスライドシステム用にPDFを動画化できます</h2>
+                    <h1 class="h1 mb-3">{{ _("PDFを動画に変換") }}</h1>
+                    <h2 class="h6 text-secondary">{{ _("PDFを動画に変換して、VRChatのスライドシステムに表示できます") }}</h2>
                 </div>
             </div>
             <div class="col-12 bg-light border col-12 p-5 rounded shadow">
                 <form class="row g-3 justify-content-md-center" id="image_form" enctype="multipart/form-data">
-                    <h3 class="h5 mb-3">動画化したいPDFを選択してください</h3>
-                    <label for="files" class="visually-hidden">PDF</label>
+                    <h3 class="h5 mb-3">{{ _("動画に変換したいPDFを選択してください") }}</h3>
+                    <label for="files" class="visually-hidden">{{ _("PDF") }}</label>
                     <input type="file" accept="application/pdf" multiple class="form-control border border-dark"
                            id="files" name="files"
                            placeholder="https://">
                     <div class="mt-3">
-                        <div>1ページの表示時間:</div>
+                        <div>{{ _("1ページの表示時間") }}:</div>
                         <div class="form-check-inline">
                             <input class="form-check-input" type="radio" name="frame_sec" id="1"
                                    value="1"
@@ -50,7 +50,7 @@
                         </div>
                     </div>
                     <div class="mt-3 text-center">
-                        <div id="submit" class="btn btn-primary d-block">動画を作成</div>
+                        <div id="submit" class="btn btn-primary d-block">{{ _("動画を作成") }}</div>
                     </div>
                     <div class=" progress visually-hidden">
                         <div class="progress-bar bg-info" role="progressbar" id="progress_bar"
@@ -60,7 +60,7 @@
                 </form>
                 {% include 'output-area.html' %}
                 <div class="mt-4 text-center">
-                    おすすめのスライドシステム:
+                    {{ _("おすすめのスライドシステム") }}:
                     <a href="https://booth.pm/ja/items/4141632" target="_blank">UnaSlides</a>
                 </div>
             </div>
