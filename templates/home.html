@@ -1,38 +1,53 @@
 {% extends 'base.html' %}
-{% block title %}Web Screen|VRChatの動画プレイヤー用にウェブページを動画化できます{% endblock %}
+{% block title %}{{ _("Web Screen|VRChatの動画プレイヤー用にWebページを動画に変換") }}{% endblock %}
+{% block meta_tag %}
+    <meta property="og:url" content="{{ request.url }}"/>
+    <meta property="og:title" content="{{ _("Web Screen|Web、画像、PDFをVRChatで見られる動画に変換") }}"/>
+    <meta name="description"
+          content="{{ _("Web ScreenはWeb、画像、PDFをVRChatで見られる動画に変換するサービスです。") }}
+          {{ _("変換された動画のURLを取得できます。") }}
+          {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内でフレンドと共有できます。") }}
+          {{ _("更に、パソコンの画面録画や画面共有もでき便利な機能があります。") }}">
+    <meta property="og:description"
+          content="{{ _("Web ScreenはWeb、画像、PDFをVRChatで見られる動画に変換するサービスです。") }}
+          {{ _("変換された動画のURLを取得できます。") }}
+          {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内でフレンドと共有できます。") }}
+          {{ _("更に、パソコンの画面録画や画面共有もでき便利な機能があります。") }}">">
+    <meta property="og:type" content="article"/>
+{% endblock %}
 {% block content %}
     <style>
-
         a {
             text-decoration: none;
         }
     </style>
     <div class="">
         <div class="px-4 my-5 py-3 text-center" style="margin-top: 3rem; padding-top: 3rem;">
-            <h1 class="display-5 fw-bold">WebScreen</h1>
+            <div class="display-5 fw-bold">WebScreen</div>
             <div class="col-lg-6 mx-auto">
-                <p class="h6 text-secondary mb-4">
-                    {{ _("WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換システムです。") }}<br/>
+                <h1 class="h6 text-secondary mb-4">
+                    {{ _("WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換サービスです。") }}
+                </h1>
                 <div>
                     <a href="/web/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/web.png"
-                             class="top-icon" alt="{{ _("webページを動画に変換") }}">
+                             class="top-icon" alt="{{ _("webページを動画に変換") }}" width="80px" height="80px">
                     </a>
                     <a href="/image/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/image.png"
-                             class="top-icon" alt="{{ _("画像を動画に変換") }}">
+                             class="top-icon" alt="{{ _("画像を動画に変換") }}" width="80px" height="80px">
                     </a>
                     <a href="/pdf/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/pdf.png"
-                             class="top-icon" alt="{{ _("PDFを画像に変換") }}">
+                             class="top-icon" alt="{{ _("PDFを画像に変換") }}" width="80px" height="80px">
                     </a>
                     <a href="/record/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/record.png"
-                             class="top-icon" alt="{{ _("画面録画をして、VRChatに共有") }}">
+                             class="top-icon" alt="{{ _("画面録画をして、VRChatに共有") }}" width="80px" height="80px">
                     </a>
                     <a href="/streaming/">
                         <img src="https://storage.googleapis.com/noricha-public/web-screen/image/icon/streaming.png"
-                             class="top-icon" alt="{{ _("VRChatに画面共有") }}">
+                             class="top-icon" alt="{{ _("VRChatに画面共有") }}" width="80px" height="80px">
                     </a>
                 </div>
             </div>
@@ -52,7 +67,7 @@
             <div class="col-md-5">
                 <a href="/web/">
                     <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/url.gif"
-                         alt="{{ _("webページを動画に変換") }}" class="img-fluid"></a>
+                         alt="{{ _("webページを動画に変換") }}" class="img-fluid" width="300px" height="300px"></a>
             </div>
         </div>
         <div class="row p-5">
@@ -66,7 +81,7 @@
             <div class="col-md-5 order-md-1">
                 <a href="/image/">
                     <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/image.gif"
-                         alt="{{ _("webページを動画に変換") }}" class="img-fluid">
+                         alt="{{ _("webページを動画に変換") }}" class="img-fluid" width="300px" height="300px">
                 </a>
             </div>
         </div>
@@ -82,7 +97,7 @@
             <div class="col-md-5 order-md-1">
                 <a href="/pdf/">
                     <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/pdf.png"
-                         alt="{{ _("webページを動画に変換") }}" class="img-fluid">
+                         alt="{{ _("webページを動画に変換") }}" class="img-fluid" width="300px" height="300px">
                 </a>
             </div>
         </div>
@@ -96,7 +111,7 @@
             <div class="col-md-5 order-md-1">
                 <a href="/record/">
                     <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/rec.gif"
-                         alt="{{ _("webページを動画に変換") }}" class="img-fluid">
+                         alt="{{ _("webページを動画に変換") }}" class="img-fluid" width="300px" height="300px">
                 </a>
             </div>
         </div>
@@ -112,7 +127,7 @@
             <div class="col-md-5">
                 <a href="/streaming/">
                     <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/share.gif"
-                         alt="{{ _("webページを動画に変換") }}" class="img-fluid">
+                         alt="{{ _("webページを動画に変換") }}" class="img-fluid" width="300px" height="300px">
                 </a>
             </div>
         </div>
@@ -126,7 +141,7 @@
             <div class="col-md-5 order-md-1">
                 <a href="/history/">
                     <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/history.png"
-                         alt="{{ _("webページを動画に変換") }}" class="img-fluid">
+                         alt="{{ _("webページを動画に変換") }}" class="img-fluid" width="300px" height="300px">
                 </a>
             </div>
         </div>

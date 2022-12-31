@@ -1,5 +1,19 @@
 {% extends 'base.html' %}
 {% block title %}{{ _("Web Screen|VRChatの動画プレイヤー用にウェブページを動画に変換") }}{% endblock %}
+{% block meta_tag %}
+    <meta property="og:url" content="https://web-screen.net/"/>
+    <meta name="description"
+          content="{{ _("Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換するサービスです。") }}
+          {{ _("このページではWebページを動画に変換できます。") }}
+          {{ _("変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。") }}">
+    <meta property="og:description"
+          content="{{ _("Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換するサービスです。") }}
+          {{ _("変換された動画のURLを取得できます。動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内でフレンドと共有できます。") }}
+          {{ _("更に、パソコンの画面録画や画面共有もでき便利な機能があります。") }}">
+    <meta property="og:image"
+          content="{{ _("https://storage.googleapis.com/noricha-public/web-screen/image/og-image/web-screen-ja.webp") }}"/>
+    <meta property="og:type" content="article"/>
+{% endblock %}
 {% block content %}
     <div class="container">
         <section class="section mt-5">
