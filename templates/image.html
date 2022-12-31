@@ -1,15 +1,17 @@
 {% extends 'base.html' %}
-{% block title %}{{ _("Web Screen|画像を動画に変換して、VRChatの動画プレイヤーに表示") }}{% endblock %}
+{% block title %}{{ _("Web Screenで画像をVRChatで見られる動画に変換") }}{% endblock %}
 
 {% block meta_tag %}
-    <meta property="og:title" content="{{ _("Web Screen|Web、画像、PDFをVRChatで見られる動画に変換") }}"/>
+    <meta property="og:title" content="{{ _("Web Screenで画像をVRChatで見られる動画に変換") }}"/>
     <meta property="og:type" content="article"/>
     <meta name="description"
           content="{{ _("Web Screenに画像を入力すると動画に変換してくれます。") }}
-          {{ _("変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると画像表示できます。") }}">
+          {{ _("変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると画像を表示できます。") }}
+          {{ _("ワールド巡りをした写真や、フレンドと撮った写真を一緒に見返せます。") }}">
     <meta property="og:description"
           content="{{ _("Web Screenに画像を入力すると動画に変換してくれます。") }}
-          {{ _("変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると画像表示できます。") }}">
+          {{ _("変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると画像を表示できます。") }}
+          {{ _("ワールド巡りをした写真や、フレンドと撮った写真を一緒に見返せます。") }}">
 {% endblock %}
 
 {% block content %}

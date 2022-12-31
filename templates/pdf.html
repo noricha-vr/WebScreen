@@ -1,32 +1,30 @@
 {% extends 'base.html' %}
-{% block title %}{{ _("Web Screen|PDFを動画に変換して、VRChatのスライドシステムに表示できます") }}{% endblock %}
+{% block title %}{{ _("Web ScreenでPDFをVRChatで見られる動画に変換") }}{% endblock %}
 
 {% block meta_tag %}
-    <meta property="og:url" content="https://web-screen.net/image/"/>
+    <meta property="og:title" content="{{ _("Web ScreenでPDFをVRChatで見られる動画に変換") }}"/>
+    <meta property="og:type" content="article"/>
     <meta name="description"
-          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
+          content="{{ _("Web ScreenにPDFを入力すると動画に変換してくれます。") }}
+          {{ _("変換された動画のURLをVRChat内の動画プレイヤーやスライドシステムに貼り付けるとPDF表示できます。") }}">
     <meta property="og:description"
-          content="Web ScreenはVRChatでウェブページを表示するためのシステムです。URLを入力すると動画に変換してくれます。
-          変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると、ウェブページを表示できます。
-          ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。">
-    <meta property="og:image"
-          content="https://storage.googleapis.com/noricha-public/web-screen/image/web-screen-og-image.png"/>
+          content="{{ _("Web ScreenにPDFを入力すると動画に変換してくれます。") }}
+          {{ _("変換された動画のURLをVRChat内の動画プレイヤーやスライドシステムに貼り付けるとPDF表示できます。") }}">
 {% endblock %}
+
 
 {% block content %}
     <div class="container">
         <section class="section mt-5">
             <div class="row justify-content-md-center">
                 <div class="col mb-4 text-center">
-                    <h1 class="h1 mb-3">{{ _("PDFを動画に変換") }}</h1>
-                    <h2 class="h6 text-secondary">{{ _("PDFを動画に変換して、VRChatのスライドシステムに表示できます") }}</h2>
+                    <h2 class="h1 mb-3">{{ _("PDFを動画に変換") }}</h2>
+                    <h1 class="h6 text-secondary">{{ _("PDFを動画に変換して、VRChatのスライドシステムに表示できます") }}</h1>
                 </div>
             </div>
             <div class="col-12 bg-light border col-12 p-5 rounded shadow">
                 <form class="row g-3 justify-content-md-center" id="image_form" enctype="multipart/form-data">
-                    <h3 class="h5 mb-3">{{ _("動画に変換したいPDFを選択してください") }}</h3>
+                    <h2 class="h5 mb-3">{{ _("動画に変換したいPDFを選択してください") }}</h2>
                     <label for="files" class="visually-hidden">{{ _("PDF") }}</label>
                     <input type="file" accept="application/pdf" multiple class="form-control border border-dark"
                            id="files" name="files"
