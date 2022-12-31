@@ -28,19 +28,19 @@
                 <div class="col mt-3">
                     <div id="results">
                         <div class="mb-3 row visually-hidden" name="result">
-                            <div class="col-2">
+                            <div class="col-3 col-sm-2">
                                 <button name="copy_button" style="margin-right: 10px; margin-left: 5px"
                                         class="btn btn-outline-primary w-100">
                                     Copy
                                 </button>
                             </div>
-                            <div class="col-3 col-md-2">
+                            <div class="col-4 col-sm-3 col-md-2">
                                 <button name="copy_button"
                                         class="btn btn-outline-secondary w-100">
                                     Download
                                 </button>
                             </div>
-                            <div class="col-7 col-md-8">
+                            <div class="col-5 col-sm-7 col-md-8">
                                 <input type="text" name="movie_url"
                                        value="" name="url" class="form-control"
                                        onclick="window.open(this.textContent, '_blank');"
@@ -60,5 +60,6 @@
 
 {% block script %}
     <script src="/static/js/util.js"></script>
+    <script src="/static/js/baseFunctions.js"></script>
     <script src="/static/js/history.js"></script>
 {% endblock %}

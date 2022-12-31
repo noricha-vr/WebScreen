@@ -82,4 +82,5 @@ function createResultNode(text, href) {
 
 window.onload = () => {
     addResultsToPage();
+    selectActiveMenu();
 }
