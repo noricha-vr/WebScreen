@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-31 01:45+0000\n"
-"PO-Revision-Date: 2022-12-31 10:53+0900\n"
+"POT-Creation-Date: 2022-12-31 01:56+0000\n"
+"PO-Revision-Date: 2022-12-31 10:57+0900\n"
 "Last-Translator: \n"
 "Language-Team: en <LL@li.org>\n"
 "Language: en\n"
@@ -72,8 +72,8 @@ msgid "PDF"
 msgstr "PDF"
 
 #: templates/base.html:63
-msgid "録画"
-msgstr "Recording"
+msgid "画面録画"
+msgstr "ScreenRecording"
 
 #: templates/base.html:64 templates/streaming.html:33
 msgid "画面共有"
@@ -248,7 +248,7 @@ msgstr "Web Screen|You can record your computer screen and display it on VRChat"
 
 #: templates/record.html:23
 msgid "パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます"
-msgstr ""
+msgstr "Record your computer screen and play it back in the VRChat video player"
 
 #: templates/record.html:29
 msgid "録画開始"

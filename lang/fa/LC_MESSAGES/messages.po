@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-31 01:45+0000\n"
+"POT-Creation-Date: 2022-12-31 01:56+0000\n"
 "PO-Revision-Date: 2022-12-30 08:33+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fa\n"
@@ -59,7 +59,7 @@ msgid "PDF"
 msgstr ""
 
 #: templates/base.html:63
-msgid "録画"
+msgid "画面録画"
 msgstr ""
 
 #: templates/base.html:64 templates/streaming.html:33
@@ -368,5 +368,8 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "ウェブページの他に画像やPDFの変換、パソコンの画面共有もできます。"
+#~ msgstr ""
+
+#~ msgid "録画"
 #~ msgstr ""
 

@@ -220,8 +220,8 @@ async def read_index(request: Request) -> templates.TemplateResponse:
     return templates.TemplateResponse('streaming.html', {'request': request})
 
 
-@app.get("/record/")
-def record_desktop(request: Request) -> templates.TemplateResponse:
+@app.get("/recording/")
+def recording_desktop(request: Request) -> templates.TemplateResponse:
     """
     Recode user desktop or window. Then post the movie to /api/save-movie/
     """
