@@ -104,62 +104,6 @@ async def robots_txt():
     return FileResponse("static/robots.txt")
 
 
-@app.get("/{lang}/", response_class=HTMLResponse)
-async def home(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('home.html', {'request': request})
-
-
-@app.get("/{lang}/web/", response_class=HTMLResponse)
-async def web(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('web.html', {'request': request})
-
-
-@app.get("/{lang}/pdf/")
-async def pdf(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('pdf.html', {'request': request})
-
-
-@app.get("/{lang}/image/")
-async def image(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('image.html', {'request': request})
-
-
-@app.get("/{lang}/recording/")
-def recording_desktop(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('record.html', {'request': request})
-
-
-@app.get("/{lang}/streaming/")
-async def read_index(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('streaming.html', {'request': request})
-
-
-@app.get("/{lang}/history/", response_class=HTMLResponse)
-async def history(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('history.html', {'request': request})
-
-
-@app.get("/{lang}/github/")
-async def github(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('github.html', {'request': request})
-
-
 @app.get("/favicon.ico")
 async def favicon() -> FileResponse:
     return FileResponse((STATIC_DIR / 'favicon.ico'))
@@ -414,6 +358,62 @@ def delete_movie() -> dict:
             file.unlink()
             deleted_files.append(str(file))
     return {"message": "ok", "deleted_files": deleted_files}
+
+
+@app.get("/{lang}/", response_class=HTMLResponse)
+async def home(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('home.html', {'request': request})
+
+
+@app.get("/{lang}/web/", response_class=HTMLResponse)
+async def web(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('web.html', {'request': request})
+
+
+@app.get("/{lang}/pdf/")
+async def pdf(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('pdf.html', {'request': request})
+
+
+@app.get("/{lang}/image/")
+async def image(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('image.html', {'request': request})
+
+
+@app.get("/{lang}/recording/")
+def recording_desktop(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('record.html', {'request': request})
+
+
+@app.get("/{lang}/streaming/")
+async def read_index(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('streaming.html', {'request': request})
+
+
+@app.get("/{lang}/history/", response_class=HTMLResponse)
+async def history(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('history.html', {'request': request})
+
+
+@app.get("/{lang}/github/")
+async def github(request: Request, lang: str) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('github.html', {'request': request})
 
 
 if __name__ == '__main__':
