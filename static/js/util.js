@@ -21,7 +21,7 @@ function saveResult(result) {
         return;
     }
     let expires = new Date(result.delete_at * 1000);
-    let cookie = `${result.name}=${result.url}; expires=${expires.toUTCString()}; path=/`;
+    let cookie = `${result.name}=${result.url}; expires=${expires.toUTCString()}; path=/; SameSite=None; Secure`;
     console.log(`Saving result in cookie: ${cookie}`);
     document.cookie = cookie;
 }
