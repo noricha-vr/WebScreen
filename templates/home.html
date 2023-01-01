@@ -17,6 +17,11 @@
         a {
             text-decoration: none;
         }
+
+        .img-fixed-size {
+            width: 300px;
+            height: 300px;
+        }
     </style>
     <div class="">
         <div class="px-4 my-5 py-3 text-center" style="margin-top: 3rem; padding-top: 3rem;">
@@ -63,8 +68,11 @@
             </div>
             <div class="col-md-5 text-center">
                 <a href="/web/">
-                    <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/url.gif"
-                         alt="{{ _("webページを動画に変換") }}" class="" width="300px" height="300px"></a>
+                    <video muted autoplay playsinline loop class="img-fixed-size"
+                           src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/url.webm"
+                           poster="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/url-600.jpg">
+                    </video>
+                </a>
             </div>
         </div>
         <div class="row p-5">
@@ -77,8 +85,9 @@
             </div>
             <div class="col-md-5 order-md-1 text-center">
                 <a href="/image/">
-                    <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/image.gif"
-                         alt="{{ _("写真を動画に変換") }}" class="img-fluid" width="300px" height="300px">
+                    <video muted autoplay playsinline loop class="img-fixed-size"
+                           src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/image.webm">
+                    </video>
                 </a>
             </div>
         </div>
@@ -94,7 +103,7 @@
             <div class="col-md-5 order-md-1  text-center">
                 <a href="/pdf/">
                     <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/pdf.png"
-                         alt="{{ _("PDFを動画に変換") }}" class="img-fluid" width="300px" height="300px">
+                         alt="{{ _("PDFを動画に変換") }}" class="img-fluid img-fixed-size"></a>
                 </a>
             </div>
         </div>
@@ -107,8 +116,9 @@
             </div>
             <div class="col-md-5 order-md-1 text-center">
                 <a href="/record/">
-                    <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/rec.gif"
-                         alt="{{ _("パソコンの画面を録画") }}" class="img-fluid" width="300px" height="300px">
+                    <video muted autoplay playsinline loop class="img-fixed-size"
+                           src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/rec.webm">
+                    </video>
                 </a>
             </div>
         </div>
@@ -123,8 +133,9 @@
             </div>
             <div class="col-md-5 text-center">
                 <a href="/streaming/">
-                    <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/share.gif"
-                         alt="{{ _("VRChatのビデオプレーヤーに画面共有") }}" class="img-fluid" width="300px" height="300px">
+                    <video muted autoplay playsinline loop class="img-fixed-size"
+                           src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/share.webm">
+                    </video>
                 </a>
             </div>
         </div>
@@ -138,12 +149,12 @@
             <div class="col-md-5 order-md-1 text-center">
                 <a href="/history/">
                     <img src="https://storage.googleapis.com/noricha-public/web-screen/image/big-icons/history.png"
-                         alt="{{ _("履歴を確認") }}" class="img-fluid" width="300px" height="300px">
+                         alt="{{ _("履歴を確認") }}" class="img-fluid" class="img-fluid img-fixed-size"></a>
                 </a>
             </div>
         </div>
     </div>
 {% endblock %}
 {% block script %}
-    <script src="/static/js/baseFunctions.js"></script>
+    <script src="/static/js/baseFunctions.js" async></script>
 {% endblock %}
