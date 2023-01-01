@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-31 15:25+0000\n"
+"POT-Creation-Date: 2023-01-01 12:33+0000\n"
 "PO-Revision-Date: 2022-12-31 23:59+0900\n"
 "Last-Translator: \n"
 "Language: en\n"
@@ -174,9 +174,7 @@ msgstr ""
 "WebScreen is a video conversion service for displaying web pages, photos,"
 " and PDFs in VRChat’s video player."
 
-#: templates/home.html:31 templates/home.html:67 templates/home.html:81
-#: templates/home.html:97 templates/home.html:111 templates/home.html:127
-#: templates/home.html:141
+#: templates/home.html:31 templates/home.html:67
 msgid "webページを動画に変換"
 msgstr "Convert web page to video"
 
@@ -214,7 +212,7 @@ msgstr "You can also use the seek bar to scroll through the page."
 msgid "さらに、Webページを他のユーザーと共有することで、そのページを話題にすることができます。"
 msgstr "Additionally, you can share a web page with other users to talk about it."
 
-#: templates/home.html:73
+#: templates/home.html:73 templates/home.html:81
 msgid "写真を動画に変換"
 msgstr "Convert photo to video"
 
@@ -224,7 +222,7 @@ msgstr ""
 "Take photos taken on a world tour or with friends and watch them together"
 " instantly in VRChat."
 
-#: templates/home.html:88 templates/pdf.html:21
+#: templates/home.html:88 templates/home.html:97 templates/pdf.html:21
 msgid "PDFを動画に変換"
 msgstr "Convert PDF to video"
 
@@ -234,7 +232,7 @@ msgstr ""
 "Export PowerPoint or Google Slides as PDF and convert it to video to "
 "start your presentation in a video player or slide system."
 
-#: templates/home.html:104 templates/record.html:21
+#: templates/home.html:104 templates/home.html:111 templates/record.html:21
 msgid "パソコンの画面を録画"
 msgstr "Record your computer screen"
 
@@ -245,7 +243,7 @@ msgstr ""
 " within VRChat, watch VRChat recordings together, or share web pages that"
 " require a login."
 
-#: templates/home.html:118
+#: templates/home.html:118 templates/home.html:127
 msgid "VRChatのビデオプレーヤーに画面共有"
 msgstr "Screen sharing to VRChat video player"
 
@@ -256,7 +254,7 @@ msgstr ""
 "to share your work, or to explain or introduce your work while viewing "
 "your computer screen."
 
-#: templates/home.html:134
+#: templates/home.html:134 templates/home.html:141
 msgid "履歴を確認"
 msgstr "View history"
 

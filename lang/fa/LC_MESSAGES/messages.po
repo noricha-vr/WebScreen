@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2022-12-31 15:25+0000\n"
+"POT-Creation-Date: 2023-01-01 12:33+0000\n"
 "PO-Revision-Date: 2022-12-30 08:33+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fa\n"
@@ -159,9 +159,7 @@ msgstr ""
 "WebScreen est un système de conversion vidéo pour afficher des pages Web,"
 " des photos et des PDF sur le lecteur vidéo VRChat."
 
-#: templates/home.html:31 templates/home.html:67 templates/home.html:81
-#: templates/home.html:97 templates/home.html:111 templates/home.html:127
-#: templates/home.html:141
+#: templates/home.html:31 templates/home.html:67
 msgid "webページを動画に変換"
 msgstr ""
 
@@ -197,7 +195,7 @@ msgstr ""
 msgid "さらに、Webページを他のユーザーと共有することで、そのページを話題にすることができます。"
 msgstr ""
 
-#: templates/home.html:73
+#: templates/home.html:73 templates/home.html:81
 msgid "写真を動画に変換"
 msgstr ""
 
@@ -205,7 +203,7 @@ msgstr ""
 msgid "ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。"
 msgstr ""
 
-#: templates/home.html:88 templates/pdf.html:21
+#: templates/home.html:88 templates/home.html:97 templates/pdf.html:21
 msgid "PDFを動画に変換"
 msgstr ""
 
@@ -213,7 +211,7 @@ msgstr ""
 msgid "パワーポイントやGoogleスライドをPDFで書き出して、動画に変換すれば動画プレイヤーやスライドシステムでプレゼンを開始。"
 msgstr ""
 
-#: templates/home.html:104 templates/record.html:21
+#: templates/home.html:104 templates/home.html:111 templates/record.html:21
 msgid "パソコンの画面を録画"
 msgstr ""
 
@@ -221,7 +219,7 @@ msgstr ""
 msgid "自分のパソコンの特定の画面をVRChat内でみんなに見せたり、VRChatの録画映像をみんなで見たり、ログインが必要なWebページを共有するのにも使えます。"
 msgstr ""
 
-#: templates/home.html:118
+#: templates/home.html:118 templates/home.html:127
 msgid "VRChatのビデオプレーヤーに画面共有"
 msgstr ""
 
@@ -229,7 +227,7 @@ msgstr ""
 msgid "自分のパソコンの画面をVRChatの動画プレイヤーにストリーミング。作業の様子を共有したり、パソコンの画面を見ながらの説明や紹介にも使えます。"
 msgstr ""
 
-#: templates/home.html:134
+#: templates/home.html:134 templates/home.html:141
 msgid "履歴を確認"
 msgstr ""
 
