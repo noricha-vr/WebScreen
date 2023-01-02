@@ -360,57 +360,68 @@ def delete_movie() -> dict:
     return {"message": "ok", "deleted_files": deleted_files}
 
 
+@app.get("/cache/{file_path:path}")
+async def read_static_file(file_path: str):
+    try:
+        file_path = STATIC_DIR / file_path
+        if file_path.exists() is False:
+            raise HTTPException(status_code=404, detail="File not found")
+        return FileResponse(file_path, headers={"Cache-Control": "public, max-age=3600"})
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+
+
 @app.get("/{lang}/", response_class=HTMLResponse)
-async def home(request: Request, lang: str) -> templates.TemplateResponse:
+async def redirect_home(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('home.html', {'request': request})
 
 
 @app.get("/{lang}/web/", response_class=HTMLResponse)
-async def web(request: Request, lang: str) -> templates.TemplateResponse:
+async def redirect_web(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('web.html', {'request': request})
 
 
 @app.get("/{lang}/pdf/")
-async def pdf(request: Request, lang: str) -> templates.TemplateResponse:
+async def redirect_pdf(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('pdf.html', {'request': request})
 
 
 @app.get("/{lang}/image/")
-async def image(request: Request, lang: str) -> templates.TemplateResponse:
+async def redirect_image(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('image.html', {'request': request})
 
 
 @app.get("/{lang}/recording/")
-def recording_desktop(request: Request, lang: str) -> templates.TemplateResponse:
+def redirect_recording(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('record.html', {'request': request})
 
 
 @app.get("/{lang}/streaming/")
-async def read_index(request: Request, lang: str) -> templates.TemplateResponse:
+async def redirect_streaming(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('streaming.html', {'request': request})
 
 
 @app.get("/{lang}/history/", response_class=HTMLResponse)
-async def history(request: Request, lang: str) -> templates.TemplateResponse:
+async def redirect_history(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('history.html', {'request': request})
 
 
 @app.get("/{lang}/github/")
-async def github(request: Request, lang: str) -> templates.TemplateResponse:
+async def redirect_github(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('github.html', {'request': request})
