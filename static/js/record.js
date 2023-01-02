@@ -17,7 +17,12 @@ stopElem.addEventListener("click", function (evt) {
 
 async function recordScreen() {
     return await navigator.mediaDevices.getDisplayMedia({
-        audio: true,
+        audio: {
+            channelCount: 2,
+            sampleRate: 44100,
+            sampleSize: 16,
+            autoGainControl: true
+        },
         video: {mediaSource: "screen"}
     });
 }
