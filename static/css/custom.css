@@ -45,3 +45,7 @@
 a {
     color: #0067ff;
 }
+
+img {
+    aspect-ratio: attr(width) / attr(height);
+}
