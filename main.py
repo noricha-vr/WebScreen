@@ -84,6 +84,11 @@ def recording_desktop(request: Request) -> templates.TemplateResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/recording/", status_code=301)
 
 
+@app.get("/record-screen/")
+def recording_desktop(request: Request) -> templates.TemplateResponse:
+    return RedirectResponse(url=f"/{get_lang(request)}/recording/", status_code=301)
+
+
 @app.get("/streaming/")
 async def read_index(request: Request) -> templates.TemplateResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/streaming/", status_code=301)
