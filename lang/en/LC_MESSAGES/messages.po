@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2023-01-01 12:33+0000\n"
+"POT-Creation-Date: 2023-01-31 07:19+0000\n"
 "PO-Revision-Date: 2022-12-31 23:59+0900\n"
 "Last-Translator: \n"
 "Language: en\n"
@@ -32,39 +32,39 @@ msgstr ""
 "https://storage.googleapis.com/noricha-public/web-screen/image/og-image"
 "/web-screen-en.webp"
 
-#: templates/base.html:46
+#: templates/base.html:47
 msgid "WebScreenトップページ"
 msgstr "WebScreen Top Page"
 
-#: templates/base.html:52
+#: templates/base.html:61
 msgid "ホーム"
 msgstr "Home"
 
-#: templates/base.html:54
+#: templates/base.html:63
 msgid "Web"
 msgstr "Web"
 
-#: templates/base.html:55 templates/image.html:29
+#: templates/base.html:65 templates/image.html:29
 msgid "画像"
 msgstr "Image"
 
-#: templates/base.html:56 templates/pdf.html:28
+#: templates/base.html:67 templates/pdf.html:28
 msgid "PDF"
 msgstr "PDF"
 
-#: templates/base.html:57
+#: templates/base.html:69
 msgid "画面録画"
 msgstr "ScreenRecording"
 
-#: templates/base.html:58 templates/streaming.html:32
+#: templates/base.html:71 templates/streaming.html:32
 msgid "画面共有"
 msgstr "ScreenSharing"
 
-#: templates/base.html:59 templates/history.html:21
+#: templates/base.html:73 templates/history.html:21
 msgid "履歴"
 msgstr "History"
 
-#: templates/base.html:71
+#: templates/base.html:86
 msgid "Powered by OSS集会"
 msgstr "Powered by OSS Assembly"
 
@@ -168,97 +168,97 @@ msgstr ""
 "Furthermore, it has convenient functions such as screen recording and "
 "screen sharing on a PC."
 
-#: templates/home.html:26
+#: templates/home.html:31
 msgid "WebScreenはVRChatの動画プレーヤーにWebページや、写真、PDFを表示するための動画変換サービスです。"
 msgstr ""
 "WebScreen is a video conversion service for displaying web pages, photos,"
 " and PDFs in VRChat’s video player."
 
-#: templates/home.html:31 templates/home.html:67
+#: templates/home.html:36
 msgid "webページを動画に変換"
 msgstr "Convert web page to video"
 
-#: templates/home.html:35 templates/image.html:22
+#: templates/home.html:40 templates/image.html:22
 msgid "画像を動画に変換"
 msgstr "Convert image to video"
 
-#: templates/home.html:39
+#: templates/home.html:44
 msgid "PDFを画像に変換"
 msgstr "Convert PDF to Image"
 
-#: templates/home.html:43
+#: templates/home.html:48
 msgid "画面録画をして、VRChatに共有"
 msgstr "Make a screen recording and share it to VRChat"
 
-#: templates/home.html:47
+#: templates/home.html:52
 msgid "VRChatに画面共有"
 msgstr "Share screen to VRChat"
 
-#: templates/home.html:56 templates/web.html:21
+#: templates/home.html:61 templates/web.html:21
 msgid "Webページを動画に変換"
 msgstr "Convert web page to video"
 
-#: templates/home.html:59
+#: templates/home.html:64
 msgid "Webページを動画に変換することで、VRChat内で動画プレイヤーを使ってそのページを表示することができます。"
 msgstr ""
 "Converting a web page to video allows you to view that page using a video"
 " player within VRChat."
 
-#: templates/home.html:60
+#: templates/home.html:65
 msgid "また、シークバーを使うことでページ内をスクロールすることができます。"
 msgstr "You can also use the seek bar to scroll through the page."
 
-#: templates/home.html:61
+#: templates/home.html:66
 msgid "さらに、Webページを他のユーザーと共有することで、そのページを話題にすることができます。"
 msgstr "Additionally, you can share a web page with other users to talk about it."
 
-#: templates/home.html:73 templates/home.html:81
+#: templates/home.html:70 templates/home.html:82 templates/home.html:88
 msgid "写真を動画に変換"
 msgstr "Convert photo to video"
 
-#: templates/home.html:76
+#: templates/home.html:85
 msgid "ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。"
 msgstr ""
 "Take photos taken on a world tour or with friends and watch them together"
 " instantly in VRChat."
 
-#: templates/home.html:88 templates/home.html:97 templates/pdf.html:21
+#: templates/home.html:98 templates/home.html:107 templates/pdf.html:21
 msgid "PDFを動画に変換"
 msgstr "Convert PDF to video"
 
-#: templates/home.html:91
+#: templates/home.html:101
 msgid "パワーポイントやGoogleスライドをPDFで書き出して、動画に変換すれば動画プレイヤーやスライドシステムでプレゼンを開始。"
 msgstr ""
 "Export PowerPoint or Google Slides as PDF and convert it to video to "
 "start your presentation in a video player or slide system."
 
-#: templates/home.html:104 templates/home.html:111 templates/record.html:21
+#: templates/home.html:114 templates/home.html:119 templates/record.html:21
 msgid "パソコンの画面を録画"
 msgstr "Record your computer screen"
 
-#: templates/home.html:106
+#: templates/home.html:116
 msgid "自分のパソコンの特定の画面をVRChat内でみんなに見せたり、VRChatの録画映像をみんなで見たり、ログインが必要なWebページを共有するのにも使えます。"
 msgstr ""
 "You can also use this to show everyone a specific screen of your computer"
 " within VRChat, watch VRChat recordings together, or share web pages that"
 " require a login."
 
-#: templates/home.html:118 templates/home.html:127
+#: templates/home.html:129 templates/home.html:136
 msgid "VRChatのビデオプレーヤーに画面共有"
 msgstr "Screen sharing to VRChat video player"
 
-#: templates/home.html:121
+#: templates/home.html:132
 msgid "自分のパソコンの画面をVRChatの動画プレイヤーにストリーミング。作業の様子を共有したり、パソコンの画面を見ながらの説明や紹介にも使えます。"
 msgstr ""
 "Stream your own computer screen to VRChat’s video player. You can use it "
 "to share your work, or to explain or introduce your work while viewing "
 "your computer screen."
 
-#: templates/home.html:134 templates/home.html:141
+#: templates/home.html:146 templates/home.html:153
 msgid "履歴を確認"
 msgstr "View history"
 
-#: templates/home.html:136
+#: templates/home.html:148
 msgid "履歴からは、過去14間に変換した動画のリンクやダウンロードが行えます。ダウンロードした動画はTwitterなどに投稿して共有できます。"
 msgstr ""
 "From History, you can link to and download videos you have converted in "
