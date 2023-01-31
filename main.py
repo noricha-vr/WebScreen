@@ -61,42 +61,42 @@ app.add_middleware(I18nMiddleware, babel=babel)
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/{get_lang(request)}/")
+    return RedirectResponse(url=f"/{get_lang(request)}/", status_code=301)
 
 
 @app.get("/web/", response_class=HTMLResponse)
 async def web(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/{get_lang(request)}/web/")
+    return RedirectResponse(url=f"/{get_lang(request)}/web/", status_code=301)
 
 
 @app.get("/image/")
 async def image(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/{get_lang(request)}/image/")
+    return RedirectResponse(url=f"/{get_lang(request)}/image/", status_code=301)
 
 
 @app.get("/pdf/")
 async def pdf(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/{get_lang(request)}/pdf/")
+    return RedirectResponse(url=f"/{get_lang(request)}/pdf/", status_code=301)
 
 
 @app.get("/recording/")
 def recording_desktop(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/{get_lang(request)}/recording/")
+    return RedirectResponse(url=f"/{get_lang(request)}/recording/", status_code=301)
 
 
 @app.get("/streaming/")
 async def read_index(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/{get_lang(request)}/streaming/")
+    return RedirectResponse(url=f"/{get_lang(request)}/streaming/", status_code=301)
 
 
 @app.get("/history/", response_class=HTMLResponse)
 async def history(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/{get_lang(request)}/history/")
+    return RedirectResponse(url=f"/{get_lang(request)}/history/", status_code=301)
 
 
 @app.get("/github/")
 async def github(request: Request) -> templates.TemplateResponse:
-    return RedirectResponse(url=f"/{get_lang(request)}/github/")
+    return RedirectResponse(url=f"/{get_lang(request)}/github/", status_code=301)
 
 
 @app.get("/robots.txt/")
