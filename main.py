@@ -1,14 +1,12 @@
-import logging
 import os
 import shutil
-import sys
 import time
 from uuid import uuid4
 from datetime import datetime
 from pathlib import Path
 from typing import List
 import uvicorn
-from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, Form, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -53,7 +51,6 @@ from utils.i18n import get_lang
 
 from i18n import babel, check_trans
 from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
-from fastapi_babel import _
 
 babel.install_jinja(templates)
 app.add_middleware(I18nMiddleware, babel=babel)
@@ -136,7 +133,6 @@ def url_to_movie(browser_setting: BrowserSetting) -> dict:
     if browser_setting.url.startswith("http") is False:
         raise HTTPException(
             status_code=400, detail="URL is not valid. Please set URL.")
-    bucket_manager = BucketManager(BUCKET_NAME)
     scroll = int(browser_setting.height // 3)
     browser_config = BrowserConfig(browser_setting.url, browser_setting.width, browser_setting.height,
                                    browser_setting.page_height, scroll, lang=browser_setting.lang,
