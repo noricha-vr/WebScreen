@@ -19,6 +19,10 @@ from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
 from util import pdf_to_image, to_m3u8, upload_hls_files, add_frames
 from utils.setup_logger import get_logger
+from utils.i18n import get_lang
+
+from i18n import babel, check_trans
+from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
 
 logger = get_logger(__name__)
 DEBUG = os.getenv('DEBUG') == 'True'
@@ -29,9 +33,12 @@ STATIC_DIR = ROOT_DIR / "static"
 MOVIE_DIR = ROOT_DIR / "movie"
 
 templates = Jinja2Templates(directory=ROOT_DIR / "templates")
+babel.install_jinja(templates)
+
 app = FastAPI(debug=DEBUG)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/movie", StaticFiles(directory=MOVIE_DIR), name="movie")
+app.add_middleware(I18nMiddleware, babel=babel)
 
 origins = [
     os.environ.get("ALLOW_HOST", None)
@@ -46,14 +53,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from utils.i18n import get_lang
-
-from i18n import babel, check_trans
-from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
-
-babel.install_jinja(templates)
-app.add_middleware(I18nMiddleware, babel=babel)
 
 
 @app.get("/", response_class=HTMLResponse)
