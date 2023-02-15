@@ -432,6 +432,11 @@ async def redirect_github(request: Request, lang: str) -> templates.TemplateResp
     return templates.TemplateResponse('github.html', {'request': request})
 
 
+@app.get("/sitemap.xml", response_class=HTMLResponse)
+async def sitemap(request: Request) -> templates.TemplateResponse:
+    return templates.TemplateResponse('sitemap.xml', {'request': request})
+
+
 if __name__ == '__main__':
     # reload = True
     uvicorn.run(app, host="0.0.0.0", port=8000)
