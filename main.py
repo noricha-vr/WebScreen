@@ -109,6 +109,11 @@ async def robots_txt():
     return FileResponse("static/robots.txt")
 
 
+@app.get("/sitemap.xml", response_class=HTMLResponse)
+async def sitemap():
+    return FileResponse("static/sitemap.xml")
+
+
 @app.get("/favicon.ico")
 async def favicon() -> FileResponse:
     return FileResponse((STATIC_DIR / 'favicon.ico'))
@@ -430,11 +435,6 @@ async def redirect_github(request: Request, lang: str) -> templates.TemplateResp
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('github.html', {'request': request})
-
-
-@app.get("/sitemap.xml", response_class=HTMLResponse)
-async def sitemap(request: Request) -> templates.TemplateResponse:
-    return templates.TemplateResponse('sitemap.xml', {'request': request})
 
 
 if __name__ == '__main__':
