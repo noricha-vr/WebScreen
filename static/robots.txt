@@ -1,2 +1,8 @@
 User-agent: *
-Allow: /
+Disallow: /web/
+Disallow: /image/
+Disallow: /pdf/
+Disallow: /recording/
+Disallow: /streaming/
+Disallow: /history/
+Disallow: /github/
