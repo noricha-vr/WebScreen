@@ -109,7 +109,7 @@ async def robots_txt():
     return FileResponse("static/robots.txt")
 
 
-@app.get("/sitemap.xml", response_class=HTMLResponse)
+@app.get("/sitemap.xml")
 async def sitemap():
     return FileResponse("static/sitemap.xml")
 
