@@ -40,15 +40,9 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/movie", StaticFiles(directory=MOVIE_DIR), name="movie")
 app.add_middleware(I18nMiddleware, babel=babel)
 
-origins = [
-    os.environ.get("ALLOW_HOST", None)
-]
-
-logger.info(f"origins: {origins}")
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origins],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
