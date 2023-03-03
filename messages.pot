@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2023-01-31 07:19+0000\n"
+"POT-Creation-Date: 2023-03-03 07:04+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -51,7 +51,7 @@ msgstr ""
 msgid "画面録画"
 msgstr ""
 
-#: templates/base.html:71 templates/streaming.html:32
+#: templates/base.html:71 templates/streaming.html:30
 msgid "画面共有"
 msgstr ""
 
@@ -140,11 +140,11 @@ msgid "Web ScreenでWeb、画像、PDFをVRChatで見られる動画に変換"
 msgstr ""
 
 #: templates/home.html:6 templates/home.html:10
-msgid "Web ScreenはWeb、画像、PDFをVRChatで見られる動画に変換できます。"
+msgid "Web ScreenはWeb、画像、PDFをVRChatで見れる動画に変換できます。"
 msgstr ""
 
 #: templates/home.html:7 templates/home.html:11
-msgid "変換された動画のURLを取得でき、動画のURLをVRChat内の動画プレイヤーに貼り付けるとVRChat内で再生できます。"
+msgid "変換された動画のURLをVRChatの動画プレイヤーに貼り付けるとVRChat内で再生できます。"
 msgstr ""
 
 #: templates/home.html:8 templates/home.html:12 templates/web.html:13
@@ -320,7 +320,7 @@ msgid "Web ScreenにPDFを入力すると動画に変換してくれます。"
 msgstr ""
 
 #: templates/pdf.html:9 templates/pdf.html:12
-msgid "変換された動画のURLをVRChat内の動画プレイヤーやスライドシステムに貼り付けるとPDF表示できます。"
+msgid "変換された動画のURLをVRChat内の動画プレイヤーやスライドシステムに貼り付けるとPDFを表示できます。"
 msgstr ""
 
 #: templates/pdf.html:22
@@ -399,91 +399,87 @@ msgstr ""
 msgid "Web Screenでパソコンの画面をVRChatに共有"
 msgstr ""
 
-#: templates/streaming.html:7 templates/streaming.html:11
+#: templates/streaming.html:7 templates/streaming.html:10
 msgid "Web Screenでパソコンの画面をVRChatに共有できます。"
 msgstr ""
 
-#: templates/streaming.html:8 templates/streaming.html:12
-msgid "ストリーミング用のURLを取得できます。"
+#: templates/streaming.html:8 templates/streaming.html:11
+msgid "ストリーミング用のURLを取得し、VRChat内の動画プレイヤーに貼り付けると、動画プレイヤーにパソコン画面が表示されます。"
 msgstr ""
 
-#: templates/streaming.html:9 templates/streaming.html:13
-msgid "URLをVRChat内の動画プレイヤーに貼り付けると、VRChat内でフレンドと共有できます。"
-msgstr ""
-
-#: templates/streaming.html:22
+#: templates/streaming.html:20
 msgid "VRChatの動画プレイヤーに画面共有"
 msgstr ""
 
-#: templates/streaming.html:23
+#: templates/streaming.html:21
 msgid "パソコンの画面をVRChatの動画プレイヤーに画面共有できます"
 msgstr ""
 
-#: templates/streaming.html:30
+#: templates/streaming.html:28
 msgid "この機能はベータ版です"
 msgstr ""
 
-#: templates/streaming.html:33
+#: templates/streaming.html:31
 msgid "共有停止"
 msgstr ""
 
-#: templates/streaming.html:36
+#: templates/streaming.html:34
 msgid "「画面共有」ボタンを押して、「デスクトップ全体」を選択してください。"
 msgstr ""
 
-#: templates/streaming.html:37
+#: templates/streaming.html:35
 msgid "「ウィンドウ」「Chromeタブ」は動作しません。"
 msgstr ""
 
-#: templates/streaming.html:42
+#: templates/streaming.html:40
 msgid "ストリーミングサーバー起動中。"
 msgstr ""
 
-#: templates/streaming.html:43
+#: templates/streaming.html:41
 msgid "プログレスバーが消えるとVRChatの動画プレイヤーで再生できるようになります。"
 msgstr ""
 
-#: templates/streaming.html:57
+#: templates/streaming.html:55
 msgid "動画説明"
 msgstr ""
 
-#: templates/streaming.html:64
+#: templates/streaming.html:62
 msgid "画面共有のポイント"
 msgstr ""
 
-#: templates/streaming.html:66
+#: templates/streaming.html:64
 msgid "映像に20〜50秒の遅延があります。"
 msgstr ""
 
-#: templates/streaming.html:67
+#: templates/streaming.html:65
 msgid "画面選択時に左下のチェックを入れると音声が共有されます。（左スピーカーのみ）"
 msgstr ""
 
-#: templates/streaming.html:68
+#: templates/streaming.html:66
 msgid "iwaSyncで開始直後に「Invalid URL」と表示された場合はリロードするかURLを入れ直すと表示されます。"
 msgstr ""
 
-#: templates/streaming.html:69
+#: templates/streaming.html:67
 msgid "それでも表示されない場合は、共有を停止してから再度共有を行ってください。"
 msgstr ""
 
-#: templates/streaming.html:70
+#: templates/streaming.html:68
 msgid "共有終了時は「共有終了」を押してください。"
 msgstr ""
 
-#: templates/streaming.html:71
+#: templates/streaming.html:69
 msgid "画面共有可能な時間は30分です。30分経過すると自動で終了します。"
 msgstr ""
 
-#: templates/streaming.html:72
+#: templates/streaming.html:70
 msgid "ストリーミング中に映像が映らなくなったり、固まったり、表示がおかしくなることがあります。"
 msgstr ""
 
-#: templates/streaming.html:73
+#: templates/streaming.html:71
 msgid "リロードするか、もう一度画面共有を行ってください。iwaSyncのリロードはローカルです。"
 msgstr ""
 
-#: templates/streaming.html:74
+#: templates/streaming.html:72
 msgid "スマホの画面は共有できません。"
 msgstr ""
 
