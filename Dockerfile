@@ -35,4 +35,4 @@ COPY . .
 EXPOSE 8080
 
 # Run the web service on container startup
-CMD exec uvicorn main:app --host 0.0.0.0 --port 8080
+CMD exec uvicorn main:app --host 0.0.0.0 --port 8080 --limit-concurrency 20 --timeout-keep-alive 20 --limit-max-requests 20 --log-level info
