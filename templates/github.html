@@ -35,25 +35,45 @@
                                    placeholder="https://">
                         </div>
                     </div>
-                    <label for="targets" class="">{{ _("表示したいファイル名やファイルタイプをカンマ区切りで入力してください") }}</label>
-                    <input type="text" class="form-control border border-dark" id="targets" name="targets"
-                           value="README.md,Dockerfile,*.yaml,*.json,*.py,*js,*html">
-                    <div class="mt-3">{{ _("ブラウザのサイズ") }}:</div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="width_height" id="16-9" value="1280x720"
-                               checked>
-                        <label class="form-check-label" for="16-9">
-                            16:9
-                        </label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="width_height" id="4-3" value="1024x768">
-                        <label class="form-check-label" for="4-3">
-                            4:3
-                        </label>
-                    </div>
-                    <label for="catch">{{ _("キャッシュ") }}</label>
-                    <input type="checkbox" class="form-inline border" id="catch" name="catch" checked>
+                    <label for="targets" class="">{{ _("表示したいファイル名やファイルタイプをチェックしてください") }}</label><br>
+                    <input type="checkbox" class="me-2" id="md" name="targets[]" value="*.md"><label
+                        for="md">*.md</label>
+                    <input type="checkbox" class="me-2" id="py" name="targets[]" value="*.py"><label
+                        for="py">*.py</label>
+                    <input type="checkbox" class="me-2" id="java" name="targets[]" value="*.java"><label for="java">*.java</label>
+                    <input type="checkbox" class="me-2" id="c" name="targets[]" value="*.c"><label for="c">*.c</label>
+                    <input type="checkbox" class="me-2" id="cs" name="targets[]" value="*.cs"><label
+                        for="cs">*.cs</label>
+                    <input type="checkbox" class="me-2" id="cpp" name="targets[]" value="*.cpp"><label
+                        for="cpp">*.cpp</label>
+                    <input type="checkbox" class="me-2" id="html" name="targets[]" value="*.html"><label for="html">*.html</label>
+                    <input type="checkbox" class="me-2" id="css" name="targets[]" value="*.css"><label
+                        for="css">*.css</label>
+                    <input type="checkbox" class="me-2" id="js" name="targets[]" value="*.js"><label
+                        for="js">*.js</label>
+                    <input type="checkbox" class="me-2" id="ts" name="targets[]" value="*.ts"><label
+                        for="ts">*.ts</label>
+                    <input type="checkbox" class="me-2" id="json" name="targets[]" value="*.json"><label for="json">*.json</label>
+                    <input type="checkbox" class="me-2" id="xml" name="targets[]" value="*.xml"><label
+                        for="xml">*.xml</label>
+                    <input type="checkbox" class="me-2" id="php" name="targets[]" value="*.php"><label
+                        for="php">*.php</label>
+                    <input type="checkbox" class="me-2" id="rb" name="targets[]" value="*.rb"><label
+                        for="rb">*.rb</label>
+                    <input type="checkbox" class="me-2" id="sh" name="targets[]" value="*.sh"><label
+                        for="sh">*.sh</label>
+                    <input type="checkbox" class="me-2" id="sql" name="targets[]" value="*.sql"><label
+                        for="sql">*.sql</label>
+                    <input type="checkbox" class="me-2" id="txt" name="targets[]" value="*.txt"><label
+                        for="txt">*.txt</label>
+                    <input type="checkbox" class="me-2" id="csv" name="targets[]" value="*.csv"><label
+                        for="csv">*.csv</label>
+                    <input type="checkbox" class="me-2" id="yaml" name="targets[]" value="*.yaml"><label for="yaml">*.yaml</label>
+                    <input type="checkbox" class="me-2" id="toml" name="targets[]" value="*.toml"><label for="toml">*.toml</label>
+                    <input type="checkbox" class="me-2" id="ini" name="targets[]" value="*.ini"><label
+                        for="ini">*.ini</label>
+                    <input type="checkbox" class="me-2" id="dockerfile" name="targets[]" value="*.dockerfile"><label
+                        for="dockerfile">Dockerfile</label><br>
                     <div class="mt-3 text-center">
                         <div id="submit" class="btn btn-primary d-block">{{ _("動画を作成") }}</div>
                     </div>

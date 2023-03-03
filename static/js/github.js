@@ -1,10 +1,24 @@
 'use static';
 
+function getTargets() {
+    let targetList = [];
+    const targets = document.querySelectorAll('input[name="targets[]"]');
+    for (const target of targets) {
+        if (target.checked) {
+            targetList.push(target.value);
+            if (target.value === 'yaml') targetList.push('yml');
+        }
+    }
+    return targetList.join(',');
+}
+
+
 async function fetchMovieUrl() {
     let url = document.getElementById('url').value;
-    let targets = document.getElementById('targets').value;
-    let [width, height] = document.querySelector('input[name="width_height"]:checked').value.split('x');
-    let cache = document.getElementById('catch').checked;
+    let targets = getTargets();
+    let width = 1280
+    let height = 720
+    let cache = false;
     let request_url = `/api/create_github_movie/`
     console.log(`Requesting ${request_url}`);
     let data = JSON.stringify({
