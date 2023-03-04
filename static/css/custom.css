@@ -46,6 +46,7 @@ a {
     color: #0067ff;
 }
 
-img {
-    aspect-ratio: attr(width) / attr(height);
+
+#cookie-consent {
+    background-color: rgba(0, 0, 0, 0.8);
 }
