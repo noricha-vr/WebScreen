@@ -138,7 +138,7 @@ function showBrowserErrorMessage() {
 
 window.onload = () => {
     console.log('cookie_consent', getCookie("cookie_consent"))
-    if (getCookie("cookie_consent") !== "true") {
+    if (!getCookie("cookie_consent")) {
         document.getElementById("cookie-consent").classList.remove("visually-hidden");
     }
     selectActiveMenu();

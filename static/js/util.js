@@ -66,6 +66,6 @@ function allowCookies() {
 }
 
 function denyCookies() {
-    setCookie("cookie_consent", "false", 365);
+    setCookie("cookie_consent", "false", 14);
     document.getElementById("cookie-consent").classList.add("visually-hidden");
 }
