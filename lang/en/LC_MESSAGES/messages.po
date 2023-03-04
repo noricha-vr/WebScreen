@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2023-03-04 01:16+0000\n"
-"PO-Revision-Date: 2023-03-04 10:22+0900\n"
+"POT-Creation-Date: 2023-03-04 04:54+0000\n"
+"PO-Revision-Date: 2023-03-04 13:56+0900\n"
 "Last-Translator: \n"
 "Language-Team: en <LL@li.org>\n"
 "Language: en\n"
@@ -105,11 +105,11 @@ msgstr "Convert your GitHub project to video"
 msgid "GitHubプロジェクトを動画に変換し、VRChatの動画プレイヤーで再生できます"
 msgstr "Convert your GitHub project into a video that can be played on VRChat’s video player"
 
-#: templates/github.html:29 templates/web.html:25
+#: templates/github.html:29 templates/web.html:28
 msgid "動画化したいWebページのURLを貼り付けてください"
 msgstr "Paste the URL of the web page you want to make into a video"
 
-#: templates/github.html:34 templates/web.html:29
+#: templates/github.html:34 templates/web.html:32
 msgid "貼り付け"
 msgstr "Paste"
 
@@ -205,34 +205,39 @@ msgid "Webページを動画に変換"
 msgstr "Convert web page to video"
 
 #: templates/home.html:64
-msgid ""
-"Webページを動画に変換することで、VRChat内で動画プレイヤーを使ってそのページを表示することができま"
-"す。"
-msgstr ""
-"Converting a web page to video allows you to view that page using a video player within VRChat."
+msgid "Webページを動画に変換することで、VRChat内で動画プレイヤーに表示できます。"
+msgstr "Web pages can be converted to video and displayed in a video player within VRChat."
 
 #: templates/home.html:65
-msgid "また、シークバーを使うことでページ内をスクロールすることができます。"
-msgstr "You can also use the seek bar to scroll through the page."
+msgid "また、動画プレイヤーのシークバーを使うことでスクロールもできます。"
+msgstr "You can also scroll by using the video player’s seek bar."
 
 #: templates/home.html:66
-msgid "さらに、Webページを他のユーザーと共有することで、そのページを話題にすることができます。"
-msgstr "Additionally, you can share a web page with other users to talk about it."
+msgid ""
+"さらに、WebScreenの拡張機能を使えば共有したいページを開いて、アイコンをクリックするだけでWebページ"
+"を動画化できます。"
+msgstr ""
+"In addition, with the WebScreen extension, you can open the page you want to share and make a "
+"video of the web page by simply clicking on the icon."
 
-#: templates/home.html:70 templates/home.html:82 templates/home.html:88
+#: templates/home.html:67
+msgid "WebScreen Extension を追加する"
+msgstr "Add WebScreen Extension"
+
+#: templates/home.html:71 templates/home.html:83 templates/home.html:89
 msgid "写真を動画に変換"
 msgstr "Convert photo to video"
 
-#: templates/home.html:85
+#: templates/home.html:86
 msgid "ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。"
 msgstr ""
 "Take photos taken on a world tour or with friends and watch them together instantly in VRChat."
 
-#: templates/home.html:98 templates/home.html:107 templates/pdf.html:21
+#: templates/home.html:99 templates/home.html:108 templates/pdf.html:21
 msgid "PDFを動画に変換"
 msgstr "Convert PDF to video"
 
-#: templates/home.html:101
+#: templates/home.html:102
 msgid ""
 "パワーポイントやGoogleスライドをPDFで書き出して、動画に変換すれば動画プレイヤーやスライドシステム"
 "でプレゼンを開始。"
@@ -240,11 +245,11 @@ msgstr ""
 "Export PowerPoint or Google Slides as PDF and convert it to video to start your presentation in a "
 "video player or slide system."
 
-#: templates/home.html:114 templates/home.html:119 templates/record.html:21
+#: templates/home.html:115 templates/home.html:120 templates/record.html:21
 msgid "パソコンの画面を録画"
 msgstr "Record your computer screen"
 
-#: templates/home.html:116
+#: templates/home.html:117
 msgid ""
 "自分のパソコンの特定の画面をVRChat内でみんなに見せたり、VRChatの録画映像をみんなで見たり、ログイン"
 "が必要なWebページを共有するのにも使えます。"
@@ -252,11 +257,11 @@ msgstr ""
 "You can also use this to show everyone a specific screen of your computer within VRChat, watch "
 "VRChat recordings together, or share web pages that require a login."
 
-#: templates/home.html:129 templates/home.html:136
+#: templates/home.html:130 templates/home.html:137
 msgid "VRChatのビデオプレーヤーに画面共有"
 msgstr "Screen sharing to VRChat video player"
 
-#: templates/home.html:132
+#: templates/home.html:133
 msgid ""
 "自分のパソコンの画面をVRChatの動画プレイヤーにストリーミング。作業の様子を共有したり、パソコンの画"
 "面を見ながらの説明や紹介にも使えます。"
@@ -264,11 +269,11 @@ msgstr ""
 "Stream your own computer screen to VRChat’s video player. You can use it to share your work, or "
 "to explain or introduce your work while viewing your computer screen."
 
-#: templates/home.html:146 templates/home.html:153
+#: templates/home.html:147 templates/home.html:154
 msgid "履歴を確認"
 msgstr "View history"
 
-#: templates/home.html:148
+#: templates/home.html:149
 msgid ""
 "履歴からは、過去14間に変換した動画のリンクやダウンロードが行えます。ダウンロードした動画はTwitter"
 "などに投稿して共有できます。"
@@ -310,7 +315,7 @@ msgstr "Multiple sheets can be selected. Dragging is OK!"
 msgid "順番を設定するには01、02、03...のようにファイル名を設定してください。"
 msgstr "To set the order, set the file names as 01, 02, 03… to set the file name."
 
-#: templates/image.html:36 templates/pdf.html:51 templates/web.html:79
+#: templates/image.html:36 templates/pdf.html:51 templates/web.html:82
 msgid "動画に変換"
 msgstr "Convert to Video"
 
@@ -387,7 +392,7 @@ msgstr "Select the PDF you want to convert to video"
 msgid "1ページの表示時間"
 msgstr "Display time per page"
 
-#: templates/pdf.html:39 templates/web.html:49
+#: templates/pdf.html:39 templates/web.html:52
 msgid "1秒"
 msgstr "1 second"
 
@@ -651,23 +656,27 @@ msgstr ""
 msgid "ウェブページを動画に変換し、VRChatの動画プレイヤーで再生できます"
 msgstr "Convert web pages to video for playback in VRChat’s video player"
 
-#: templates/web.html:36
+#: templates/web.html:22
+msgid "WebScreenの拡張機能を追加するともっと便利になります！"
+msgstr "Add a WebScreen extension for even more convenience!"
+
+#: templates/web.html:39
 msgid "ページの長さ（最大）"
 msgstr "Page length (max)"
 
-#: templates/web.html:44
+#: templates/web.html:47
 msgid "待ち時間: (ページの読み込みが正しくできなかった時は秒数を長くしてください。）"
 msgstr "Latency: (If the page fails to load correctly, increase the number of seconds.)"
 
-#: templates/web.html:57
+#: templates/web.html:60
 msgid "5秒"
 msgstr "5 second"
 
-#: templates/web.html:65
+#: templates/web.html:68
 msgid "10秒"
 msgstr "10 second"
 
-#: templates/web.html:72
+#: templates/web.html:75
 msgid "15秒"
 msgstr "15 second"
 
@@ -795,3 +804,6 @@ msgstr "Select “LIVE” in the VRChat video player and paste the URL."
 
 #~ msgid "キャッシュ"
 #~ msgstr "cash"
+
+#~ msgid "さらに、Webページを他のユーザーと共有することで、そのページを話題にすることができます。"
+#~ msgstr "Additionally, you can share a web page with other users to talk about it."
