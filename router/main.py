@@ -105,20 +105,7 @@ async def favicon() -> FileResponse:
     return FileResponse((STATIC_DIR / 'favicon.ico'))
 
 
-# @app.get("/desktop/{session_id}/")
-# def send_desktop_movie(session_id: str):
-#     """
-#     Get movie which file name is 'movie/{session_id}.mp4.
-#     :param session_id:
-#     :return: movie file
-#     """
-#     movie_path = Path(f"movie/{session_id}.mp4")
-#     if not movie_path.exists():
-#         not_found_movie = 'https://storage.googleapis.com/noricha-public/web-screen/movie/not_found.mp4'
-#         return RedirectResponse(url=not_found_movie)
-#     return FileResponse(movie_path)
-
-
+# Streaming file from GCS
 @app.get("/stream/{uuid}/{file_name}")
 async def get_stream(uuid: str, file_name: str):
     """
