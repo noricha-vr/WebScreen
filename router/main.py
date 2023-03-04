@@ -19,9 +19,11 @@ DEBUG = os.getenv('DEBUG') == 'True'
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 ROOT_DIR = Path(os.path.dirname(__file__)).parent
 STATIC_DIR = ROOT_DIR / "static"
+MOVIE_DIR = ROOT_DIR / "movie"
 
 app = FastAPI(debug=DEBUG)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/movie", StaticFiles(directory=MOVIE_DIR), name="movie")
 app.add_middleware(I18nMiddleware, babel=babel)
 
 origins = [

@@ -35,4 +35,4 @@ COPY . .
 EXPOSE 8080
 
 # Run the web service on container startup
-CMD exec uvicorn router.main:app --host 0.0.0.0 --port 8080 --workers 4 --timeout-keep-alive 20 --limit-max-requests 20 --log-level info
+CMD exec uvicorn router.main:app --host 0.0.0.0 --port 8080 --workers 4 --timeout-keep-alive 90 --limit-max-requests 20 --log-level info

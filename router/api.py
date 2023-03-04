@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 DEBUG = os.getenv('DEBUG') == 'True'
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
 
-ROOT_DIR = Path(os.path.dirname(__file__))
+ROOT_DIR = Path(os.path.dirname(__file__)).parent
 STATIC_DIR = ROOT_DIR / "static"
 MOVIE_DIR = ROOT_DIR / "movie"
 
@@ -208,7 +208,7 @@ def post_stream(request: Request, movie: UploadFile = Form(), uuid: str = Form()
 
     if not movie:
         raise HTTPException(status_code=400, detail="Movie file is empty.")
-    movie_dir = Path(f"movie/{uuid}")
+    movie_dir = Path(f"{MOVIE_DIR}/{uuid}")
     movie_dir.mkdir(exist_ok=True, parents=True)
     movie_path = movie_dir / f"video.mp4"
     # write movie file.
