@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 from fastapi.testclient import TestClient
-from main import app
+from router.main import app
 
 """
 This test needs GOOGLE_APPLICATION_CREDENTIALS

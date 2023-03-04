@@ -85,9 +85,9 @@ async def image_to_movie(images: List[UploadFile]) -> dict:
     """
     bucket_manager = BucketManager(BUCKET_NAME)
     name = str(uuid4())
-    image_dir = Path('image') / name
+    image_dir = Path('../image') / name
     image_dir.mkdir(exist_ok=True, parents=True)
-    output_image_dir = Path('image') / f'{name}_output'
+    output_image_dir = Path('../image') / f'{name}_output'
     image_config = ImageConfig(image_dir, output_image_dir)
     movie_path = Path(f"movie/{name}.mp4")
     movie_path.parent.mkdir(exist_ok=True, parents=True)
@@ -117,7 +117,7 @@ async def pdf_to_movie(pdf: UploadFile = File(), frame_sec: int = Form(...)) -> 
     """
     bucket_manager = BucketManager(BUCKET_NAME)
     name = str(uuid4())
-    image_dir = Path('image') / name
+    image_dir = Path('../image') / name
     image_dir.mkdir(exist_ok=True, parents=True)
     movie_path = Path(f"movie/{name}.mp4")
     movie_path.parent.mkdir(exist_ok=True, parents=True)
@@ -234,7 +234,7 @@ def delete_movie() -> dict:
     Delete movie files in movie directory. If file age is over 1 hour, delete the file.
     :return: message and deleted file list.
     """
-    movie_dir = Path("movie")
+    movie_dir = Path("../movie")
     deleted_files = []
     _1_hour_ago = time.time() - 60 * 60
     for file in movie_dir.glob("**/*.mp4"):

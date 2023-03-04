@@ -1,42 +1,15 @@
 from fastapi import APIRouter
 import os
-import shutil
-import time
-from uuid import uuid4
-from datetime import datetime
 from pathlib import Path
-from typing import List
-from fastapi import HTTPException, Request, UploadFile, Form, File
-from movie_maker import BrowserConfig, MovieConfig, MovieMaker
-from movie_maker.config import ImageConfig
-from threading import Thread
-from gcs import BucketManager
-from models import BrowserSetting, GithubSetting
-from util import pdf_to_image, to_m3u8, upload_hls_files, add_frames
-from utils.setup_logger import get_logger
-import os
-from datetime import datetime
-from pathlib import Path
-import uvicorn
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import Request
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-import api
-from gcs import BucketManager
 from utils.setup_logger import get_logger
-from utils.i18n import get_lang
 from i18n import babel, check_trans
-from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
 
 logger = get_logger(__name__)
 DEBUG = os.getenv('DEBUG') == 'True'
-BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
-
-ROOT_DIR = Path(os.path.dirname(__file__))
-STATIC_DIR = ROOT_DIR / "static"
-MOVIE_DIR = ROOT_DIR / "movie"
+ROOT_DIR = Path(os.path.dirname(__file__)).parent
 templates = Jinja2Templates(directory=ROOT_DIR / "templates")
 babel.install_jinja(templates)
 router = APIRouter()

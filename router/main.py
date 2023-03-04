@@ -2,33 +2,26 @@ import os
 from datetime import datetime
 from pathlib import Path
 import uvicorn
-import api
-import main_page
+from router import api
+from router import main_page
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from gcs import BucketManager
 from utils.setup_logger import get_logger
 from utils.i18n import get_lang
-from i18n import babel, check_trans
+from i18n import babel
 from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
 
 logger = get_logger(__name__)
 DEBUG = os.getenv('DEBUG') == 'True'
 BUCKET_NAME = os.environ.get("BUCKET_NAME", None)
-
-ROOT_DIR = Path(os.path.dirname(__file__))
+ROOT_DIR = Path(os.path.dirname(__file__)).parent
 STATIC_DIR = ROOT_DIR / "static"
-MOVIE_DIR = ROOT_DIR / "movie"
-
-templates = Jinja2Templates(directory=ROOT_DIR / "templates")
-babel.install_jinja(templates)
 
 app = FastAPI(debug=DEBUG)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-app.mount("/movie", StaticFiles(directory=MOVIE_DIR), name="movie")
 app.add_middleware(I18nMiddleware, babel=babel)
 
 origins = [
@@ -51,58 +44,58 @@ app.include_router(main_page.router, )
 
 # Redirects
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request) -> templates.TemplateResponse:
+async def home(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/", status_code=301)
 
 
 @app.get("/web/", response_class=HTMLResponse)
-async def web(request: Request) -> templates.TemplateResponse:
+async def web(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/web/", status_code=301)
 
 
 @app.get("/image/")
-async def image(request: Request) -> templates.TemplateResponse:
+async def image(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/image/", status_code=301)
 
 
 @app.get("/pdf/")
-async def pdf(request: Request) -> templates.TemplateResponse:
+async def pdf(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/pdf/", status_code=301)
 
 
 @app.get("/recording/")
-def recording_desktop(request: Request) -> templates.TemplateResponse:
+def recording_desktop(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/recording/", status_code=301)
 
 
 @app.get("/record-screen/")
-def recording_desktop(request: Request) -> templates.TemplateResponse:
+def recording_desktop(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/recording/", status_code=301)
 
 
 @app.get("/streaming/")
-async def read_index(request: Request) -> templates.TemplateResponse:
+async def read_index(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/streaming/", status_code=301)
 
 
 @app.get("/history/", response_class=HTMLResponse)
-async def history(request: Request) -> templates.TemplateResponse:
+async def history(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/history/", status_code=301)
 
 
 @app.get("/github/")
-async def github(request: Request) -> templates.TemplateResponse:
+async def github(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/github/", status_code=301)
 
 
 @app.get("/robots.txt/")
 async def robots_txt():
-    return FileResponse("static/robots.txt")
+    return FileResponse("../static/robots.txt")
 
 
 @app.get("/sitemap.xml")
 async def sitemap():
-    return FileResponse("static/sitemap.xml")
+    return FileResponse("../static/sitemap.xml")
 
 
 @app.get("/favicon.ico")
