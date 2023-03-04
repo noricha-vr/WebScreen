@@ -59,3 +59,13 @@ function getCookie(name) {
     }
     return null;
 }
+
+function allowCookies() {
+    setCookie("cookie_consent", "true", 365);
+    document.getElementById("cookie-consent").classList.add("visually-hidden");
+}
+
+function denyCookies() {
+    setCookie("cookie_consent", "false", 365);
+    document.getElementById("cookie-consent").classList.add("visually-hidden");
+}

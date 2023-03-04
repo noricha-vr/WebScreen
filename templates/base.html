@@ -79,7 +79,7 @@
 {% block content %}
 
 {% endblock %}
-<div id="cookie-consent" class="bg-dark text-white p-2 fixed-bottom text-center">
+<div id="cookie-consent" class="bg-dark text-white p-2 fixed-bottom text-center visually-hidden">
     このウェブサイトはCookieを利用しています。Cookieの利用を許可しますか？
     <button onclick="allowCookies()" class="btn btn-outline-light rounded-pill ml-2">はい</button>
     <button onclick="denyCookies()" class="btn btn-outline-light rounded-pill ml-2">いいえ</button>
@@ -101,20 +101,7 @@
         integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
         crossorigin="anonymous" async></script>
 <script>
-    function allowCookies() {
-        setCookie("cookie_consent", "true", 365);
-        document.getElementById("cookie-consent").style.display = "none";
-    }
 
-    function denyCookies() {
-        setCookie("cookie_consent", "false", 365);
-        document.getElementById("cookie-consent").style.display = "none";
-    }
-
-
-    if (getCookie("cookie_consent") !== "true") {
-        document.getElementById("cookie-consent").style.display = "block";
-    }
 
 </script>
 </body>
