@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
 from threading import Thread
+import api
 
 from gcs import BucketManager
 from models import BrowserSetting, GithubSetting
@@ -53,6 +54,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(api.router, prefix="/api")
 
 
 @app.get("/", response_class=HTMLResponse)
