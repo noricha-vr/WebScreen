@@ -432,6 +432,13 @@ async def redirect_github(request: Request, lang: str) -> templates.TemplateResp
     return templates.TemplateResponse('github.html', {'request': request})
 
 
+@app.get("/{lang}/privacy")
+async def privacy(request: Request, lang: str):
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse("privacy.html", {"request": request})
+
+
 if __name__ == '__main__':
     # reload = True
     uvicorn.run(app, host="0.0.0.0", port=8000)

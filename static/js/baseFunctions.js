@@ -48,7 +48,10 @@ async function submit() {
         if (inputUrl !== null) {
             data.name = inputUrl.value.replaceAll('=', '-');
         }
-        saveResult(data);
+        // if cookie_consent is true, save result to cookie.
+        if (getCookie("cookie_consent") === "true") {
+            saveResult(data);
+        }
         showOutPut(data.name, data.url);
     } else {
         let data = await response.json()

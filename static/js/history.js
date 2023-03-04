@@ -81,6 +81,9 @@ function createResultNode(text, href) {
 }
 
 window.onload = () => {
+    if (getCookie("cookie_consent") !== "true") {
+        document.getElementById("cookie-consent").classList.remove("visually-hidden");
+    }
     addResultsToPage();
     selectActiveMenu();
 }

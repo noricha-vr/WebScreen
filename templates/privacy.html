@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示！") }}{% endblock %}
+{% block meta_tag %}
+    <meta property="og:title" content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示！") }}"/>
+    <meta property="og:type" content="article"/>
+    <meta name="description"
+          content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示できます。") }}
+          {{ _("画面を録画して、録画した動画のURLを取得できます。") }}
+          {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けると、録画した画面を動画プレイヤーに表示できます。") }}">
+    <meta property="og:description"
+          content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示できます。") }}
+          {{ _("画面を録画して、録画した動画のURLを取得できます。") }}
+          {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けると、録画した画面を動画プレイヤーに表示できます。") }}">
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <section class="section mt-5">
+            <div class="row justify-content-md-center">
+                <div class="col mb-4 text-center">
+                    <h2 class="h1 mb-3">{{ _("Cookieの使い方に関する説明") }}</h2>
+                    <h1 class="h6 text-secondary">{{ _("当ウェブサイトでは、以下のようなCookieを使用しています。") }}</h1>
+                </div>
+            </div>
+            <div class="row bg-light border p-5 rounded shadow">
+                <div id="start-recording" class="col text-center">
+
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>{{ _("Cookieの種類") }}</th>
+                            <th>{{ _("目的") }}</th>
+                            <th>{{ _("有効期限") }}</th>
+                            <th>{{ _("第三者との共有") }}</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td>{{ _("SITE_URL") }}</td>
+                            <td>{{ _("ユーザーが動画に変換したサイトと作成された動画のURLを記録するため") }}</td>
+                            <td>14{{ _("日") }}</td>
+                            <td>{{ _("しない") }}</td>
+                        </tr>
+                        <tr>
+                            <td>_ga, _gid, _gat</td>
+                            <td>{{ _("ユーザーのアクセス解析") }}</td>
+                            <td>365{{ _("日") }}</td>
+                            <td>{{ _("Googleに共有されます") }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    <p>{{ _("Cookieに収集された情報は、当ウェブサイトのアクセス解析のために使用されます。") }}</p>
+                    <p>{{ _("Cookieの管理方法については、ブラウザの設定を変更することで行うことができます。ただし、Cookieを無効にすると、当ウェブサイトの一部の機能が正しく動作しなくなる場合があります。") }}</p>
+                    <p>{{ _("当ウェブサイトでは、Google Analyticsを使用してアクセス解析を行っています。Google Analyticsは、Cookieを使用してユーザーの情報を収集します。この情報は、Google社によって管理されます。詳細については、") }}<a
+                            href="https://policies.google.com/privacy">{{ _("Googleのプライバシーポリシー") }}</a>{{ _("をご確認ください。") }}
+                    </p>
+                    <p>{{ _("当ウェブサイトは、個人情報を収集することはありません。") }}</p>
+                </div>
+            </div>
+
+        </section>
+    </div>
+    <script src="/static/js/util.js"></script>
+    <script src="/static/js/baseFunctions.js"></script>
+{% endblock %}

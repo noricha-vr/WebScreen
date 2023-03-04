@@ -72,7 +72,7 @@
         <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
            href="/{{ request.path_params.lang }}/history/">{{ _("履歴") }}</a>
         <a class="nav-link text-white pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/github/">Git</a>
+           href="/{{ request.path_params.lang }}/github/">GitHub</a>
     </nav>
 </header>
 
@@ -80,16 +80,19 @@
 
 {% endblock %}
 <div id="cookie-consent" class="bg-dark text-white p-2 fixed-bottom text-center visually-hidden">
-    このウェブサイトはCookieを利用しています。Cookieの利用を許可しますか？
-    <button onclick="allowCookies()" class="btn btn-outline-light rounded-pill ml-2">はい</button>
-    <button onclick="denyCookies()" class="btn btn-outline-light rounded-pill ml-2">いいえ</button>
+    {{ _("このウェブサイトはCookieを利用しています。") }}<a class="text-light"
+                                          href="/{{ request.path_params.lang }}/privacy">{{ _("Cookieの利用について") }}</a>{{ _("許可しますか？") }}
+    <button onclick="allowCookies()" class="btn btn-outline-light rounded-pill ml-2">{{ _("はい") }}</button>
+    <button onclick="denyCookies()" class="btn btn-outline-light rounded-pill ml-2">{{ _("いいえ") }}</button>
 </div>
 
 
 <footer class="mt-5" style="background-color: #e0e0e0">
     <div class="container text-center">
         <a href="https://sites.google.com/view/vrc-personal-development/oss%E9%9B%86%E4%BC%9A" class="text-dark"
-           style="text-decoration: underline;" target="_blank">{{ _("Powered by OSS集会") }}</a>
+           style="text-decoration: underline;" target="_blank">{{ _("Powered by OSS集会") }}</a> |
+        <a href="https://github.com/noricha-vr/WebScreen" class="text-dark" style="text-decoration: underline;"
+           target="_blank">GitHub</a>
     </div>
 </footer>
 <script src="/static/js/util.js"></script>
