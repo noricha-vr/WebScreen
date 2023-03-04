@@ -25,7 +25,7 @@ or `ctrl + c`
 #### Run/Debug Configurations
 
 - Select: FastAPI
-- Path: absolute path to `main.py`
+- Path: absolute path to `router/main.py`
 - Uvicorn options: --reload --host=0.0.0.0 --port=8080
 
 #### Interpreter settings
