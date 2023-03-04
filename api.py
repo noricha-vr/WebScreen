@@ -139,3 +139,68 @@ async def pdf_to_movie(pdf: UploadFile = File(), frame_sec: int = Form(...)) -> 
     url = bucket_manager.to_public_url(str(movie_path))
     delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
     return {'url': url, 'delete_at': delete_at}
+
+
+@router.post("/save-movie/")
+def recode_desktop(file: bytes = File()) -> dict:
+    """
+    Save movie file. Convert movie for VRChat format. Upload Movie file on GCS. Return download url.
+    :param file: base64 movie.
+    :return: message
+    """
+    if file:
+        temp_movie_path = Path(f"movie/{uuid4()}_temp.mp4")
+        movie_path = Path(f"movie/{uuid4()}.mp4")
+        with open(temp_movie_path, "wb") as f:
+            f.write(file)
+        start = time.time()
+        movie_config = MovieConfig(
+            temp_movie_path, movie_path, width=1280, encode_speed='ultrafast')
+        MovieMaker.to_vrc_movie(movie_config)
+        logger.info(f"to_vrc_movie: {time.time() - start}")
+        bucket_manager = BucketManager(BUCKET_NAME)
+        url = bucket_manager.to_public_url(str(movie_path))
+        logger.info(f"url: {url}")
+        return {"url": url, "delete_at": datetime.now().timestamp() + 60 * 60 * 24 * 14}
+    return {"message": "not found file."}
+
+
+@router.post("/create_github_movie/")
+def create_github_movie(github_setting: GithubSetting) -> dict:
+    """
+    Download github repository, convert file into HTML, and take a screenshot.
+    :param url: URL to take a screenshot
+    :param targets: target file list to take a screenshot
+    :param width: Browser width
+    :param height: Browser height
+    :param page_height: Max scroll height
+    :param scroll: scroll height
+    :param catch: if catch is true, check saved movie is suitable.
+    :return: GitHub repository page URL
+    """
+    targets = github_setting.targets.split(",")
+    if len(github_setting.url) == 0:
+        raise HTTPException(
+            status_code=400, detail="URL is empty.Please set URL.")
+    if github_setting.url.startswith("https://github.com/") is False:
+        raise HTTPException(
+            status_code=400, detail="URL is not GitHub repository.")
+    bucket_manager = BucketManager(BUCKET_NAME)
+    scroll = github_setting.height // 3
+    wait_time = 0  # local file don't need to wait.
+    browser_config = BrowserConfig(
+        github_setting.url, github_setting.width, github_setting.height, github_setting.page_height, scroll,
+        targets=targets, wait_time=wait_time)
+    logger.info(f"browser_config: {browser_config}")
+    movie_path = Path(f"movie/{browser_config.hash}.mp4")
+    if github_setting.cache and movie_path.exists():
+        url = bucket_manager.get_public_file_url(str(movie_path))
+        return {'url': url, 'delete_at': None}
+    # Download the repository.
+    image_dir = MovieMaker.take_screenshots_github_files(browser_config)
+    movie_config = MovieConfig(image_dir, movie_path, width=github_setting.width)
+    MovieMaker.image_to_movie(movie_config)
+    # Upload to GCS
+    url = BucketManager(BUCKET_NAME).to_public_url(str(movie_path))
+    delete_at = datetime.now().timestamp() + 60 * 60 * 24 * 14
+    return {'url': url, 'delete_at': delete_at}
