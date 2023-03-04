@@ -2,12 +2,13 @@ import os
 from datetime import datetime
 from pathlib import Path
 import uvicorn
+import api
+import main_page
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import api
 from gcs import BucketManager
 from utils.setup_logger import get_logger
 from utils.i18n import get_lang
@@ -45,8 +46,10 @@ app.add_middleware(
 )
 
 app.include_router(api.router, prefix="/api")
+app.include_router(main_page.router, )
 
 
+# Redirects
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> templates.TemplateResponse:
     return RedirectResponse(url=f"/{get_lang(request)}/", status_code=301)
@@ -153,69 +156,6 @@ async def read_static_file(file_path: str):
         return FileResponse(file_path, headers={"Cache-Control": "public, max-age=3600"})
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
-
-
-@app.get("/{lang}/", response_class=HTMLResponse)
-async def redirect_home(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('home.html', {'request': request})
-
-
-@app.get("/{lang}/web/", response_class=HTMLResponse)
-async def redirect_web(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('web.html', {'request': request})
-
-
-@app.get("/{lang}/pdf/")
-async def redirect_pdf(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('pdf.html', {'request': request})
-
-
-@app.get("/{lang}/image/")
-async def redirect_image(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('image.html', {'request': request})
-
-
-@app.get("/{lang}/recording/")
-def redirect_recording(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('record.html', {'request': request})
-
-
-@app.get("/{lang}/streaming/")
-async def redirect_streaming(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('streaming.html', {'request': request})
-
-
-@app.get("/{lang}/history/", response_class=HTMLResponse)
-async def redirect_history(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('history.html', {'request': request})
-
-
-@app.get("/{lang}/github/")
-async def redirect_github(request: Request, lang: str) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('github.html', {'request': request})
-
-
-@app.get("/{lang}/privacy")
-async def privacy(request: Request, lang: str):
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse("privacy.html", {"request": request})
 
 
 if __name__ == '__main__':
