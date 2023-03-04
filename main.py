@@ -1,27 +1,16 @@
 import os
-import shutil
-import time
-from uuid import uuid4
 from datetime import datetime
 from pathlib import Path
-from typing import List
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, UploadFile, Form, File
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from movie_maker import BrowserConfig, MovieConfig, MovieMaker
-from movie_maker.config import ImageConfig
-from threading import Thread
 import api
-
 from gcs import BucketManager
-from models import BrowserSetting, GithubSetting
-from util import pdf_to_image, to_m3u8, upload_hls_files, add_frames
 from utils.setup_logger import get_logger
 from utils.i18n import get_lang
-
 from i18n import babel, check_trans
 from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
 
@@ -153,60 +142,6 @@ async def get_stream(uuid: str, file_name: str):
     else:
         logger.info(f'Return local ts file. {movie_path}')
         return FileResponse(movie_path)
-
-
-@app.post("/api/stream/")
-def post_stream(request: Request, movie: UploadFile = Form(), uuid: str = Form(), is_first: bool = Form()) -> dict:
-    """
-    Uploader movie convert to .m3u8 file. Movie file is saved in 'movie/{session_id}/video.m3u8'.
-    :param request: Request
-    :param movie: movie file
-    :param uuid: session id
-    :param is_first: if is_first is true, create movie directory.
-    :return: message
-    """
-
-    if not movie:
-        raise HTTPException(status_code=400, detail="Movie file is empty.")
-    movie_dir = Path(f"movie/{uuid}")
-    movie_dir.mkdir(exist_ok=True, parents=True)
-    movie_path = movie_dir / f"video.mp4"
-    # write movie file.
-    mode = "ab" if movie_path.exists() else "wb"
-    with open(movie_path, mode) as f:
-        f.write(movie.file.read())
-    if not is_first: return {"message": "success"}
-
-    # upload to GCS
-    output_path = movie_dir / "video.m3u8"
-    Thread(target=upload_hls_files, args=(output_path, uuid, BucketManager(BUCKET_NAME))).start()
-    origin = request.headers["origin"]
-    base_url = f"{origin}/stream/{uuid}/"
-    # convert to m3u8 file.
-    Thread(target=to_m3u8, args=(movie_path, output_path, base_url)).start()
-    url = f'/api/stream/{uuid}/'
-    return {"message": "ok", 'url': url}
-
-
-@app.get("/api/delete-movie/")
-def delete_movie() -> dict:
-    """
-    Delete movie files in movie directory. If file age is over 1 hour, delete the file.
-    :return: message and deleted file list.
-    """
-    movie_dir = Path("movie")
-    deleted_files = []
-    _1_hour_ago = time.time() - 60 * 60
-    for file in movie_dir.glob("**/*.mp4"):
-        if file.is_dir():
-            # if directory is empty, delete the directory.
-            if len(list(file.glob("*"))) == 0: file.rmdir()
-            deleted_files.append(str(file))
-            continue
-        if file.stat().st_mtime < _1_hour_ago:
-            file.unlink()
-            deleted_files.append(str(file))
-    return {"message": "ok", "deleted_files": deleted_files}
 
 
 @app.get("/cache/{file_path:path}")
