@@ -15,64 +15,65 @@ babel.install_jinja(templates)
 router = APIRouter()
 
 
+@router.get("/{lang}/", response_class=HTMLResponse)
+async def redirect_home(request: Request,
+                        lang: str = Path(default="en", regex="^(en|ja)$")) -> templates.TemplateResponse:
+    check_trans(babel)
+    babel.locale = lang
+    return templates.TemplateResponse('home.html', {'request': request})
+
+
 @router.get("/{lang}/web/", response_class=HTMLResponse)
-async def redirect_web(request: Request, lang: str = Path(regex="^(ja|en)$")) -> templates.TemplateResponse:
+async def redirect_web(request: Request, lang: str = Path(regex="")) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('web.html', {'request': request})
 
 
 @router.get("/{lang}/pdf/")
-async def redirect_pdf(request: Request, lang: str = Path(regex="^(ja|en)$")) -> templates.TemplateResponse:
+async def redirect_pdf(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('pdf.html', {'request': request})
 
 
 @router.get("/{lang}/image/")
-async def redirect_image(request: Request, lang: str = Path(regex="^(ja|en)$")) -> templates.TemplateResponse:
+async def redirect_image(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('image.html', {'request': request})
 
 
 @router.get("/{lang}/recording/")
-def redirect_recording(request: Request, lang: str = Path(regex="^(ja|en)$")) -> templates.TemplateResponse:
+def redirect_recording(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('record.html', {'request': request})
 
 
 @router.get("/{lang}/streaming/")
-async def redirect_streaming(request: Request, lang: str = Path(regex="^(ja|en)$")) -> templates.TemplateResponse:
+async def redirect_streaming(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('streaming.html', {'request': request})
 
 
 @router.get("/{lang}/history/", response_class=HTMLResponse)
-async def redirect_history(request: Request, lang: str = Path(regex="^(ja|en)$")) -> templates.TemplateResponse:
+async def redirect_history(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('history.html', {'request': request})
 
 
 @router.get("/{lang}/github/")
-async def redirect_github(request: Request, lang: str = Path(regex="^(ja|en)$")) -> templates.TemplateResponse:
+async def redirect_github(request: Request, lang: str) -> templates.TemplateResponse:
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse('github.html', {'request': request})
 
 
 @router.get("/{lang}/privacy")
-async def privacy(request: Request, lang: str = Path(regex="^(ja|en)$")):
+async def privacy(request: Request, lang: str):
     check_trans(babel)
     babel.locale = lang
     return templates.TemplateResponse("privacy.html", {"request": request})
-
-
-@router.get("/{lang}/", response_class=HTMLResponse)
-async def redirect_home(request: Request, lang: str = Path(regex="^(ja|en)$")) -> templates.TemplateResponse:
-    check_trans(babel)
-    babel.locale = lang
-    return templates.TemplateResponse('home.html', {'request': request})

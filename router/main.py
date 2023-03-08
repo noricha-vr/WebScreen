@@ -11,8 +11,6 @@ from fastapi.staticfiles import StaticFiles
 from gcs import BucketManager
 from utils.setup_logger import get_logger
 from utils.i18n import get_lang
-from i18n import babel
-from fastapi_babel.middleware import InternationalizationMiddleware as I18nMiddleware
 
 logger = get_logger(__name__)
 DEBUG = os.getenv('DEBUG') == 'True'
@@ -24,7 +22,6 @@ MOVIE_DIR = ROOT_DIR / "movie"
 app = FastAPI(debug=DEBUG)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/movie", StaticFiles(directory=MOVIE_DIR), name="movie")
-app.add_middleware(I18nMiddleware, babel=babel)
 
 origins = [
     os.environ.get("ALLOW_HOST", None)
