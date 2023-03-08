@@ -41,7 +41,6 @@ app.add_middleware(
 )
 
 app.include_router(api.router, prefix="/api")
-app.include_router(main_page.router, )
 
 
 # Redirects
@@ -92,12 +91,12 @@ async def github(request: Request) -> RedirectResponse:
 
 @app.get("/robots.txt/")
 async def robots_txt():
-    return FileResponse("../static/robots.txt")
+    return FileResponse("static/robots.txt")
 
 
 @app.get("/sitemap.xml")
 async def sitemap():
-    return FileResponse("../static/sitemap.xml")
+    return FileResponse("static/sitemap.xml")
 
 
 @app.get("/favicon.ico")
@@ -139,6 +138,8 @@ async def read_static_file(file_path: str):
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
 
+
+app.include_router(main_page.router)  # main page needs to load after all routes. It routes all paths to `/{lang}/`
 
 if __name__ == '__main__':
     # reload = True
