@@ -1,4 +1,3 @@
-git+https://github.com/noricha-vr/MovieMaker.git@7e2e46ed13f6e37b5f2259b5f95c71cd7ac4dcb6
 fastapi==0.87.0
 httpx==0.23.0
 google-cloud-storage==2.5.0
@@ -10,4 +9,7 @@ python-multipart==0.0.5
 uvicorn[standard]==0.18.3
 opencv-python==4.6.0.66
 babel==2.11.0
+source-converter>=0.1.18
+selenium==4.5.0
+Pillow==9.3.0
 git+https://github.com/Anbarryprojects/fastapi-babel.git@3da8ef7f99eec280bef9bfc7fe5122ee4273381f

@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 from fastapi import HTTPException, Request, UploadFile, Form, File
-from movie_maker import BrowserConfig, MovieConfig, MovieMaker
+from movie_maker.movie_maker import BrowserConfig, MovieConfig, MovieMaker
 from movie_maker.config import ImageConfig
 from threading import Thread
 from gcs import BucketManager
@@ -53,7 +53,7 @@ def url_to_movie(browser_setting: BrowserSetting) -> dict:
     if browser_setting.url.startswith("http") is False:
         raise HTTPException(
             status_code=400, detail="URL is not valid. Please set URL.")
-    scroll = int(browser_setting.height // 3)
+    scroll = int(browser_setting.height // 4)
     browser_config = BrowserConfig(browser_setting.url, browser_setting.width, browser_setting.height,
                                    browser_setting.page_height, scroll, lang=browser_setting.lang,
                                    wait_time=browser_setting.wait_time)
@@ -77,7 +77,7 @@ def url_to_movie(browser_setting: BrowserSetting) -> dict:
 
 
 @router.post("/image-to-movie/")
-async def image_to_movie(images: List[UploadFile]) -> dict:
+async def image_to_movie(images: List[UploadFile] = File(...)) -> dict:
     """
     Merge images and create a movie.
     :param images: List of image files
