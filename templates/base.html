@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="{{ request.path_params.lang }}">
+
 <head>
     <!-- Title -->
     <title>{% block title %}{% endblock %}</title>
@@ -12,17 +13,18 @@
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta http-equiv="content-language" content="{{ request.path_params.lang }}">
     <meta name="author" content="noricha">
-    <link rel='canonical' href='{{ request.url }}'/>
-    <meta property="og:site_name" content="{{ _("Web Screen|Web、画像、PDFをVRChatで見れる動画に変換！画面録画や画面共有にも対応") }}"/>
-    <meta property="og:image"
-          content="{{ _("https://storage.googleapis.com/noricha-public/web-screen/image/og-image/web-screen-ja.webp") }}"/>
-    <meta property="og:url" content="{{ request.url }}"/>
+    <link rel='canonical' href='{{ request.url }}' />
+    <meta property="og:site_name" content="{{ _(" Web Screen|Web、画像、PDFをVRChatで見れる動画に変換！画面録画や画面共有にも対応") }}" />
+    <meta property="og:image" content="{{ _("
+        https://storage.googleapis.com/noricha-public/web-screen/image/og-image/web-screen-ja.webp") }}" />
+    <meta property="og:url" content="{{ request.url }}" />
     <!-- Custom meta tags -->
     {% block meta_tag %}
     {% endblock %}
     <!-- Bootstrap CSS -->
-    {#    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"#}
-    {#          integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">#}
+    {#
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" #} {#
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">#}
     <link href="https://storage.googleapis.com/noricha-public/web-screen/css/bootstrap.min.css" rel="stylesheet">
 
     <!-- Google tag (gtag.js) -->
@@ -41,71 +43,73 @@
     <!-- custom.css-->
     <link rel="stylesheet" href="/static/css/custom.css">
 </head>
-<body>
-<header>
-    <div class=" bg-light text-center">
-        <a href="/{{ request.path_params.lang }}" alt="{{ _("WebScreenトップページ") }}">
-            <picture>
-                <source srcset="https://storage.googleapis.com/noricha-public/web-screen/image/header-7.png"
+
+<body class="d-flex flex-column min-vh-100">
+    <header>
+        <div class=" bg-light text-center">
+            <a href="/{{ request.path_params.lang }}" alt="{{ _(" WebScreenトップページ") }}">
+                <picture>
+                    <source srcset="https://storage.googleapis.com/noricha-public/web-screen/image/header-7.png"
                         media="(max-width: 767px)">
-                <source srcset="https://storage.googleapis.com/noricha-public/web-screen/image/header-2000.png"
+                    <source srcset="https://storage.googleapis.com/noricha-public/web-screen/image/header-2000.png"
                         media="(min-width: 768px)">
-                <img src="https://storage.googleapis.com/noricha-public/web-screen/image/header-2000.png"
-                     class="img-fluid" alt="WebScreenロゴ" width="1000" height="100">
-            </picture>
+                    <img src="https://storage.googleapis.com/noricha-public/web-screen/image/header-2000.png"
+                        class="img-fluid" alt="WebScreenロゴ" width="1000" height="100">
+                </picture>
 
-        </a>
-    </div>
-    <nav class="border-bottom border-top justify-content-center nav nav-pills navbar-light p-1">
-        <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/">{{ _("ホーム") }}</a>
-        <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/web/">{{ _("Web") }}</a>
-        <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/image/">{{ _("画像") }}</a>
-        <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/pdf/">{{ _("PDF") }}</a>
-        <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/recording/">{{ _("画面録画") }}</a>
-        <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/streaming/">{{ _("画面共有") }}</a>
-        <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/history/">{{ _("履歴") }}</a>
-        <a class="nav-link text-white pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
-           href="/{{ request.path_params.lang }}/github/">GitHub</a>
-    </nav>
-</header>
+            </a>
+        </div>
+        <nav class="border-bottom border-top justify-content-center nav nav-pills navbar-light p-1">
+            <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
+                href="/{{ request.path_params.lang }}/">{{ _("ホーム") }}</a>
+            <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
+                href="/{{ request.path_params.lang }}/web/">{{ _("Web") }}</a>
+            <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
+                href="/{{ request.path_params.lang }}/image/">{{ _("画像") }}</a>
+            <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
+                href="/{{ request.path_params.lang }}/pdf/">{{ _("PDF") }}</a>
+            <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
+                href="/{{ request.path_params.lang }}/recording/">{{ _("画面録画") }}</a>
+            <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
+                href="/{{ request.path_params.lang }}/streaming/">{{ _("画面共有") }}</a>
+            <a class="nav-link text-dark pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
+                href="/{{ request.path_params.lang }}/history/">{{ _("履歴") }}</a>
+            <a class="nav-link text-white pb-1 pt-1" hreflang="{{ request.path_params.lang }}"
+                href="/{{ request.path_params.lang }}/github/">GitHub</a>
+        </nav>
+    </header>
+    <main class="mb-auto">
+        {% block content %}
 
-{% block content %}
+        {% endblock %}
+        <div id="cookie-consent" class="bg-dark text-white p-2 fixed-bottom text-center visually-hidden">
+            {{ _("このウェブサイトはCookieを利用しています。") }}<a class="text-light" href="/{{ request.path_params.lang }}/privacy">{{
+                _("Cookieの利用について") }}</a>{{ _("許可しますか？") }}
+            <button onclick="allowCookies()" class="btn btn-outline-light rounded-pill ml-2">{{ _("はい") }}</button>
+            <button onclick="denyCookies()" class="btn btn-outline-light rounded-pill ml-2">{{ _("いいえ") }}</button>
+        </div>
+    </main>
 
-{% endblock %}
-<div id="cookie-consent" class="bg-dark text-white p-2 fixed-bottom text-center visually-hidden">
-    {{ _("このウェブサイトはCookieを利用しています。") }}<a class="text-light"
-                                          href="/{{ request.path_params.lang }}/privacy">{{ _("Cookieの利用について") }}</a>{{ _("許可しますか？") }}
-    <button onclick="allowCookies()" class="btn btn-outline-light rounded-pill ml-2">{{ _("はい") }}</button>
-    <button onclick="denyCookies()" class="btn btn-outline-light rounded-pill ml-2">{{ _("いいえ") }}</button>
-</div>
+    <footer class="mt-5" style="background-color: #e0e0e0">
+        <div class="container text-center">
+            <a href="https://sites.google.com/view/vrc-personal-development/oss%E9%9B%86%E4%BC%9A" class="text-dark"
+                style="text-decoration: underline;" target="_blank">{{ _("Powered by OSS集会") }}</a> |
+            <a href="https://github.com/noricha-vr/WebScreen" class="text-dark" style="text-decoration: underline;"
+                target="_blank">GitHub</a>
+        </div>
+    </footer>
+    <script src="/static/js/util.js"></script>
+    <!-- Custom script -->
+    {% block script %}{% endblock %}
 
-
-<footer class="mt-5" style="background-color: #e0e0e0">
-    <div class="container text-center">
-        <a href="https://sites.google.com/view/vrc-personal-development/oss%E9%9B%86%E4%BC%9A" class="text-dark"
-           style="text-decoration: underline;" target="_blank">{{ _("Powered by OSS集会") }}</a> |
-        <a href="https://github.com/noricha-vr/WebScreen" class="text-dark" style="text-decoration: underline;"
-           target="_blank">GitHub</a>
-    </div>
-</footer>
-<script src="/static/js/util.js"></script>
-<!-- Custom script -->
-{% block script %}{% endblock %}
-
-<!-- Bootstrap Bundle with Popper -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-        crossorigin="anonymous" async></script>
-<script>
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"
+        async></script>
+    <script>
 
 
-</script>
+    </script>
 </body>
+
 </html>
