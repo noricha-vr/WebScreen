@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2023-03-04 04:54+0000\n"
+"POT-Creation-Date: 2023-08-15 06:49+0000\n"
 "PO-Revision-Date: 2022-12-30 08:33+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fa\n"
@@ -40,11 +40,11 @@ msgstr ""
 msgid "Web"
 msgstr ""
 
-#: templates/base.html:65 templates/image.html:29
+#: templates/base.html:65 templates/image.html:25
 msgid "画像"
 msgstr ""
 
-#: templates/base.html:67 templates/pdf.html:28
+#: templates/base.html:67 templates/pdf.html:26
 msgid "PDF"
 msgstr ""
 
@@ -56,7 +56,7 @@ msgstr ""
 msgid "画面共有"
 msgstr ""
 
-#: templates/base.html:73 templates/history.html:21
+#: templates/base.html:73 templates/history.html:24
 msgid "履歴"
 msgstr ""
 
@@ -140,15 +140,19 @@ msgstr ""
 msgid "動画をダウンロードすることで、パソコンに保存したり、Twitterに投稿できます。"
 msgstr ""
 
-#: templates/history.html:23
+#: templates/history.html:21
+msgid "Cookieを許可すると、履歴が有効になります。"
+msgstr ""
+
+#: templates/history.html:26
 msgid "過去に動画化したURLを「コピー」して、VRChatのプレイヤーに表示できます。"
 msgstr ""
 
-#: templates/history.html:54
+#: templates/history.html:57
 msgid "履歴は動画を作成してから14日で消えます。"
 msgstr ""
 
-#: templates/history.html:55
+#: templates/history.html:58
 msgid "ダウンロードして自分のパソコンに動画を保存したり、Twitterに投稿できます。"
 msgstr ""
 
@@ -179,7 +183,7 @@ msgstr ""
 msgid "webページを動画に変換"
 msgstr ""
 
-#: templates/home.html:40 templates/image.html:22
+#: templates/home.html:40 templates/image.html:18
 msgid "画像を動画に変換"
 msgstr ""
 
@@ -223,7 +227,7 @@ msgstr ""
 msgid "ワールド巡りやフレンドと撮った写真をすぐにVRChat内でみんなで鑑賞。"
 msgstr ""
 
-#: templates/home.html:99 templates/home.html:108 templates/pdf.html:21
+#: templates/home.html:99 templates/home.html:108 templates/pdf.html:19
 msgid "PDFを動画に変換"
 msgstr ""
 
@@ -255,39 +259,47 @@ msgstr ""
 msgid "履歴からは、過去14間に変換した動画のリンクやダウンロードが行えます。ダウンロードした動画はTwitterなどに投稿して共有できます。"
 msgstr ""
 
-#: templates/image.html:2 templates/image.html:5
+#: templates/image.html:2
 msgid "Web Screenで画像をVRChat用の動画に変換！"
 msgstr ""
 
-#: templates/image.html:8 templates/image.html:12
-msgid "Web Screenに画像を入力すると動画に変換してくれます。"
+#: templates/image.html:5
+msgid " Web Screenで画像をVRChat用の動画に変換！"
 msgstr ""
 
-#: templates/image.html:9 templates/image.html:13
+#: templates/image.html:7 templates/image.html:9
+msgid " Web Screenに画像を入力すると動画に変換してくれます。"
+msgstr ""
+
+#: templates/image.html:8 templates/image.html:10
 msgid "変換された動画のURLをVRChat内の動画プレイヤーに貼り付けると画像を表示できます。"
 msgstr ""
 
-#: templates/image.html:10 templates/image.html:14
+#: templates/image.html:8 templates/image.html:10
 msgid "ワールド巡りをした写真や、フレンドと撮った写真を一緒に見返せます。"
 msgstr ""
 
-#: templates/image.html:23
+#: templates/image.html:19
 msgid "VRChatの動画プレイヤー用に画像を動画化できます"
 msgstr ""
 
-#: templates/image.html:28
+#: templates/image.html:24
 msgid "動画に変換したい画像を選択してください"
 msgstr ""
 
-#: templates/image.html:33
+#: templates/image.html:28
+msgid "最大合計ファイルサイズ32MB"
+msgstr ""
+
+#: templates/image.html:29
 msgid "複数枚選択可能。ドラッグもOK！"
 msgstr ""
 
-#: templates/image.html:34
+#: templates/image.html:30
 msgid "順番を設定するには01、02、03...のようにファイル名を設定してください。"
 msgstr ""
 
-#: templates/image.html:36 templates/pdf.html:51 templates/web.html:82
+#: templates/image.html:32 templates/pdf.html:46 templates/web.html:82
 msgid "動画に変換"
 msgstr ""
 
@@ -335,39 +347,47 @@ msgstr ""
 msgid "URLをクリックすると動画を確認できます。"
 msgstr ""
 
-#: templates/pdf.html:2 templates/pdf.html:5
+#: templates/pdf.html:2
 msgid "Web ScreenでPDFをVRChat用の動画に変換！"
 msgstr ""
 
-#: templates/pdf.html:8 templates/pdf.html:11
-msgid "Web ScreenにPDFを入力すると動画に変換できます。"
+#: templates/pdf.html:5
+msgid " Web ScreenでPDFをVRChat用の動画に変換！"
 msgstr ""
 
-#: templates/pdf.html:9 templates/pdf.html:12
+#: templates/pdf.html:7 templates/pdf.html:9
+msgid " Web ScreenにPDFを入力すると動画に変換できます。"
+msgstr ""
+
+#: templates/pdf.html:8 templates/pdf.html:10
 msgid "変換された動画のURLをVRChat内の動画プレイヤーやスライドシステムに貼り付けるとPDFを表示できます。"
 msgstr ""
 
-#: templates/pdf.html:22
+#: templates/pdf.html:20
 msgid "PDFを動画に変換して、VRChatのスライドシステムに表示できます"
 msgstr ""
 
-#: templates/pdf.html:27
+#: templates/pdf.html:25
 msgid "動画に変換したいPDFを選択してください"
 msgstr ""
 
-#: templates/pdf.html:33
+#: templates/pdf.html:30
+msgid "最大ファイルサイズ32MB"
+msgstr ""
+
+#: templates/pdf.html:31
 msgid "1ページの表示時間"
 msgstr ""
 
-#: templates/pdf.html:39 templates/web.html:52
+#: templates/pdf.html:35 templates/web.html:52
 msgid "1秒"
 msgstr ""
 
-#: templates/pdf.html:46
+#: templates/pdf.html:41
 msgid "2秒"
 msgstr ""
 
-#: templates/pdf.html:61
+#: templates/pdf.html:56
 msgid "おすすめのスライドシステム"
 msgstr ""
 
@@ -884,5 +904,11 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "さらに、Webページを他のユーザーと共有することで、そのページを話題にすることができます。"
+#~ msgstr ""
+
+#~ msgid "Web Screenに画像を入力すると動画に変換してくれます。"
+#~ msgstr ""
+
+#~ msgid "Web ScreenにPDFを入力すると動画に変換できます。"
 #~ msgstr ""
 
