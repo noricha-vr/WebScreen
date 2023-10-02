@@ -96,7 +96,8 @@ class MovieMaker:
                     '-c:v', 'h264',
                             '-pix_fmt', 'yuv420p',
                             '-preset', movie_config.encode_speed,
-                            '-profile:v', 'baseline',  # 追加した部分
+                            '-profile:v', 'baseline',  # Baseline Profile を使う
+                            '-bf', '0', # Bidirectional Predictive Frame を使わない
                             '-tune', 'stillimage',
                             '-y',
                             f'{movie_config.output_movie_path}']

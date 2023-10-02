@@ -23,8 +23,8 @@ class MovieConfig:
     width: int = 1280
     height: int = 720
     image_type: str = 'png'
-    frame_rate: int = 4
-    max_frame_rate: int = 4
+    frame_rate: int = 6
+    max_frame_rate: int = 6
     encode_speed: str = 'medium'
     has_audio: bool = True
 
