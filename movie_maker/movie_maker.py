@@ -80,16 +80,17 @@ class MovieMaker:
         # stop watch
         start = time.time()
         commands = ['ffmpeg',
-                    '-framerate', f'{movie_config.frame_rate}',
-                    # Select image_dir/*.file_type
-                    '-pattern_type', 'glob', '-i', f'{movie_config.input_image_dir}/*.{movie_config.image_type}',
-                    '-vf', f"scale='min({movie_config.width},iw)':-2",  # iw is input width, -2 is auto height
-                    '-c:v', 'h264',  # codec
-                    '-pix_fmt', 'yuv420p',  # pixel format (color space)
-                    '-preset', movie_config.encode_speed,
-                    '-tune', 'stillimage',  # tune for still image
-                    '-y',  # overwrite output file
-                    f'{movie_config.output_movie_path}']
+                            '-framerate', f'{movie_config.frame_rate}',
+                            '-pattern_type', 'glob', '-i', f'{movie_config.input_image_dir}/*.{movie_config.image_type}',
+                            '-vf', f"scale='min({movie_config.width},iw)':-2",
+                            '-c:v', 'h264',
+                            '-pix_fmt', 'yuv420p',
+                            '-preset', movie_config.encode_speed,
+                            '-profile:v', 'baseline',  # 追加した部分
+                            '-tune', 'stillimage',
+                            '-y',
+                            f'{movie_config.output_movie_path}']
+
         logger.info(f'command: {commands}')
         subprocess.call(commands)
         logger.info(f"MovieMaker.image_to_movie: {time.time() - start} sec")
