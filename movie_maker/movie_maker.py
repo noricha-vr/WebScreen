@@ -14,6 +14,13 @@ from dataclasses import dataclass
 import logging
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 class MovieMaker:
@@ -50,17 +57,18 @@ class MovieMaker:
         :param movie_config:
         :return None:
         """
-        audio_setting = ['-c:a', 'aac', '-strict', '-2'] if movie_config.has_audio else ['-an']
+        audio_setting = ['-c:a', 'aac', '-strict',
+                         '-2'] if movie_config.has_audio else ['-an']
         command = [
-                      'ffmpeg',
-                      '-i', f'{movie_config.input_image_dir}',
-                      '-c:v', 'copy',  # copy codec(video)
-                  ] + audio_setting + [
-                      '-pix_fmt', 'yuv420p',  # pixel format (color space)
-                      '-y',  # overwrite output file
-                      f'{movie_config.output_movie_path}'
-                  ]
-        logger.info(f'command: {command}')
+            'ffmpeg',
+            '-i', f'{movie_config.input_image_dir}',
+            '-c:v', 'copy',  # copy codec(video)
+        ] + audio_setting + [
+            '-pix_fmt', 'yuv420p',  # pixel format (color space)
+            '-y',  # overwrite output file
+            f'{movie_config.output_movie_path}'
+        ]
+        logger.info(f'ffmpeg command: {" ".join(command)}')
         subprocess.call(command)
 
     @staticmethod
@@ -70,20 +78,22 @@ class MovieMaker:
         :param movie_config:
         :return None:
         """
-        image_paths = sorted(movie_config.input_image_dir.glob(f'*.{movie_config.image_type}'))
+        image_paths = sorted(movie_config.input_image_dir.glob(
+            f'*.{movie_config.image_type}'))
         if len(image_paths) == 0:
             raise Exception(
                 f"No image files in {movie_config.input_image_dir.absolute()}. "
                 f"Target file type is {movie_config.image_type}"
                 f"Image dir files are {list(movie_config.input_image_dir.glob('*'))}")
-        MovieMaker.__copy_for_frame_rate_images(image_paths, movie_config.frame_rate)
+        MovieMaker.__copy_for_frame_rate_images(
+            image_paths, movie_config.frame_rate)
         # stop watch
         start = time.time()
         commands = ['ffmpeg',
-                            '-framerate', f'{movie_config.frame_rate}',
-                            '-pattern_type', 'glob', '-i', f'{movie_config.input_image_dir}/*.{movie_config.image_type}',
-                            '-vf', f"scale='min({movie_config.width},iw)':-2",
-                            '-c:v', 'h264',
+                    '-framerate', f'{movie_config.frame_rate}',
+                    '-pattern_type', 'glob', '-i', f'{movie_config.input_image_dir}/*.{movie_config.image_type}',
+                    '-vf', f"scale='min({movie_config.width},iw)':-2",
+                    '-c:v', 'h264',
                             '-pix_fmt', 'yuv420p',
                             '-preset', movie_config.encode_speed,
                             '-profile:v', 'baseline',  # 追加した部分
@@ -147,12 +157,16 @@ class MovieMaker:
         if len(words) < 5:
             raise Exception(f"Invalid GitHub URL: {browser_config.url}")
         project_name = words[4]
-        folder_path = GithubDownloader.download_github_archive_and_unzip_to_file(browser_config.url, project_name)
-        project_path = GithubDownloader.rename_project(folder_path, project_name)
+        folder_path = GithubDownloader.download_github_archive_and_unzip_to_file(
+            browser_config.url, project_name)
+        project_path = GithubDownloader.rename_project(
+            folder_path, project_name)
         # Convert the source codes to html files.
         source_converter = SourceConverter('default')
-        html_file_path = source_converter.project_to_html(project_path, browser_config.targets)
-        image_dir = MovieMaker.take_local_file_screenshots(html_file_path, browser_config)
+        html_file_path = source_converter.project_to_html(
+            project_path, browser_config.targets)
+        image_dir = MovieMaker.take_local_file_screenshots(
+            html_file_path, browser_config)
         return image_dir
 
     @staticmethod
@@ -162,23 +176,29 @@ class MovieMaker:
         Format images.
         :param image_config:
         """
-        types = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif', '.svg', '.avif']
+        types = ['.jpg', '.jpeg', '.png', '.webp',
+                 '.bmp', '.tiff', '.tif', '.svg', '.avif']
         image_paths = []
         # Get image paths.
         for path in image_config.input_image_dir.glob("*"):
             suffix = path.suffix.lower()
-            if suffix not in types: continue
+            if suffix not in types:
+                continue
             image_paths.append(path)
         if len(image_paths) == 0:
-            raise Exception(f"No image files in {image_config.input_image_dir.absolute()}")
+            raise Exception(
+                f"No image files in {image_config.input_image_dir.absolute()}")
         image_config.output_image_dir.mkdir(exist_ok=True)
         images = [Image.open(image_path) for image_path in image_paths]
         for i, image in enumerate(images):
-            background = Image.new('RGB', (image_config.width, image_config.height), (0, 0, 0))
+            background = Image.new(
+                'RGB', (image_config.width, image_config.height), (0, 0, 0))
             # resize image. keep aspect ratio
-            image.thumbnail((image_config.width, image_config.height), Image.ANTIALIAS)
+            image.thumbnail(
+                (image_config.width, image_config.height), Image.ANTIALIAS)
             # centering
             background.paste(image, (
                 int((image_config.width - image.width) / 2), int((image_config.height - image.height) / 2)))
-            new_path = image_config.output_image_dir.joinpath(f'{image_paths[i].stem}.png')
+            new_path = image_config.output_image_dir.joinpath(
+                f'{image_paths[i].stem}.png')
             background.save(new_path, 'PNG')
