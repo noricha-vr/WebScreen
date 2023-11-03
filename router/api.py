@@ -65,8 +65,8 @@ def url_to_movie(browser_setting: BrowserSetting) -> dict:
     try:
         image_dir = MovieMaker.take_screenshots(browser_config)
     except Exception as e:
-        logger.error(f'Failed to make movie.  url: {browser_setting.url} {e}')
-        raise HTTPException(status_code=500, detail="Failed to create movie.")
+        logger.error(f'Failed to create a movie.  url: {browser_setting.url} {e}')
+        raise HTTPException(status_code=500, detail="Failed to create a movie.")
     movie_config = MovieConfig(
         image_dir, movie_path, width=browser_setting.width)
     MovieMaker.image_to_movie(movie_config)
