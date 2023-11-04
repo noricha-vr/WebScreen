@@ -14,10 +14,12 @@ RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.d
     dpkg -i google-chrome-stable_current_amd64.deb; apt-get -fy install \
     && rm google-chrome-stable_current_amd64.deb
 # Download and extract the latest version of ChromeDriver
-RUN CHROME_DRIVER_VERSION=$(curl -sL "https://chromedriver.storage.googleapis.com/LATEST_RELEASE") && \
-    curl -sL "https://chromedriver.storage.googleapis.com/$CHROME_DRIVER_VERSION/chromedriver_linux64.zip" > chromedriver.zip && \
-    unzip chromedriver.zip -d /usr/local/bin && \
-    rm chromedriver.zip
+RUN curl -s https://googlechromelabs.github.io/chrome-for-testing/ | \
+    grep -o 'https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/[^/]*/linux64/chromedriver-linux64.zip' | \
+    head -n 1 | xargs curl -sL > chromedriver.zip && \
+    unzip chromedriver.zip && \
+    mv chromedriver-linux64/chromedriver /usr/local/bin && \
+    rm -r chromedriver.zip chromedriver-linux64
 
 
 # Install Python dependencies
