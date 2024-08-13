@@ -4,13 +4,14 @@ const stopElem = document.getElementById("stop");
 const progressAreaElm = document.getElementById("progress-bar-area");
 const mineType = 'video/mp4';
 let mediaRecorder = null;
+let recordingTimer = null;
+const MAX_RECORDING_TIME = 180000; // 3 minutes in milliseconds
 
 // Set event listeners for the start and stop buttons
 startElem.addEventListener("click", function (evt) {
     startRecording();
 }, false);
 
-// TODO add stopRecording on default stop button.
 stopElem.addEventListener("click", function (evt) {
     stopRecording();
 }, false);
@@ -23,7 +24,7 @@ async function recordScreen() {
             sampleSize: 16,
             autoGainControl: true
         },
-        video: {mediaSource: "screen"}
+        video: { mediaSource: "screen" }
     });
 }
 
@@ -95,8 +96,23 @@ async function startRecording() {
     startElem.classList.add('visually-hidden');
     stopElem.classList.remove('visually-hidden');
     mediaRecorder = createRecorder(stream, mimeType);
+
+    // Start the recording timer
+    recordingTimer = setTimeout(endRecordingByTimeout, MAX_RECORDING_TIME);
 }
 
 function stopRecording() {
-    mediaRecorder.stop();
+    if (mediaRecorder) {
+        mediaRecorder.stop();
+    }
+    // Clear the recording timer
+    if (recordingTimer) {
+        clearTimeout(recordingTimer);
+        recordingTimer = null;
+    }
+}
+
+function endRecordingByTimeout() {
+    alert("Recording time limit of 3 minutes has been reached. The recording will now stop.");
+    stopRecording();
 }
