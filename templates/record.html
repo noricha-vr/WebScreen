@@ -1,55 +1,52 @@
 {% extends 'base.html' %}
 {% block title %}{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示！") }}{% endblock %}
 {% block meta_tag %}
-    <meta property="og:title" content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示！") }}"/>
-    <meta property="og:type" content="article"/>
-    <meta name="description"
-          content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示できます。") }}
-          {{ _("画面を録画して、録画した動画のURLを取得できます。") }}
-          {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けると、録画した画面を動画プレイヤーに表示できます。") }}">
-    <meta property="og:description"
-          content="{{ _("Web Screenでパソコンの画面録画をしてVRChatに表示できます。") }}
-          {{ _("画面を録画して、録画した動画のURLを取得できます。") }}
-          {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けると、録画した画面を動画プレイヤーに表示できます。") }}">
+<meta property="og:title" content="{{ _(" Web Screenでパソコンの画面録画をしてVRChatに表示！") }}" />
+<meta property="og:type" content="article" />
+<meta name="description" content="{{ _(" Web Screenでパソコンの画面録画をしてVRChatに表示できます。") }} {{ _("画面を録画して、録画した動画のURLを取得できます。")
+    }} {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けると、録画した画面を動画プレイヤーに表示できます。") }}">
+<meta property="og:description" content="{{ _(" Web Screenでパソコンの画面録画をしてVRChatに表示できます。") }} {{
+    _("画面を録画して、録画した動画のURLを取得できます。") }} {{ _("動画のURLをVRChat内の動画プレイヤーに貼り付けると、録画した画面を動画プレイヤーに表示できます。") }}">
 {% endblock %}
 
 {% block content %}
-    <div class="container">
-        <section class="section mt-5">
-            <div class="row justify-content-md-center">
-                <div class="col mb-4 text-center">
-                    <h2 class="h1 mb-3">{{ _("パソコンの画面を録画") }}</h2>
-                    <h1 class="h6 text-secondary">{{ _("パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます") }}</h1>
-                </div>
+<div class="container">
+    <section class="section mt-5">
+        <div class="row justify-content-md-center">
+            <div class="col mb-4 text-center">
+                <h2 class="h1 mb-3">{{ _("パソコンの画面を録画") }}</h2>
+                <h1 class="h6 text-secondary">{{ _("パソコンの画面を録画して、VRChatの動画プレイヤーで再生きます") }}</h1>
             </div>
-            <div class="row bg-light border p-5 rounded shadow">
-                <div id="start-recording" class="col text-center">
-                    <p>
-                        <button class="btn btn-primary btn-lg mt-3" id="start">{{ _("録画開始") }}</button>&nbsp;
-                        <button class="btn btn-danger btn-lg mt-3 visually-hidden" id="stop">{{ _("録画停止") }}</button>
-                    </p>
-                    <p>
-                        {{ _("「録画開始」を押して録画したい画面を選択します。") }}<br>
-                        {{ _("「録画停止」を押すと動画のアップロードが始まります。") }}
-                    </p>
-                    <div class="visually-hidden" id="progress-bar-area">
-                        <div class="progress">
-                            <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
-                                 aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
-                        </div>
+        </div>
+        <div class="row bg-light border p-5 rounded shadow">
+            <div id="start-recording" class="col text-center">
+                <p>
+                    <button class="btn btn-primary btn-lg mt-3" id="start">{{ _("録画開始") }}</button>&nbsp;
+                    <button class="btn btn-danger btn-lg mt-3 visually-hidden" id="stop">{{ _("録画停止") }}</button>
+                </p>
+                <p>
+                    {{ _("「録画開始」を押して録画したい画面を選択します。") }}<br>
+                    {{ _("※ Chromeの「タブ」は録画できません。ウィンドウを選択してください。") }}<br>
+                    {{ _("「録画停止」を押すと動画のアップロードが始まります。") }}
+                </p>
+                <div class="visually-hidden" id="progress-bar-area">
+                    <div class="progress">
+                        <div class="progress-bar bg-info" role="progressbar" id="progress_bar" aria-valuenow="0"
+                            aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
                     </div>
                 </div>
-                {% include 'output-area.html' %}
             </div>
-            {% include 'how-to/record.html' %}
-            <p>
-                ※ {{ _("スマホでの録画はできません。") }}<br/>
-                ※ {{ _("処理にかかる時間は回線速度、動画の大きさ、録画時間によって異なります。") }}<br/>
-                ※ {{ _("ファイルサイズが大きくなるため、1〜2分程度の短い動画でご利用ください。") }}<br/>
-            </p>
-        </section>
-    </div>
-    <script src="/static/js/util.js"></script>
-    <script src="/static/js/record.js"></script>
-    <script src="/static/js/baseFunctions.js"></script>
+            {% include 'output-area.html' %}
+        </div>
+        {% include 'how-to/record.html' %}
+        <p>
+            ※ {{ _("スマホでの録画はできません。") }}<br />
+            ※ {{ _("処理にかかる時間は回線速度、動画の大きさ、録画時間によって異なります。") }}<br />
+            ※ {{ _("ファイルサイズが大きくなるため、1〜2分程度の短い動画でご利用ください。") }}<br />
+        </p>
+    </section>
+</div>
+<script src="/static/js/util.js"></script>
+<script src="/static/js/record.js"></script>
+<script src="/static/js/baseFunctions.js"></script>
 {% endblock %}
