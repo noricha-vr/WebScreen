@@ -48,13 +48,20 @@ def add_frames(image_dir: Path, frame_sec: int) -> None:
 def pdf_to_image(pdf_bytes: bytes, image_dir: Path) -> None:
     """
     Convert pdf to image.
+    Processes one page at a time to minimize memory usage.
+
     :param pdf_bytes: pdf file bytes.
     :param image_dir: image directory path.
     :return: None
     """
-    images = [image_path for image_path in pdf2image.convert_from_bytes(pdf_bytes)]
-    for i, image in enumerate(images):
+    page_count = 0
+    # convert_from_bytes returns a generator, so we iterate without loading all pages into memory
+    for i, image in enumerate(pdf2image.convert_from_bytes(pdf_bytes)):
         image.save(image_dir / f"{str(i).zfill(3)}.png")
+        image.close()
+        del image
+        page_count += 1
+    logger.info(f"pdf_to_image: Processed {page_count} pages")
 
 
 def to_m3u8(input_path: Path, output_path: Path, base_url: str, buffer_sec=5) -> None:

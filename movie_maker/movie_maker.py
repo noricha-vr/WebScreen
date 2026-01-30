@@ -175,7 +175,8 @@ class MovieMaker:
     def format_images(image_config: ImageConfig) -> None:
         """
         Get types of image paths. Resize image and centering. Save as png.
-        Format images.
+        Format images. Processes one image at a time to minimize memory usage.
+
         :param image_config:
         """
         types = ['.jpg', '.jpeg', '.png', '.webp',
@@ -191,16 +192,19 @@ class MovieMaker:
             raise Exception(
                 f"No image files in {image_config.input_image_dir.absolute()}")
         image_config.output_image_dir.mkdir(exist_ok=True)
-        images = [Image.open(image_path) for image_path in image_paths]
-        for i, image in enumerate(images):
-            background = Image.new(
-                'RGB', (image_config.width, image_config.height), (0, 0, 0))
-            # resize image. keep aspect ratio
-            image.thumbnail(
-                (image_config.width, image_config.height), Image.ANTIALIAS)
-            # centering
-            background.paste(image, (
-                int((image_config.width - image.width) / 2), int((image_config.height - image.height) / 2)))
-            new_path = image_config.output_image_dir.joinpath(
-                f'{image_paths[i].stem}.png')
-            background.save(new_path, 'PNG')
+        # Process one image at a time to minimize memory usage
+        for i, image_path in enumerate(image_paths):
+            with Image.open(image_path) as image:
+                background = Image.new(
+                    'RGB', (image_config.width, image_config.height), (0, 0, 0))
+                # resize image. keep aspect ratio
+                image.thumbnail(
+                    (image_config.width, image_config.height), Image.Resampling.LANCZOS)
+                # centering
+                background.paste(image, (
+                    int((image_config.width - image.width) / 2), int((image_config.height - image.height) / 2)))
+                new_path = image_config.output_image_dir.joinpath(
+                    f'{image_path.stem}.png')
+                background.save(new_path, 'PNG')
+                background.close()
+        logger.info(f"format_images: Processed {len(image_paths)} images")
