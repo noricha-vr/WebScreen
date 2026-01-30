@@ -56,7 +56,7 @@ def pdf_to_image(pdf_bytes: bytes, image_dir: Path) -> None:
     """
     page_count = 0
     # convert_from_bytes returns a generator, so we iterate without loading all pages into memory
-    for i, image in enumerate(pdf2image.convert_from_bytes(pdf_bytes)):
+    for i, image in enumerate(pdf2image.convert_from_bytes(pdf_bytes, size=(1920, None))):
         image.save(image_dir / f"{str(i).zfill(3)}.png")
         image.close()
         del image

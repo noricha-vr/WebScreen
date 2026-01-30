@@ -79,6 +79,35 @@ class TestPdfToImage:
                 expected_path = image_dir / name
                 mock_images[i].save.assert_called_once_with(expected_path)
 
+    def test_pdf_to_image_resizes_to_fhd(self):
+        """Verify that pdf_to_image passes size=(1920, None) to reduce memory usage for 4K PDFs."""
+        # Mock the gcs module before importing util
+        mock_gcs = MagicMock()
+        sys.modules['gcs'] = mock_gcs
+
+        from util import pdf_to_image
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            image_dir = Path(tmpdir)
+
+            mock_images = [MagicMock() for _ in range(2)]
+
+            def mock_generator(*args, **kwargs):
+                for img in mock_images:
+                    yield img
+
+            with patch('util.pdf2image.convert_from_bytes', side_effect=mock_generator) as mock_convert:
+                pdf_to_image(b'dummy_pdf_bytes', image_dir)
+
+                # Verify convert_from_bytes was called with size parameter
+                mock_convert.assert_called_once()
+                call_args = mock_convert.call_args
+                # Check positional argument
+                assert call_args[0][0] == b'dummy_pdf_bytes'
+                # Check keyword argument for size
+                assert 'size' in call_args[1]
+                assert call_args[1]['size'] == (1920, None)
+
 
 class TestFormatImages:
     """Tests for MovieMaker.format_images function."""
