@@ -1,10 +1,10 @@
 # Use the official Python image with version 3.10
 # https://hub.docker.com/_/python
-FROM python:3.10-buster
+FROM python:3.10-bookworm
 
 # Install necessary packages
 RUN apt-get update && apt-get install -y \
-    curl unzip gettext python-babel \
+    curl unzip gettext python3-babel wget \
     ffmpeg \
     poppler-utils \
     fonts-takao-* fonts-wqy-microhei fonts-unfonts-core
@@ -14,11 +14,13 @@ RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.d
     dpkg -i google-chrome-stable_current_amd64.deb; apt-get -fy install && \
     rm google-chrome-stable_current_amd64.deb
 
-# Install ChromeDriver
-RUN CHROME_DRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE) && \
-    wget -O /tmp/chromedriver.zip http://chromedriver.storage.googleapis.com/${CHROME_DRIVER_VERSION}/chromedriver_linux64.zip && \
-    unzip /tmp/chromedriver.zip chromedriver -d /usr/local/bin/ && \
-    rm /tmp/chromedriver.zip && \
+# Install ChromeDriver (Chrome for Testing API)
+RUN DRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+        python3 -c "import sys,json; d=json.load(sys.stdin); print([x['url'] for x in d['channels']['Stable']['downloads']['chromedriver'] if 'linux64' in x['url']][0])") && \
+    wget -O /tmp/chromedriver.zip "$DRIVER_URL" && \
+    unzip /tmp/chromedriver.zip -d /tmp/ && \
+    mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/ && \
+    rm -rf /tmp/chromedriver* && \
     chmod +x /usr/local/bin/chromedriver
 
 # Install Python dependencies
