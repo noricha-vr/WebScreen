@@ -131,17 +131,23 @@ async def pdf_to_movie(pdf: UploadFile = File(), frame_sec: int = Form(...)) -> 
 
 
 @router.post("/save-movie/")
-def recode_desktop(file: bytes = File()) -> dict:
+def recode_desktop(file: UploadFile = File()) -> dict:
     """
     Save movie file. Convert movie for VRChat format. Upload Movie file on GCS. Return download url.
-    :param file: base64 movie.
-    :return: message
+
+    Args:
+        file: MP4 movie file (UploadFile or bytes)
+
+    Returns:
+        Download URL and delete timestamp
     """
     if file:
         temp_movie_path = Path(f"movie/{uuid4()}_temp.mp4")
         movie_path = Path(f"movie/{uuid4()}.mp4")
         with open(temp_movie_path, "wb") as f:
-            f.write(file)
+            # UploadFile の場合は .read() でバイト列を取得
+            content = file.file.read() if hasattr(file, 'file') else file
+            f.write(content)
         start = time.time()
         movie_config = MovieConfig(
             temp_movie_path, movie_path, width=1280, encode_speed='ultrafast')
@@ -150,6 +156,9 @@ def recode_desktop(file: bytes = File()) -> dict:
         bucket_manager = BucketManager(BUCKET_NAME)
         url = bucket_manager.to_public_url(str(movie_path))
         logger.info(f"url: {url}")
+        # 一時ファイルを削除
+        if temp_movie_path.exists():
+            temp_movie_path.unlink()
         return {"url": url, "delete_at": datetime.now().timestamp() + 60 * 60 * 24 * 14}
     return {"message": "not found file."}
 
