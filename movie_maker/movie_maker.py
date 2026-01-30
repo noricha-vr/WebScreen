@@ -98,6 +98,7 @@ class MovieMaker:
                             '-preset', movie_config.encode_speed,
                             '-profile:v', 'baseline',  # Baseline Profile を使う
                             '-bf', '0', # Bidirectional Predictive Frame を使わない
+                            '-g', '1',  # キーフレーム間隔を1に固定（全フレームをキーフレームに）
                             '-tune', 'stillimage',
                             '-y',
                             f'{movie_config.output_movie_path}']
