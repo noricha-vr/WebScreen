@@ -27,7 +27,6 @@
                 <input type="file" accept="application/pdf" multiple class="form-control border border-dark" id="files"
                     name="files" placeholder="https://">
                 <div class="mt-3">
-                    <div>※ {{ _("最大ファイルサイズ32MB") }}</div>
                     <div>{{ _("1ページの表示時間") }}:</div>
                     <div class="form-check-inline">
                         <input class="form-check-input" type="radio" name="frame_sec" id="1" value="1" checked>
@@ -66,5 +65,5 @@
 {% block script %}
 <script src="/static/js/util.js"></script>
 <script src="/static/js/baseFunctions.js"></script>
-<script src="/static/js/pdf.js"></script>
+<script type="module" src="/static/js/pdf.js"></script>
 {% endblock %}
