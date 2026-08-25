@@ -184,6 +184,37 @@ test.describe('ログイン済み', () => {
     });
   }
 
+  test('URL からのウェブページ変換：capture の画像群を MP4 にして ftyp を確認する', async ({ page }) => {
+    test.setTimeout(180_000);
+    await signIn(page);
+    await mockUploadEndpoints(page);
+    // web-capture プロキシは撮影順の画像 URL 配列を返す（順序が動画のスクロール順になる）
+    const shots = ['0001', '0002', '0003'].map((n) => `https://shots.test/cap/${n}.png`);
+    await page.route('**/api/capture/', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ images: shots }) })
+    );
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    for (const shot of shots) {
+      await page.route(shot, (route) => route.fulfill({ contentType: 'image/png', body: png }));
+    }
+    await page.goto('/ja/');
+
+    const panel = page.locator('[data-convert-panel]');
+    const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
+    await panel.locator('[data-url-input]').fill('https://example.com/');
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    const request = await uploadRequest;
+    expect(request.headers()['content-type']).toBe('video/mp4');
+    const body = request.postDataBuffer();
+    expect(body).not.toBeNull();
+    expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
+    await expect(panel).toHaveAttribute('data-phase', 'done', { timeout: 120_000 });
+  });
+
   test('対応外の形式は変換を始めずエラーを出す', async ({ page }) => {
     await signIn(page);
     await page.goto('/ja/');
