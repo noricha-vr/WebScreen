@@ -13,3 +13,11 @@ credentials.json
 __pycache__
 # テスト用フィクスチャの生成物（generate_slides.py で再生成可能）
 test_slides/*.pdf
+
+# Cloudflare β 版（web/）の生成物。bun.lock はサプライチェーン対策で追跡する
+web/node_modules/
+web/dist/
+web/.astro/
+
+# wrangler のローカルキャッシュ（Cloudflare アカウント情報を含む）
+.wrangler/
