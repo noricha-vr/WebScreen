@@ -15,6 +15,22 @@ export const SESSION_COOKIE_NAME = 'ws_session';
 /** OAuth の CSRF 対策 state を一時保持する Cookie 名。 */
 export const OAUTH_STATE_COOKIE_NAME = 'ws_oauth_state';
 
+/** Cookie ヘッダーから指定名のデコード済み値を取得する。不正なエンコードは無効として扱う。 */
+export function readCookie(header: string | null, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const separator = part.indexOf('=');
+    if (separator < 0 || part.slice(0, separator).trim() !== name) continue;
+    const value = part.slice(separator + 1).trim();
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 /** セッションの有効期間（30 日）。payload.exp は発行時刻 + この秒数。 */
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 

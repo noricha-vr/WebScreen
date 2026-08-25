@@ -1,6 +1,5 @@
 ---
 import ConvertPanel from './ConvertPanel.astro';
-import CrossOriginIsolationStatus from './CrossOriginIsolationStatus.astro';
 import GuestHero from './GuestHero.astro';
 import type { Locale } from '../i18n';
 
@@ -19,10 +18,5 @@ const { lang } = Astro.props;
 
   <div data-auth-only="member">
     <ConvertPanel lang={lang} />
-  </div>
-
-  <!-- FFmpeg.wasm の前提（SharedArrayBuffer）が満たされているかの実機表示 -->
-  <div class="mt-12 rounded-lg bg-slate-900 px-4 py-2">
-    <CrossOriginIsolationStatus label="crossOriginIsolated:" />
   </div>
 </div>

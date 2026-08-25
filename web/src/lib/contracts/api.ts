@@ -57,7 +57,7 @@ export interface ErrorResponse {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/presign/ — R2 への直接アップロード先を払い出す
+// POST /api/uploads/presign/ — R2 への直接アップロード先を払い出す
 // ---------------------------------------------------------------------------
 
 export interface PresignRequest {
@@ -75,7 +75,7 @@ export interface PresignResponse {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/commit/ — アップロード完了を確定し status を ready にする
+// POST /api/uploads/commit/ — アップロード完了を確定し status を ready にする
 // ---------------------------------------------------------------------------
 
 export interface CommitRequest {

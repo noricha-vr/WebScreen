@@ -20,6 +20,7 @@ export const GET: APIRoute = async ({ request }) => {
     signingKey,
   });
 
-  if (!result.ok) return Response.json(result.error, { status: result.status });
-  return Response.json(result.user);
+  const headers = { 'Cache-Control': 'no-store' };
+  if (!result.ok) return Response.json(result.error, { status: result.status, headers });
+  return Response.json(result.user, { headers });
 };

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES, type ErrorResponse } from '../../../lib/contracts/api';
+import { resolveLocale } from '../../../i18n';
 import {
   OAUTH_STATE_COOKIE_NAME,
   SESSION_COOKIE_ATTRIBUTES,
@@ -26,7 +27,7 @@ interface CallbackBindings {
 }
 
 /** OAuth state を使い捨て検証し、Discord ユーザーとセッションを確立する。 */
-export const GET: APIRoute = async ({ cookies, redirect, url }) => {
+export const GET: APIRoute = async ({ cookies, redirect, request, url }) => {
   const bindings = env as unknown as CallbackBindings;
   const signingKey = await importSigningKey(bindings.SESSION_SIGNING_KEY);
   const callbackState = url.searchParams.get('state') ?? '';
@@ -59,7 +60,7 @@ export const GET: APIRoute = async ({ cookies, redirect, url }) => {
       ...SESSION_COOKIE_ATTRIBUTES,
       maxAge: SESSION_TTL_SECONDS,
     });
-    return redirect('/ja/', 302);
+    return redirect(`/${resolveLocale(request.headers.get('accept-language'))}/`, 302);
   } catch (error) {
     if (error instanceof OAuthUpstreamError) {
       return jsonError(502, ERROR_CODES.internalError, 'Discord API への接続に失敗しました');

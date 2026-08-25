@@ -11,6 +11,8 @@ import type { MiddlewareHandler } from 'astro';
 const CROSS_ORIGIN_ISOLATION_HEADERS: Readonly<Record<string, string>> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'credentialless',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
 export const onRequest: MiddlewareHandler = async (_context, next) => {

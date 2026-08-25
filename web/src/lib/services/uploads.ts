@@ -134,11 +134,12 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
 
   const usageBeforeCommit = await getUserStorageUsage(input.database, input.userId);
   const exceedsPerFileLimit = object.size > MAX_UPLOAD_BYTES;
+  const exceedsDeclaredSizeLimit = object.size > movie.size_bytes * 2;
   const exceedsUserLimit = exceedsStorageQuota(
     usageBeforeCommit - movie.size_bytes,
     object.size
   );
-  if (exceedsPerFileLimit || exceedsUserLimit) {
+  if (exceedsPerFileLimit || exceedsDeclaredSizeLimit || exceedsUserLimit) {
     await input.bucket.delete(key);
     await input.database
       .prepare(

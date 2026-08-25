@@ -17,7 +17,13 @@ describe('parseViewer', () => {
     });
   });
 
-  test('アバターがハッシュ値など絶対 URL でない場合は採用しない', () => {
+  test('Discord ID と avatar hash から CDN URL を組み立てる', () => {
+    expect(parseViewer({ name: 'noricha', discordId: '1234', avatar: 'a1b2c3d4' }).avatarUrl).toBe(
+      'https://cdn.discordapp.com/avatars/1234/a1b2c3d4.png'
+    );
+  });
+
+  test('Discord ID がない avatar hash は採用しない', () => {
     expect(parseViewer({ name: 'noricha', avatar: 'a1b2c3d4' }).avatarUrl).toBeNull();
   });
 

@@ -58,6 +58,11 @@ class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private select(query: string, values: unknown[]): { short_id: string }[] {
+    if (query.includes('WHERE short_id = ? AND pinned = 0')) {
+      const movie = this.movies.get(values[0] as string);
+      return movie?.pinned === 0 ? [{ short_id: movie.shortId }] : [];
+    }
+
     const threshold = parseSqliteTime(values[0] as string);
     const rows = [...this.movies.values()].filter((movie) =>
       query.includes("status = 'ready'")
@@ -172,7 +177,7 @@ describe('runRetention: 期限切れ動画', () => {
     expect(database.movies.has('pinnedAAAAAA')).toBe(true);
   });
 
-  it('SELECT 後に pin された動画は D1 の行を残す（削除時の再チェック）', async () => {
+  it('SELECT 後・R2 削除前に pin された動画は R2 と D1 の両方を残す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'racePinAAAAA', expiresAt: iso(-HOUR_MS) }),
     ]);
@@ -184,6 +189,7 @@ describe('runRetention: 期限切れ動画', () => {
     const summary = await run(database, bucket);
 
     expect(summary.deletedMovies).toBe(0);
+    expect(bucket.deleted).toEqual([]);
     expect(database.movies.get('racePinAAAAA')?.pinned).toBe(1);
   });
 
