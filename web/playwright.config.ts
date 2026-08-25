@@ -10,6 +10,8 @@ export default defineConfig({
   testDir: './e2e',
   // 契約の検証はユニットテスト（bun test tests）が担当し、e2e は画面の疎通だけを見る。
   fullyParallel: true,
+  // FFmpeg.wasm を読み込むブラウザ E2E はメモリ・Mach ポート使用量が大きいため直列で実行する。
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   reporter: [['list']],

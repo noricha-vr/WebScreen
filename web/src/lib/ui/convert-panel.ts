@@ -2,12 +2,11 @@
  * 変換パネルの DOM 配線。状態の遷移規則は upload-flow.ts（純粋関数）が持ち、
  * ここは「イベントを流す」「状態を DOM に反映する」だけを担当する。
  *
- * 変換・アップロードの実処理は後続タスクが接続する。現時点では runDemo が
- * タイマーで進捗を進めるだけで、通信は一切行わない（画面には demoNotice を出す）。
- * 接続時は runDemo を実処理に差し替えれば済むよう、進捗の入力口を dispatch に寄せている。
+ * 変換とアップロードはここで順につなぎ、状態そのものは upload-flow.ts の純粋関数に委ねる。
  */
 
-import { generateShortId, movieKey } from '../contracts/r2key';
+import { MAX_UPLOAD_BYTES, type CaptureResponse, type CommitResponse, type PresignResponse, type UploadKind } from '../contracts/api';
+import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
 import {
   INITIAL_UPLOAD_STATE,
   reduceUpload,
@@ -16,12 +15,10 @@ import {
   type UploadState,
 } from './upload-flow';
 
-/** デモ遷移の 1 ステップ。Playwright の待ち時間が伸びない程度に短くする。 */
-const DEMO_STEP_MS = 180;
-const DEMO_PROGRESS_STEPS = [30, 65, 100] as const;
 const COPIED_FEEDBACK_MS = 2000;
 
 type Schedule = (callback: () => void, delayMs: number) => void;
+type Dispatch = (event: UploadEvent, runGeneration?: number) => void;
 
 export interface ConvertPanelOptions {
   schedule?: Schedule;
@@ -40,6 +37,7 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
   const messages: Record<UploadErrorCode, string | undefined> = {
     tooLarge: panel.dataset['msgTooLarge'],
     unsupported: panel.dataset['msgUnsupported'],
+    tooManyPages: panel.dataset['msgTooManyPages'],
     failed: panel.dataset['msgFailed'],
   };
   return messages[code] ?? '';
@@ -69,33 +67,107 @@ function render(panel: HTMLElement, state: UploadState): void {
     node.textContent = `${state.progress}%`;
   }
 
+  const count = state.current !== null && state.total !== null ? `${state.current}/${state.total}` : '';
+  for (const node of elements(panel, '[data-progress-count]')) node.textContent = count;
+
   for (const node of elements<HTMLInputElement>(panel, '[data-result-url]')) {
     node.value = state.publicUrl ?? '';
+  }
+
+  for (const link of elements<HTMLAnchorElement>(panel, '[data-preview-link]')) {
+    link.href = state.shortId ? `/${state.shortId}` : '#';
   }
 
   const message = state.errorCode ? errorMessage(panel, state.errorCode) : '';
   for (const node of elements(panel, '[data-error-message]')) node.textContent = message;
 }
 
-/** 実処理が繋がるまでの見た目確認用ドライバ。通信せずタイマーだけで進捗を進める。 */
-function runDemo(dispatch: (event: UploadEvent) => void, schedule: Schedule): void {
-  let step = 0;
-  const queue: UploadEvent[] = [
-    ...DEMO_PROGRESS_STEPS.map((value): UploadEvent => ({ type: 'progress', value })),
-    { type: 'converted' },
-    ...DEMO_PROGRESS_STEPS.map((value): UploadEvent => ({ type: 'progress', value })),
-    { type: 'uploaded', publicUrl: `${location.origin}/${movieKey(generateShortId())}` },
-  ];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-  const tick = (): void => {
-    const event = queue[step];
-    if (!event) return;
-    step += 1;
-    dispatch(event);
-    schedule(tick, DEMO_STEP_MS);
+async function requestJson(url: string, init: RequestInit): Promise<unknown> {
+  const response = await fetch(url, { ...init, credentials: 'same-origin' });
+  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+  return response.json();
+}
+
+function asPresignResponse(value: unknown): PresignResponse {
+  if (!isRecord(value) || typeof value.shortId !== 'string' || typeof value.uploadUrl !== 'string' || typeof value.publicUrl !== 'string') {
+    throw new Error('Invalid presign response');
+  }
+  return { shortId: value.shortId, uploadUrl: value.uploadUrl, publicUrl: value.publicUrl };
+}
+
+function asCommitResponse(value: unknown): CommitResponse {
+  if (
+    !isRecord(value) ||
+    typeof value.shortId !== 'string' ||
+    typeof value.publicUrl !== 'string' ||
+    typeof value.sizeBytes !== 'number' ||
+    (typeof value.expiresAt !== 'string' && value.expiresAt !== null)
+  ) {
+    throw new Error('Invalid commit response');
+  }
+  return {
+    shortId: value.shortId,
+    publicUrl: value.publicUrl,
+    sizeBytes: value.sizeBytes,
+    expiresAt: value.expiresAt,
   };
+}
 
-  schedule(tick, DEMO_STEP_MS);
+function asCaptureResponse(value: unknown): CaptureResponse {
+  if (!isRecord(value) || !Array.isArray(value.images) || value.images.some((image) => typeof image !== 'string')) {
+    throw new Error('Invalid capture response');
+  }
+  return { images: value.images as string[] };
+}
+
+function mp4Filename(source: string): string {
+  const extension = source.lastIndexOf('.');
+  return `${extension > 0 ? source.slice(0, extension) : source}.mp4`;
+}
+
+async function uploadMp4(
+  mp4: Blob,
+  filename: string,
+  kind: UploadKind,
+  dispatch: Dispatch,
+  runGeneration: number
+): Promise<void> {
+  if (mp4.size > MAX_UPLOAD_BYTES) {
+    dispatch({ type: 'failed', errorCode: 'tooLarge' }, runGeneration);
+    return;
+  }
+  dispatch({ type: 'converted' }, runGeneration);
+  const presign = asPresignResponse(
+    await requestJson('/api/uploads/presign/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, sizeBytes: mp4.size, kind }),
+    })
+  );
+  dispatch({ type: 'progress', value: 20 }, runGeneration);
+  const upload = await fetch(presign.uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'video/mp4' },
+    body: mp4,
+  });
+  if (!upload.ok) throw new Error(`Upload failed: ${upload.status}`);
+  dispatch({ type: 'progress', value: 80 }, runGeneration);
+  const committed = asCommitResponse(
+    await requestJson('/api/uploads/commit/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shortId: presign.shortId }),
+    })
+  );
+  dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
+}
+
+function conversionErrorCode(error: unknown): UploadErrorCode {
+  return error instanceof ConversionError && error.code === 'tooManyPages' ? 'tooManyPages' : 'failed';
 }
 
 async function copyToClipboard(value: string, input: HTMLInputElement | null): Promise<void> {
@@ -114,20 +186,14 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
   let state = INITIAL_UPLOAD_STATE;
   let generation = 0;
 
-  const dispatch = (event: UploadEvent, runGeneration = generation): void => {
+  const dispatch: Dispatch = (event, runGeneration = generation): void => {
     if (runGeneration !== generation) return;
 
     const next = reduceUpload(state, event);
     if (next === state) return;
 
-    const started = state.phase !== 'converting' && next.phase === 'converting';
     state = next;
     render(panel, state);
-
-    if (started) {
-      const current = generation;
-      runDemo((demoEvent) => dispatch(demoEvent, current), schedule);
-    }
   };
 
   const reset = (): void => {
@@ -137,10 +203,29 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
   };
 
   const fileInput = element<HTMLInputElement>(panel, '[data-file-input]');
+  const startFiles = (files: readonly File[]): void => {
+    if (files.length === 0) return;
+    if (state.phase === 'converting' || state.phase === 'uploading') return;
+    const event: UploadEvent = {
+      type: 'selectFiles',
+      files: files.map((file) => ({ filename: file.name, sizeBytes: file.size })),
+    };
+    const next = reduceUpload(state, event);
+    dispatch(event);
+    if (next.phase !== 'converting' || next.kind === null || next.kind === 'web') return;
+    const current = generation;
+    const kind = next.kind;
+    void convertFilesToMp4(files, kind, (progress) => {
+      dispatch({ type: 'conversionProgress', ...progress }, current);
+    })
+      .then((mp4) => uploadMp4(mp4, mp4Filename(files[0]!.name), kind, dispatch, current))
+      .catch((error: unknown) => {
+        console.error('conversion failed', error);
+        dispatch({ type: 'failed', errorCode: conversionErrorCode(error) }, current);
+      });
+  };
   fileInput?.addEventListener('change', () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    dispatch({ type: 'selectFile', filename: file.name, sizeBytes: file.size });
+    startFiles(Array.from(fileInput.files ?? []));
     fileInput.value = '';
   });
 
@@ -159,9 +244,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       event.preventDefault();
       delete dropzone.dataset['dragover'];
 
-      const file = event.dataTransfer?.files?.[0];
-      if (!file) return;
-      dispatch({ type: 'selectFile', filename: file.name, sizeBytes: file.size });
+      startFiles(Array.from(event.dataTransfer?.files ?? []));
     });
   }
 
@@ -172,7 +255,23 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     const input = element<HTMLInputElement>(panel, '[data-url-input]');
     const url = input?.value.trim();
     if (!url) return;
+    if (state.phase === 'converting' || state.phase === 'uploading') return;
     dispatch({ type: 'selectUrl', url });
+    const current = generation;
+    void requestJson('/api/capture/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    })
+      .then(asCaptureResponse)
+      .then((capture) => convertImageUrlsToMp4(capture.images, (progress) => {
+        dispatch({ type: 'conversionProgress', ...progress }, current);
+      }))
+      .then((mp4) => uploadMp4(mp4, 'capture.mp4', 'web', dispatch, current))
+      .catch((error: unknown) => {
+        console.error('conversion failed', error);
+        dispatch({ type: 'failed', errorCode: conversionErrorCode(error) }, current);
+      });
   });
 
   const copyButton = element<HTMLButtonElement>(panel, '[data-copy-button]');

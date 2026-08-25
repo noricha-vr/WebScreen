@@ -48,9 +48,10 @@
     "copy": "Copy URL",
     "copied": "Copied",
     "again": "Convert another file",
-    "demoNotice": "This is a preview of the interface. Conversion is not wired up yet, so no real video is produced.",
+    "preview": "Open preview page",
     "errorTooLarge": "This file is larger than the 50 MB limit",
     "errorUnsupported": "This file type is not supported",
+    "errorTooManyPages": "PDF files must have 200 pages or fewer",
     "errorFailed": "Conversion failed. Please try again in a moment"
   },
   "footer": {

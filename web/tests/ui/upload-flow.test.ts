@@ -41,6 +41,19 @@ describe('detectUploadKind', () => {
       '.mov',
     ]);
   });
+
+  test('画像だけは複数ファイルを 1 回の変換として受け付ける', () => {
+    const state = reduceUpload(INITIAL_UPLOAD_STATE, {
+      type: 'selectFiles',
+      files: [
+        { filename: 'first.png', sizeBytes: 100 },
+        { filename: 'second.webp', sizeBytes: 100 },
+      ],
+    });
+
+    expect(state.phase).toBe('converting');
+    expect(state.kind).toBe('image');
+  });
 });
 
 describe('ファイル選択', () => {
@@ -94,10 +107,15 @@ describe('変換の進行', () => {
     expect(state.phase).toBe('uploading');
     expect(state.progress).toBe(0);
 
-    state = reduceUpload(state, { type: 'uploaded', publicUrl: 'https://example.com/movies/x.mp4' });
+    state = reduceUpload(state, {
+      type: 'uploaded',
+      publicUrl: 'https://example.com/movies/x.mp4',
+      shortId: 'Ab12Cd34Ef56',
+    });
     expect(state.phase).toBe('done');
     expect(state.progress).toBe(100);
     expect(state.publicUrl).toBe('https://example.com/movies/x.mp4');
+    expect(state.shortId).toBe('Ab12Cd34Ef56');
   });
 
   test('進捗は 0〜100 に丸める', () => {
@@ -135,5 +153,19 @@ describe('URL からの変換', () => {
     expect(state.phase).toBe('converting');
     expect(state.kind).toBe('web');
     expect(state.source).toBe('https://example.com');
+  });
+});
+
+describe('変換対象の上限', () => {
+  test('複数ファイルのどれかが 50 MB を超えると変換前に拒否する', () => {
+    const state = reduceUpload(INITIAL_UPLOAD_STATE, {
+      type: 'selectFiles',
+      files: [
+        { filename: 'first.png', sizeBytes: 100 },
+        { filename: 'too-large.png', sizeBytes: MAX_UPLOAD_BYTES + 1 },
+      ],
+    });
+
+    expect(state.errorCode).toBe('tooLarge');
   });
 });

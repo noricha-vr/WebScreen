@@ -13,7 +13,7 @@ import { MAX_UPLOAD_BYTES, type UploadKind } from '../contracts/api';
 export const UPLOAD_PHASES = ['idle', 'converting', 'uploading', 'done', 'error'] as const;
 export type UploadPhase = (typeof UPLOAD_PHASES)[number];
 
-export const UPLOAD_ERROR_CODES = ['tooLarge', 'unsupported', 'failed'] as const;
+export const UPLOAD_ERROR_CODES = ['tooLarge', 'unsupported', 'tooManyPages', 'failed'] as const;
 export type UploadErrorCode = (typeof UPLOAD_ERROR_CODES)[number];
 
 /** 拡張子 → アップロード種別。UPLOAD_KINDS（契約）に無い種別は増やさない。 */
@@ -41,7 +41,12 @@ export interface UploadState {
   kind: UploadKind | null;
   /** 0〜100。converting / uploading の進捗バー表示に使う。 */
   progress: number;
+  /** 変換対象の現在位置。複数画像・PDF ページの進捗表示に使う。 */
+  current: number | null;
+  /** 変換対象の総数。複数画像・PDF ページの進捗表示に使う。 */
+  total: number | null;
   publicUrl: string | null;
+  shortId: string | null;
   errorCode: UploadErrorCode | null;
 }
 
@@ -50,16 +55,21 @@ export const INITIAL_UPLOAD_STATE: UploadState = {
   source: null,
   kind: null,
   progress: 0,
+  current: null,
+  total: null,
   publicUrl: null,
+  shortId: null,
   errorCode: null,
 };
 
 export type UploadEvent =
   | { type: 'selectFile'; filename: string; sizeBytes: number }
+  | { type: 'selectFiles'; files: readonly { filename: string; sizeBytes: number }[] }
   | { type: 'selectUrl'; url: string }
   | { type: 'progress'; value: number }
+  | { type: 'conversionProgress'; current: number; total: number }
   | { type: 'converted' }
-  | { type: 'uploaded'; publicUrl: string }
+  | { type: 'uploaded'; publicUrl: string; shortId: string }
   | { type: 'failed'; errorCode: UploadErrorCode }
   | { type: 'reset' };
 
@@ -77,7 +87,21 @@ function clampProgress(value: number): number {
 }
 
 function failure(state: UploadState, errorCode: UploadErrorCode): UploadState {
-  return { ...state, phase: 'error', progress: 0, publicUrl: null, errorCode };
+  return { ...state, phase: 'error', progress: 0, current: null, total: null, publicUrl: null, shortId: null, errorCode };
+}
+
+function selectFiles(files: readonly { filename: string; sizeBytes: number }[]): UploadState {
+  const first = files[0];
+  const base: UploadState = {
+    ...INITIAL_UPLOAD_STATE,
+    source: first?.filename ?? null,
+    kind: first ? detectUploadKind(first.filename) : null,
+  };
+  if (base.kind === null) return failure(base, 'unsupported');
+  if (files.some((file) => file.sizeBytes > MAX_UPLOAD_BYTES)) return failure(base, 'tooLarge');
+  if (files.some((file) => detectUploadKind(file.filename) !== base.kind)) return failure(base, 'unsupported');
+  if (files.length > 1 && base.kind !== 'image') return failure(base, 'unsupported');
+  return { ...base, phase: 'converting' };
 }
 
 /**
@@ -90,16 +114,12 @@ export function reduceUpload(state: UploadState, event: UploadEvent): UploadStat
   switch (event.type) {
     case 'selectFile': {
       if (state.phase === 'converting' || state.phase === 'uploading') return state;
+      return selectFiles([event]);
+    }
 
-      const base: UploadState = {
-        ...INITIAL_UPLOAD_STATE,
-        source: event.filename,
-        kind: detectUploadKind(event.filename),
-      };
-      if (base.kind === null) return failure(base, 'unsupported');
-      if (event.sizeBytes > MAX_UPLOAD_BYTES) return failure(base, 'tooLarge');
-
-      return { ...base, phase: 'converting' };
+    case 'selectFiles': {
+      if (state.phase === 'converting' || state.phase === 'uploading') return state;
+      return selectFiles(event.files);
     }
 
     case 'selectUrl': {
@@ -113,14 +133,24 @@ export function reduceUpload(state: UploadState, event: UploadEvent): UploadStat
       return { ...state, progress: clampProgress(event.value) };
     }
 
+    case 'conversionProgress': {
+      if (state.phase !== 'converting' || event.total <= 0 || event.current < 0) return state;
+      return {
+        ...state,
+        current: Math.min(event.current, event.total),
+        total: event.total,
+        progress: clampProgress((event.current / event.total) * 100),
+      };
+    }
+
     case 'converted': {
       if (state.phase !== 'converting') return state;
-      return { ...state, phase: 'uploading', progress: 0 };
+      return { ...state, phase: 'uploading', progress: 0, current: null, total: null };
     }
 
     case 'uploaded': {
       if (state.phase !== 'uploading') return state;
-      return { ...state, phase: 'done', progress: 100, publicUrl: event.publicUrl };
+      return { ...state, phase: 'done', progress: 100, current: null, total: null, publicUrl: event.publicUrl, shortId: event.shortId };
     }
 
     case 'failed':
