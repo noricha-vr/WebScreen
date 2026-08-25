@@ -3,8 +3,43 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * e2e 用ポート。astro dev の既定（4321）を避け、開発者が dev サーバーを
  * 動かしたままでもテストが衝突しないようにする。
+ *
+ * 並行 worktree でも e2e を回すため E2E_PORT で上書きできる。同じポートを別の
+ * worktree が握っていると reuseExistingServer が「他人のビルド」に接続してしまい、
+ * 自分の変更を検証したつもりで通ってしまう。
  */
-const PORT = 4322;
+const PORT = Number(process.env['E2E_PORT'] ?? 4322);
+const INSPECTOR_PORT = PORT + 5000;
+
+/** ローカル D1 / R2 の永続先。wrangler の既定値に依存せず、seed と dev で同じ場所を指す。 */
+const STATE_DIR = '.wrangler/state';
+
+/** e2e 用の署名鍵。テストが本人のセッション Cookie を自前で作れるようにする（本番の値ではない）。 */
+export const E2E_SESSION_SIGNING_KEY = 'e2e-session-signing-key';
+
+/** e2e が投入するフィクスチャ（e2e/fixtures/seed.sql と一致させること）。 */
+export const E2E_FIXTURES = {
+  ownerId: 1,
+  readyShortId: 'E2EReady0001',
+  readyFilename: 'slides.pdf',
+  /** seed.sql が now + 15 日で入れるため、表示は「あと 15 日」で安定する。 */
+  readyRemainingDays: 15,
+  pinnedShortId: 'E2EPinned001',
+  pinnedFilename: 'pinned-clip.mp4',
+  /** 3 日前に作られているので、pin を外すと作成 + 30 日 = あと 27 日に戻る。 */
+  pinnedRemainingDaysAfterUnpin: 27,
+  pendingShortId: 'E2EPending01',
+  deletableShortId: 'E2EDelete001',
+} as const;
+
+const seedCommand = [
+  // 毎回まっさらな D1 から作り直す（前回の pin 解除・削除が残っていると結果が変わるため）。
+  `rm -rf ${STATE_DIR}`,
+  'bun run build',
+  `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=migrations/0001_init.sql`,
+  `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=e2e/fixtures/seed.sql`,
+  `bunx wrangler dev -c dist/server/wrangler.json --persist-to ${STATE_DIR} --port ${PORT} --inspector-port ${INSPECTOR_PORT} --var SESSION_SIGNING_KEY:${E2E_SESSION_SIGNING_KEY}`,
+].join(' && ');
 
 export default defineConfig({
   testDir: './e2e',
@@ -25,9 +60,11 @@ export default defineConfig({
     //      Playwright の webServer（前面プロセスの生存で待つ）と噛み合わない
     //   2. COOP/COEP は middleware と public/_headers の二重化で配っており、
     //      両方が効いているかは Worker 経由でしか確認できない
-    command: 'bun run build && wrangler dev -c dist/server/wrangler.json --port 4322',
+    // ビルド後にマイグレーションとフィクスチャを流し込むのは、プレビューページが
+    // D1 の実データを描画するため（起動順に依存させないよう 1 本のコマンドに繋ぐ）。
+    command: seedCommand,
     url: `http://localhost:${PORT}/api/health/`,
     reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    timeout: 240_000,
   },
 });
