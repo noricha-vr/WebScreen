@@ -79,10 +79,10 @@ const t = useTranslations(lang);
         <button
           type="button"
           data-delete-trigger
-          aria-label={t.actions.delete}
           class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-600 hover:bg-red-50 hover:text-red-700"
         >
           <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span>{t.actions.delete}</span>
         </button>
 
         <span data-delete-confirm class="flex items-center gap-1">
