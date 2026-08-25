@@ -47,7 +47,7 @@ const LOGOUT_URL = '/api/auth/logout/';
       <a
         data-auth-only="guest"
         href={LOGIN_URL}
-        class="inline-flex items-center gap-2 rounded-md bg-brand-500 px-3 py-2 text-base font-semibold text-white hover:bg-brand-700"
+        class="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-brand-500 px-3 py-2 text-base font-semibold text-white hover:bg-brand-700"
       >
         <i class="fa-brands fa-discord" aria-hidden="true"></i>
         <span>{t.nav.login}</span>
@@ -56,7 +56,7 @@ const LOGOUT_URL = '/api/auth/logout/';
       <div data-auth-only="member" class="flex items-center gap-2">
         <a
           href={`/${lang}/#convert`}
-          class="inline-flex items-center gap-2 rounded-md border border-brand-500 px-3 py-2 text-base font-semibold text-brand-700 hover:bg-brand-50"
+          class="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-brand-500 px-3 py-2 text-base font-semibold text-brand-700 hover:bg-brand-50"
         >
           <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i>
           <span>{t.nav.upload}</span>

@@ -58,7 +58,7 @@ const t = useTranslations(lang);
       <label for="convert-url" class="mt-2 block text-base text-slate-700">
         {t.convert.urlLabel}
       </label>
-      <div class="mt-2 flex flex-wrap gap-3">
+      <div class="mt-2 flex flex-col gap-3 sm:flex-row">
         <input
           id="convert-url"
           data-url-input
@@ -110,7 +110,7 @@ const t = useTranslations(lang);
     <label for="convert-result" class="mt-4 block text-base text-slate-700">
       {t.convert.resultLabel}
     </label>
-    <div class="mt-2 flex flex-wrap gap-3">
+    <div class="mt-2 flex flex-col gap-3 sm:flex-row">
       <input
         id="convert-result"
         data-result-url
