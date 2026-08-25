@@ -1,0 +1,23 @@
+---
+interface Props {
+  label: string;
+}
+
+const { label } = Astro.props;
+---
+
+<p class="mt-8 text-base text-slate-300">
+  {label}
+  <code
+    id="coi-status"
+    data-coi-status
+    class="ml-2 rounded bg-slate-800 px-2 py-1 font-mono text-slate-100">unknown</code
+  >
+</p>
+
+<!-- is:inline: バンドラを通さず素の script として配信し、COOP/COEP 実機確認を最短経路にする -->
+<script is:inline>
+  document.querySelector('[data-coi-status]').textContent = String(
+    globalThis.crossOriginIsolated
+  );
+</script>

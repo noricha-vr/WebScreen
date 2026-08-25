@@ -1,0 +1,6 @@
+# Static Assets 経路の COOP/COEP。FFmpeg.wasm が要求する crossOriginIsolated の前提。
+# Worker が生成するレスポンス（SSR / API ルート）には適用されないため、
+# 同じヘッダーを src/middleware.ts でも付与している。
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless

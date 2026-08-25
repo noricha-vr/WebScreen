@@ -1,0 +1,23 @@
+{
+  "name": "webscreen-beta",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "wrangler dev",
+    "deploy": "astro build && wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "14.2.1",
+    "@tailwindcss/vite": "4.3.3",
+    "astro": "7.2.2",
+    "tailwindcss": "4.3.3"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "wrangler": "4.123.0"
+  }
+}
