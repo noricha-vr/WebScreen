@@ -58,8 +58,7 @@
     "empty": "You have not converted any video yet",
     "error": "Could not load your history",
     "processing": "Processing",
-    "pinned": "Pinned",
-    "open": "Open the video page"
+    "pinned": "Pinned"
   },
   "preview": {
     "heading": "Your video",
