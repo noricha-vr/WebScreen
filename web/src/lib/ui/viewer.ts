@@ -25,7 +25,7 @@ function readString(record: Record<string, unknown>, key: string): string | null
   return trimmed.length > 0 ? trimmed : null;
 }
 
-/** アバターは絶対 URL のときだけ採用する（ハッシュ値から CDN URL を推測して組み立てない）。 */
+/** アバターは絶対 URL のときだけ採用する。 */
 function readHttpUrl(record: Record<string, unknown>, keys: readonly string[]): string | null {
   for (const key of keys) {
     const value = readString(record, key);
@@ -41,6 +41,14 @@ function readHttpUrl(record: Record<string, unknown>, keys: readonly string[]): 
   return null;
 }
 
+/** Discord のユーザー ID と avatar hash から CDN URL を組み立てる。 */
+function readDiscordAvatarUrl(record: Record<string, unknown>): string | null {
+  const discordId = readString(record, 'discordId');
+  const avatar = readString(record, 'avatar');
+  if (discordId === null || avatar === null) return null;
+  return `https://cdn.discordapp.com/avatars/${encodeURIComponent(discordId)}/${encodeURIComponent(avatar)}.png`;
+}
+
 export function parseViewer(payload: unknown): Viewer {
   const record = asRecord(payload);
   if (!record) return { name: null, avatarUrl: null };
@@ -49,7 +57,7 @@ export function parseViewer(payload: unknown): Viewer {
 
   return {
     name: readString(user, 'name') ?? readString(user, 'username'),
-    avatarUrl: readHttpUrl(user, ['avatarUrl', 'avatar']),
+    avatarUrl: readHttpUrl(user, ['avatarUrl']) ?? readDiscordAvatarUrl(user),
   };
 }
 

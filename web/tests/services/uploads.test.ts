@@ -177,7 +177,7 @@ describe('アップロードのクォータと検証', () => {
 
 describe('commitUpload', () => {
   it('pending を ready に遷移し、実測サイズを返す', async () => {
-    const database = new FakeUploadDatabase([movie()]);
+    const database = new FakeUploadDatabase([movie({ sizeBytes: 200 })]);
 
     await expect(
       commitUpload({
@@ -227,6 +227,23 @@ describe('commitUpload', () => {
   it('実測サイズ超過時は R2 を削除して failed にする', async () => {
     const database = new FakeUploadDatabase([movie()]);
     const bucket = new FakeUploadBucket(MAX_UPLOAD_BYTES + 1);
+
+    await expect(
+      commitUpload({
+        database,
+        bucket,
+        userId: USER_ID,
+        shortId: SHORT_ID,
+        publicBaseUrl: PUBLIC_URL,
+      })
+    ).rejects.toMatchObject({ status: 413 });
+    expect(bucket.deletedKeys).toEqual([`movies/${SHORT_ID}.mp4`]);
+    expect(database.movies.get(SHORT_ID)?.status).toBe('failed');
+  });
+
+  it('実測サイズが申告の2倍を超えると R2 を削除して failed にする', async () => {
+    const database = new FakeUploadDatabase([movie({ sizeBytes: 100 })]);
+    const bucket = new FakeUploadBucket(201);
 
     await expect(
       commitUpload({

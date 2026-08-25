@@ -8,9 +8,9 @@ export interface R2PresignConfig {
   secretAccessKey: string;
 }
 
-const PRESIGN_TTL_SECONDS = 60 * 60;
+const PRESIGN_TTL_SECONDS = 5 * 60;
 
-/** R2 への単発 PUT 用に1時間有効な署名 URL を発行する。 */
+/** R2 への video/mp4 専用、5分間有効な単発 PUT 署名 URL を発行する。 */
 export async function createR2PutPresignedUrl(
   config: R2PresignConfig,
   key: string
@@ -29,7 +29,8 @@ export async function createR2PutPresignedUrl(
   });
   const signedRequest = await client.sign(url, {
     method: 'PUT',
-    aws: { signQuery: true },
+    headers: { 'Content-Type': 'video/mp4' },
+    aws: { signQuery: true, allHeaders: true },
   });
 
   return signedRequest.url;

@@ -75,7 +75,7 @@ function render(panel: HTMLElement, state: UploadState): void {
   }
 
   for (const link of elements<HTMLAnchorElement>(panel, '[data-preview-link]')) {
-    link.href = state.shortId ? `/${state.shortId}` : '#';
+    link.href = state.shortId ? `/${state.shortId}/` : '#';
   }
 
   const message = state.errorCode ? errorMessage(panel, state.errorCode) : '';

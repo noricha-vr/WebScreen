@@ -125,6 +125,7 @@ test.describe('ログイン済み', () => {
     ]);
 
     const request = await uploadRequest;
+    expect(request.headers()['content-type']).toBe('video/mp4');
     const body = request.postDataBuffer();
     expect(body).not.toBeNull();
     expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
@@ -135,7 +136,7 @@ test.describe('ログイン済み', () => {
     await expect(doneBlock.locator('[data-result-url]')).toHaveValue(
       'https://cdn.test/movies/Ab12Cd34Ef56.mp4'
     );
-    await expect(doneBlock.locator('[data-preview-link]')).toHaveAttribute('href', '/Ab12Cd34Ef56');
+    await expect(doneBlock.locator('[data-preview-link]')).toHaveAttribute('href', '/Ab12Cd34Ef56/');
 
     await page.getByRole('button', { name: ja.convert.copy }).click();
     await expect(page.getByText(ja.convert.copied)).toBeVisible();

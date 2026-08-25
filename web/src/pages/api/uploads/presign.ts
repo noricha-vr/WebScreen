@@ -2,7 +2,8 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES, type ErrorResponse, validatePresignRequest } from '../../../lib/contracts/api';
-import { importSigningKey, SESSION_COOKIE_NAME, verifySession } from '../../../lib/contracts/session';
+import { importSigningKey } from '../../../lib/contracts/session';
+import { requireUser, type AuthDatabase } from '../../../lib/services/auth';
 import {
   createPendingUpload,
   createR2UploadUrlGenerator,
@@ -14,7 +15,7 @@ import {
 export const prerender = false;
 
 interface UploadBindings {
-  DB: UploadDatabase;
+  DB: UploadDatabase & AuthDatabase;
   BUCKET: UploadBucket;
   SESSION_SIGNING_KEY: string;
   R2_ACCOUNT_ID: string;
@@ -26,17 +27,18 @@ interface UploadBindings {
 
 /** pending movie を予約し、R2 への直接 PUT URL を払い出す。 */
 export const POST: APIRoute = async ({ request }) => {
-  const userId = await requireLocalUser(request);
-  if (userId === null) return errorResponse(401, ERROR_CODES.unauthorized, '認証が必要です');
+  const bindings = env as unknown as UploadBindings;
+  const signingKey = await importSigningKey(bindings.SESSION_SIGNING_KEY);
+  const authenticated = await requireUser(request, { db: bindings.DB, signingKey });
+  if (!authenticated.ok) return json(authenticated.error, authenticated.status);
 
   const validation = validatePresignRequest(await readJson(request));
   if (!validation.ok) return json(validation.error, 400);
 
-  const bindings = env as unknown as UploadBindings;
   try {
     const response = await createPendingUpload({
       database: bindings.DB,
-      userId,
+      userId: authenticated.user.id,
       request: validation.value,
       publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
       createUploadUrl: createR2UploadUrlGenerator({
@@ -52,31 +54,9 @@ export const POST: APIRoute = async ({ request }) => {
   }
 };
 
-// TODO(lead,2026-08-25): auth.ts の requireUser 実装に統合する。
-async function requireLocalUser(request: Request): Promise<number | null> {
-  const token = readCookie(request.headers.get('Cookie'), SESSION_COOKIE_NAME);
-  if (!token) return null;
-
-  const bindings = env as unknown as UploadBindings;
-  const key = await importSigningKey(bindings.SESSION_SIGNING_KEY);
-  return (await verifySession(token, key))?.uid ?? null;
-}
-
 async function readJson(request: Request): Promise<unknown> {
   try {
     return await request.json();
-  } catch {
-    return null;
-  }
-}
-
-function readCookie(header: string | null, name: string): string | null {
-  if (!header) return null;
-  const prefix = `${name}=`;
-  const value = header.split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix));
-  if (!value) return null;
-  try {
-    return decodeURIComponent(value.slice(prefix.length));
   } catch {
     return null;
   }

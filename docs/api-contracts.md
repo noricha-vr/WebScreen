@@ -22,8 +22,8 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `GET /api/auth/callback/` | OAuth コールバック（state 検証 → users upsert → セッション Cookie 発行） | 不要 | `session.ts` |
 | `POST /api/auth/logout/` | セッション Cookie の破棄 | 本人 | — |
 | `GET /api/me/` | ログイン中のユーザー情報 | 本人 | — |
-| `POST /api/presign/` | R2 へのアップロード先を払い出し、movies に `pending` 行を作る | 本人 | `PresignRequest` / `PresignResponse` |
-| `POST /api/commit/` | アップロード完了を確定し `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse` |
+| `POST /api/uploads/presign/` | R2 へのアップロード先を払い出し、movies に `pending` 行を作る | 本人 | `PresignRequest` / `PresignResponse` |
+| `POST /api/uploads/commit/` | アップロード完了を確定し `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse` |
 | `GET /api/history/` | 自分の動画一覧 | 本人 | — |
 | `POST /api/movies/{shortId}/pin/` | pin の切り替え（自動削除の対象外にする） | 本人（所有者） | — |
 | `DELETE /api/movies/{shortId}/` | 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | — |
@@ -54,7 +54,7 @@ Worker とは別サービス（ヘッドレスブラウザを持つ実行環境�
 | pin `POST /api/movies/{shortId}/pin/` | 本人のみ | 所有者チェック必須 |
 | 削除 `DELETE /api/movies/{shortId}/` | 本人のみ | 所有者チェック必須。他人の shortId は 404（存在を漏らさない） |
 | プレビュー `GET /{shortId}/` | **公開**（認証なし） | 動画 URL と同じ扱い。`ready` 以外は 404。pin / 削除の操作 UI は所有者にだけ出す |
-| commit `POST /api/commit/` | 本人のみ | 所有者チェック必須。他人の pending を確定できてはならない |
+| commit `POST /api/uploads/commit/` | 本人のみ | 所有者チェック必須。他人の pending を確定できてはならない |
 
 「動画は公開・操作は本人のみ」が原則。動画 URL を推測されないこと自体が保護なので、
 shortId をログ・エラーメッセージ経由で無関係な第三者へ漏らさない。

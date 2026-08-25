@@ -119,6 +119,14 @@ async function deleteExpiredMovies(
 
   let deleted = 0;
   for (const row of results) {
+    // 初回 SELECT の後に pin された場合、R2 を先に消すと D1 行だけ残る。
+    // R2 削除の直前にも状態を読むことで、実体と行の不整合を防ぐ。
+    const current = await database
+      .prepare('SELECT short_id FROM movies WHERE short_id = ? AND pinned = 0')
+      .bind(row.short_id)
+      .all<ShortIdRow>();
+    if (current.results.length === 0) continue;
+
     try {
       await bucket.delete(movieKey(row.short_id));
     } catch {

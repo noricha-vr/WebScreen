@@ -12,7 +12,7 @@ const other = alternateLocale(lang);
 
 // 画像は既存サイトの GCS 配信をそのまま使う（リポジトリの .gitignore が *.png を
 // 一括で無視するため、web/public/ にバイナリを置かない方針）。
-const BANNER_URL = 'https://storage.googleapis.com/noricha-public/web-screen/image/header-2000.png';
+const BANNER_BASE_URL = 'https://storage.googleapis.com/noricha-public/web-screen/image/';
 
 // OAuth の開始エンドポイントは docs/api-contracts.md の契約に合わせる。
 const LOGIN_URL = '/api/auth/login/';
@@ -22,14 +22,17 @@ const LOGOUT_URL = '/api/auth/logout/';
 <header class="border-b border-slate-200 bg-white">
   <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
     <a href={`/${lang}/`} class="flex items-center gap-3 no-underline">
-      <img
-        src={BANNER_URL}
-        alt={t.nav.bannerAlt}
-        width="1000"
-        height="100"
-        class="hidden h-9 w-auto lg:block"
-      />
-      <span class="text-xl font-bold tracking-tight text-slate-900">WebScreen</span>
+      <picture>
+        <source media="(max-width: 767px)" srcset={`${BANNER_BASE_URL}header-7.png`} />
+        <img
+          src={`${BANNER_BASE_URL}header-2000.png`}
+          alt={t.nav.bannerAlt}
+          width="1000"
+          height="100"
+          class="h-9 w-auto"
+        />
+      </picture>
+      <span class="text-xl font-bold tracking-tight text-slate-900 lg:hidden">WebScreen</span>
       <span class="rounded-full bg-brand-50 px-2 py-0.5 text-sm font-semibold text-brand-700">
         β
       </span>
