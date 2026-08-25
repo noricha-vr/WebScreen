@@ -8,7 +8,10 @@
     "build": "astro build",
     "preview": "wrangler dev -c dist/server/wrangler.json",
     "deploy": "astro build && wrangler deploy -c dist/server/wrangler.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "// test": "e2e/ を除外する: Playwright の .spec.ts を bun のテストランナーが拾うと失敗するため",
+    "test": "bun test tests",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@astrojs/cloudflare": "14.2.1",
@@ -17,6 +20,8 @@
     "tailwindcss": "4.3.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/bun": "1.3.14",
     "typescript": "7.0.2",
     "wrangler": "4.123.0"
   }
