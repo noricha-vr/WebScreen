@@ -50,6 +50,14 @@ paths = ["web/src/pages", "web/src/middleware.ts"]
 may_depend_on = ["services", "contracts"]
 max_file_loc = 200
 
+# cron トリガー専用の独立 Worker（web/cron/wrangler.jsonc で単体デプロイする）。
+# entrypoints と同じく I/O 変換だけを担う層で、判定ロジックは services に置く。
+# services 側の may_depend_on に cron は無いので、逆流（services → cron）は違反になる。
+[modules.cron]
+paths = ["web/cron/src"]
+may_depend_on = ["services", "contracts"]
+max_file_loc = 200
+
 [modules.tests]
 paths = ["web/tests", "web/e2e"]
 may_depend_on = ["contracts", "infra", "services", "entrypoints"]
