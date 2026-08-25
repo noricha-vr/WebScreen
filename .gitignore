@@ -18,6 +18,7 @@ test_slides/*.pdf
 web/node_modules/
 web/dist/
 web/.astro/
+web/.dev.vars
 
 # wrangler のローカルキャッシュ（Cloudflare アカウント情報を含む）
 .wrangler/

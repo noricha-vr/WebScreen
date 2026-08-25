@@ -18,8 +18,8 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | メソッド / パス | 用途 | 認証 | 型 |
 |---|---|---|---|
 | `GET /api/health/` | 疎通確認 | 不要 | — |
-| `GET /api/auth/discord/` | Discord OAuth 開始（state Cookie を発行してリダイレクト） | 不要 | `session.ts` |
-| `GET /api/auth/discord/callback/` | OAuth コールバック（state 検証 → users upsert → セッション Cookie 発行） | 不要 | `session.ts` |
+| `GET /api/auth/login/` | Discord OAuth 開始（state Cookie を発行してリダイレクト） | 不要 | `session.ts` |
+| `GET /api/auth/callback/` | OAuth コールバック（state 検証 → users upsert → セッション Cookie 発行） | 不要 | `session.ts` |
 | `POST /api/auth/logout/` | セッション Cookie の破棄 | 本人 | — |
 | `GET /api/me/` | ログイン中のユーザー情報 | 本人 | — |
 | `POST /api/presign/` | R2 へのアップロード先を払い出し、movies に `pending` 行を作る | 本人 | `PresignRequest` / `PresignResponse` |
