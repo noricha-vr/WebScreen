@@ -19,7 +19,8 @@
   "vars": {
     "R2_ACCOUNT_ID": "65850b2bd0055921bdcfbe42383c794a",
     "R2_BUCKET_NAME": "webscreen-beta",
-    "R2_PUBLIC_BASE_URL": "https://pub-ebb48e6efc2f4128b606cf381851cae5.r2.dev"
+    "R2_PUBLIC_BASE_URL": "https://pub-ebb48e6efc2f4128b606cf381851cae5.r2.dev",
+    "WEBCAPTURE_URL": "http://localhost:8090"
   },
   "d1_databases": [
     {
