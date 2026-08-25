@@ -1,0 +1,10 @@
+---
+import { resolveLocale } from '../i18n';
+
+// Accept-Language を見て振り分けるため、このルートだけ Worker で実行する
+// （他のページは静的生成のままで、リクエストヘッダーを読めない）。
+export const prerender = false;
+
+const locale = resolveLocale(Astro.request.headers.get('accept-language'));
+return Astro.redirect(`/${locale}/`, 302);
+---

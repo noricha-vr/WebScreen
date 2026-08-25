@@ -1,0 +1,65 @@
+# ladder-stage: 1
+#
+# 検査対象は web/（Cloudflare β 版）のみ。既存の Python 実装（router/ movie_maker/ 等）は
+# ゲート外にする。β の構造を先に固めるのが目的で、移行前のコードに後付けの契約を
+# かぶせても違反リストが出るだけで設計は良くならないため。
+#
+# 記述規約の正本: ~/.claude/docs/architecture-contract.md
+# 検査: python3 ~/.claude/scripts/check-architecture.py --root .
+
+# .astro はチェッカーが解析しないため対象外（コンポーネント側の import 方向は
+# レビューで見る）。.ts に閉じた層構造だけを機械検査する。
+extensions = [".ts", ".tsx"]
+
+[limits]
+max_file_loc = 400
+max_public_symbols = 40
+
+[rules]
+no_cycles = true
+
+# 最内層。API 型・セッション形式・R2 キー導出の正本で、他のどこにも依存しない。
+# Wave 2 以降の並列実装が全員ここを import するため、依存を足すと全体に波及する。
+[modules.contracts]
+paths = ["web/src/lib/contracts"]
+may_depend_on = []
+forbidden_imports = [
+  # workerd と bun test の両方で同じコードを動かすため Web 標準 API のみ使う
+  # （node:crypto / Buffer は workerd で挙動が変わる）。
+  "^node:",
+  # フレームワーク非依存を保つ（Astro の実行文脈なしでテストできること）。
+  "^astro",
+  "^@astrojs/",
+  "^cloudflare:",
+]
+
+# 外部依存の隔離層（D1 / R2 / Discord API / web-capture の呼び出し）。
+[modules.infra]
+paths = ["web/src/lib/infra"]
+may_depend_on = ["contracts"]
+
+# ドメインロジック。infra 越しにしか外部へ触らない。
+[modules.services]
+paths = ["web/src/lib/services"]
+may_depend_on = ["infra", "contracts"]
+
+# エントリポイント。HTTP と services の間の I/O 変換だけを担い、ロジックを持たない。
+# infra を直接叩くのは禁止（services を経由させる）。
+[modules.entrypoints]
+paths = ["web/src/pages", "web/src/middleware.ts"]
+may_depend_on = ["services", "contracts"]
+max_file_loc = 200
+
+# cron トリガー専用の独立 Worker（web/cron/wrangler.jsonc で単体デプロイする）。
+# entrypoints と同じく I/O 変換だけを担う層で、判定ロジックは services に置く。
+# services 側の may_depend_on に cron は無いので、逆流（services → cron）は違反になる。
+[modules.cron]
+paths = ["web/cron/src"]
+may_depend_on = ["services", "contracts"]
+max_file_loc = 200
+
+[modules.tests]
+paths = ["web/tests", "web/e2e"]
+may_depend_on = ["contracts", "infra", "services", "entrypoints"]
+max_file_loc = 500
+max_public_symbols = 0

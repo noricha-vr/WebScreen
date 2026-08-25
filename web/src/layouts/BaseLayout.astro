@@ -1,0 +1,54 @@
+---
+import '../styles/global.css';
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import { alternateLocale, switchLocalePath, useTranslations, type Locale } from '../i18n';
+
+interface Props {
+  lang: Locale;
+  title: string;
+  description?: string;
+}
+
+const { lang, title, description } = Astro.props;
+const t = useTranslations(lang);
+const other = alternateLocale(lang);
+
+// SRI 付きで固定バージョンを読む（CDN 側の差し替えをブラウザが検出できるようにする）。
+const FONT_AWESOME_URL = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.1.0/css/all.min.css';
+const FONT_AWESOME_SRI = 'sha384-YgSbYtJcfPnMV/aJ0UdQk84ctht/ckX0MrfQwxOhw43RMBw2WSaDSMVh4gQwLdE4';
+---
+
+<!doctype html>
+<html lang={lang} data-auth-state="guest">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description ?? t.meta.description} />
+    <link rel="alternate" hreflang={other} href={switchLocalePath(Astro.url.pathname, other)} />
+    <link
+      rel="stylesheet"
+      href={FONT_AWESOME_URL}
+      integrity={FONT_AWESOME_SRI}
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+  </head>
+  <body class="flex min-h-screen flex-col bg-white text-slate-900 antialiased">
+    <SiteHeader lang={lang} />
+
+    <main class="flex-1">
+      <slot />
+    </main>
+
+    <SiteFooter lang={lang} />
+
+    <script>
+      // ログイン状態は静的 HTML に埋め込めないので、描画後に /api/me/ で解決する。
+      import { resolveAuthState } from '../lib/ui/session-view';
+
+      void resolveAuthState(document.documentElement);
+    </script>
+  </body>
+</html>

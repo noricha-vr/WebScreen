@@ -1,0 +1,48 @@
+# Dockerfile が `COPY . .` を使うため、Python イメージに不要なものを除外する。
+# 特に web/（Cloudflare β 版）は Python 側の実行に一切不要で、node_modules が
+# 混入するとイメージサイズとビルド時間が跳ね上がる。
+#
+# 注意: router/main.py が static/ と movie/ を StaticFiles でマウントしており、
+# ディレクトリが存在しないと uvicorn 起動時に落ちる。static/ は除外せず、
+# movie/ は中身（生成済み mp4）だけ除外してディレクトリ自体は残す。
+
+# Cloudflare β 版（Workers 側で完結。Python イメージには不要）
+web/
+
+# Node
+node_modules/
+
+# Git / CI
+.git/
+.github/
+.gitignore
+.dockerignore
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# 開発環境
+.devcontainer/
+.vscode/
+.idea/
+.claude/
+.wrangler/
+
+# 認証情報・ローカル設定（イメージに焼かない）
+.env
+credentials.json
+
+# ローカル生成物（movie/ はマウント先なのでディレクトリだけ残す）
+movie/*
+!movie/.gitkeep
+logs/
+drivers/
+html/
+image/
+test_slides/
+docs/tmp/
+.DS_Store

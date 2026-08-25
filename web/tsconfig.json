@@ -1,0 +1,10 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    // bun:test の型と Bun 実行環境のグローバル（process 等）を読み込む。
+    // 明示しないと `bun:test` が解決できず tsc が落ちる。
+    "types": ["bun"]
+  },
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"]
+}

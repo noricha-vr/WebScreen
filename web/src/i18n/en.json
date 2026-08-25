@@ -1,0 +1,124 @@
+{
+  "meta": {
+    "title": "WebScreen β — Turn web pages, images and PDFs into VRChat videos",
+    "description": "Upload a PDF, image or video and get an MP4 URL that plays in VRChat video players.",
+    "privacyTitle": "Cookies and privacy — WebScreen β"
+  },
+  "nav": {
+    "home": "Home",
+    "login": "Sign in with Discord",
+    "upload": "Upload",
+    "account": "Account",
+    "history": "History",
+    "logout": "Sign out",
+    "langSwitch": "日本語",
+    "bannerAlt": "WebScreen logo",
+    "avatarAlt": "Account avatar"
+  },
+  "hero": {
+    "title": "Drag and drop a file, get a video URL for VRChat.",
+    "lead": "Upload a PDF, image or video and WebScreen returns an MP4 URL that plays in VRChat video players.",
+    "cta": "Sign in with Discord to upload",
+    "ctaNote": "A Discord account is all you need. There is no password to create."
+  },
+  "spec": {
+    "heading": "Upload limits",
+    "formats": "PDF, images (png, jpg, webp, gif) and video files",
+    "maxSize": "Up to 50 MB per file",
+    "retention": "Stored for 30 days",
+    "pinned": "Up to 10 pinned videos are kept indefinitely",
+    "quota": "500 MB of storage per user"
+  },
+  "convert": {
+    "heading": "Convert a file to video",
+    "dropzoneTitle": "Drop your file here",
+    "dropzoneOr": "or",
+    "chooseFile": "Choose a file",
+    "accepted": "PDF / png / jpg / webp / gif / video — up to 50 MB",
+    "selectedFile": "Selected file",
+    "urlHeading": "Convert from a URL",
+    "urlLabel": "URL of the web page to convert",
+    "urlPlaceholder": "https://example.com",
+    "urlSubmit": "Convert URL",
+    "converting": "Converting",
+    "uploading": "Uploading",
+    "done": "Conversion finished",
+    "resultLabel": "Video URL",
+    "copy": "Copy URL",
+    "copied": "Copied",
+    "again": "Convert another file",
+    "preview": "Open preview page",
+    "errorTooLarge": "This file is larger than the 50 MB limit",
+    "errorUnsupported": "This file type is not supported",
+    "errorTooManyPages": "PDF files must have 200 pages or fewer",
+    "errorFailed": "Conversion failed. Please try again in a moment"
+  },
+  "history": {
+    "heading": "Your videos",
+    "loading": "Loading",
+    "empty": "You have not converted any video yet",
+    "error": "Could not load your history",
+    "processing": "Processing",
+    "pinned": "Pinned"
+  },
+  "preview": {
+    "heading": "Your video",
+    "urlLabel": "Video URL",
+    "copy": "Copy URL",
+    "copied": "Copied",
+    "expiry": "Retention",
+    "expiresInDays": "{days} days left",
+    "expiresToday": "less than a day left",
+    "neverExpires": "no expiry (pinned)",
+    "pin": "Pin this video",
+    "unpin": "Remove pin",
+    "pinHint": "Pinned videos are kept with no expiry (up to {count})",
+    "pinLimit": "You can pin up to {count} videos",
+    "pinFailed": "Could not change the pin",
+    "notFoundHeading": "Video not found",
+    "notFoundLead": "The URL may be wrong, or the video may have been removed after its retention period.",
+    "backHome": "Back to the home page",
+    "deletedHeading": "Deleted",
+    "deletedLead": "This video has been deleted and the URL no longer plays.",
+    "playbackHint": "Paste this URL into a VRChat video player to watch it."
+  },
+  "actions": {
+    "delete": "Delete",
+    "deleteConfirm": "Deleting cannot be undone",
+    "deleteYes": "Delete",
+    "deleteCancel": "Cancel",
+    "deleteFailed": "Could not delete the video"
+  },
+  "footer": {
+    "github": "GitHub",
+    "privacy": "Cookies and privacy",
+    "note": "WebScreen β — an early release of the Cloudflare edition"
+  },
+  "privacy": {
+    "heading": "Cookies and privacy",
+    "lead": "What WebScreen β stores in cookies, and what information it handles.",
+    "tableCaption": "Cookies in use",
+    "columnName": "Name",
+    "columnPurpose": "Purpose",
+    "columnExpiry": "Expiry",
+    "columnShared": "Shared with third parties",
+    "notShared": "No",
+    "cookies": [
+      {
+        "name": "ws_session",
+        "purpose": "Keeps you signed in",
+        "expiry": "30 days"
+      },
+      {
+        "name": "ws_oauth_state",
+        "purpose": "Protects the Discord sign-in flow against forgery",
+        "expiry": "10 minutes"
+      }
+    ],
+    "paragraphs": [
+      "When you sign in with Discord we store your Discord user ID, display name and avatar URL. We never receive your email address or password.",
+      "Uploaded videos get a public URL containing a hard-to-guess random ID. VRChat video players fetch it without authentication, so anyone who knows the URL can play it. Please do not upload anything you need to keep private.",
+      "You can delete or block cookies in your browser settings. Features that require signing in will not work if you do."
+    ]
+  }
+}

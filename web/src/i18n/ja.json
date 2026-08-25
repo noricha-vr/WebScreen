@@ -1,0 +1,124 @@
+{
+  "meta": {
+    "title": "WebScreen β — Web・画像・PDF を VRChat 用の動画に変換",
+    "description": "PDF・画像・動画をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
+    "privacyTitle": "Cookie とプライバシー — WebScreen β"
+  },
+  "nav": {
+    "home": "ホーム",
+    "login": "Discord でログイン",
+    "upload": "アップロード",
+    "account": "アカウント",
+    "history": "履歴",
+    "logout": "ログアウト",
+    "langSwitch": "English",
+    "bannerAlt": "WebScreen のロゴ",
+    "avatarAlt": "アカウントのアバター"
+  },
+  "hero": {
+    "title": "VRChat に映せる動画 URL を、ドラッグ&ドロップで。",
+    "lead": "PDF・画像・動画をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
+    "cta": "Discord でログインしてアップロード",
+    "ctaNote": "ログインに使うのは Discord アカウントだけです。パスワードの登録は必要ありません。"
+  },
+  "spec": {
+    "heading": "アップロードの仕様",
+    "formats": "対応形式は PDF / 画像 (png, jpg, webp, gif) / 動画",
+    "maxSize": "1 ファイルあたり 50 MB まで",
+    "retention": "保管期間は 30 日",
+    "pinned": "ピン留めした 10 件は無期限で保管",
+    "quota": "1 ユーザーあたり合計 500 MB"
+  },
+  "convert": {
+    "heading": "ファイルを動画に変換",
+    "dropzoneTitle": "ここにファイルをドロップ",
+    "dropzoneOr": "または",
+    "chooseFile": "ファイルを選択",
+    "accepted": "PDF / png / jpg / webp / gif / 動画 — 50 MB まで",
+    "selectedFile": "選択中のファイル",
+    "urlHeading": "URL から変換",
+    "urlLabel": "変換する Web ページの URL",
+    "urlPlaceholder": "https://example.com",
+    "urlSubmit": "URL を変換",
+    "converting": "変換しています",
+    "uploading": "アップロードしています",
+    "done": "変換が完了しました",
+    "resultLabel": "動画の URL",
+    "copy": "URL をコピー",
+    "copied": "コピーしました",
+    "again": "別のファイルを変換",
+    "preview": "プレビューページを開く",
+    "errorTooLarge": "ファイルサイズが上限の 50 MB を超えています",
+    "errorUnsupported": "対応していないファイル形式です",
+    "errorTooManyPages": "PDF は 200 ページ以下にしてください",
+    "errorFailed": "変換に失敗しました。時間をおいて再度お試しください"
+  },
+  "history": {
+    "heading": "変換した動画",
+    "loading": "読み込んでいます",
+    "empty": "変換した動画はまだありません",
+    "error": "履歴を取得できませんでした",
+    "processing": "処理中",
+    "pinned": "ピン留め中"
+  },
+  "preview": {
+    "heading": "変換した動画",
+    "urlLabel": "動画の URL",
+    "copy": "URL をコピー",
+    "copied": "コピーしました",
+    "expiry": "保管期限",
+    "expiresInDays": "あと {days} 日",
+    "expiresToday": "まもなく削除されます",
+    "neverExpires": "無期限（ピン留め中）",
+    "pin": "ピン留めする",
+    "unpin": "ピン留めを解除",
+    "pinHint": "ピン留めした動画は期限なしで保管します（{count} 件まで）",
+    "pinLimit": "ピン留めできるのは {count} 件までです",
+    "pinFailed": "ピン留めを変更できませんでした",
+    "notFoundHeading": "動画が見つかりません",
+    "notFoundLead": "URL が間違っているか、保管期限が過ぎて削除された可能性があります。",
+    "backHome": "トップへ戻る",
+    "deletedHeading": "削除しました",
+    "deletedLead": "この動画は削除されました。この URL では再生できません。",
+    "playbackHint": "この URL を VRChat のビデオプレイヤーに貼り付けると再生できます。"
+  },
+  "actions": {
+    "delete": "削除",
+    "deleteConfirm": "削除すると元に戻せません",
+    "deleteYes": "削除する",
+    "deleteCancel": "キャンセル",
+    "deleteFailed": "削除に失敗しました"
+  },
+  "footer": {
+    "github": "GitHub",
+    "privacy": "Cookie とプライバシー",
+    "note": "WebScreen β — Cloudflare 版の先行公開です"
+  },
+  "privacy": {
+    "heading": "Cookie とプライバシー",
+    "lead": "WebScreen β が保存する Cookie と、扱う情報の範囲を説明します。",
+    "tableCaption": "利用している Cookie",
+    "columnName": "名前",
+    "columnPurpose": "目的",
+    "columnExpiry": "有効期限",
+    "columnShared": "第三者との共有",
+    "notShared": "しない",
+    "cookies": [
+      {
+        "name": "ws_session",
+        "purpose": "ログイン状態の保持",
+        "expiry": "30 日"
+      },
+      {
+        "name": "ws_oauth_state",
+        "purpose": "Discord ログイン時のなりすまし防止",
+        "expiry": "10 分"
+      }
+    ],
+    "paragraphs": [
+      "Discord でログインすると、Discord のユーザー ID・表示名・アバター画像の URL を保存します。メールアドレスやパスワードは受け取りません。",
+      "アップロードされた動画の URL は、推測されにくいランダムな ID を含む公開 URL です。VRChat のビデオプレイヤーが認証なしで再生できるようにするため、URL を知っている人は誰でも再生できます。他人に知られたくない内容はアップロードしないでください。",
+      "Cookie はブラウザの設定で削除・無効化できます。無効にした場合はログインが必要な機能を利用できません。"
+    ]
+  }
+}

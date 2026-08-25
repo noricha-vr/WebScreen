@@ -1,0 +1,33 @@
+{
+  // 保持期間バッチ専用の独立 Worker。Astro のビルドを通さない素の TS で、
+  // wrangler が esbuild して単体デプロイする:
+  //   bunx wrangler deploy -c web/cron/wrangler.jsonc
+  // 本体（webscreen-beta）と分けるのは、cron の失敗・実行時間が
+  // リクエスト処理側の可観測性に混ざらないようにするため。
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "webscreen-beta-cron",
+  "main": "src/index.ts",
+  // 本体（web/wrangler.jsonc）と揃える。片方だけ上げると同じ D1 / R2 を
+  // 別挙動の runtime で触ることになるため、上げる時は両方同時に上げる。
+  "compatibility_date": "2026-08-18",
+  // 毎時 17 分。0 分ちょうどは Cloudflare 全体のスケジュール集中で遅延しやすい。
+  "triggers": {
+    "crons": ["17 * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "webscreen-beta-db",
+      "database_id": "8e95e386-039b-4589-a442-8cc7ca7e6996"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "webscreen-beta"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  // ルート設定。ビルド時に @astrojs/cloudflare がこれを取り込んで
+  // dist/server/wrangler.json を生成するため、デプロイは生成物を指定する:
+  //   bun run build && bunx wrangler deploy -c dist/server/wrangler.json
+  // ここに main を書くとビルド前に dist/_worker.js を解決しようとして失敗する。
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "webscreen-beta",
+  // 同梱 wrangler の workerd がサポートする上限日。上げる時は wrangler も同時に上げる
+  // （未来日にすると prerender 時の miniflare 起動が失敗する）。
+  "compatibility_date": "2026-08-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "R2_ACCOUNT_ID": "65850b2bd0055921bdcfbe42383c794a",
+    "R2_BUCKET_NAME": "webscreen-beta",
+    "R2_PUBLIC_BASE_URL": "https://pub-ebb48e6efc2f4128b606cf381851cae5.r2.dev",
+    "WEBCAPTURE_URL": "http://localhost:8090"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "webscreen-beta-db",
+      "database_id": "8e95e386-039b-4589-a442-8cc7ca7e6996"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "webscreen-beta"
+    }
+  ],
+  // Astro のセッション機能が既定で要求する KV。初回 deploy で wrangler が
+  // 自動プロビジョニングしたものを、再デプロイ時の取り違えを防ぐため明示している。
+  "kv_namespaces": [
+    {
+      "binding": "SESSION",
+      "id": "8318e211fb8c4caebb81bc04745b438b"
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+import { beforeAll, describe, expect, test } from 'bun:test';
+
+import {
+  createSessionPayload,
+  importSigningKey,
+  signSession,
+} from '../../src/lib/contracts/session';
+import { proxyCapture, type CaptureFetcher } from '../../src/lib/services/capture';
+import type { UserStatement, UsersDatabase } from '../../src/lib/infra/users';
+
+const NOW = 1_700_000_000;
+let signingKey: CryptoKey;
+
+beforeAll(async () => {
+  signingKey = await importSigningKey('test-signing-key');
+});
+
+describe('proxyCapture', () => {
+  test.each([
+    ['private 10/8', 'http://10.1.2.3/'],
+    ['private 172.16/12', 'http://172.16.0.1/'],
+    ['private 192.168/16', 'http://192.168.1.1/'],
+    ['loopback IPv4', 'http://127.0.0.1/'],
+    ['link-local IPv4', 'http://169.254.10.1/'],
+    ['loopback IPv6', 'http://[::1]/'],
+    ['IPv4-mapped loopback IPv6', 'http://[::ffff:7f00:1]/'],
+    ['localhost', 'http://localhost/'],
+    ['localhost subdomain', 'http://preview.localhost/'],
+    ['ftp scheme', 'ftp://example.com/file'],
+  ])('%s を 400 で拒否する', async (_label, url) => {
+    let fetchCount = 0;
+
+    const response = await proxyCapture(captureRequest({ url }), {
+      ...authenticatedDependencies(),
+      fetcher: async () => {
+        fetchCount += 1;
+        return Response.json({ images: [] });
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(fetchCount).toBe(0);
+  });
+
+  test('認証なしは 401 を返し、下流を呼ばない', async () => {
+    let fetchCount = 0;
+
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      database: new FakeUsersDatabase(null),
+      fetcher: async () => {
+        fetchCount += 1;
+        return Response.json({ images: [] });
+      },
+    });
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ errorCode: 'UNAUTHORIZED', message: '認証が必要です' });
+    expect(fetchCount).toBe(0);
+  });
+
+  test('下流の失敗を 502 に変換する', async () => {
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      fetcher: async () => new Response('upstream error', { status: 500 }),
+    });
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ errorCode: 'CAPTURE_FAILED' });
+  });
+
+  test('下流タイムアウトを 504 に変換する', async () => {
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      timeoutMs: 1,
+      fetcher: timeoutFetcher,
+    });
+
+    expect(response.status).toBe(504);
+    expect(await response.json()).toMatchObject({ errorCode: 'CAPTURE_FAILED' });
+  });
+
+  test('下流の images 配列を順序を変えず返す', async () => {
+    const images = ['https://images.test/0000.webp', 'https://images.test/0001.webp'];
+    let forwardedRequest: Request | undefined;
+    const fetcher: CaptureFetcher = async (input, init) => {
+      forwardedRequest = new Request(input, init);
+      return Response.json({ images });
+    };
+
+    const response = await proxyCapture(
+      captureRequest({ url: 'https://example.com/', width: 1280, height: 720 }),
+      { ...authenticatedDependencies(), fetcher }
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ images });
+    expect(forwardedRequest?.url).toBe('http://web-capture.test/capture');
+    expect(forwardedRequest?.headers.get('Authorization')).toBe('Bearer test-capture-token');
+    expect(await forwardedRequest?.json()).toEqual({
+      url: 'https://example.com/',
+      width: 1280,
+      height: 720,
+    });
+  });
+});
+
+function authenticatedDependencies() {
+  return {
+    database: new FakeUsersDatabase({
+      id: 42,
+      discord_id: '123456789',
+      name: 'WebScreen User',
+      avatar: 'avatar-hash',
+    }),
+    signingKey,
+    nowSeconds: NOW,
+    webCaptureUrl: 'http://web-capture.test',
+    webCaptureToken: 'test-capture-token',
+  };
+}
+
+function captureRequest(body: unknown): Request {
+  return new Request('https://example.test/api/capture/', {
+    method: 'POST',
+    headers: { Cookie: `ws_session=${sessionToken}` },
+    body: JSON.stringify(body),
+  });
+}
+
+const sessionToken = await signSession(createSessionPayload(42, NOW), await importSigningKey('test-signing-key'));
+
+const timeoutFetcher: CaptureFetcher = async (_input, init) =>
+  new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+  });
+
+class FakeUsersDatabase implements UsersDatabase {
+  constructor(private readonly row: Record<string, unknown> | null) {}
+
+  prepare(): UserStatement {
+    return {
+      bind: () => this.prepare(),
+      first: async <T>() => this.row as T | null,
+    };
+  }
+}

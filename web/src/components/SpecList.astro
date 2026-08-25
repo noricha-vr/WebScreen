@@ -1,0 +1,34 @@
+---
+import { useTranslations, type Locale } from '../i18n';
+
+interface Props {
+  lang: Locale;
+  /** 見出しを出すか（ドロップゾーン下では見出し無しで並べる）。 */
+  heading?: boolean;
+}
+
+const { lang, heading = true } = Astro.props;
+const t = useTranslations(lang);
+
+const items = [
+  { icon: 'fa-file-lines', text: t.spec.formats },
+  { icon: 'fa-weight-hanging', text: t.spec.maxSize },
+  { icon: 'fa-calendar-day', text: t.spec.retention },
+  { icon: 'fa-thumbtack', text: t.spec.pinned },
+  { icon: 'fa-database', text: t.spec.quota },
+];
+---
+
+<div>
+  {heading && <h2 class="text-lg font-semibold text-slate-900">{t.spec.heading}</h2>}
+  <ul class="mt-3 grid gap-2 text-base text-slate-700">
+    {
+      items.map((item) => (
+        <li class="flex items-start gap-3">
+          <i class={`fa-solid ${item.icon} mt-1 text-brand-500`} aria-hidden="true" />
+          <span>{item.text}</span>
+        </li>
+      ))
+    }
+  </ul>
+</div>

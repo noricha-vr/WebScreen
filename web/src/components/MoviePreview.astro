@@ -1,0 +1,167 @@
+---
+import { useTranslations, type Locale } from '../i18n';
+import { MAX_PINNED_MOVIES } from '../lib/services/quota';
+import { remainingDays } from '../lib/ui/history-view';
+
+interface Props {
+  lang: Locale;
+  shortId: string;
+  filename: string;
+  publicUrl: string;
+  pinned: boolean;
+  expiresAt: string | null;
+  /** 所有者にだけ pin / 削除の操作を出す（動画そのものは誰でも見られる）。 */
+  isOwner: boolean;
+}
+
+const { lang, shortId, filename, publicUrl, pinned, expiresAt, isOwner } = Astro.props;
+const t = useTranslations(lang);
+
+const daysLeft = expiresAt === null ? null : remainingDays(expiresAt, new Date());
+const expiryLabel =
+  pinned || daysLeft === null
+    ? t.preview.neverExpires
+    : daysLeft > 0
+      ? t.preview.expiresInDays.replace('{days}', String(daysLeft))
+      : t.preview.expiresToday;
+
+const pinLimitMessage = t.preview.pinLimit.replace('{count}', String(MAX_PINNED_MOVIES));
+const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
+---
+
+<section
+  data-preview
+  data-preview-state="ready"
+  data-delete-scope
+  data-short-id={shortId}
+  data-msg-pin-limit={pinLimitMessage}
+  data-msg-pin-failed={t.preview.pinFailed}
+  class="mx-auto max-w-3xl px-4 py-10"
+>
+  <div data-when-preview="ready">
+    <p class="flex items-center gap-2 text-base font-semibold text-brand-700">
+      <i class="fa-solid fa-film" aria-hidden="true"></i>
+      <span>{t.preview.heading}</span>
+    </p>
+    <h1 class="mt-2 truncate text-3xl font-bold tracking-tight text-slate-900">{filename}</h1>
+
+    <p class="mt-3 flex items-center gap-2 text-base text-slate-700">
+      <i
+        class={pinned ? 'fa-solid fa-thumbtack text-brand-500' : 'fa-regular fa-clock text-slate-500'}
+        aria-hidden="true"></i>
+      <span class="text-slate-600">{t.preview.expiry}</span>
+      <span class="font-semibold text-slate-900">{expiryLabel}</span>
+    </p>
+
+    <video
+      data-preview-video
+      src={publicUrl}
+      controls
+      playsinline
+      preload="metadata"
+      class="mt-6 aspect-video w-full rounded-xl bg-slate-900"
+    ></video>
+
+    <label for="preview-url" class="mt-6 block text-base font-semibold text-slate-700">
+      {t.preview.urlLabel}
+    </label>
+    <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+      <input
+        id="preview-url"
+        data-preview-url
+        type="text"
+        readonly
+        value={publicUrl}
+        class="min-w-0 flex-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-base text-slate-900"
+      />
+      <button
+        type="button"
+        data-copy-button
+        class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white hover:bg-brand-700"
+      >
+        <i class="fa-solid fa-copy" aria-hidden="true"></i>
+        <span>{t.preview.copy}</span>
+      </button>
+    </div>
+    <p data-copied-label class="mt-2 flex items-center gap-2 text-base text-brand-700" role="status">
+      <i class="fa-solid fa-check" aria-hidden="true"></i>
+      <span>{t.preview.copied}</span>
+    </p>
+    <p class="mt-2 text-base text-slate-600">{t.preview.playbackHint}</p>
+
+    {
+      isOwner && (
+        <div class="mt-8 flex flex-col gap-4 border-t border-slate-200 pt-6">
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              data-pin-button
+              class="inline-flex items-center gap-2 rounded-md border border-brand-500 px-4 py-2 text-base font-semibold text-brand-700 hover:bg-brand-50"
+            >
+              <i class="fa-solid fa-thumbtack" aria-hidden="true" />
+              <span>{pinned ? t.preview.unpin : t.preview.pin}</span>
+            </button>
+            <span class="text-base text-slate-600">{pinHint}</span>
+          </div>
+          <p data-pin-failed hidden role="alert" class="text-base text-red-700" />
+
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              data-delete-trigger
+              class="inline-flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-red-50 hover:text-red-700"
+            >
+              <i class="fa-solid fa-trash-can" aria-hidden="true" />
+              <span>{t.actions.delete}</span>
+            </button>
+
+            <span data-delete-confirm class="flex flex-wrap items-center gap-3">
+              <span class="text-base text-slate-700">{t.actions.deleteConfirm}</span>
+              <button
+                type="button"
+                data-delete-yes
+                class="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-base font-semibold text-white hover:bg-red-700"
+              >
+                <i class="fa-solid fa-trash-can" aria-hidden="true" />
+                <span>{t.actions.deleteYes}</span>
+              </button>
+              <button
+                type="button"
+                data-delete-cancel
+                class="rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                {t.actions.deleteCancel}
+              </button>
+            </span>
+          </div>
+          <p data-delete-failed hidden role="alert" class="text-base text-red-700">
+            {t.actions.deleteFailed}
+          </p>
+        </div>
+      )
+    }
+  </div>
+
+  <div data-when-preview="deleted" class="py-10 text-center">
+    <p class="flex items-center justify-center gap-2 text-2xl font-bold text-slate-900">
+      <i class="fa-solid fa-circle-check text-brand-500" aria-hidden="true"></i>
+      <span>{t.preview.deletedHeading}</span>
+    </p>
+    <p class="mt-3 text-base text-slate-600">{t.preview.deletedLead}</p>
+    <a
+      href={`/${lang}/`}
+      class="mt-6 inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white no-underline hover:bg-brand-700"
+    >
+      <i class="fa-solid fa-house" aria-hidden="true"></i>
+      <span>{t.preview.backHome}</span>
+    </a>
+  </div>
+</section>
+
+<script>
+  import { mountPreviewActions } from '../lib/ui/preview-actions';
+
+  for (const panel of document.querySelectorAll<HTMLElement>('[data-preview]')) {
+    mountPreviewActions(panel);
+  }
+</script>
