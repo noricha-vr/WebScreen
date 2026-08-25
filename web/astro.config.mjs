@@ -10,13 +10,16 @@ export default defineConfig({
   output: 'static',
   trailingSlash: 'always',
   i18n: {
-    // prefixDefaultLocale: true により defaultLocale も含め全ロケールが /{lang}/ 配下になる
-    // （既存 FastAPI 版の /ja/ /en/ ルーティングと URL 構造を揃えるため）。
+    // ページは物理的に /ja/ /en/ 配下に置く（既存 FastAPI 版と URL 構造を揃えるため）。
+    //
+    // routing は 'manual'。prefixDefaultLocale: true（= pathname-prefix-always-no-redirect）だと
+    // Astro の i18n ミドルウェアが「ロケール接頭辞の無いページ URL」を無条件に 404 にするため、
+    // 公開プレビュー /{shortId}/ が到達不能になる（astro/dist/i18n/router.js の
+    // matchPrefixAlwaysNoRedirect）。ロケール判定は src/pages/index.astro の
+    // Accept-Language 振り分けで自前に行っており、ミドルウェアに任せている処理は無い。
     defaultLocale: 'ja',
     locales: ['ja', 'en'],
-    routing: {
-      prefixDefaultLocale: true,
-    },
+    routing: 'manual',
   },
   vite: {
     plugins: [tailwindcss()],

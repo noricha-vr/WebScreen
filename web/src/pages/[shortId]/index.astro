@@ -1,0 +1,74 @@
+---
+import { env } from 'cloudflare:workers';
+
+import MovieNotFound from '../../components/MovieNotFound.astro';
+import MoviePreview from '../../components/MoviePreview.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { resolveLocale, useTranslations } from '../../i18n';
+import { importSigningKey } from '../../lib/contracts/session';
+import { requireUser, type AuthDatabase } from '../../lib/services/auth';
+import { findPublicMovie, type MoviesDatabase } from '../../lib/services/movies';
+
+// 公開ページ（認証不要）だが shortId ごとに内容が変わるので Worker で描画する。
+// /ja/ /en/ /api/ は静的セグメントが優先されるため、このルートには落ちてこない。
+export const prerender = false;
+
+interface PreviewBindings {
+  DB: AuthDatabase & MoviesDatabase;
+  SESSION_SIGNING_KEY: string;
+  R2_PUBLIC_BASE_URL: string;
+}
+
+const bindings = env as unknown as PreviewBindings;
+const lang = resolveLocale(Astro.request.headers.get('accept-language'));
+const t = useTranslations(lang);
+
+// 所有者にだけ pin / 削除の操作 UI を出すため、共有キャッシュには載せない。
+Astro.response.headers.set('Cache-Control', 'no-store');
+
+// shortId は 12 文字 base62 のみ。形式チェックは findPublicMovie 側でも行うが、
+// ルーティングの取りこぼし（予約語との衝突）を二重に塞ぐためここでも弾く。
+const movie = await findPublicMovie({
+  database: bindings.DB,
+  shortId: Astro.params.shortId ?? '',
+  publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
+});
+
+/**
+ * 所有者判定。未ログイン・署名鍵未設定でも公開表示は壊さない（匿名として扱う）。
+ */
+async function resolveIsOwner(ownerId: number): Promise<boolean> {
+  try {
+    const signingKey = await importSigningKey(bindings.SESSION_SIGNING_KEY);
+    const result = await requireUser(Astro.request, { db: bindings.DB, signingKey });
+    return result.ok && result.user.id === ownerId;
+  } catch {
+    return false;
+  }
+}
+
+const isOwner = movie === null ? false : await resolveIsOwner(movie.ownerId);
+
+if (movie === null) Astro.response.status = 404;
+---
+
+<BaseLayout
+  lang={lang}
+  title={movie === null ? t.preview.notFoundHeading : `${movie.filename} — WebScreen`}
+>
+  {
+    movie === null ? (
+      <MovieNotFound lang={lang} />
+    ) : (
+      <MoviePreview
+        lang={lang}
+        shortId={movie.shortId}
+        filename={movie.filename}
+        publicUrl={movie.publicUrl}
+        pinned={movie.pinned}
+        expiresAt={movie.expiresAt}
+        isOwner={isOwner}
+      />
+    )
+  }
+</BaseLayout>

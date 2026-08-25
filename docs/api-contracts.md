@@ -26,6 +26,10 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `POST /api/commit/` | アップロード完了を確定し `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse` |
 | `GET /api/history/` | 自分の動画一覧 | 本人 | — |
 | `POST /api/movies/{shortId}/pin/` | pin の切り替え（自動削除の対象外にする） | 本人（所有者） | — |
+| `DELETE /api/movies/{shortId}/` | 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | — |
+
+`GET /api/history/` / pin / delete の型は `web/src/lib/services/movies.ts` が持つ（contracts/api.ts が
+別タスクで凍結中のための暫定。解凍後に contracts へ移す）。
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
 
@@ -48,6 +52,8 @@ Worker とは別サービス（ヘッドレスブラウザを持つ実行環境�
 | キャプチャ画像（`captures/{uuid}/{index}.png`） | 公開 | 同上。動画生成の中間物 |
 | 履歴 `GET /api/history/` | 本人のみ | セッション Cookie の uid で絞る |
 | pin `POST /api/movies/{shortId}/pin/` | 本人のみ | 所有者チェック必須 |
+| 削除 `DELETE /api/movies/{shortId}/` | 本人のみ | 所有者チェック必須。他人の shortId は 404（存在を漏らさない） |
+| プレビュー `GET /{shortId}/` | **公開**（認証なし） | 動画 URL と同じ扱い。`ready` 以外は 404。pin / 削除の操作 UI は所有者にだけ出す |
 | commit `POST /api/commit/` | 本人のみ | 所有者チェック必須。他人の pending を確定できてはならない |
 
 「動画は公開・操作は本人のみ」が原則。動画 URL を推測されないこと自体が保護なので、

@@ -53,6 +53,31 @@
 }
 
 /* コピー完了のフィードバック（2 秒で data-copied が外れる）。 */
-[data-convert-panel]:not([data-copied]) [data-copied-label] {
+[data-convert-panel]:not([data-copied]) [data-copied-label],
+[data-preview]:not([data-copied]) [data-copied-label] {
+  display: none;
+}
+
+/* 履歴ドロップダウンの状態別表示（読み込み中 / 一覧 / 空 / 失敗）。 */
+[data-history-state='idle'] [data-when-history],
+[data-history-state='loading'] [data-when-history]:not([data-when-history~='loading']),
+[data-history-state='ready'] [data-when-history]:not([data-when-history~='ready']),
+[data-history-state='empty'] [data-when-history]:not([data-when-history~='empty']),
+[data-history-state='error'] [data-when-history]:not([data-when-history~='error']) {
+  display: none;
+}
+
+/* プレビューページの状態別表示（表示中 / 削除済み）。 */
+[data-preview-state='ready'] [data-when-preview]:not([data-when-preview~='ready']),
+[data-preview-state='deleted'] [data-when-preview]:not([data-when-preview~='deleted']) {
+  display: none;
+}
+
+/*
+ * 削除のインライン確認。confirm() を使わず、確認 UI を同じ場所に出し分ける。
+ * 履歴の各行とプレビューページの両方で同じ規則を使う。
+ */
+[data-delete-scope]:not([data-confirming]) [data-delete-confirm],
+[data-delete-scope][data-confirming] [data-delete-trigger] {
   display: none;
 }

@@ -10,7 +10,6 @@
     "upload": "Upload",
     "account": "Account",
     "history": "History",
-    "historyPending": "The history list is not ready yet. The URL of a converted video is shown right after conversion.",
     "logout": "Sign out",
     "langSwitch": "日本語",
     "bannerAlt": "WebScreen logo",
@@ -53,6 +52,42 @@
     "errorUnsupported": "This file type is not supported",
     "errorTooManyPages": "PDF files must have 200 pages or fewer",
     "errorFailed": "Conversion failed. Please try again in a moment"
+  },
+  "history": {
+    "heading": "Your videos",
+    "loading": "Loading",
+    "empty": "You have not converted any video yet",
+    "error": "Could not load your history",
+    "processing": "Processing",
+    "pinned": "Pinned"
+  },
+  "preview": {
+    "heading": "Your video",
+    "urlLabel": "Video URL",
+    "copy": "Copy URL",
+    "copied": "Copied",
+    "expiry": "Retention",
+    "expiresInDays": "{days} days left",
+    "expiresToday": "less than a day left",
+    "neverExpires": "no expiry (pinned)",
+    "pin": "Pin this video",
+    "unpin": "Remove pin",
+    "pinHint": "Pinned videos are kept with no expiry (up to {count})",
+    "pinLimit": "You can pin up to {count} videos",
+    "pinFailed": "Could not change the pin",
+    "notFoundHeading": "Video not found",
+    "notFoundLead": "The URL may be wrong, or the video may have been removed after its retention period.",
+    "backHome": "Back to the home page",
+    "deletedHeading": "Deleted",
+    "deletedLead": "This video has been deleted and the URL no longer plays.",
+    "playbackHint": "Paste this URL into a VRChat video player to watch it."
+  },
+  "actions": {
+    "delete": "Delete",
+    "deleteConfirm": "Deleting cannot be undone",
+    "deleteYes": "Delete",
+    "deleteCancel": "Cancel",
+    "deleteFailed": "Could not delete the video"
   },
   "footer": {
     "github": "GitHub",

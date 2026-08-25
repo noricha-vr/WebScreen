@@ -4,6 +4,15 @@ export const USER_STORAGE_QUOTA_BYTES = 524_288_000;
 /** ユーザーごとの pin 上限。pin API 実装時にもこの定数を使用する。 */
 export const MAX_PINNED_MOVIES = 10;
 
+/** pin していない動画の保管期間（30 日）。presign 時の期限設定と pin 解除時の復元で共有する。 */
+export const MOVIE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * pin 解除時、元の保管期限が既に過ぎていた場合に与える猶予（7 日）。
+ * 解除した瞬間に削除対象へ落ちると、ユーザーが取り違えに気づく機会が無くなるため。
+ */
+export const UNPIN_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** D1 の最小操作面。サービスを workerd の実装から切り離す。 */
 export interface QuotaDatabase {
   prepare(query: string): {

@@ -1,0 +1,119 @@
+---
+import { useTranslations, type Locale } from '../i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<details data-history-menu data-history-state="idle" data-locale={lang} class="relative">
+  <summary
+    class="flex cursor-pointer list-none items-center gap-2 whitespace-nowrap rounded-md border border-slate-300 px-3 py-2 text-base font-semibold text-slate-800 hover:bg-slate-100"
+  >
+    <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+    <span>{t.nav.history}</span>
+  </summary>
+
+  <div
+    class="absolute right-0 z-10 mt-2 w-80 rounded-md border border-slate-200 bg-white p-3 shadow-lg sm:w-96"
+  >
+    <p class="px-1 pb-2 text-base font-semibold text-slate-900">{t.history.heading}</p>
+
+    <p data-when-history="loading" class="flex items-center gap-2 px-1 py-3 text-base text-slate-600">
+      <i class="fa-solid fa-spinner fa-spin-pulse" aria-hidden="true"></i>
+      <span>{t.history.loading}</span>
+    </p>
+
+    <p data-when-history="empty" class="px-1 py-3 text-base text-slate-600">{t.history.empty}</p>
+
+    <p
+      data-when-history="error"
+      role="alert"
+      class="flex items-center gap-2 px-1 py-3 text-base text-red-700"
+    >
+      <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+      <span>{t.history.error}</span>
+    </p>
+
+    <ul
+      data-when-history="ready"
+      data-history-list
+      class="max-h-96 list-none overflow-y-auto p-0 text-base"
+    >
+    </ul>
+  </div>
+
+  <!-- 行のひな型。文言を JS で組み立てないよう、辞書の値はここに埋めておく -->
+  <template data-history-item>
+    <li
+      data-history-row
+      data-delete-scope
+      class="flex items-center justify-between gap-2 border-b border-slate-100 px-1 py-2 last:border-b-0"
+    >
+      <a
+        data-entry-link
+        href="/"
+        class="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md px-1 py-1 no-underline hover:bg-slate-50"
+      >
+        <span class="flex items-center gap-2">
+          <i class="fa-solid fa-film text-brand-500" aria-hidden="true"></i>
+          <span data-entry-name class="truncate font-semibold text-slate-900"></span>
+        </span>
+        <span class="flex flex-wrap items-center gap-2 text-slate-600">
+          <span data-entry-time></span>
+          <span data-entry-pinned hidden class="inline-flex items-center gap-1 text-brand-700">
+            <i class="fa-solid fa-thumbtack" aria-hidden="true"></i>
+            <span>{t.history.pinned}</span>
+          </span>
+          <span data-entry-processing hidden class="inline-flex items-center gap-1 text-amber-800">
+            <i class="fa-solid fa-hourglass-half" aria-hidden="true"></i>
+            <span>{t.history.processing}</span>
+          </span>
+        </span>
+      </a>
+
+      <div class="flex flex-none flex-col items-end gap-1">
+        <button
+          type="button"
+          data-delete-trigger
+          class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-600 hover:bg-red-50 hover:text-red-700"
+        >
+          <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span>{t.actions.delete}</span>
+        </button>
+
+        <span data-delete-confirm class="flex items-center gap-1">
+          <button
+            type="button"
+            data-delete-yes
+            class="rounded-md bg-red-600 px-2 py-1 font-semibold text-white hover:bg-red-700"
+          >
+            {t.actions.deleteYes}
+          </button>
+          <button
+            type="button"
+            data-delete-cancel
+            class="rounded-md border border-slate-300 px-2 py-1 text-slate-700 hover:bg-slate-100"
+          >
+            {t.actions.deleteCancel}
+          </button>
+        </span>
+
+        <span data-delete-failed hidden role="alert" class="text-red-700">
+          {t.actions.deleteFailed}
+        </span>
+      </div>
+    </li>
+  </template>
+</details>
+
+<script>
+  import { mountHistoryMenu } from '../lib/ui/history-menu';
+
+  for (const menu of document.querySelectorAll<HTMLDetailsElement>('[data-history-menu]')) {
+    mountHistoryMenu(menu);
+  }
+</script>
