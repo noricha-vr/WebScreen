@@ -11,3 +11,5 @@ credentials.json
 .DS_Store
 .idea
 __pycache__
+# テスト用フィクスチャの生成物（generate_slides.py で再生成可能）
+test_slides/*.pdf
