@@ -8,9 +8,12 @@ import {
 } from '../contracts/api';
 import { generateShortId, movieKey } from '../contracts/r2key';
 import { createR2PutPresignedUrl, type R2PresignConfig } from '../infra/r2presign';
-import { exceedsStorageQuota, getUserStorageUsage, type QuotaDatabase } from './quota';
-
-const MOVIE_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
+import {
+  exceedsStorageQuota,
+  getUserStorageUsage,
+  MOVIE_RETENTION_MS,
+  type QuotaDatabase,
+} from './quota';
 
 /** D1 の更新まで含む、アップロードサービスが必要とする最小の操作面。 */
 export interface UploadDatabase extends QuotaDatabase {
@@ -87,7 +90,9 @@ export async function createPendingUpload(
   }
 
   const shortId = (input.generateId ?? generateShortId)();
-  const expiresAt = new Date((input.now ?? new Date()).getTime() + MOVIE_EXPIRY_MS).toISOString();
+  const expiresAt = new Date(
+    (input.now ?? new Date()).getTime() + MOVIE_RETENTION_MS
+  ).toISOString();
   await input.database
     .prepare(
       "INSERT INTO movies (short_id, user_id, filename, size_bytes, status, expires_at) VALUES (?, ?, ?, ?, 'pending', ?)"
