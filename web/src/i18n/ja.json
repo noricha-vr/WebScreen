@@ -48,9 +48,10 @@
     "copy": "URL をコピー",
     "copied": "コピーしました",
     "again": "別のファイルを変換",
-    "demoNotice": "デモ表示です。変換処理はまだ接続されていないため、実際の動画は生成されません。",
+    "preview": "プレビューページを開く",
     "errorTooLarge": "ファイルサイズが上限の 50 MB を超えています",
     "errorUnsupported": "対応していないファイル形式です",
+    "errorTooManyPages": "PDF は 200 ページ以下にしてください",
     "errorFailed": "変換に失敗しました。時間をおいて再度お試しください"
   },
   "footer": {

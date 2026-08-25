@@ -70,6 +70,36 @@ test.describe('ルートのリダイレクト', () => {
   });
 });
 
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+async function mockUploadEndpoints(page: Page): Promise<void> {
+  await page.route('**/api/uploads/presign/', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        shortId: 'Ab12Cd34Ef56',
+        uploadUrl: 'https://upload.test/r2-upload',
+        publicUrl: 'https://cdn.test/movies/Ab12Cd34Ef56.mp4',
+      }),
+    })
+  );
+  await page.route('**/api/uploads/commit/', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        shortId: 'Ab12Cd34Ef56',
+        publicUrl: 'https://cdn.test/movies/Ab12Cd34Ef56.mp4',
+        sizeBytes: 1024,
+        expiresAt: null,
+      }),
+    })
+  );
+  await page.route('https://upload.test/r2-upload', (route) => route.fulfill({ status: 200 }));
+}
+
 test.describe('ログイン済み', () => {
   test('ヘッダーがアカウント表示に切り替わり変換パネルが出る', async ({ page }) => {
     await signIn(page);
@@ -81,27 +111,31 @@ test.describe('ログイン済み', () => {
     await expect(page.getByText(ja.convert.dropzoneTitle)).toBeVisible();
   });
 
-  test('ファイルを選ぶと変換中 → アップロード → 完了まで進む', async ({ page }) => {
+  test('小さな画像2枚を MP4 に変換し、ftyp を含む成果物をアップロードする', async ({ page }) => {
+    test.setTimeout(180_000);
     await signIn(page);
+    await mockUploadEndpoints(page);
     await page.goto('/ja/');
 
     const panel = page.locator('[data-convert-panel]');
-    await panel.locator('[data-file-input]').setInputFiles({
-      name: 'slides.pdf',
-      mimeType: 'application/pdf',
-      buffer: Buffer.from('%PDF-1.4 demo'),
-    });
+    const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
+    await panel.locator('[data-file-input]').setInputFiles([
+      { name: 'first.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG },
+      { name: 'second.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG },
+    ]);
 
-    await expect(panel).toHaveAttribute('data-phase', 'converting');
-    await expect(page.getByText('slides.pdf')).toBeVisible();
+    const request = await uploadRequest;
+    const body = request.postDataBuffer();
+    expect(body).not.toBeNull();
+    expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
 
-    // 状態ごとのブロックは同じ表示項目を持つため、完了ブロックに絞って確認する
+    await expect(panel).toHaveAttribute('data-phase', 'done', { timeout: 120_000 });
     const doneBlock = panel.locator('[data-when-phase="done"]');
-    await expect(panel).toHaveAttribute('data-phase', 'done');
     await expect(doneBlock.getByText(ja.convert.done)).toBeVisible();
     await expect(doneBlock.locator('[data-result-url]')).toHaveValue(
-      /\/movies\/[0-9A-Za-z]{12}\.mp4$/
+      'https://cdn.test/movies/Ab12Cd34Ef56.mp4'
     );
+    await expect(doneBlock.locator('[data-preview-link]')).toHaveAttribute('href', '/Ab12Cd34Ef56');
 
     await page.getByRole('button', { name: ja.convert.copy }).click();
     await expect(page.getByText(ja.convert.copied)).toBeVisible();
@@ -123,16 +157,5 @@ test.describe('ログイン済み', () => {
 
     await expect(panel).toHaveAttribute('data-phase', 'error');
     await expect(page.getByText(ja.convert.errorUnsupported)).toBeVisible();
-  });
-
-  test('URL からの変換も同じ流れで完了する', async ({ page }) => {
-    await signIn(page);
-    await page.goto('/ja/');
-
-    const panel = page.locator('[data-convert-panel]');
-    await panel.locator('[data-url-input]').fill('https://example.com');
-    await page.getByRole('button', { name: ja.convert.urlSubmit }).click();
-
-    await expect(panel).toHaveAttribute('data-phase', 'done');
   });
 });

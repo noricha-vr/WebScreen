@@ -17,6 +17,7 @@ const t = useTranslations(lang);
   data-phase="idle"
   data-msg-too-large={t.convert.errorTooLarge}
   data-msg-unsupported={t.convert.errorUnsupported}
+  data-msg-too-many-pages={t.convert.errorTooManyPages}
   data-msg-failed={t.convert.errorFailed}
   data-label-converting={t.convert.converting}
   data-label-uploading={t.convert.uploading}
@@ -25,17 +26,12 @@ const t = useTranslations(lang);
 >
   <h2 class="text-2xl font-bold tracking-tight text-slate-900">{t.convert.heading}</h2>
 
-  <p class="mt-2 flex items-start gap-2 text-base text-amber-800">
-    <i class="fa-solid fa-triangle-exclamation mt-1" aria-hidden="true"></i>
-    <span>{t.convert.demoNotice}</span>
-  </p>
-
   <div data-when-phase="idle error" class="mt-6">
     <label
       data-dropzone
       class="flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center hover:border-brand-500 hover:bg-brand-50 data-[dragover]:border-brand-500 data-[dragover]:bg-brand-50"
     >
-      <input type="file" data-file-input accept={ACCEPT_ATTRIBUTE} class="sr-only" />
+      <input type="file" data-file-input accept={ACCEPT_ATTRIBUTE} multiple class="sr-only" />
       <i class="fa-solid fa-cloud-arrow-up text-4xl text-brand-500" aria-hidden="true"></i>
       <span class="text-lg font-semibold text-slate-900">{t.convert.dropzoneTitle}</span>
       <span class="text-base text-slate-600">{t.convert.dropzoneOr}</span>
@@ -83,6 +79,7 @@ const t = useTranslations(lang);
       <i class="fa-solid fa-spinner fa-spin-pulse text-brand-500" aria-hidden="true"></i>
       <span data-phase-label></span>
       <span data-progress-value class="text-slate-600"></span>
+      <span data-progress-count class="text-slate-600"></span>
     </p>
     <p class="mt-1 text-base text-slate-600">
       {t.convert.selectedFile}: <span data-source-name></span>
@@ -131,6 +128,10 @@ const t = useTranslations(lang);
       <i class="fa-solid fa-check" aria-hidden="true"></i>
       <span>{t.convert.copied}</span>
     </p>
+
+    <a data-preview-link class="mt-4 inline-flex text-base font-semibold text-brand-700 underline hover:text-brand-900">
+      {t.convert.preview}
+    </a>
 
     <button
       type="button"
