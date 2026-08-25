@@ -20,7 +20,7 @@
     "R2_ACCOUNT_ID": "65850b2bd0055921bdcfbe42383c794a",
     "R2_BUCKET_NAME": "webscreen-beta",
     "R2_PUBLIC_BASE_URL": "https://pub-ebb48e6efc2f4128b606cf381851cae5.r2.dev",
-    "WEBCAPTURE_URL": "http://localhost:8090"
+    "WEBCAPTURE_URL": "https://web-capture-345811595113.asia-northeast1.run.app"
   },
   "d1_databases": [
     {
