@@ -24,7 +24,7 @@ test.describe('未ログイン', () => {
 
     const cta = page.getByRole('link', { name: ja.hero.cta });
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveAttribute('href', '/api/auth/discord/');
+    await expect(cta).toHaveAttribute('href', '/api/auth/login/');
 
     // 仕様リストはヒーローと変換パネルの両方にあるので、未ログイン側に絞って見る
     const hero = page.locator('[data-auth-only="guest"]');
