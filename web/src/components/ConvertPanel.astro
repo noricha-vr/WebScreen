@@ -1,0 +1,156 @@
+---
+import SpecList from './SpecList.astro';
+import { useTranslations, type Locale } from '../i18n';
+import { ACCEPT_ATTRIBUTE } from '../lib/ui/upload-flow';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<section
+  id="convert"
+  data-convert-panel
+  data-phase="idle"
+  data-msg-too-large={t.convert.errorTooLarge}
+  data-msg-unsupported={t.convert.errorUnsupported}
+  data-msg-failed={t.convert.errorFailed}
+  data-label-converting={t.convert.converting}
+  data-label-uploading={t.convert.uploading}
+  data-label-done={t.convert.done}
+  class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+>
+  <h2 class="text-2xl font-bold tracking-tight text-slate-900">{t.convert.heading}</h2>
+
+  <p class="mt-2 flex items-start gap-2 text-base text-amber-800">
+    <i class="fa-solid fa-triangle-exclamation mt-1" aria-hidden="true"></i>
+    <span>{t.convert.demoNotice}</span>
+  </p>
+
+  <div data-when-phase="idle error" class="mt-6">
+    <label
+      data-dropzone
+      class="flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center hover:border-brand-500 hover:bg-brand-50 data-[dragover]:border-brand-500 data-[dragover]:bg-brand-50"
+    >
+      <input type="file" data-file-input accept={ACCEPT_ATTRIBUTE} class="sr-only" />
+      <i class="fa-solid fa-cloud-arrow-up text-4xl text-brand-500" aria-hidden="true"></i>
+      <span class="text-lg font-semibold text-slate-900">{t.convert.dropzoneTitle}</span>
+      <span class="text-base text-slate-600">{t.convert.dropzoneOr}</span>
+      <span
+        class="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white"
+      >
+        <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+        {t.convert.chooseFile}
+      </span>
+      <span class="text-base text-slate-600">{t.convert.accepted}</span>
+    </label>
+
+    <p data-when-phase="error" class="mt-4 flex items-start gap-2 text-base text-red-700">
+      <i class="fa-solid fa-circle-exclamation mt-1" aria-hidden="true"></i>
+      <span data-error-message role="alert"></span>
+    </p>
+
+    <form data-url-form class="mt-8 border-t border-slate-200 pt-6">
+      <h3 class="text-lg font-semibold text-slate-900">{t.convert.urlHeading}</h3>
+      <label for="convert-url" class="mt-2 block text-base text-slate-700">
+        {t.convert.urlLabel}
+      </label>
+      <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+        <input
+          id="convert-url"
+          data-url-input
+          type="url"
+          required
+          placeholder={t.convert.urlPlaceholder}
+          class="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 placeholder:text-slate-400"
+        />
+        <button
+          type="submit"
+          class="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white hover:bg-brand-700"
+        >
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+          <span>{t.convert.urlSubmit}</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div data-when-phase="converting uploading" class="mt-6">
+    <p class="flex items-center gap-2 text-lg font-semibold text-slate-900">
+      <i class="fa-solid fa-spinner fa-spin-pulse text-brand-500" aria-hidden="true"></i>
+      <span data-phase-label></span>
+      <span data-progress-value class="text-slate-600"></span>
+    </p>
+    <p class="mt-1 text-base text-slate-600">
+      {t.convert.selectedFile}: <span data-source-name></span>
+    </p>
+    <div class="mt-3 h-3 w-full overflow-hidden rounded-full bg-slate-200">
+      <div
+        data-progress-bar
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        class="h-full bg-brand-500 transition-[width] duration-200"
+        style="width: 0%"
+      >
+      </div>
+    </div>
+  </div>
+
+  <div data-when-phase="done" class="mt-6">
+    <p class="flex items-center gap-2 text-lg font-semibold text-slate-900">
+      <i class="fa-solid fa-circle-check text-brand-500" aria-hidden="true"></i>
+      <span data-phase-label></span>
+    </p>
+
+    <label for="convert-result" class="mt-4 block text-base text-slate-700">
+      {t.convert.resultLabel}
+    </label>
+    <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+      <input
+        id="convert-result"
+        data-result-url
+        type="text"
+        readonly
+        class="min-w-0 flex-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-base text-slate-900"
+      />
+      <button
+        type="button"
+        data-copy-button
+        class="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white hover:bg-brand-700"
+      >
+        <i class="fa-solid fa-copy" aria-hidden="true"></i>
+        <span>{t.convert.copy}</span>
+      </button>
+    </div>
+    <p data-copied-label class="mt-2 flex items-center gap-2 text-base text-brand-700" role="status">
+      <i class="fa-solid fa-check" aria-hidden="true"></i>
+      <span>{t.convert.copied}</span>
+    </p>
+
+    <button
+      type="button"
+      data-reset-button
+      class="mt-6 inline-flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-slate-100"
+    >
+      <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+      <span>{t.convert.again}</span>
+    </button>
+  </div>
+
+  <div class="mt-8 border-t border-slate-200 pt-6">
+    <SpecList lang={lang} heading={false} />
+  </div>
+</section>
+
+<script>
+  import { mountConvertPanel } from '../lib/ui/convert-panel';
+
+  for (const panel of document.querySelectorAll<HTMLElement>('[data-convert-panel]')) {
+    mountConvertPanel(panel);
+  }
+</script>
