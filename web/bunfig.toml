@@ -1,0 +1,4 @@
+[test]
+# テストの探索を tests/ に限定する。既定パターンは .spec.ts も拾うため、
+# 限定しないと Playwright の e2e/*.spec.ts を bun のランナーが実行して落ちる。
+root = "tests"

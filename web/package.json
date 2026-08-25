@@ -9,8 +9,7 @@
     "preview": "wrangler dev -c dist/server/wrangler.json",
     "deploy": "astro build && wrangler deploy -c dist/server/wrangler.json",
     "typecheck": "tsc --noEmit",
-    "// test": "e2e/ を除外する: Playwright の .spec.ts を bun のテストランナーが拾うと失敗するため",
-    "test": "bun test tests",
+    "test": "bun test",
     "test:e2e": "playwright test"
   },
   "dependencies": {
