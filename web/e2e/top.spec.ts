@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 
 // Playwright は Node で直接実行するため、JSON には import 属性が要る（Vite は不要）
 import en from '../src/i18n/en.json' with { type: 'json' };
 import ja from '../src/i18n/ja.json' with { type: 'json' };
+
+const fixture = (name: string): Buffer =>
+  readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
 
 // トップ画面の 2 状態（未ログイン / ログイン済み）と、変換 UI の状態遷移を見る。
 // ログイン済みは /api/me/ を 200 に差し替えて再現する（OAuth は後続タスクの担当）。
@@ -144,6 +149,40 @@ test.describe('ログイン済み', () => {
     await page.getByRole('button', { name: ja.convert.again }).click();
     await expect(panel).toHaveAttribute('data-phase', 'idle');
   });
+
+  // 実ファイルをブラウザ内変換パイプライン（PDF.js / FFmpeg.wasm）に通し、
+  // 出力 mp4 が faststart mp4（先頭ボックスが ftyp）であることを確認する。
+  // 画像・PDF・動画の3経路がそれぞれ実データで mp4 を生成できることの機械実証。
+  for (const c of [
+    { label: 'PDF（3ページ）', file: 'sample-3page.pdf', mimeType: 'application/pdf' },
+    { label: '動画ファイル', file: 'sample-clip.mp4', mimeType: 'video/mp4' },
+  ]) {
+    test(`${c.label}を MP4 に変換し、ftyp を含む成果物をアップロードする`, async ({ page }) => {
+      test.setTimeout(180_000);
+      await signIn(page);
+      await mockUploadEndpoints(page);
+      await page.goto('/ja/');
+
+      const panel = page.locator('[data-convert-panel]');
+      const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
+      await panel.locator('[data-file-input]').setInputFiles({
+        name: c.file,
+        mimeType: c.mimeType,
+        buffer: fixture(c.file),
+      });
+
+      const request = await uploadRequest;
+      expect(request.headers()['content-type']).toBe('video/mp4');
+      const body = request.postDataBuffer();
+      expect(body).not.toBeNull();
+      expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
+
+      await expect(panel).toHaveAttribute('data-phase', 'done', { timeout: 120_000 });
+      await expect(panel.locator('[data-when-phase="done"]').locator('[data-result-url]')).toHaveValue(
+        'https://cdn.test/movies/Ab12Cd34Ef56.mp4'
+      );
+    });
+  }
 
   test('対応外の形式は変換を始めずエラーを出す', async ({ page }) => {
     await signIn(page);

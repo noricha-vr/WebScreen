@@ -26,3 +26,7 @@ web/.dev.vars
 # Playwright の実行成果物（trace / レポート HTML）
 web/test-results/
 web/playwright-report/
+
+# テスト用 fixture は追跡する（*.mp4 除外の例外）
+!web/e2e/fixtures/
+!web/e2e/fixtures/**
