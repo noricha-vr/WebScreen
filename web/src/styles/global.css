@@ -1,1 +1,58 @@
 @import 'tailwindcss';
+
+/*
+ * 既存 WebScreen（Bootstrap 版）の見た目を引き継ぐためのトークン。
+ * 紫は static/css/custom.css の .btn-primary と同じ #783ed2 / hover #511ab3 を正とする。
+ */
+@theme {
+  --color-brand-50: #f4effc;
+  --color-brand-100: #e4d7f8;
+  --color-brand-200: #cbb2f0;
+  --color-brand-500: #783ed2;
+  --color-brand-600: #6631c2;
+  --color-brand-700: #511ab3;
+
+  /* 日本語の可読性を優先し、Web フォントは読み込まない（COEP 下の追加取得を増やさない）。 */
+  --font-sans:
+    'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'BIZ UDPGothic', 'Yu Gothic Medium',
+    'Noto Sans JP', 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+
+  /* キーボード操作の可視化。ブランド色のリングで統一する。 */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-700);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * ログイン状態の出し分け。ページは静的生成でセッションを読めないため、
+ * 両方の HTML を出しておき src/lib/ui/session-view.ts が data-auth-state を切り替える。
+ * 既定は guest（JS が動かなくてもログイン導線は見える）。
+ */
+[data-auth-state='guest'] [data-auth-only='member'],
+[data-auth-state='member'] [data-auth-only='guest'] {
+  display: none;
+}
+
+/*
+ * 変換パネルの状態別表示。:not() で「合致しないものだけ」を隠すので、
+ * 表示側は Tailwind の display ユーティリティ（flex / grid）をそのまま使える。
+ */
+[data-phase='idle'] [data-when-phase]:not([data-when-phase~='idle']),
+[data-phase='converting'] [data-when-phase]:not([data-when-phase~='converting']),
+[data-phase='uploading'] [data-when-phase]:not([data-when-phase~='uploading']),
+[data-phase='done'] [data-when-phase]:not([data-when-phase~='done']),
+[data-phase='error'] [data-when-phase]:not([data-when-phase~='error']) {
+  display: none;
+}
+
+/* コピー完了のフィードバック（2 秒で data-copied が外れる）。 */
+[data-convert-panel]:not([data-copied]) [data-copied-label] {
+  display: none;
+}

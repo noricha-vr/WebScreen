@@ -1,0 +1,12 @@
+---
+import PrivacyArticle from '../../components/PrivacyArticle.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { useTranslations } from '../../i18n';
+
+const lang = 'en' as const;
+const t = useTranslations(lang);
+---
+
+<BaseLayout lang={lang} title={t.meta.privacyTitle} description={t.privacy.lead}>
+  <PrivacyArticle lang={lang} />
+</BaseLayout>
