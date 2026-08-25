@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+// Playwright は Node で直接実行するため、JSON には import 属性が要る（Vite は不要）
+import ja from '../src/i18n/ja.json' with { type: 'json' };
+
 // ビルド済み Worker（wrangler dev）に対する煙テスト。
 // ページが配信されること、FFmpeg.wasm が要求する crossOriginIsolated の
 // 表示要素まで到達すること、COOP/COEP が静的・動的の両経路で付くことを見る。
@@ -7,7 +10,8 @@ import { expect, test } from '@playwright/test';
 test('日本語トップページが表示される', async ({ page }) => {
   await page.goto('/ja/');
 
-  await expect(page.getByRole('heading', { name: 'WebScreen β' })).toBeVisible();
+  // 見出しはスケルトンの "WebScreen β" から、ヒーローの訴求文（辞書が正本）に変わった
+  await expect(page.getByRole('heading', { level: 1, name: ja.hero.title })).toBeVisible();
   await expect(page.locator('[data-coi-status]')).toBeVisible();
 });
 
