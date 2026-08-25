@@ -1,12 +1,12 @@
 ---
+import TopPage from '../../components/TopPage.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import CrossOriginIsolationStatus from '../../components/CrossOriginIsolationStatus.astro';
+import { useTranslations } from '../../i18n';
+
+const lang = 'ja' as const;
+const t = useTranslations(lang);
 ---
 
-<BaseLayout lang="ja" title="WebScreen β">
-  <h1 class="text-4xl font-bold tracking-tight">WebScreen β</h1>
-  <p class="mt-4 text-lg text-slate-400">
-    Cloudflare Workers 上で動く β 版のスケルトンです。
-  </p>
-  <CrossOriginIsolationStatus label="crossOriginIsolated:" />
+<BaseLayout lang={lang} title={t.meta.title}>
+  <TopPage lang={lang} />
 </BaseLayout>
