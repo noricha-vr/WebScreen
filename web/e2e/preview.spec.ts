@@ -276,6 +276,23 @@ test.describe('履歴ドロップダウン', () => {
     await expect(menu.getByText(ja.history.empty)).toBeVisible();
   });
 
+  test('外側のクリックで閉じ、内側のクリックでは閉じない', async ({ page }) => {
+    await stubHistory(page, [historyMovie()]);
+    await page.goto('/ja/');
+
+    const menu = page.locator('[data-history-menu]');
+    await menu.locator('summary').click();
+    await expect(menu.locator('[data-history-row]')).toHaveCount(1);
+
+    // exact 指定は「変換した動画はまだありません」（空表示）との二重マッチを避けるため
+    await menu.getByText(ja.history.heading, { exact: true }).click();
+    await expect(menu).toHaveJSProperty('open', true);
+
+    // メニューから離れた位置を直接クリックする（間に何が描かれていても外側だと分かる座標）
+    await page.mouse.click(20, 500);
+    await expect(menu).toHaveJSProperty('open', false);
+  });
+
   test('行の削除は確認してから実行し、一覧から消える', async ({ page }) => {
     await stubHistory(page, [historyMovie(), historyMovie({ shortId: 'E2EOther0002' })]);
     await page.route('**/api/movies/*/', (route) =>
@@ -291,6 +308,8 @@ test.describe('履歴ドロップダウン', () => {
     await rows.first().getByRole('button', { name: ja.actions.deleteYes }).click();
 
     await expect(rows).toHaveCount(1);
+    // 削除は行を DOM から外すので、外側クリック判定が誤発火して閉じないこと
+    await expect(menu).toHaveJSProperty('open', true);
   });
 
   test('取得に失敗したらエラーを出す', async ({ page }) => {
