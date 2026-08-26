@@ -11,7 +11,6 @@
     "account": "Account",
     "history": "History",
     "logout": "Sign out",
-    "langSwitch": "日本語",
     "bannerAlt": "WebScreen logo",
     "avatarAlt": "Account avatar"
   },
@@ -86,6 +85,7 @@
   "footer": {
     "github": "GitHub",
     "privacy": "Cookies and privacy",
+    "langSwitch": "日本語",
     "note": "WebScreen β — an early release of the Cloudflare edition"
   },
   "privacy": {

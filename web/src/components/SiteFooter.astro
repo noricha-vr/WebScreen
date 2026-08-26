@@ -1,5 +1,5 @@
 ---
-import { useTranslations, type Locale } from '../i18n';
+import { alternateLocale, switchLocalePath, useTranslations, type Locale } from '../i18n';
 
 interface Props {
   lang: Locale;
@@ -7,6 +7,7 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+const other = alternateLocale(lang);
 
 const REPOSITORY_URL = 'https://github.com/noricha-vr/WebScreen';
 ---
@@ -33,6 +34,14 @@ const REPOSITORY_URL = 'https://github.com/noricha-vr/WebScreen';
       >
         <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
         <span>{t.footer.privacy}</span>
+      </a>
+      <a
+        href={switchLocalePath(Astro.url.pathname, other)}
+        hreflang={other}
+        class="inline-flex items-center gap-2 text-slate-700 underline hover:text-brand-700"
+      >
+        <i class="fa-solid fa-language" aria-hidden="true"></i>
+        <span>{t.footer.langSwitch}</span>
       </a>
     </nav>
   </div>
