@@ -45,13 +45,56 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
     </p>
     <h1 class="mt-2 truncate text-3xl font-bold tracking-tight text-slate-900">{filename}</h1>
 
-    <p class="mt-3 flex items-center gap-2 text-base text-slate-700">
-      <i
-        class={pinned ? 'fa-solid fa-thumbtack text-brand-500' : 'fa-regular fa-clock text-slate-500'}
-        aria-hidden="true"></i>
-      <span class="text-slate-600">{t.preview.expiry}</span>
-      <span class="font-semibold text-slate-900">{expiryLabel}</span>
-    </p>
+    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <p class="flex items-center gap-2 text-base text-slate-700">
+        <i
+          class={pinned ? 'fa-solid fa-thumbtack text-brand-500' : 'fa-regular fa-clock text-slate-500'}
+          aria-hidden="true"></i>
+        <span class="text-slate-600">{t.preview.expiry}</span>
+        <span class="font-semibold text-slate-900">{expiryLabel}</span>
+      </p>
+
+      {
+        isOwner && (
+          <div class="flex flex-wrap items-center justify-end gap-3">
+            <button
+              type="button"
+              data-delete-trigger
+              class="inline-flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-red-50 hover:text-red-700"
+            >
+              <i class="fa-solid fa-trash-can" aria-hidden="true" />
+              <span>{t.actions.delete}</span>
+            </button>
+
+            <span data-delete-confirm class="flex flex-wrap items-center justify-end gap-3">
+              <span class="text-base text-slate-700">{t.actions.deleteConfirm}</span>
+              <button
+                type="button"
+                data-delete-yes
+                class="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-base font-semibold text-white hover:bg-red-700"
+              >
+                <i class="fa-solid fa-trash-can" aria-hidden="true" />
+                <span>{t.actions.deleteYes}</span>
+              </button>
+              <button
+                type="button"
+                data-delete-cancel
+                class="rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                {t.actions.deleteCancel}
+              </button>
+            </span>
+          </div>
+        )
+      }
+    </div>
+    {
+      isOwner && (
+        <p data-delete-failed hidden role="alert" class="mt-2 text-base text-red-700">
+          {t.actions.deleteFailed}
+        </p>
+      )
+    }
 
     <video
       data-preview-video
@@ -104,39 +147,6 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
             <span class="text-base text-slate-600">{pinHint}</span>
           </div>
           <p data-pin-failed hidden role="alert" class="text-base text-red-700" />
-
-          <div class="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              data-delete-trigger
-              class="inline-flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-red-50 hover:text-red-700"
-            >
-              <i class="fa-solid fa-trash-can" aria-hidden="true" />
-              <span>{t.actions.delete}</span>
-            </button>
-
-            <span data-delete-confirm class="flex flex-wrap items-center gap-3">
-              <span class="text-base text-slate-700">{t.actions.deleteConfirm}</span>
-              <button
-                type="button"
-                data-delete-yes
-                class="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-base font-semibold text-white hover:bg-red-700"
-              >
-                <i class="fa-solid fa-trash-can" aria-hidden="true" />
-                <span>{t.actions.deleteYes}</span>
-              </button>
-              <button
-                type="button"
-                data-delete-cancel
-                class="rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-slate-100"
-              >
-                {t.actions.deleteCancel}
-              </button>
-            </span>
-          </div>
-          <p data-delete-failed hidden role="alert" class="text-base text-red-700">
-            {t.actions.deleteFailed}
-          </p>
         </div>
       )
     }
