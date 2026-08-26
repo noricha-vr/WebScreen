@@ -5,6 +5,7 @@
  * 文言は HTML に埋め込まれた辞書の値を読むだけで、ここに日本語 / 英語を書かない。
  */
 
+import { MAX_FILENAME_LENGTH } from '../contracts/api';
 import { copyToClipboard } from './clipboard';
 import { consumeAutoCopy } from './auto-copy';
 import { movieEndpoint, pinEndpoint } from './history-view';
@@ -115,6 +116,19 @@ function wireRename(root: HTMLElement, fetchImpl: typeof fetch, schedule: Schedu
     const filename = input.value.trim();
     if (filename.length === 0 || filename === originalFilename) {
       cancel();
+      return;
+    }
+
+    // 長すぎは送信前に弾き、理由と現在の文字数を出す（サーバー 400 は防御層として残る）。
+    if (filename.length > MAX_FILENAME_LENGTH) {
+      if (failure) {
+        failure.textContent = (root.dataset['msgRenameTooLong'] ?? '').replace(
+          '{count}',
+          String(filename.length)
+        );
+        failure.hidden = false;
+      }
+      input.focus();
       return;
     }
 

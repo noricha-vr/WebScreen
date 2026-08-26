@@ -71,6 +71,7 @@
     "renameSave": "保存",
     "renameSaved": "保存済み",
     "renameFailed": "ファイル名を変更できませんでした",
+    "renameTooLong": "ファイル名が長すぎます（{count} / 上限 {max} 文字）",
     "notFoundHeading": "動画が見つかりません",
     "notFoundLead": "URL が間違っているか、保管期限が過ぎて削除された可能性があります。",
     "backHome": "トップへ戻る",

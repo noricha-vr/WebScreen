@@ -186,6 +186,30 @@ test.describe('所有者の操作', () => {
     await expect(input).toBeHidden();
   });
 
+  test('長すぎるファイル名は保存せず、文字数入りの理由を表示する', async ({ page, context }) => {
+    let patchRequested = false;
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);
+    page.on('request', (request) => {
+      if (request.method() === 'PATCH' && request.url().includes('/api/movies/')) {
+        patchRequested = true;
+      }
+    });
+
+    await page.getByRole('button', { name: ja.preview.rename }).click();
+    const input = page.locator('[data-filename-input]');
+    const longName = `${'あ'.repeat(256)}.mp4`;
+    await input.fill(longName);
+    await input.press('Enter');
+
+    const expected = ja.preview.renameTooLong
+      .replace('{count}', String(longName.length))
+      .replace('{max}', '255');
+    await expect(page.locator('[data-rename-failed]')).toHaveText(expected);
+    await expect(input).toBeVisible();
+    expect(patchRequested).toBe(false);
+  });
+
   test('編集中に Escape を押すと元の名前へ戻し保存しない', async ({ page, context }) => {
     let patchRequested = false;
     await signIn(context, E2E_FIXTURES.ownerId);
