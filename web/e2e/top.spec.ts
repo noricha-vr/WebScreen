@@ -5,6 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 // Playwright は Node で直接実行するため、JSON には import 属性が要る（Vite は不要）
 import en from '../src/i18n/en.json' with { type: 'json' };
 import ja from '../src/i18n/ja.json' with { type: 'json' };
+import { E2E_FIXTURES } from '../playwright.config';
 
 const fixture = (name: string): Buffer =>
   readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -80,14 +81,15 @@ const ONE_PIXEL_PNG = Buffer.from(
   'base64'
 );
 
-async function mockUploadEndpoints(page: Page): Promise<void> {
+async function mockUploadEndpoints(page: Page, shortId = 'Ab12Cd34Ef56'): Promise<void> {
+  const publicUrl = `https://cdn.test/movies/${shortId}.mp4`;
   await page.route('**/api/uploads/presign/', (route) =>
     route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
-        shortId: 'Ab12Cd34Ef56',
+        shortId,
         uploadUrl: 'https://upload.test/r2-upload',
-        publicUrl: 'https://cdn.test/movies/Ab12Cd34Ef56.mp4',
+        publicUrl,
       }),
     })
   );
@@ -95,8 +97,8 @@ async function mockUploadEndpoints(page: Page): Promise<void> {
     route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
-        shortId: 'Ab12Cd34Ef56',
-        publicUrl: 'https://cdn.test/movies/Ab12Cd34Ef56.mp4',
+        shortId,
+        publicUrl,
         sizeBytes: 1024,
         expiresAt: null,
       }),
@@ -116,10 +118,11 @@ test.describe('ログイン済み', () => {
     await expect(page.getByText(ja.convert.dropzoneTitle)).toBeVisible();
   });
 
-  test('小さな画像2枚を MP4 に変換し、ftyp を含む成果物をアップロードする', async ({ page }) => {
+  test('小さな画像2枚を MP4 に変換し、プレビューで動画 URL を自動コピーする', async ({ page, context }) => {
     test.setTimeout(180_000);
     await signIn(page);
-    await mockUploadEndpoints(page);
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await mockUploadEndpoints(page, E2E_FIXTURES.readyShortId);
     await page.goto('/ja/');
 
     const panel = page.locator('[data-convert-panel]');
@@ -135,19 +138,13 @@ test.describe('ログイン済み', () => {
     expect(body).not.toBeNull();
     expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
 
-    await expect(panel).toHaveAttribute('data-phase', 'done', { timeout: 120_000 });
-    const doneBlock = panel.locator('[data-when-phase="done"]');
-    await expect(doneBlock.getByText(ja.convert.done)).toBeVisible();
-    await expect(doneBlock.locator('[data-result-url]')).toHaveValue(
-      'https://cdn.test/movies/Ab12Cd34Ef56.mp4'
-    );
-    await expect(doneBlock.locator('[data-preview-link]')).toHaveAttribute('href', '/Ab12Cd34Ef56/');
-
-    await page.getByRole('button', { name: ja.convert.copy }).click();
-    await expect(page.getByText(ja.convert.copied)).toBeVisible();
-
-    await page.getByRole('button', { name: ja.convert.again }).click();
-    await expect(panel).toHaveAttribute('data-phase', 'idle');
+    await expect(page).toHaveURL(new RegExp(`/${E2E_FIXTURES.readyShortId}/$`), {
+      timeout: 120_000,
+    });
+    const preview = page.locator('[data-preview]');
+    await expect(preview).toHaveAttribute('data-copied', 'true');
+    const previewUrl = await preview.locator('[data-preview-url]').inputValue();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(previewUrl);
   });
 
   // 実ファイルをブラウザ内変換パイプライン（PDF.js / FFmpeg.wasm）に通し、
@@ -177,10 +174,7 @@ test.describe('ログイン済み', () => {
       expect(body).not.toBeNull();
       expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
 
-      await expect(panel).toHaveAttribute('data-phase', 'done', { timeout: 120_000 });
-      await expect(panel.locator('[data-when-phase="done"]').locator('[data-result-url]')).toHaveValue(
-        'https://cdn.test/movies/Ab12Cd34Ef56.mp4'
-      );
+      await expect(page).toHaveURL(/\/Ab12Cd34Ef56\/$/, { timeout: 120_000 });
     });
   }
 
@@ -212,7 +206,7 @@ test.describe('ログイン済み', () => {
     const body = request.postDataBuffer();
     expect(body).not.toBeNull();
     expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
-    await expect(panel).toHaveAttribute('data-phase', 'done', { timeout: 120_000 });
+    await expect(page).toHaveURL(/\/Ab12Cd34Ef56\/$/, { timeout: 120_000 });
   });
 
   test('対応外の形式は変換を始めずエラーを出す', async ({ page }) => {

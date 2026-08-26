@@ -1,16 +1,13 @@
-/**
- * クリップボードへのコピー。権限が無い環境では入力を選択状態にして手動コピーへ誘導する。
- *
- * convert-panel.ts にも同じ処理があるが、あちらはアップロードフローの差し替え中のため
- * 触っていない。差し替えが落ち着いたらこちらへ寄せる。
- */
+/** クリップボードへコピーし、失敗時は入力を選択して手動コピーへ誘導する。 */
 export async function copyToClipboard(
   value: string,
   input: HTMLInputElement | null
-): Promise<void> {
+): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(value);
+    return true;
   } catch {
     input?.select();
+    return false;
   }
 }

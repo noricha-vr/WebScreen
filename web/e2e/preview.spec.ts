@@ -102,11 +102,36 @@ test.describe('公開プレビュー', () => {
     await context.close();
   });
 
-  test('URL をコピーするとコピー済みが出る', async ({ page }) => {
+  test('URL をコピーするとコピー済みが出る', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
     await page.getByRole('button', { name: ja.preview.copy }).click();
 
     await expect(page.getByText(ja.preview.copied)).toBeVisible();
+  });
+
+  test('変換直後は動画 URL を一度だけ自動コピーする', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('/ja/');
+    await page.evaluate((shortId) => {
+      sessionStorage.setItem('webscreen:auto-copy', shortId);
+    }, E2E_FIXTURES.readyShortId);
+
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+    const preview = page.locator('[data-preview]');
+    await expect(preview).toHaveAttribute('data-copied', 'true');
+    const previewUrl = await preview.locator('[data-preview-url]').inputValue();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(previewUrl);
+
+    await page.reload();
+    await expect(preview).not.toHaveAttribute('data-copied', 'true');
+  });
+
+  test('通常閲覧では動画 URL を自動コピーしない', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+
+    await expect(page.locator('[data-preview]')).not.toHaveAttribute('data-copied', 'true');
   });
 
   test('ピン留め中の動画は無期限と表示する', async ({ page }) => {
