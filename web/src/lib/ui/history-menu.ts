@@ -133,4 +133,15 @@ export function mountHistoryMenu(root: HTMLDetailsElement, fetchImpl: typeof fet
   root.addEventListener('toggle', () => {
     if (root.open) void load(root, fetchImpl);
   });
+
+  // details はネイティブでは外側クリックで閉じないので document 側で拾う。
+  // contains() ではなく composedPath() を見るのは、行の削除が先に row.remove() を
+  // 走らせた場合にクリック対象が DOM から外れ、内側のクリックが「外側」と誤判定される
+  // ため（composedPath は dispatch 時点の経路を保持する）。
+  // note: 解除口は設けていない。MPA なのでページ遷移ごとに 1 回しか mount されない
+  document.addEventListener('click', (event) => {
+    if (!root.open) return;
+    if (event.composedPath().includes(root)) return;
+    root.open = false;
+  });
 }
