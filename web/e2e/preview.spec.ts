@@ -1,16 +1,11 @@
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { join } from 'node:path';
 
 // Playwright は Node で直接実行するため、JSON には import 属性が要る（Vite は不要）
 import en from '../src/i18n/en.json' with { type: 'json' };
 import ja from '../src/i18n/ja.json' with { type: 'json' };
-import {
-  createSessionPayload,
-  importSigningKey,
-  signSession,
-  SESSION_COOKIE_NAME,
-} from '../src/lib/contracts/session';
-import { E2E_FIXTURES, E2E_SESSION_SIGNING_KEY } from '../playwright.config';
+import { E2E_FIXTURES } from '../playwright.config';
+import { signIn } from './session';
 
 // 公開プレビュー /{shortId}/ と履歴ドロップダウンの画面確認。
 // D1 のフィクスチャは playwright.config.ts の webServer が seed.sql で流し込む。
@@ -24,16 +19,6 @@ const SCREENSHOT_DIR = join(process.cwd(), '..', 'docs', 'tmp', 'screenshots');
 function screenshotPath(name: string): string {
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15);
   return join(SCREENSHOT_DIR, `${name}-${stamp}.png`);
-}
-
-/** 本人のセッション Cookie を作る（Worker と同じ鍵・同じ署名形式）。 */
-async function signIn(context: BrowserContext, userId: number): Promise<void> {
-  const key = await importSigningKey(E2E_SESSION_SIGNING_KEY);
-  const value = await signSession(createSessionPayload(userId), key);
-
-  await context.addCookies([
-    { name: SESSION_COOKIE_NAME, value, domain: 'localhost', path: '/' },
-  ]);
 }
 
 /** 履歴 API を差し替える（実データではなく一覧の描画と削除操作を見るため）。 */

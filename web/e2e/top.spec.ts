@@ -6,6 +6,8 @@ import { expect, test, type Page } from '@playwright/test';
 import en from '../src/i18n/en.json' with { type: 'json' };
 import ja from '../src/i18n/ja.json' with { type: 'json' };
 import { E2E_FIXTURES } from '../playwright.config';
+import { signIn as signInWithSessionCookie } from './session';
+import { SESSION_COOKIE_NAME } from '../src/lib/contracts/session';
 
 const fixture = (name: string): Buffer =>
   readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -113,9 +115,40 @@ test.describe('ログイン済み', () => {
     await page.goto('/ja/');
 
     await expect(page.locator('[data-history-menu] summary', { hasText: ja.nav.history })).toBeVisible();
-    await expect(page.getByText('noricha')).toBeVisible();
+    // 名前は sr-only なので、見えるアカウント表示はアバター（頭文字バッジ）とログアウトの 2 つ
+    await expect(page.locator('header [data-viewer-initial]')).toBeVisible();
+    await expect(page.getByRole('button', { name: ja.nav.logout })).toBeVisible();
     await expect(page.getByRole('link', { name: ja.hero.cta })).toBeHidden();
     await expect(page.getByText(ja.convert.dropzoneTitle)).toBeVisible();
+  });
+
+  // ログアウトが 204 を返していた頃はブラウザが遷移せず、押しても何も起きなかった。
+  // 実セッション Cookie で入る（/api/me/ をモックするとログアウト後も member を返してしまう）。
+  test('ログアウトすると未ログイン表示に戻り、セッション Cookie が消える', async ({
+    page,
+    context,
+  }) => {
+    await signInWithSessionCookie(context, E2E_FIXTURES.ownerId);
+    await page.goto('/ja/');
+
+    const header = page.locator('header');
+    const logout = header.getByRole('button', { name: ja.nav.logout });
+    await expect(logout).toBeVisible();
+
+    const logoutResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/auth/logout/') && response.request().method() === 'POST'
+    );
+    await logout.click();
+    expect((await logoutResponse).status()).toBe(303);
+
+    await expect(header.getByRole('link', { name: ja.nav.login })).toBeVisible();
+    await expect(logout).toBeHidden();
+
+    const session = (await context.cookies()).find(
+      (cookie) => cookie.name === SESSION_COOKIE_NAME
+    );
+    expect(session).toBeUndefined();
   });
 
   test('小さな画像2枚を MP4 に変換し、プレビューで動画 URL を自動コピーする', async ({ page, context }) => {
