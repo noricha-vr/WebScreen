@@ -21,24 +21,24 @@ const LOGOUT_URL = '/api/auth/logout/';
 
 <header class="border-b border-slate-200 bg-white">
   <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-    <a href={`/${lang}/`} class="flex items-center gap-3 no-underline">
-      <picture>
-        <source media="(max-width: 767px)" srcset={`${BANNER_BASE_URL}header-7.png`} />
-        <img
-          src={`${BANNER_BASE_URL}header-2000.png`}
-          alt={t.nav.bannerAlt}
-          width="1000"
-          height="100"
-          class="h-9 w-auto"
-        />
-      </picture>
-      <span class="text-xl font-bold tracking-tight text-slate-900 lg:hidden">WebScreen</span>
-      <span class="rounded-full bg-brand-50 px-2 py-0.5 text-sm font-semibold text-brand-700">
-        β
-      </span>
-    </a>
-
     <div class="flex items-center gap-3">
+      <a href={`/${lang}/`} class="flex items-center gap-3 no-underline">
+        <picture>
+          <source media="(max-width: 767px)" srcset={`${BANNER_BASE_URL}header-7.png`} />
+          <img
+            src={`${BANNER_BASE_URL}header-2000.png`}
+            alt={t.nav.bannerAlt}
+            width="1000"
+            height="100"
+            class="h-9 w-auto"
+          />
+        </picture>
+        <span class="text-xl font-bold tracking-tight text-slate-900 lg:hidden">WebScreen</span>
+        <span class="rounded-full bg-brand-50 px-2 py-0.5 text-sm font-semibold text-brand-700">
+          β
+        </span>
+      </a>
+
       <a
         href={switchLocalePath(Astro.url.pathname, other)}
         hreflang={other}
@@ -47,7 +47,9 @@ const LOGOUT_URL = '/api/auth/logout/';
         <i class="fa-solid fa-language" aria-hidden="true"></i>
         <span class="ml-1">{t.nav.langSwitch}</span>
       </a>
+    </div>
 
+    <div class="flex items-center gap-3">
       <a
         data-auth-only="guest"
         href={LOGIN_URL}
