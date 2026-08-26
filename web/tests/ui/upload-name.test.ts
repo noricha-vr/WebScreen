@@ -1,21 +1,21 @@
 import { describe, expect, test } from 'bun:test';
 
-import { MAX_FILENAME_LENGTH } from '../../src/lib/contracts/api';
+import { validatePresignRequest } from '../../src/lib/contracts/api';
 import { movieNameForFiles, movieNameForUrl } from '../../src/lib/ui/upload-name';
 
-/** contracts/api.ts の isSafeFilename と同じ判定（presign に渡せる名前かの確認用）。 */
-function isSafeFilename(value: string): boolean {
-  if (value.length === 0 || value.length > MAX_FILENAME_LENGTH) return false;
-  if (value.includes('/') || value.includes('\\')) return false;
-  if (value === '.' || value === '..') return false;
-  return ![...value].some((char) => {
-    const code = char.codePointAt(0) ?? 0;
-    return code <= 0x1f || code === 0x7f;
-  });
+/**
+ * 生成した名前を実際の presign バリデータに掛ける。
+ * 判定ロジックをテスト側に写すと契約がドリフトするため、正本をそのまま呼ぶ。
+ */
+function presignAccepts(filename: string): boolean {
+  return validatePresignRequest({ filename, sizeBytes: 1024, kind: 'image' }).ok;
 }
 
 const JA_SUFFIX = '他{count}枚';
 const EN_SUFFIX = '+{count}';
+
+/** 制御文字はソースに直接書くとファイルごと壊れるので、コードポイントから組み立てる。 */
+const CONTROL_CHAR = String.fromCharCode(1);
 
 describe('movieNameForFiles', () => {
   test('1 件なら拡張子だけ mp4 に替える', () => {
@@ -42,6 +42,57 @@ describe('movieNameForFiles', () => {
 
   test('ファイルが無ければ既定名にする', () => {
     expect(movieNameForFiles([], JA_SUFFIX)).toBe('capture.mp4');
+  });
+
+  test('パス区切り・制御文字を含むファイル名は - に置き換える', () => {
+    const name = movieNameForFiles([`a/b\\c${CONTROL_CHAR}d.png`], JA_SUFFIX);
+
+    expect(name).toBe('a-b-c-d.mp4');
+    expect(presignAccepts(name)).toBe(true);
+  });
+
+  test('上限ぎりぎりの長いファイル名に接尾辞を足しても presign を通る', () => {
+    // 250 文字 base + 「 他3枚」+ .mp4 は素直に繋ぐと 255 文字を超える
+    const long = `${'a'.repeat(250)}.jpg`;
+    const name = movieNameForFiles([long, 'b.jpg', 'c.jpg', 'd.jpg'], JA_SUFFIX);
+
+    expect(name.endsWith(' 他3枚.mp4')).toBe(true);
+    expect(name.length).toBeLessThanOrEqual(255);
+    expect(presignAccepts(name)).toBe(true);
+  });
+
+  test('長いファイル名は 1 件のときも presign を通る長さに収める', () => {
+    const name = movieNameForFiles([`${'あ'.repeat(300)}.png`], JA_SUFFIX);
+
+    expect(name.length).toBeLessThanOrEqual(255);
+    expect(presignAccepts(name)).toBe(true);
+  });
+
+  test('上限内のファイル名は切り詰めずそのまま使う', () => {
+    const base = 'a'.repeat(240);
+
+    expect(movieNameForFiles([`${base}.jpg`], JA_SUFFIX)).toBe(`${base}.mp4`);
+  });
+
+  test('接尾辞が異常に長い辞書値でも上限を超えない', () => {
+    const name = movieNameForFiles(['photo.jpg', 'b.jpg'], 'x'.repeat(400));
+
+    expect(name.length).toBeLessThanOrEqual(255);
+    expect(presignAccepts(name)).toBe(true);
+  });
+
+  test('絵文字入りの長いファイル名でも壊れた文字を残さない', () => {
+    const name = movieNameForFiles([`${'🎬'.repeat(200)}.png`, 'b.png'], JA_SUFFIX);
+
+    // サロゲートペアの片割れ（孤立サロゲート）が残っていないこと
+    const hasLoneSurrogate = [...name].some((char) => {
+      const code = char.charCodeAt(0);
+      return char.length === 1 && code >= 0xd800 && code <= 0xdfff;
+    });
+
+    expect(name.length).toBeLessThanOrEqual(255);
+    expect(hasLoneSurrogate).toBe(false);
+    expect(presignAccepts(name)).toBe(true);
   });
 });
 
@@ -92,7 +143,7 @@ describe('movieNameForUrl', () => {
     ];
 
     for (const url of urls) {
-      expect(isSafeFilename(movieNameForUrl(url))).toBe(true);
+      expect(presignAccepts(movieNameForUrl(url))).toBe(true);
     }
   });
 });
