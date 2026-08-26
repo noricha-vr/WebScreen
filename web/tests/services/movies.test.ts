@@ -9,6 +9,7 @@ import {
   deleteMovie,
   findPublicMovie,
   listHistory,
+  renameMovie,
   togglePin,
   type MovieBucket,
   type MoviesDatabase,
@@ -75,6 +76,13 @@ class FakeMoviesDatabase implements MoviesDatabase {
   }
 
   private run(query: string, values: unknown[]): void {
+    if (query.startsWith('UPDATE movies SET filename')) {
+      const [filename, shortId, userId] = values as [string, string, number];
+      const movie = this.movies.get(shortId);
+      if (movie && movie.userId === userId) movie.filename = filename;
+      return;
+    }
+
     if (query.startsWith('UPDATE movies SET pinned')) {
       const [pinned, expiresAt, shortId, userId] = values as [number, string | null, string, number];
       const movie = this.movies.get(shortId);
@@ -230,6 +238,47 @@ describe('togglePin', () => {
       togglePin({ database, userId: USER_ID, shortId: SHORT_ID })
     ).rejects.toMatchObject({ status: 404 });
     expect(database.movies.get(SHORT_ID)?.pinned).toBe(0);
+  });
+});
+
+describe('renameMovie', () => {
+  it('所有者のファイル名を trim して変更する', async () => {
+    const database = new FakeMoviesDatabase([movie()]);
+
+    await expect(
+      renameMovie({ database, userId: USER_ID, shortId: SHORT_ID, filename: ' renamed.mp4 ' })
+    ).resolves.toEqual({ shortId: SHORT_ID, filename: 'renamed.mp4' });
+    expect(database.movies.get(SHORT_ID)?.filename).toBe('renamed.mp4');
+  });
+
+  it.each([
+    ['', '空文字'],
+    ['   ', '空白のみ'],
+    ['a'.repeat(256), '256 文字'],
+    ['folder/file.mp4', 'パス区切り'],
+  ])('%s（%s）は 400 で拒否する', async (filename) => {
+    const database = new FakeMoviesDatabase([movie()]);
+
+    await expect(
+      renameMovie({ database, userId: USER_ID, shortId: SHORT_ID, filename })
+    ).rejects.toMatchObject({ status: 400, errorCode: 'INVALID_REQUEST' });
+    expect(database.movies.get(SHORT_ID)?.filename).toBe('slides.pdf');
+  });
+
+  it('他人の動画は 404 で拒否する', async () => {
+    const database = new FakeMoviesDatabase([movie({ userId: USER_ID + 1 })]);
+
+    await expect(
+      renameMovie({ database, userId: USER_ID, shortId: SHORT_ID, filename: 'renamed.mp4' })
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('不在の動画は 404 で拒否する', async () => {
+    const database = new FakeMoviesDatabase();
+
+    await expect(
+      renameMovie({ database, userId: USER_ID, shortId: SHORT_ID, filename: 'renamed.mp4' })
+    ).rejects.toMatchObject({ status: 404 });
   });
 });
 

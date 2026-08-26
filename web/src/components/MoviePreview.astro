@@ -32,10 +32,16 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
 <section
   data-preview
   data-preview-state="ready"
+  data-rename-state="idle"
   data-delete-scope
   data-short-id={shortId}
   data-msg-pin-limit={pinLimitMessage}
   data-msg-pin-failed={t.preview.pinFailed}
+  data-msg-rename-failed={t.preview.renameFailed}
+  data-label-rename={t.preview.rename}
+  data-label-rename-save={t.preview.renameSave}
+  data-label-rename-saved={t.preview.renameSaved}
+  data-document-title-suffix=" — WebScreen"
   class="mx-auto max-w-3xl px-4 py-10"
 >
   <div data-when-preview="ready">
@@ -43,7 +49,37 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
       <i class="fa-solid fa-film" aria-hidden="true"></i>
       <span>{t.preview.heading}</span>
     </p>
-    <h1 class="mt-2 truncate text-3xl font-bold tracking-tight text-slate-900">{filename}</h1>
+    <h1 class="mt-2 flex min-w-0 items-center gap-2 text-3xl font-bold tracking-tight text-slate-900">
+      <span data-filename-text class="min-w-0 truncate">{filename}</span>
+      {
+        isOwner && (
+          <>
+            <input
+              data-filename-input
+              type="text"
+              value={filename}
+              aria-label={t.preview.rename}
+              class="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-3xl font-bold tracking-tight text-slate-900"
+            />
+            <button
+              type="button"
+              data-rename-button
+              aria-label={t.preview.rename}
+              class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-xl text-slate-600 hover:bg-brand-50 hover:text-brand-700"
+            >
+              <i data-when-rename="idle" class="fa-solid fa-pencil" aria-hidden="true" />
+              <i data-when-rename="editing saving" class="fa-solid fa-floppy-disk" aria-hidden="true" />
+              <i data-when-rename="saved" class="fa-solid fa-check" aria-hidden="true" />
+            </button>
+          </>
+        )
+      }
+    </h1>
+    {
+      isOwner && (
+        <p data-rename-failed hidden role="alert" class="mt-2 text-base text-red-700" />
+      )
+    }
 
     <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
       <p class="flex items-center gap-2 text-base text-slate-700">

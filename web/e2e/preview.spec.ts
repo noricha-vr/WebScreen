@@ -70,6 +70,7 @@ test.describe('公開プレビュー', () => {
 
     // 未ログインには操作 UI を出さない（動画そのものは誰でも見られる）
     await expect(page.locator('[data-preview] [data-pin-button]')).toHaveCount(0);
+    await expect(page.locator('[data-preview] [data-rename-button]')).toHaveCount(0);
 
     await page.screenshot({ path: screenshotPath('01-preview-ja'), fullPage: true });
   });
@@ -153,6 +154,38 @@ test.describe('公開プレビュー', () => {
 });
 
 test.describe('所有者の操作', () => {
+  test('ファイル名を Enter で変更し、再読み込み後も保持する', async ({ page, context }) => {
+    const filename = 'renamed-slides.mp4';
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+
+    await page.getByRole('button', { name: ja.preview.rename }).click();
+    const input = page.locator('[data-filename-input]');
+    await expect(input).toBeVisible();
+    await input.fill(filename);
+    await input.press('Enter');
+
+    await expect(page.getByRole('heading', { level: 1, name: filename })).toBeVisible();
+    await expect(page).toHaveTitle(`${filename} — WebScreen`);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: filename })).toBeVisible();
+  });
+
+  test('空白のみのファイル名は保存せず、元の名前を維持する', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);
+
+    await page.getByRole('button', { name: ja.preview.rename }).click();
+    const input = page.locator('[data-filename-input]');
+    await input.fill('   ');
+    await input.press('Enter');
+
+    await expect(
+      page.getByRole('heading', { level: 1, name: E2E_FIXTURES.pinnedFilename })
+    ).toBeVisible();
+    await expect(input).toBeHidden();
+  });
+
   test('ピン留めを解除すると保管期限が戻る', async ({ page, context }) => {
     await signIn(context, E2E_FIXTURES.ownerId);
     await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);

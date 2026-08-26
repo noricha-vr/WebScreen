@@ -72,6 +72,21 @@
   display: none;
 }
 
+/* ファイル名リネームのインライン状態（編集 / 保存中 / 保存完了）。 */
+[data-rename-state='idle'] [data-when-rename]:not([data-when-rename~='idle']),
+[data-rename-state='editing'] [data-when-rename]:not([data-when-rename~='editing']),
+[data-rename-state='saving'] [data-when-rename]:not([data-when-rename~='saving']),
+[data-rename-state='saved'] [data-when-rename]:not([data-when-rename~='saved']),
+[data-rename-state='idle'] [data-filename-input],
+[data-rename-state='saved'] [data-filename-input] {
+  display: none;
+}
+
+[data-rename-state='editing'] [data-filename-text],
+[data-rename-state='saving'] [data-filename-text] {
+  display: none;
+}
+
 /*
  * 削除のインライン確認。confirm() を使わず、確認 UI を同じ場所に出し分ける。
  * 履歴の各行とプレビューページの両方で同じ規則を使う。

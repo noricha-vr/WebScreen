@@ -8,7 +8,13 @@
  * 契約が解凍されたら HistoryEntry / PinResponse は contracts/api.ts へ移す。
  */
 
-import { ERROR_CODES, type ErrorCode, type MovieStatus } from '../contracts/api';
+import {
+  ERROR_CODES,
+  isSafeFilename,
+  MAX_FILENAME_LENGTH,
+  type ErrorCode,
+  type MovieStatus,
+} from '../contracts/api';
 import { isShortId, movieKey } from '../contracts/r2key';
 import { MAX_PINNED_MOVIES, MOVIE_RETENTION_MS, UNPIN_GRACE_MS } from './quota';
 
@@ -71,7 +77,7 @@ export interface MovieBucket {
 /** エントリポイントが HTTP 応答へ変換するドメインエラー。 */
 export class MovieActionError extends Error {
   constructor(
-    public readonly status: 404 | 409,
+    public readonly status: 400 | 404 | 409,
     public readonly errorCode: ErrorCode,
     message: string
   ) {
@@ -104,6 +110,12 @@ export interface MovieActionInput {
   database: MoviesDatabase;
   userId: number;
   shortId: string;
+}
+
+/** ファイル名変更の応答。 */
+export interface RenameMovieResponse {
+  shortId: string;
+  filename: string;
 }
 
 /** 自分の movies を新しい順に返す（未完了の pending も進捗確認のために含める）。 */
@@ -156,6 +168,32 @@ export async function togglePin(
     .run();
 
   return { shortId: input.shortId, pinned: nextPinned, expiresAt };
+}
+
+/** 所有者の動画の表示名を変更する。 */
+export async function renameMovie(
+  input: MovieActionInput & { filename: unknown }
+): Promise<RenameMovieResponse> {
+  if (typeof input.filename !== 'string') {
+    throw new MovieActionError(400, ERROR_CODES.invalidRequest, 'filename が不正です');
+  }
+
+  const filename = input.filename.trim();
+  if (
+    filename.length === 0 ||
+    filename.length > MAX_FILENAME_LENGTH ||
+    !isSafeFilename(filename)
+  ) {
+    throw new MovieActionError(400, ERROR_CODES.invalidRequest, 'filename が不正です');
+  }
+
+  await findOwnedMovie(input.database, input.userId, input.shortId);
+  await input.database
+    .prepare('UPDATE movies SET filename = ? WHERE short_id = ? AND user_id = ?')
+    .bind(filename, input.shortId, input.userId)
+    .run();
+
+  return { shortId: input.shortId, filename };
 }
 
 /**

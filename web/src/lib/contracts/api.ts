@@ -138,7 +138,7 @@ function asRecord(input: unknown): Record<string, unknown> | null {
 }
 
 /** パス区切り・親ディレクトリ参照・制御文字を含まない実ファイル名かを判定する。 */
-function isSafeFilename(value: string): boolean {
+export function isSafeFilename(value: string): boolean {
   if (value.length === 0 || value.length > MAX_FILENAME_LENGTH) return false;
   if (value.includes('/') || value.includes('\\')) return false;
   if (value === '.' || value === '..') return false;
