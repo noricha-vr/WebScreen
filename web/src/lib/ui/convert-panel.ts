@@ -21,6 +21,15 @@ import { movieNameForFiles, movieNameForUrl } from './upload-name';
 /** data-batch-name-suffix が無いときの接尾辞（ロケール非依存で読める形）。 */
 const DEFAULT_BATCH_NAME_SUFFIX = '+{count}';
 
+/**
+ * URL 変換のキャプチャ待ち（数十秒）は進捗イベントが一切来ないため、バーが 0% で静止する。
+ * その間だけ疑似進捗をゆっくり進めて「動いている」ことを示す。実進捗を先取りしないよう
+ * 上限は低く抑え、キャプチャ完了後は実進捗（conversionProgress）へ引き継ぐ。
+ */
+const CAPTURE_PSEUDO_PROGRESS_INTERVAL_MS = 800;
+const CAPTURE_PSEUDO_PROGRESS_START = 2;
+const CAPTURE_PSEUDO_PROGRESS_MAX = 12;
+
 type Dispatch = (event: UploadEvent, runGeneration?: number) => void;
 type Navigate = (url: string) => void;
 
@@ -256,12 +265,24 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (state.phase === 'converting' || state.phase === 'uploading') return;
     dispatch({ type: 'selectUrl', url });
     const current = generation;
+
+    let pseudoProgress = CAPTURE_PSEUDO_PROGRESS_START - 1;
+    const pseudoTimer = window.setInterval(() => {
+      pseudoProgress += 1;
+      dispatch({ type: 'progress', value: pseudoProgress }, current);
+      if (pseudoProgress >= CAPTURE_PSEUDO_PROGRESS_MAX) window.clearInterval(pseudoTimer);
+    }, CAPTURE_PSEUDO_PROGRESS_INTERVAL_MS);
+
     void requestJson('/api/capture/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
     })
       .then(asCaptureResponse)
+      // 成功・失敗のどちらでも疑似進捗を必ず止める（ここから先は実進捗が来る）。
+      .finally(() => {
+        window.clearInterval(pseudoTimer);
+      })
       .then((capture) => convertImageUrlsToMp4(capture.images, (progress) => {
         dispatch({ type: 'conversionProgress', ...progress }, current);
       }))
