@@ -11,7 +11,6 @@
     "account": "アカウント",
     "history": "履歴",
     "logout": "ログアウト",
-    "langSwitch": "English",
     "bannerAlt": "WebScreen のロゴ",
     "avatarAlt": "アカウントのアバター"
   },
@@ -86,6 +85,7 @@
   "footer": {
     "github": "GitHub",
     "privacy": "Cookie とプライバシー",
+    "langSwitch": "English",
     "note": "WebScreen β — Cloudflare 版の先行公開です"
   },
   "privacy": {

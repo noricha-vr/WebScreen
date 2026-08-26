@@ -1,6 +1,6 @@
 ---
 import HistoryDropdown from './HistoryDropdown.astro';
-import { alternateLocale, switchLocalePath, useTranslations, type Locale } from '../i18n';
+import { useTranslations, type Locale } from '../i18n';
 
 interface Props {
   lang: Locale;
@@ -8,7 +8,6 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
-const other = alternateLocale(lang);
 
 // 画像は既存サイトの GCS 配信をそのまま使う（リポジトリの .gitignore が *.png を
 // 一括で無視するため、web/public/ にバイナリを置かない方針）。
@@ -40,15 +39,6 @@ const LOGOUT_URL = '/api/auth/logout/';
         <span class="rounded-full bg-brand-50 px-2 py-0.5 text-sm font-semibold text-brand-700">
           β
         </span>
-      </a>
-
-      <a
-        href={switchLocalePath(Astro.url.pathname, other)}
-        hreflang={other}
-        class="rounded-md px-2 py-1 text-base text-slate-700 hover:bg-slate-100"
-      >
-        <i class="fa-solid fa-language" aria-hidden="true"></i>
-        <span class="ml-1">{t.nav.langSwitch}</span>
       </a>
     </div>
 

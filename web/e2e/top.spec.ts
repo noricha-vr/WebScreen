@@ -50,7 +50,7 @@ test.describe('未ログイン', () => {
 
   test('言語切替リンクで同じページの別ロケールへ移動する', async ({ page }) => {
     await page.goto('/ja/privacy/');
-    await page.getByRole('link', { name: ja.nav.langSwitch }).click();
+    await page.locator('footer').getByRole('link', { name: ja.footer.langSwitch }).click();
 
     await expect(page).toHaveURL(/\/en\/privacy\/$/);
     await expect(page.getByRole('heading', { level: 1, name: en.privacy.heading })).toBeVisible();
