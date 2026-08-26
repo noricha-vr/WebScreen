@@ -71,6 +71,7 @@
     "renameSave": "Save",
     "renameSaved": "Saved",
     "renameFailed": "Could not rename the file",
+    "renameTooLong": "File name is too long ({count} / max {max} characters)",
     "notFoundHeading": "Video not found",
     "notFoundLead": "The URL may be wrong, or the video may have been removed after its retention period.",
     "backHome": "Back to the home page",
