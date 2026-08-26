@@ -6,6 +6,7 @@
  */
 
 import { MAX_UPLOAD_BYTES, type CaptureResponse, type CommitResponse, type PresignResponse, type UploadKind } from '../contracts/api';
+import { isShortId } from '../contracts/r2key';
 import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
 import {
   INITIAL_UPLOAD_STATE,
@@ -93,6 +94,7 @@ function asCommitResponse(value: unknown): CommitResponse {
   if (
     !isRecord(value) ||
     typeof value.shortId !== 'string' ||
+    !isShortId(value.shortId) ||
     typeof value.publicUrl !== 'string' ||
     typeof value.sizeBytes !== 'number' ||
     (typeof value.expiresAt !== 'string' && value.expiresAt !== null)
@@ -179,6 +181,14 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       navigate(`/${next.shortId}/`);
     }
   };
+
+  // BFCache で復元すると完了状態のままになるため、古い非同期処理も無効化して初期表示に戻す。
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    generation += 1;
+    state = INITIAL_UPLOAD_STATE;
+    render(panel, state);
+  });
 
   const fileInput = element<HTMLInputElement>(panel, '[data-file-input]');
   const startFiles = (files: readonly File[]): void => {

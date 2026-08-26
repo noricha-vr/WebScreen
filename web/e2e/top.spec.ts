@@ -145,6 +145,16 @@ test.describe('ログイン済み', () => {
     await expect(preview).toHaveAttribute('data-copied', 'true');
     const previewUrl = await preview.locator('[data-preview-url]').inputValue();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(previewUrl);
+
+    await page.goBack();
+    const restoredPanel = page.locator('[data-convert-panel]');
+    await expect(restoredPanel.getByText(ja.convert.dropzoneTitle)).toBeVisible();
+    await restoredPanel.locator('[data-file-input]').setInputFiles({
+      name: 'archive.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from('PK'),
+    });
+    await expect(restoredPanel).toHaveAttribute('data-phase', 'error');
   });
 
   // 実ファイルをブラウザ内変換パイプライン（PDF.js / FFmpeg.wasm）に通し、

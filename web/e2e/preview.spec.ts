@@ -123,8 +123,10 @@ test.describe('公開プレビュー', () => {
     const previewUrl = await preview.locator('[data-preview-url]').inputValue();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(previewUrl);
 
+    await page.evaluate(() => navigator.clipboard.writeText('sentinel'));
     await page.reload();
     await expect(preview).not.toHaveAttribute('data-copied', 'true');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('sentinel');
   });
 
   test('通常閲覧では動画 URL を自動コピーしない', async ({ page, context }) => {
