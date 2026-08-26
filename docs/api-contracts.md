@@ -20,7 +20,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `GET /api/health/` | 疎通確認 | 不要 | — |
 | `GET /api/auth/login/` | Discord OAuth 開始（state Cookie を発行してリダイレクト） | 不要 | `session.ts` |
 | `GET /api/auth/callback/` | OAuth コールバック（state 検証 → users upsert → セッション Cookie 発行） | 不要 | `session.ts` |
-| `POST /api/auth/logout/` | セッション Cookie の破棄 | 本人 | — |
+| `POST /api/auth/logout/` | セッション Cookie の破棄（form の `lang` のトップへ 303 リダイレクト。不正・欠落は `ja`） | 本人 | — |
 | `GET /api/me/` | ログイン中のユーザー情報 | 本人 | — |
 | `POST /api/uploads/presign/` | R2 へのアップロード先を払い出し、movies に `pending` 行を作る | 本人 | `PresignRequest` / `PresignResponse` |
 | `POST /api/uploads/commit/` | アップロード完了を確定し `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse` |
