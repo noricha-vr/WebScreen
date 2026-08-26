@@ -16,6 +16,10 @@ import {
   type UploadState,
 } from './upload-flow';
 import { markAutoCopy } from './auto-copy';
+import { movieNameForFiles, movieNameForUrl } from './upload-name';
+
+/** data-batch-name-suffix が無いときの接尾辞（ロケール非依存で読める形）。 */
+const DEFAULT_BATCH_NAME_SUFFIX = '+{count}';
 
 type Dispatch = (event: UploadEvent, runGeneration?: number) => void;
 type Navigate = (url: string) => void;
@@ -116,11 +120,6 @@ function asCaptureResponse(value: unknown): CaptureResponse {
   return { images: value.images as string[] };
 }
 
-function mp4Filename(source: string): string {
-  const extension = source.lastIndexOf('.');
-  return `${extension > 0 ? source.slice(0, extension) : source}.mp4`;
-}
-
 async function uploadMp4(
   mp4: Blob,
   filename: string,
@@ -206,7 +205,18 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     void convertFilesToMp4(files, kind, (progress) => {
       dispatch({ type: 'conversionProgress', ...progress }, current);
     })
-      .then((mp4) => uploadMp4(mp4, mp4Filename(files[0]!.name), kind, dispatch, current))
+      .then((mp4) =>
+        uploadMp4(
+          mp4,
+          movieNameForFiles(
+            files.map((file) => file.name),
+            panel.dataset['batchNameSuffix'] ?? DEFAULT_BATCH_NAME_SUFFIX
+          ),
+          kind,
+          dispatch,
+          current
+        )
+      )
       .catch((error: unknown) => {
         console.error('conversion failed', error);
         dispatch({ type: 'failed', errorCode: conversionErrorCode(error) }, current);
@@ -255,7 +265,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       .then((capture) => convertImageUrlsToMp4(capture.images, (progress) => {
         dispatch({ type: 'conversionProgress', ...progress }, current);
       }))
-      .then((mp4) => uploadMp4(mp4, 'capture.mp4', 'web', dispatch, current))
+      .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current))
       .catch((error: unknown) => {
         console.error('conversion failed', error);
         dispatch({ type: 'failed', errorCode: conversionErrorCode(error) }, current);

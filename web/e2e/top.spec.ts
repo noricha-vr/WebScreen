@@ -160,10 +160,16 @@ test.describe('ログイン済み', () => {
 
     const panel = page.locator('[data-convert-panel]');
     const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
+    const presignRequest = page.waitForRequest('**/api/uploads/presign/');
     await panel.locator('[data-file-input]').setInputFiles([
       { name: 'first.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG },
       { name: 'second.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG },
     ]);
+
+    // 複数枚は「先頭ファイル名 + 残り枚数」で保存される（/ja/ なので日本語の接尾辞）
+    expect((await presignRequest).postDataJSON().filename).toBe(
+      `first ${ja.convert.batchNameSuffix.replace('{count}', '1')}.mp4`
+    );
 
     const request = await uploadRequest;
     expect(request.headers()['content-type']).toBe('video/mp4');
@@ -241,8 +247,12 @@ test.describe('ログイン済み', () => {
 
     const panel = page.locator('[data-convert-panel]');
     const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
+    const presignRequest = page.waitForRequest('**/api/uploads/presign/');
     await panel.locator('[data-url-input]').fill('https://example.com/');
     await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    // 変換元の URL から名前を作る（ルート直下なのでホスト名だけ）
+    expect((await presignRequest).postDataJSON().filename).toBe('example.com.mp4');
 
     const request = await uploadRequest;
     expect(request.headers()['content-type']).toBe('video/mp4');
