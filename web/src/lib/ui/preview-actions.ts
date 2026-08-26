@@ -92,6 +92,7 @@ function wireRename(root: HTMLElement, fetchImpl: typeof fetch, schedule: Schedu
 
   const setState = (state: 'idle' | 'editing' | 'saving' | 'saved'): void => {
     root.dataset['renameState'] = state;
+    input.disabled = state === 'saving';
     button.setAttribute(
       'aria-label',
       state === 'idle'
@@ -108,6 +109,8 @@ function wireRename(root: HTMLElement, fetchImpl: typeof fetch, schedule: Schedu
   };
 
   const save = (): void => {
+    if (root.dataset['renameState'] === 'saving') return;
+
     const filename = input.value.trim();
     if (filename.length === 0 || filename === originalFilename) {
       cancel();
@@ -153,6 +156,8 @@ function wireRename(root: HTMLElement, fetchImpl: typeof fetch, schedule: Schedu
   };
 
   button.addEventListener('click', () => {
+    if (root.dataset['renameState'] === 'saving') return;
+
     if (root.dataset['renameState'] === 'idle' || !root.dataset['renameState']) {
       input.value = originalFilename;
       if (failure) failure.hidden = true;
@@ -165,6 +170,11 @@ function wireRename(root: HTMLElement, fetchImpl: typeof fetch, schedule: Schedu
   });
 
   input.addEventListener('keydown', (event) => {
+    if (root.dataset['renameState'] === 'saving') {
+      event.preventDefault();
+      return;
+    }
+
     if (event.key === 'Enter') {
       event.preventDefault();
       save();

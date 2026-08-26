@@ -186,6 +186,28 @@ test.describe('所有者の操作', () => {
     await expect(input).toBeHidden();
   });
 
+  test('編集中に Escape を押すと元の名前へ戻し保存しない', async ({ page, context }) => {
+    let patchRequested = false;
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);
+    page.on('request', (request) => {
+      if (request.method() === 'PATCH' && request.url().includes('/api/movies/')) {
+        patchRequested = true;
+      }
+    });
+
+    await page.getByRole('button', { name: ja.preview.rename }).click();
+    const input = page.locator('[data-filename-input]');
+    await input.fill('cancelled-name.mp4');
+    await input.press('Escape');
+
+    await expect(
+      page.getByRole('heading', { level: 1, name: E2E_FIXTURES.pinnedFilename })
+    ).toBeVisible();
+    await expect(input).toBeHidden();
+    expect(patchRequested).toBe(false);
+  });
+
   test('ピン留めを解除すると保管期限が戻る', async ({ page, context }) => {
     await signIn(context, E2E_FIXTURES.ownerId);
     await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);
