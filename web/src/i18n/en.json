@@ -42,7 +42,8 @@
     "errorTooLarge": "This file is larger than the 50 MB limit",
     "errorUnsupported": "This file type is not supported",
     "errorTooManyPages": "PDF files must have 200 pages or fewer",
-    "errorFailed": "Conversion failed. Please try again in a moment"
+    "errorFailed": "Conversion failed. Please try again in a moment",
+    "batchNameSuffix": "+{count}"
   },
   "history": {
     "heading": "Your videos",

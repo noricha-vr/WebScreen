@@ -42,7 +42,8 @@
     "errorTooLarge": "ファイルサイズが上限の 50 MB を超えています",
     "errorUnsupported": "対応していないファイル形式です",
     "errorTooManyPages": "PDF は 200 ページ以下にしてください",
-    "errorFailed": "変換に失敗しました。時間をおいて再度お試しください"
+    "errorFailed": "変換に失敗しました。時間をおいて再度お試しください",
+    "batchNameSuffix": "他{count}枚"
   },
   "history": {
     "heading": "変換した動画",
