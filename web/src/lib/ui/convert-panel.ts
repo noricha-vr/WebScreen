@@ -6,6 +6,7 @@
  */
 
 import { MAX_UPLOAD_BYTES, type CaptureResponse, type CommitResponse, type PresignResponse, type UploadKind } from '../contracts/api';
+import { isShortId } from '../contracts/r2key';
 import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
 import {
   INITIAL_UPLOAD_STATE,
@@ -14,14 +15,13 @@ import {
   type UploadEvent,
   type UploadState,
 } from './upload-flow';
+import { markAutoCopy } from './auto-copy';
 
-const COPIED_FEEDBACK_MS = 2000;
-
-type Schedule = (callback: () => void, delayMs: number) => void;
 type Dispatch = (event: UploadEvent, runGeneration?: number) => void;
+type Navigate = (url: string) => void;
 
 export interface ConvertPanelOptions {
-  schedule?: Schedule;
+  navigate?: Navigate;
 }
 
 function element<T extends HTMLElement>(root: HTMLElement, selector: string): T | null {
@@ -46,7 +46,6 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
 function phaseLabel(panel: HTMLElement, state: UploadState): string {
   if (state.phase === 'converting') return panel.dataset['labelConverting'] ?? '';
   if (state.phase === 'uploading') return panel.dataset['labelUploading'] ?? '';
-  if (state.phase === 'done') return panel.dataset['labelDone'] ?? '';
   return '';
 }
 
@@ -69,14 +68,6 @@ function render(panel: HTMLElement, state: UploadState): void {
 
   const count = state.current !== null && state.total !== null ? `${state.current}/${state.total}` : '';
   for (const node of elements(panel, '[data-progress-count]')) node.textContent = count;
-
-  for (const node of elements<HTMLInputElement>(panel, '[data-result-url]')) {
-    node.value = state.publicUrl ?? '';
-  }
-
-  for (const link of elements<HTMLAnchorElement>(panel, '[data-preview-link]')) {
-    link.href = state.shortId ? `/${state.shortId}/` : '#';
-  }
 
   const message = state.errorCode ? errorMessage(panel, state.errorCode) : '';
   for (const node of elements(panel, '[data-error-message]')) node.textContent = message;
@@ -103,6 +94,7 @@ function asCommitResponse(value: unknown): CommitResponse {
   if (
     !isRecord(value) ||
     typeof value.shortId !== 'string' ||
+    !isShortId(value.shortId) ||
     typeof value.publicUrl !== 'string' ||
     typeof value.sizeBytes !== 'number' ||
     (typeof value.expiresAt !== 'string' && value.expiresAt !== null)
@@ -170,18 +162,8 @@ function conversionErrorCode(error: unknown): UploadErrorCode {
   return error instanceof ConversionError && error.code === 'tooManyPages' ? 'tooManyPages' : 'failed';
 }
 
-async function copyToClipboard(value: string, input: HTMLInputElement | null): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(value);
-  } catch {
-    // クリップボード権限が無い環境では選択状態にして手動コピーへ誘導する
-    input?.select();
-  }
-}
-
 export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptions = {}): void {
-  const schedule: Schedule =
-    options.schedule ?? ((callback, delayMs) => window.setTimeout(callback, delayMs));
+  const navigate: Navigate = options.navigate ?? ((url) => window.location.assign(url));
 
   let state = INITIAL_UPLOAD_STATE;
   let generation = 0;
@@ -194,13 +176,19 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
 
     state = next;
     render(panel, state);
+    if (next.phase === 'done' && next.shortId) {
+      markAutoCopy(next.shortId);
+      navigate(`/${next.shortId}/`);
+    }
   };
 
-  const reset = (): void => {
+  // BFCache で復元すると完了状態のままになるため、古い非同期処理も無効化して初期表示に戻す。
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
     generation += 1;
     state = INITIAL_UPLOAD_STATE;
     render(panel, state);
-  };
+  });
 
   const fileInput = element<HTMLInputElement>(panel, '[data-file-input]');
   const startFiles = (files: readonly File[]): void => {
@@ -273,19 +261,6 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         dispatch({ type: 'failed', errorCode: conversionErrorCode(error) }, current);
       });
   });
-
-  const copyButton = element<HTMLButtonElement>(panel, '[data-copy-button]');
-  copyButton?.addEventListener('click', () => {
-    const input = element<HTMLInputElement>(panel, '[data-result-url]');
-    void copyToClipboard(state.publicUrl ?? '', input);
-
-    panel.dataset['copied'] = 'true';
-    schedule(() => {
-      delete panel.dataset['copied'];
-    }, COPIED_FEEDBACK_MS);
-  });
-
-  element(panel, '[data-reset-button]')?.addEventListener('click', reset);
 
   render(panel, state);
 }

@@ -6,6 +6,7 @@
  */
 
 import { copyToClipboard } from './clipboard';
+import { consumeAutoCopy } from './auto-copy';
 import { movieEndpoint, pinEndpoint } from './history-view';
 
 const COPIED_FEEDBACK_MS = 2000;
@@ -23,14 +24,19 @@ function find<T extends HTMLElement>(root: HTMLElement, selector: string): T | n
   return root.querySelector<T>(selector);
 }
 
+function showCopied(root: HTMLElement, schedule: Schedule): void {
+  root.dataset['copied'] = 'true';
+  schedule(() => {
+    delete root.dataset['copied'];
+  }, COPIED_FEEDBACK_MS);
+}
+
 function wireCopy(root: HTMLElement, schedule: Schedule): void {
   const input = find<HTMLInputElement>(root, '[data-preview-url]');
   find<HTMLButtonElement>(root, '[data-copy-button]')?.addEventListener('click', () => {
-    void copyToClipboard(input?.value ?? '', input);
-    root.dataset['copied'] = 'true';
-    schedule(() => {
-      delete root.dataset['copied'];
-    }, COPIED_FEEDBACK_MS);
+    void copyToClipboard(input?.value ?? '', input).then((copied) => {
+      if (copied) showCopied(root, schedule);
+    });
   });
 }
 
@@ -126,6 +132,13 @@ export function mountPreviewActions(
   const reload = options.reload ?? (() => window.location.reload());
 
   wireCopy(root, schedule);
+  const shortId = root.dataset['shortId'] ?? '';
+  const input = find<HTMLInputElement>(root, '[data-preview-url]');
+  if (consumeAutoCopy(shortId) && input) {
+    void copyToClipboard(input.value, input).then((copied) => {
+      if (copied) showCopied(root, schedule);
+    });
+  }
   wirePin(root, fetchImpl, reload);
   wireDelete(root, fetchImpl);
 }
