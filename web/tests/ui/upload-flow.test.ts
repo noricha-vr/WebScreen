@@ -156,6 +156,53 @@ describe('URL からの変換', () => {
   });
 });
 
+describe('変換ページの進捗', () => {
+  function convertingUrl(): UploadState {
+    return reduceUpload(INITIAL_UPLOAD_STATE, { type: 'selectUrl', url: 'https://example.com' });
+  }
+
+  test('現在位置と総数から進捗率を出す', () => {
+    const state = reduceUpload(select('slides.pdf'), {
+      type: 'conversionProgress',
+      current: 3,
+      total: 10,
+    });
+
+    expect(state.progress).toBe(30);
+    expect(state.current).toBe(3);
+    expect(state.total).toBe(10);
+  });
+
+  test('実進捗が疑似進捗より小さくてもバーは戻さず、現在位置と総数だけ更新する', () => {
+    const pseudo = reduceUpload(convertingUrl(), { type: 'progress', value: 12 });
+
+    const state = reduceUpload(pseudo, { type: 'conversionProgress', current: 1, total: 30 });
+
+    expect(state.progress).toBe(12);
+    expect(state.current).toBe(1);
+    expect(state.total).toBe(30);
+  });
+
+  test('実進捗が疑似進捗を追い越したら実進捗の値になる', () => {
+    let state = reduceUpload(convertingUrl(), { type: 'progress', value: 12 });
+    state = reduceUpload(state, { type: 'conversionProgress', current: 1, total: 30 });
+
+    state = reduceUpload(state, { type: 'conversionProgress', current: 5, total: 30 });
+
+    expect(state.progress).toBe(17);
+    expect(state.current).toBe(5);
+  });
+
+  test('変換中でなければ進捗イベントを無視する', () => {
+    const uploading = reduceUpload(select('slides.pdf'), { type: 'converted' });
+    expect(uploading.phase).toBe('uploading');
+
+    expect(reduceUpload(uploading, { type: 'conversionProgress', current: 1, total: 4 })).toBe(
+      uploading
+    );
+  });
+});
+
 describe('変換対象の上限', () => {
   test('複数ファイルのどれかが 50 MB を超えると変換前に拒否する', () => {
     const state = reduceUpload(INITIAL_UPLOAD_STATE, {

@@ -135,11 +135,14 @@ export function reduceUpload(state: UploadState, event: UploadEvent): UploadStat
 
     case 'conversionProgress': {
       if (state.phase !== 'converting' || event.total <= 0 || event.current < 0) return state;
+      // URL 変換ではキャプチャ待ちの間だけ疑似進捗でバーを進めるため、実進捗の初回値
+      // （1/30 = 3% など）の方が小さくなりうる。バーの逆戻りを避けて大きい方を採る。
+      // converted で progress は 0 に戻るので、この下限が次のフェーズへ漏れることはない。
       return {
         ...state,
         current: Math.min(event.current, event.total),
         total: event.total,
-        progress: clampProgress((event.current / event.total) * 100),
+        progress: Math.max(state.progress, clampProgress((event.current / event.total) * 100)),
       };
     }
 
