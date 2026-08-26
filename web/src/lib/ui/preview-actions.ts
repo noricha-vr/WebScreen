@@ -9,7 +9,8 @@ import { copyToClipboard } from './clipboard';
 import { consumeAutoCopy } from './auto-copy';
 import { movieEndpoint, pinEndpoint } from './history-view';
 
-const COPIED_FEEDBACK_MS = 2000;
+// 遷移直後の自動コピーでも見逃しにくい長さ（2000ms は短すぎるとの報告で延長）
+const COPIED_FEEDBACK_MS = 4000;
 const RENAME_SAVED_FEEDBACK_MS = 2000;
 
 type Schedule = (callback: () => void, delayMs: number) => void;

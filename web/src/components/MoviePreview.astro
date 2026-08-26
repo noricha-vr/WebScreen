@@ -158,14 +158,16 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
         data-copy-button
         class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white hover:bg-brand-700"
       >
-        <i class="fa-solid fa-copy" aria-hidden="true"></i>
-        <span>{t.preview.copy}</span>
+        <span data-when-copied="idle" class="inline-flex items-center gap-2">
+          <i class="fa-solid fa-copy" aria-hidden="true"></i>
+          <span>{t.preview.copy}</span>
+        </span>
+        <span data-when-copied="copied" role="status" class="inline-flex items-center gap-2">
+          <i class="fa-solid fa-check" aria-hidden="true"></i>
+          <span>{t.preview.copied}</span>
+        </span>
       </button>
     </div>
-    <p data-copied-label class="mt-2 flex items-center gap-2 text-base text-brand-700" role="status">
-      <i class="fa-solid fa-check" aria-hidden="true"></i>
-      <span>{t.preview.copied}</span>
-    </p>
     <p class="mt-2 text-base text-slate-600">{t.preview.playbackHint}</p>
 
     {
