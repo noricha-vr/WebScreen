@@ -1,6 +1,7 @@
 ---
 import ConvertPanel from './ConvertPanel.astro';
 import GuestHero from './GuestHero.astro';
+import LpSections from './LpSections.astro';
 import type { Locale } from '../i18n';
 
 interface Props {
@@ -19,4 +20,7 @@ const { lang } = Astro.props;
   <div data-auth-only="member">
     <ConvertPanel lang={lang} />
   </div>
+
+  <!-- サービス紹介はログイン状態を問わず出す（data-auth-only の外に置く）。 -->
+  <LpSections lang={lang} />
 </div>
