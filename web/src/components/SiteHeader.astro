@@ -55,8 +55,20 @@ const LOGOUT_URL = '/api/auth/logout/';
       <div data-auth-only="member" class="flex items-center gap-2">
         <HistoryDropdown lang={lang} />
 
+        <form method="post" action={LOGOUT_URL}>
+          <input type="hidden" name="lang" value={lang} />
+          <button
+            type="submit"
+            class="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-slate-300 px-3 py-2 text-base font-semibold text-slate-800 hover:bg-slate-100"
+          >
+            <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+            <span>{t.nav.logout}</span>
+          </button>
+        </form>
+
         {/* アバターは本人確認の目印なので表示のみ。操作はログアウトの 1 つだけなので */}
         {/* ドロップダウンに畳まず、履歴と並べて常時見えるボタンにしている。 */}
+        {/* 並びの右端に置くのは、操作ボタン（履歴・ログアウト）と役割が違うため。 */}
         <span class="flex items-center">
           <span
             data-viewer-initial
@@ -74,17 +86,6 @@ const LOGOUT_URL = '/api/auth/logout/';
           {/* 名前は表示しないが、支援技術向けに残す（JS が実名で上書きする）。 */}
           <span data-viewer-name class="sr-only">{t.nav.account}</span>
         </span>
-
-        <form method="post" action={LOGOUT_URL}>
-          <input type="hidden" name="lang" value={lang} />
-          <button
-            type="submit"
-            class="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-slate-300 px-3 py-2 text-base font-semibold text-slate-800 hover:bg-slate-100"
-          >
-            <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
-            <span>{t.nav.logout}</span>
-          </button>
-        </form>
       </div>
     </div>
   </div>
