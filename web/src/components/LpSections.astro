@@ -1,0 +1,114 @@
+---
+import { useTranslations, type Locale } from '../i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+/*
+ * 旧 LP（web-screen.net）から引き継いだ紹介用メディア。GCS 直参照のまま使う。
+ * COEP は credentialless（src/middleware.ts）なので no-cors のまま読める。
+ * crossorigin 属性は付けない（GCS 側が CORS ヘッダーを返さず、付けると逆に読めなくなる）。
+ */
+const MEDIA_BASE = 'https://storage.googleapis.com/noricha-public/web-screen/image/big-icons';
+
+/** メディアはすべて正方形（webm / png とも 300〜600px 四方）。 */
+const MEDIA_SIZE = 600;
+
+type Media =
+  | { kind: 'video'; src: string; poster?: string }
+  | { kind: 'image'; src: string };
+
+interface Section {
+  icon: string;
+  heading: string;
+  body: string;
+  mediaAlt: string;
+  media: Media;
+}
+
+const sections: Section[] = [
+  {
+    icon: 'fa-globe',
+    heading: t.lp.webHeading,
+    body: t.lp.webBody,
+    mediaAlt: t.lp.webMediaAlt,
+    media: { kind: 'video', src: `${MEDIA_BASE}/url.webm`, poster: `${MEDIA_BASE}/url-600.jpg` },
+  },
+  {
+    icon: 'fa-image',
+    heading: t.lp.imageHeading,
+    body: t.lp.imageBody,
+    mediaAlt: t.lp.imageMediaAlt,
+    // image.webm には対応する静止画（image-600.jpg）が GCS に無いため poster を付けない。
+    media: { kind: 'video', src: `${MEDIA_BASE}/image.webm` },
+  },
+  {
+    icon: 'fa-file-pdf',
+    heading: t.lp.pdfHeading,
+    body: t.lp.pdfBody,
+    mediaAlt: t.lp.pdfMediaAlt,
+    media: { kind: 'image', src: `${MEDIA_BASE}/pdf.png` },
+  },
+  {
+    icon: 'fa-clock-rotate-left',
+    heading: t.lp.historyHeading,
+    body: t.lp.historyBody,
+    mediaAlt: t.lp.historyMediaAlt,
+    media: { kind: 'image', src: `${MEDIA_BASE}/history.png` },
+  },
+];
+---
+
+<section class="mt-16 border-t border-slate-200 pt-12">
+  <p class="text-lg leading-relaxed text-slate-700">{t.lp.intro}</p>
+
+  <div class="mt-10 grid gap-14">
+    {
+      sections.map((section, index) => (
+        <article class="grid items-center gap-6 md:grid-cols-2 md:gap-10">
+          {/* 偶数番目はメディアを左に置き、縦に単調な並びにしない（モバイルは常に文章が先）。 */}
+          <div class={index % 2 === 1 ? 'md:order-2' : ''}>
+            <h2 class="flex items-start gap-3 text-2xl font-bold leading-snug tracking-tight text-slate-900">
+              <i class={`fa-solid ${section.icon} mt-1 text-brand-500`} aria-hidden="true" />
+              <span>{section.heading}</span>
+            </h2>
+            <p class="mt-4 text-base leading-relaxed text-slate-700">{section.body}</p>
+          </div>
+
+          <div class={index % 2 === 1 ? 'md:order-1' : ''}>
+            {section.media.kind === 'video' ? (
+              <video
+                class="mx-auto w-full max-w-xs rounded-xl border border-slate-200 bg-slate-50"
+                src={section.media.src}
+                poster={section.media.poster}
+                width={MEDIA_SIZE}
+                height={MEDIA_SIZE}
+                aria-label={section.mediaAlt}
+                muted
+                autoplay
+                playsinline
+                loop
+              />
+            ) : (
+              <img
+                class="mx-auto w-full max-w-xs rounded-xl border border-slate-200 bg-slate-50"
+                src={section.media.src}
+                alt={section.mediaAlt}
+                width={MEDIA_SIZE}
+                height={MEDIA_SIZE}
+                loading="lazy"
+                decoding="async"
+              />
+            )}
+          </div>
+        </article>
+      ))
+    }
+  </div>
+
+  <p class="mt-12 text-sm text-slate-500">{t.lp.comingSoon}</p>
+</section>

@@ -120,5 +120,21 @@
       "Uploaded videos get a public URL containing a hard-to-guess random ID. VRChat video players fetch it without authentication, so anyone who knows the URL can play it. Please do not upload anything you need to keep private.",
       "You can delete or block cookies in your browser settings. Features that require signing in will not work if you do."
     ]
+  },
+  "lp": {
+    "intro": "WebScreen is a video conversion service for showing web pages, photos and PDFs in the VRChat video player.",
+    "webHeading": "Convert a web page to video",
+    "webBody": "Convert a web page to video and play it on a video player inside VRChat. The seek bar of the player scrolls through the page.",
+    "webMediaAlt": "A web page being turned into a video",
+    "imageHeading": "Convert photos to video",
+    "imageBody": "Photos from a world tour or from a night out with friends can be watched together in VRChat right away.",
+    "imageMediaAlt": "Photos being turned into a video",
+    "pdfHeading": "Convert a PDF to video",
+    "pdfBody": "Export PowerPoint or Google Slides as a PDF and convert it to video to run your presentation on a video player or a slide system.",
+    "pdfMediaAlt": "A PDF being turned into a video",
+    "historyHeading": "Check your history",
+    "historyBody": "Your history keeps the link to every video you converted. Videos are stored for 30 days, and the 10 videos you pin are kept indefinitely.",
+    "historyMediaAlt": "The history of converted videos",
+    "comingSoon": "Screen recording and screen sharing are still on the way"
   }
 }
