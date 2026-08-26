@@ -52,9 +52,15 @@
   display: none;
 }
 
-/* コピー完了のフィードバック（2 秒で data-copied が外れる）。 */
-[data-preview]:not([data-copied]) [data-copied-label] {
+/* コピー完了のフィードバック: ボタン自体が「コピーしました」（緑）に切り替わる。
+   自動コピーと手動コピーが同じ data-copied を使うため、見える場所も1つに統一している。 */
+[data-preview]:not([data-copied]) [data-when-copied='copied'],
+[data-preview][data-copied] [data-when-copied='idle'] {
   display: none;
+}
+[data-preview][data-copied] [data-copy-button],
+[data-preview][data-copied] [data-copy-button]:hover {
+  background-color: var(--color-emerald-600, #059669);
 }
 
 /* 履歴ドロップダウンの状態別表示（読み込み中 / 一覧 / 空 / 失敗）。 */
