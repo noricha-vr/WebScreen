@@ -112,7 +112,7 @@ test.describe('ログイン済み', () => {
     await signIn(page);
     await page.goto('/ja/');
 
-    await expect(page.getByRole('link', { name: ja.nav.upload })).toBeVisible();
+    await expect(page.locator('[data-history-menu] summary', { hasText: ja.nav.history })).toBeVisible();
     await expect(page.getByText('noricha')).toBeVisible();
     await expect(page.getByRole('link', { name: ja.hero.cta })).toBeHidden();
     await expect(page.getByText(ja.convert.dropzoneTitle)).toBeVisible();
