@@ -10,6 +10,7 @@ import { consumeAutoCopy } from './auto-copy';
 import { movieEndpoint, pinEndpoint } from './history-view';
 
 const COPIED_FEEDBACK_MS = 2000;
+const RENAME_SAVED_FEEDBACK_MS = 2000;
 
 type Schedule = (callback: () => void, delayMs: number) => void;
 
@@ -78,6 +79,113 @@ function wirePin(root: HTMLElement, fetchImpl: typeof fetch, reload: () => void)
   });
 }
 
+function wireRename(root: HTMLElement, fetchImpl: typeof fetch, schedule: Schedule): void {
+  const button = find<HTMLButtonElement>(root, '[data-rename-button]');
+  const input = find<HTMLInputElement>(root, '[data-filename-input]');
+  const text = find<HTMLElement>(root, '[data-filename-text]');
+  if (!button || !input || !text) return;
+
+  const failure = find<HTMLElement>(root, '[data-rename-failed]');
+  const shortId = root.dataset['shortId'] ?? '';
+  const titleSuffix = root.dataset['documentTitleSuffix'] ?? '';
+  let originalFilename = text.textContent ?? '';
+
+  const setState = (state: 'idle' | 'editing' | 'saving' | 'saved'): void => {
+    root.dataset['renameState'] = state;
+    input.disabled = state === 'saving';
+    button.setAttribute(
+      'aria-label',
+      state === 'idle'
+        ? (root.dataset['labelRename'] ?? '')
+        : state === 'saved'
+          ? (root.dataset['labelRenameSaved'] ?? '')
+          : (root.dataset['labelRenameSave'] ?? '')
+    );
+  };
+
+  const cancel = (): void => {
+    input.value = originalFilename;
+    setState('idle');
+  };
+
+  const save = (): void => {
+    if (root.dataset['renameState'] === 'saving') return;
+
+    const filename = input.value.trim();
+    if (filename.length === 0 || filename === originalFilename) {
+      cancel();
+      return;
+    }
+
+    void (async () => {
+      setState('saving');
+      button.disabled = true;
+      if (failure) failure.hidden = true;
+
+      let ok = false;
+      try {
+        const response = await fetchImpl(movieEndpoint(shortId), {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ filename }),
+        });
+        ok = response.ok;
+      } catch {
+        ok = false;
+      }
+
+      button.disabled = false;
+      if (!ok) {
+        if (failure) {
+          failure.textContent = root.dataset['msgRenameFailed'] ?? '';
+          failure.hidden = false;
+        }
+        setState('editing');
+        input.focus();
+        return;
+      }
+
+      originalFilename = filename;
+      text.textContent = filename;
+      input.value = filename;
+      document.title = `${filename}${titleSuffix}`;
+      setState('saved');
+      schedule(() => setState('idle'), RENAME_SAVED_FEEDBACK_MS);
+    })();
+  };
+
+  button.addEventListener('click', () => {
+    if (root.dataset['renameState'] === 'saving') return;
+
+    if (root.dataset['renameState'] === 'idle' || !root.dataset['renameState']) {
+      input.value = originalFilename;
+      if (failure) failure.hidden = true;
+      setState('editing');
+      input.focus();
+      input.select();
+      return;
+    }
+    if (root.dataset['renameState'] === 'editing') save();
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (root.dataset['renameState'] === 'saving') {
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      save();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancel();
+    }
+  });
+}
+
 function wireDelete(root: HTMLElement, fetchImpl: typeof fetch): void {
   const confirmButton = find<HTMLButtonElement>(root, '[data-delete-yes]');
   if (!confirmButton) return;
@@ -140,5 +248,6 @@ export function mountPreviewActions(
     });
   }
   wirePin(root, fetchImpl, reload);
+  wireRename(root, fetchImpl, schedule);
   wireDelete(root, fetchImpl);
 }

@@ -137,13 +137,13 @@ function asRecord(input: unknown): Record<string, unknown> | null {
   return input as Record<string, unknown>;
 }
 
-/** パス区切り・親ディレクトリ参照・制御文字を含まない実ファイル名かを判定する。 */
-function isSafeFilename(value: string): boolean {
+/** パス区切り・偽装に使える制御文字を含まない実ファイル名かを判定する。 */
+export function isSafeFilename(value: string): boolean {
   if (value.length === 0 || value.length > MAX_FILENAME_LENGTH) return false;
   if (value.includes('/') || value.includes('\\')) return false;
   if (value === '.' || value === '..') return false;
-  // 制御文字（ログ・ヘッダーへの注入経路になる）を弾く
-  return !/[\u0000-\u001f\u007f]/.test(value);
+  // Cc と bidi / 行区切りはログ注入・拡張子偽装に使える。絵文字の ZWJ / ZWNJ / VS は許可する。
+  return !/[\p{Cc}\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/u.test(value);
 }
 
 export function validatePresignRequest(input: unknown): ValidationResult<PresignRequest> {
