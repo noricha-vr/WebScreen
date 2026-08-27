@@ -105,22 +105,31 @@
     "columnPurpose": "Purpose",
     "columnExpiry": "Expiry",
     "columnShared": "Shared with third parties",
-    "notShared": "No",
     "cookies": [
       {
         "name": "ws_session",
         "purpose": "Keeps you signed in",
-        "expiry": "30 days"
+        "expiry": "30 days",
+        "shared": "No"
       },
       {
         "name": "ws_oauth_state",
         "purpose": "Protects the Discord sign-in flow against forgery",
-        "expiry": "10 minutes"
+        "expiry": "10 minutes",
+        "shared": "No"
+      },
+      {
+        "name": "_ga / _ga_*",
+        "purpose": "Aggregates usage statistics via Google Analytics",
+        "expiry": "2 years",
+        "shared": "Google"
       }
     ],
     "paragraphs": [
       "When you sign in with Discord we store your Discord user ID, display name and avatar URL. We never receive your email address or password.",
       "Converted videos get a public URL containing a hard-to-guess random ID. VRChat video players fetch it without authentication, so anyone who knows the URL can play it. Please do not upload anything you need to keep private.",
+      "We use Google Analytics to improve the site. The page URL, referrer, approximate region and browser type are sent to Google. The names and contents of the files you upload are never sent (analytics is not loaded on video preview pages).",
+      "To opt out, install the Google Analytics Opt-out Browser Add-on that Google distributes, or block cookies in your browser settings.",
       "You can delete or block cookies in your browser settings. Features that require signing in will not work if you do."
     ]
   },
