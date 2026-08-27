@@ -6,8 +6,7 @@
  * bun test で検証する。
  */
 
-import type { HistoryEntry } from '../services/movies';
-import { MOVIE_STATUSES, type MovieStatus } from '../contracts/api';
+import { MOVIE_STATUSES, type HistoryEntry, type MovieStatus } from '../contracts/api';
 
 /** trailingSlash: 'always' のためスラッシュ必須。省くと 301 を挟む。 */
 export const HISTORY_ENDPOINT = '/api/history/';
