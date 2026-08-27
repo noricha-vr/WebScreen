@@ -19,7 +19,11 @@
   "vars": {
     "R2_ACCOUNT_ID": "65850b2bd0055921bdcfbe42383c794a",
     "R2_BUCKET_NAME": "webscreen-beta",
-    "R2_PUBLIC_BASE_URL": "https://pub-ebb48e6efc2f4128b606cf381851cae5.r2.dev",
+    // 動画の配信元。r2.dev は Cloudflare が「rate-limited / non-production traffic」と
+    // 明記する開発専用エンドポイントで、VRChat のワールド内で複数人が同時に取得する
+    // 本番用途には耐えない。Custom Domain 経由にするとキャッシュと WAF も効く。
+    // 既存の r2.dev URL は共有済みリンクを壊さないため公開したまま並走させている。
+    "R2_PUBLIC_BASE_URL": "https://cdn.web-screen.net",
     "WEBCAPTURE_URL": "https://web-capture-345811595113.asia-northeast1.run.app"
   },
   "d1_databases": [
