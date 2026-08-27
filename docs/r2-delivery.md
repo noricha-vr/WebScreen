@@ -18,14 +18,30 @@ r2.dev は Cloudflare が開発専用と明記しているエンドポイント�
 
 WebScreen では VRChat のワールド内で複数人が同時に同じ動画を取得するため、レート制限がそのまま「再生できない」というユーザー影響になる。キャッシュが効かない点も配信コストと再生開始の遅さに直結する。
 
-## Cloudflare 側の設定（コード外の正本）
+## Cloudflare 側の設定
 
-ダッシュボードでのみ管理される。変更したらこの表も更新すること。
+| 設定 | 管理場所 | 内容 |
+|---|---|---|
+| R2 Custom Domain | ダッシュボード | バケット `webscreen-beta` に `cdn.web-screen.net` を接続（Active） |
+| Transform Rule `cdn: noindex for media` | ダッシュボード | `http.host eq "cdn.web-screen.net"` のとき `X-Robots-Tag: noindex` を付与 |
+| **R2 の CORS** | **`web/r2-cors.json`** | 下記「CORS」節 |
 
-| 設定 | 内容 |
-|---|---|
-| R2 Custom Domain | バケット `webscreen-beta` に `cdn.web-screen.net` を接続（Active） |
-| Transform Rule `cdn: noindex for media` | `http.host eq "cdn.web-screen.net"` のとき `X-Robots-Tag: noindex` を付与 |
+ダッシュボード管理のものは変更したらこの表も更新すること。
+
+### CORS（アップロード経路）
+
+アップロードはブラウザから **R2 の S3 エンドポイントへ直接 PUT** する（`web/src/lib/infra/r2presign.ts` が署名 URL を払い出す）。配信ドメインではなく `https://{accountId}.r2.cloudflarestorage.com` が相手なので、**サイトのオリジンを R2 のバケット CORS に登録しないと preflight が 403 になり変換できない**。
+
+設定の正本は `web/r2-cors.json`。反映はこのコマンド:
+
+```bash
+cd web && bunx wrangler r2 bucket cors set webscreen-beta --file r2-cors.json
+bunx wrangler r2 bucket cors list webscreen-beta   # 確認
+```
+
+**サイトのオリジンが増減したら必ずここも直す。** 2026-08-27 の本番ドメイン切替では、`https://web-screen.net` の登録漏れで変換が全滅した（`presign` は 200 を返すのに R2 への PUT だけが CORS エラーになるため、原因が分かりにくい）。
+
+`AllowedMethods` に `PUT` が要るのはアップロードのため、`GET` / `HEAD` は動画再生のため。`ExposeHeaders` の `ETag` はアップロード完了の検証に使う。
 
 `X-Robots-Tag` は、プレビューページの `noindex` メタタグだけでは防げない「動画ファイル本体がクローラに直接収集される」経路を塞ぐためのもの（HTML の noindex はその HTML を検索結果から外すだけで、`<video src>` の先には効かない）。
 
