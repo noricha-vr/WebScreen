@@ -17,6 +17,10 @@ const other = alternateLocale(lang);
 // SRI 付きで固定バージョンを読む（CDN 側の差し替えをブラウザが検出できるようにする）。
 const FONT_AWESOME_URL = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.1.0/css/all.min.css';
 const FONT_AWESOME_SRI = 'sha384-YgSbYtJcfPnMV/aJ0UdQk84ctht/ckX0MrfQwxOhw43RMBw2WSaDSMVh4gQwLdE4';
+
+// 旧 FastAPI 版と同じ測定 ID。ドメイン切替の前後でレポートを分断させないため引き継ぐ。
+// HTML に出力される公開値なので環境変数に隠さない（隠しても意味がなく、参照が増えるだけ）。
+const GA_MEASUREMENT_ID = 'G-W7D0GRPM2Y';
 ---
 
 <!doctype html>
@@ -34,6 +38,17 @@ const FONT_AWESOME_SRI = 'sha384-YgSbYtJcfPnMV/aJ0UdQk84ctht/ckX0MrfQwxOhw43RMBw
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
+    {/* GA4。COEP: credentialless 下でも no-cors のサブリソースは読めるため crossorigin は付けない
+        （付けると gtag.js 側が CORS ヘッダーを返さず逆にブロックされる）。 */}
+    <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}></script>
+    <script is:inline define:vars={{ gaMeasurementId: GA_MEASUREMENT_ID }}>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        window.dataLayer.push(arguments);
+      }
+      gtag('js', new Date());
+      gtag('config', gaMeasurementId);
+    </script>
   </head>
   <body class="flex min-h-screen flex-col bg-white text-slate-900 antialiased">
     <SiteHeader lang={lang} />
