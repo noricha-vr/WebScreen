@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { join } from 'node:path';
 
 // Playwright は Node で直接実行するため、JSON には import 属性が要る（Vite は不要）
@@ -154,6 +154,28 @@ test.describe('公開プレビュー', () => {
 });
 
 test.describe('所有者の操作', () => {
+  test('タイトル → 保管期限 → ピン留め → URL → 動画 の順に並ぶ', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+
+    const top = async (locator: Locator): Promise<number> => {
+      const box = await locator.boundingBox();
+      if (box === null) throw new Error('要素が表示されていない');
+      return box.y;
+    };
+
+    // VRChat に貼る URL を動画本体より先に見せ、期限とピン留めは同じ話なので隣接させる
+    const positions = [
+      await top(page.getByRole('heading', { level: 1 })),
+      await top(page.getByText(ja.preview.expiry)),
+      await top(page.getByRole('button', { name: ja.preview.pin })),
+      await top(page.locator('[data-preview-url]')),
+      await top(page.locator('[data-preview-video]')),
+    ];
+
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
   test('ファイル名を Enter で変更し、再読み込み後も保持する', async ({ page, context }) => {
     const filename = 'renamed-slides.mp4';
     await signIn(context, E2E_FIXTURES.ownerId);

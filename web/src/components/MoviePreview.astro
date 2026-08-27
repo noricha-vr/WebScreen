@@ -134,16 +134,26 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
       )
     }
 
-    <video
-      data-preview-video
-      src={publicUrl}
-      controls
-      playsinline
-      preload="metadata"
-      class="mt-6 aspect-video w-full rounded-xl bg-slate-900"
-    ></video>
+    {
+      isOwner && (
+        <div class="mt-4 flex flex-col gap-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              data-pin-button
+              class="inline-flex items-center gap-2 rounded-md border border-brand-500 px-4 py-2 text-base font-semibold text-brand-700 hover:bg-brand-50"
+            >
+              <i class="fa-solid fa-thumbtack" aria-hidden="true" />
+              <span>{pinned ? t.preview.unpin : t.preview.pin}</span>
+            </button>
+            <span class="text-base text-slate-600">{pinHint}</span>
+          </div>
+          <p data-pin-failed hidden role="alert" class="text-base text-red-700" />
+        </div>
+      )
+    }
 
-    <label for="preview-url" class="mt-6 block text-base font-semibold text-slate-700">
+    <label for="preview-url" class="mt-8 block text-base font-semibold text-slate-700">
       {t.preview.urlLabel}
     </label>
     <div class="mt-2 flex flex-col gap-3 sm:flex-row">
@@ -172,24 +182,14 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
     </div>
     <p class="mt-2 text-base text-slate-600">{t.preview.playbackHint}</p>
 
-    {
-      isOwner && (
-        <div class="mt-8 flex flex-col gap-4 border-t border-slate-200 pt-6">
-          <div class="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              data-pin-button
-              class="inline-flex items-center gap-2 rounded-md border border-brand-500 px-4 py-2 text-base font-semibold text-brand-700 hover:bg-brand-50"
-            >
-              <i class="fa-solid fa-thumbtack" aria-hidden="true" />
-              <span>{pinned ? t.preview.unpin : t.preview.pin}</span>
-            </button>
-            <span class="text-base text-slate-600">{pinHint}</span>
-          </div>
-          <p data-pin-failed hidden role="alert" class="text-base text-red-700" />
-        </div>
-      )
-    }
+    <video
+      data-preview-video
+      src={publicUrl}
+      controls
+      playsinline
+      preload="metadata"
+      class="mt-8 aspect-video w-full rounded-xl bg-slate-900"
+    ></video>
   </div>
 
   <div data-when-preview="deleted" class="py-10 text-center">
