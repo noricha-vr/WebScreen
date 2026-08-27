@@ -21,8 +21,12 @@
     "R2_BUCKET_NAME": "webscreen-beta",
     // 動画の配信元。r2.dev は Cloudflare が「rate-limited / non-production traffic」と
     // 明記する開発専用エンドポイントで、VRChat のワールド内で複数人が同時に取得する
-    // 本番用途には耐えない。Custom Domain 経由にするとキャッシュと WAF も効く。
+    // 本番用途には耐えない。Custom Domain 経由にするとキャッシュが効き、WAF も使える。
     // 既存の r2.dev URL は共有済みリンクを壊さないため公開したまま並走させている。
+    //
+    // 注意: mp4 は Cloudflare の既定キャッシュ対象で、200/206 の Edge TTL は 120 分。
+    // R2 から削除してもキャッシュ済みのオブジェクトはその間配信され続ける（削除時の
+    // purge は未実装。詳細と対処は docs/r2-delivery.md）。
     "R2_PUBLIC_BASE_URL": "https://cdn.web-screen.net",
     "WEBCAPTURE_URL": "https://web-capture-345811595113.asia-northeast1.run.app"
   },
