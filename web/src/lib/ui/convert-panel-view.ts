@@ -11,6 +11,10 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
     unsupported: panel.dataset['msgUnsupported'],
     tooManyPages: panel.dataset['msgTooManyPages'],
     failed: panel.dataset['msgFailed'],
+    pdfUrlNotSupported: panel.dataset['msgPdfUrlNotSupported'],
+    imageUrlNotSupported: panel.dataset['msgImageUrlNotSupported'],
+    videoUrlNotSupported: panel.dataset['msgVideoUrlNotSupported'],
+    nonWebPageUrl: panel.dataset['msgNonWebPageUrl'],
   };
   return messages[code] ?? '';
 }
@@ -45,5 +49,12 @@ export function renderConvertPanel(panel: HTMLElement, state: UploadState): void
   for (const node of elements(panel, '[data-progress-count]')) node.textContent = count;
 
   const message = state.errorCode ? errorMessage(panel, state.errorCode) : '';
-  for (const node of elements(panel, '[data-error-message]')) node.textContent = message;
+  for (const node of elements(panel, '[data-file-error-message]')) node.textContent = message;
+  for (const node of elements(panel, '[data-url-error-message]')) node.textContent = message;
+  for (const node of elements(panel, '[data-file-error]')) {
+    node.hidden = state.errorTarget !== 'file' || message.length === 0;
+  }
+  for (const node of elements(panel, '[data-url-error]')) {
+    node.hidden = state.errorTarget !== 'url' || message.length === 0;
+  }
 }

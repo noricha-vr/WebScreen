@@ -43,6 +43,17 @@ Worker とは別サービス（ヘッドレスブラウザを持つ実行環境�
 
 - `CaptureResponse.images` は**撮影（スクロール）順**で返す。順序が狂うとスクロール動画が破綻する（詳細は `api.ts` の該当コメント）
 - web-capture は動画化しない。画像を R2 に置いて URL を返すだけ（[encode-contract.md](encode-contract.md)）
+- 非 Web ページを表す web-capture の lower code は、`HTTP 422` かつ JSON の `errorCode` が
+  allowlist に一致した場合だけ Worker の公開コードへ変換する。下流の `message` は返さない。
+
+| web-capture lower code | Worker 公開 `errorCode` | HTTP |
+|---|---|---|
+| `pdf_url_not_supported` | `PDF_URL_NOT_SUPPORTED` | 422 |
+| `image_url_not_supported` | `IMAGE_URL_NOT_SUPPORTED` | 422 |
+| `video_url_not_supported` | `VIDEO_URL_NOT_SUPPORTED` | 422 |
+| `non_web_page_url` | `NON_WEB_PAGE_URL` | 422 |
+
+未知コード、JSON でない応答、401 / 429 / 5xx、タイムアウトは `CAPTURE_FAILED` のまま扱う。
 
 ## 公開範囲の契約
 

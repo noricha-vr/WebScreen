@@ -185,6 +185,21 @@ describe('URL からの変換', () => {
     expect(state.kind).toBe('web');
     expect(state.source).toBe('https://example.com');
   });
+
+  test('URL 起因のエラーは URL 欄へ出す対象として保持する', () => {
+    const selected = reduceUpload(INITIAL_UPLOAD_STATE, {
+      type: 'selectUrl',
+      url: 'https://example.com/report.pdf',
+    });
+    const state = reduceUpload(selected, {
+      type: 'failed',
+      errorCode: 'pdfUrlNotSupported',
+      target: 'url',
+    });
+
+    expect(state.errorTarget).toBe('url');
+    expect(state.errorCode).toBe('pdfUrlNotSupported');
+  });
 });
 
 describe('変換ページの進捗', () => {

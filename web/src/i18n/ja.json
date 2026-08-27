@@ -44,6 +44,10 @@
     "errorUnsupported": "対応形式は PDF / png / jpg / jpeg / webp / gif です。動画やその他のファイルはアップロードできません。",
     "errorTooManyPages": "PDF は 200 ページ以下にしてください",
     "errorFailed": "変換に失敗しました。時間をおいて再度お試しください",
+    "errorPdfUrlNotSupported": "PDFのURLは変換できません。ダウンロードしたPDFファイルをアップロードしてください。",
+    "errorImageUrlNotSupported": "画像のURLは変換できません。画像をダウンロードしてアップロードしてください。",
+    "errorVideoUrlNotSupported": "動画ファイルには対応していません。Webページ、PDF、または画像をご利用ください。",
+    "errorNonWebPageUrl": "このURLはWebページではありません。WebページのURLを入力してください。",
     "batchNameSuffix": "他{count}枚"
   },
   "history": {

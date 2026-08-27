@@ -19,6 +19,10 @@ const t = useTranslations(lang);
   data-msg-unsupported={t.convert.errorUnsupported}
   data-msg-too-many-pages={t.convert.errorTooManyPages}
   data-msg-failed={t.convert.errorFailed}
+  data-msg-pdf-url-not-supported={t.convert.errorPdfUrlNotSupported}
+  data-msg-image-url-not-supported={t.convert.errorImageUrlNotSupported}
+  data-msg-video-url-not-supported={t.convert.errorVideoUrlNotSupported}
+  data-msg-non-web-page-url={t.convert.errorNonWebPageUrl}
   data-label-converting={t.convert.converting}
   data-label-uploading={t.convert.uploading}
   data-label-selected-file={t.convert.selectedFile}
@@ -46,9 +50,9 @@ const t = useTranslations(lang);
       <span class="text-base text-slate-600">{t.convert.accepted}</span>
     </label>
 
-    <p data-when-phase="error" class="mt-4 flex items-start gap-2 text-base text-red-700">
+    <p data-file-error data-when-phase="error" class="mt-4 flex items-start gap-2 text-base text-red-700">
       <i class="fa-solid fa-circle-exclamation mt-1" aria-hidden="true"></i>
-      <span data-error-message role="alert"></span>
+      <span data-file-error-message role="alert"></span>
     </p>
 
     <form data-url-form class="mt-8 border-t border-slate-200 pt-6">
@@ -71,6 +75,10 @@ const t = useTranslations(lang);
           <span>{t.convert.urlSubmit}</span>
         </button>
       </div>
+      <p data-url-error hidden class="mt-3 flex items-start gap-2 text-base text-red-700">
+        <i class="fa-solid fa-circle-exclamation mt-1" aria-hidden="true"></i>
+        <span data-url-error-message role="alert"></span>
+      </p>
     </form>
   </div>
 

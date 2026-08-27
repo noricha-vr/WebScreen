@@ -72,6 +72,15 @@ describe('validatePresignRequest', () => {
   });
 });
 
+test('非Webページ URL の公開エラーコードを固定する', () => {
+  expect(ERROR_CODES).toMatchObject({
+    pdfUrlNotSupported: 'PDF_URL_NOT_SUPPORTED',
+    imageUrlNotSupported: 'IMAGE_URL_NOT_SUPPORTED',
+    videoUrlNotSupported: 'VIDEO_URL_NOT_SUPPORTED',
+    nonWebPageUrl: 'NON_WEB_PAGE_URL',
+  });
+});
+
 describe('validateCommitRequest', () => {
   test('12 文字 base62 の shortId を受理する', () => {
     expect(validateCommitRequest({ shortId: VALID_SHORT_ID })).toEqual({

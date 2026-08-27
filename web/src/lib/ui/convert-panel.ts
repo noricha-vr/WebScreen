@@ -18,6 +18,7 @@ import {
 import { markAutoCopy } from './auto-copy';
 import { movieNameForFiles, movieNameForUrl } from './upload-name';
 import { renderConvertPanel } from './convert-panel-view';
+import { JsonRequestError, requestJson } from './request-json';
 
 /** data-batch-name-suffix が無いときの接尾辞（ロケール非依存で読める形）。 */
 const DEFAULT_BATCH_NAME_SUFFIX = '+{count}';
@@ -44,12 +45,6 @@ function element<T extends HTMLElement>(root: HTMLElement, selector: string): T 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-async function requestJson(url: string, init: RequestInit): Promise<unknown> {
-  const response = await fetch(url, { ...init, credentials: 'same-origin' });
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return response.json();
 }
 
 function asPresignResponse(value: unknown): PresignResponse {
@@ -124,6 +119,17 @@ async function uploadMp4(
 
 function conversionErrorCode(error: unknown): UploadErrorCode {
   return error instanceof ConversionError && error.code === 'tooManyPages' ? 'tooManyPages' : 'failed';
+}
+
+function captureErrorCode(error: unknown): UploadErrorCode {
+  if (!(error instanceof JsonRequestError)) return 'failed';
+  const codes: Readonly<Record<string, UploadErrorCode>> = {
+    PDF_URL_NOT_SUPPORTED: 'pdfUrlNotSupported',
+    IMAGE_URL_NOT_SUPPORTED: 'imageUrlNotSupported',
+    VIDEO_URL_NOT_SUPPORTED: 'videoUrlNotSupported',
+    NON_WEB_PAGE_URL: 'nonWebPageUrl',
+  };
+  return error.errorCode ? (codes[error.errorCode] ?? 'failed') : 'failed';
 }
 
 export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptions = {}): void {
@@ -250,7 +256,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current))
       .catch((error: unknown) => {
         console.error('conversion failed', error);
-        dispatch({ type: 'failed', errorCode: conversionErrorCode(error) }, current);
+        dispatch({ type: 'failed', errorCode: captureErrorCode(error), target: 'url' }, current);
       });
   });
 

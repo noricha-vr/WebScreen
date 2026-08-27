@@ -281,7 +281,7 @@ test.describe('ログイン済み', () => {
     });
 
     await expect(panel).toHaveAttribute('data-phase', 'error');
-    await expect(page.getByText(ja.convert.errorUnsupported)).toBeVisible();
+    await expect(panel.locator('[data-file-error-message]')).toHaveText(ja.convert.errorUnsupported);
   });
 
   test('動画 picker と D&D は presign / PUT 前に拒否する', async ({ page }) => {
@@ -305,7 +305,7 @@ test.describe('ログイン済み', () => {
       buffer: Buffer.from([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]),
     });
     await expect(panel).toHaveAttribute('data-phase', 'error');
-    await expect(panel.getByText(ja.convert.errorUnsupported)).toBeVisible();
+    await expect(panel.locator('[data-file-error-message]')).toHaveText(ja.convert.errorUnsupported);
 
     await panel.locator('[data-dropzone]').evaluate((dropzone) => {
       const transfer = new DataTransfer();
@@ -315,5 +315,27 @@ test.describe('ログイン済み', () => {
     await expect(panel).toHaveAttribute('data-phase', 'error');
     expect(presignCalls).toBe(0);
     expect(putCalls).toBe(0);
+  });
+
+  test('非Webページ URL の案内は URL 欄にだけ表示し、下流メッセージを出さない', async ({ page }) => {
+    const rawMessage = 'internal upstream detail';
+    await signIn(page);
+    await page.route('**/api/capture/', (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({ errorCode: 'PDF_URL_NOT_SUPPORTED', message: rawMessage }),
+      })
+    );
+    await page.goto('/ja/');
+
+    const panel = page.locator('[data-convert-panel]');
+    await panel.locator('[data-url-input]').fill('https://example.com/report.pdf');
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    await expect(panel.locator('[data-url-error-message]')).toHaveText(ja.convert.errorPdfUrlNotSupported);
+    await expect(panel.locator('[data-url-error]')).toBeVisible();
+    await expect(panel.locator('[data-file-error]')).toBeHidden();
+    await expect(panel.getByText(rawMessage)).toHaveCount(0);
   });
 });

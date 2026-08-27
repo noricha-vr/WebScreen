@@ -44,6 +44,10 @@
     "errorUnsupported": "Supported files: PDF, PNG, JPG, JPEG, WebP, and GIF. Videos and other files can't be uploaded.",
     "errorTooManyPages": "PDF files must have 200 pages or fewer",
     "errorFailed": "Conversion failed. Please try again in a moment",
+    "errorPdfUrlNotSupported": "PDF URLs can't be converted. Download the PDF, then upload the file.",
+    "errorImageUrlNotSupported": "Image URLs can't be converted. Download the image, then upload the file.",
+    "errorVideoUrlNotSupported": "Video files aren't supported. Use a web page, PDF, or image instead.",
+    "errorNonWebPageUrl": "This URL isn't a web page. Enter a web page URL.",
     "batchNameSuffix": "+{count}"
   },
   "history": {
