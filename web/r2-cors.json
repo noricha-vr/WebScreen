@@ -1,0 +1,19 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "https://web-screen.net",
+          "https://webscreen-beta.teranori.workers.dev",
+          "http://localhost:4321",
+          "http://localhost:8787",
+          "http://127.0.0.1:8787"
+        ],
+        "methods": ["GET", "PUT", "HEAD"],
+        "headers": ["Content-Type"]
+      },
+      "exposeHeaders": ["ETag"],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}
