@@ -117,6 +117,47 @@ export interface CaptureResponse {
 }
 
 // ---------------------------------------------------------------------------
+// 動画メタデータ — GET /api/history/, POST /api/movies/{shortId}/pin/,
+//                 PATCH /api/movies/{shortId}/
+// ---------------------------------------------------------------------------
+
+/** 履歴 1 件。外部公開フィールドなので camelCase（D1 の snake_case は services/movies.ts で変換する）。 */
+export interface HistoryEntry {
+  shortId: string;
+  filename: string;
+  status: MovieStatus;
+  pinned: boolean;
+  /** ISO8601。D1 の DEFAULT datetime('now') は UTC の "YYYY-MM-DD HH:MM:SS" なので境界で正規化する。 */
+  createdAt: string;
+  /** ISO8601。pin 中は null（自動削除の対象外）。 */
+  expiresAt: string | null;
+  publicUrl: string;
+}
+
+/** `GET /api/history/` の応答。配列を直接返さず包むのは、後で件数などを足せるようにするため。 */
+export interface HistoryResponse {
+  movies: HistoryEntry[];
+}
+
+/** `POST /api/movies/{shortId}/pin/` の応答。 */
+export interface PinResponse {
+  shortId: string;
+  pinned: boolean;
+  expiresAt: string | null;
+}
+
+/** `PATCH /api/movies/{shortId}/` のリクエスト。 */
+export interface RenameMovieRequest {
+  filename: string;
+}
+
+/** ファイル名変更の応答。 */
+export interface RenameMovieResponse {
+  shortId: string;
+  filename: string;
+}
+
+// ---------------------------------------------------------------------------
 // バリデータ
 // ---------------------------------------------------------------------------
 
@@ -230,4 +271,24 @@ function isHttpUrl(value: string): boolean {
     return false;
   }
   return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+}
+
+/**
+ * ファイル名変更のリクエストを検証する。
+ *
+ * 前後の空白は UI 由来で混ざりやすいので落として受理し、trim 後の値を正とする
+ * （サービス層は検証済みの値をそのまま保存する）。
+ */
+export function validateRenameMovieRequest(input: unknown): ValidationResult<RenameMovieRequest> {
+  const body = asRecord(input);
+  if (!body) return invalid('リクエストボディは JSON オブジェクトである必要があります');
+
+  const { filename } = body;
+  if (typeof filename !== 'string') return invalid('filename が不正です');
+
+  // 空文字と MAX_FILENAME_LENGTH 超も isSafeFilename が弾く（空白のみは trim 後に空文字になる）。
+  const trimmed = filename.trim();
+  if (!isSafeFilename(trimmed)) return invalid('filename が不正です');
+
+  return { ok: true, value: { filename: trimmed } };
 }

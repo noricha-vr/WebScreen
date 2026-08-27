@@ -8,6 +8,7 @@ import {
   validateCaptureRequest,
   validateCommitRequest,
   validatePresignRequest,
+  validateRenameMovieRequest,
 } from '../../src/lib/contracts/api';
 
 const VALID_SHORT_ID = 'aB3dE5fG7hJ9';
@@ -133,5 +134,33 @@ describe('validateCaptureRequest', () => {
     ['width が小数', { url: 'https://example.com/', width: 640.5 }],
   ])('%s は拒否する', (_label, input) => {
     expect(validateCaptureRequest(input).ok).toBe(false);
+  });
+});
+
+describe('validateRenameMovieRequest', () => {
+  test('前後の空白を落として受理する', () => {
+    expect(validateRenameMovieRequest({ filename: ' renamed.mp4 ' })).toEqual({
+      ok: true,
+      value: { filename: 'renamed.mp4' },
+    });
+  });
+
+  test.each([
+    ['filename が空文字', { filename: '' }],
+    ['filename が空白のみ', { filename: '   ' }],
+    ['filename が 256 文字', { filename: 'a'.repeat(256) }],
+    ['filename がパス区切りを含む', { filename: 'folder/file.mp4' }],
+    // isSafeFilename を通していることの確認。全パターンは validatePresignRequest 側で網羅する。
+    ['filename が親ディレクトリ参照', { filename: '..' }],
+    ['filename が RTL override を含む', { filename: 'report\u202egpj.exe' }],
+    ['filename が欠落', {}],
+    ['filename が数値', { filename: 42 }],
+    ['ボディが配列', []],
+    ['ボディが null', null],
+  ])('%s は INVALID_REQUEST で拒否する', (_label, input) => {
+    expect(validateRenameMovieRequest(input)).toMatchObject({
+      ok: false,
+      error: { errorCode: ERROR_CODES.invalidRequest },
+    });
   });
 });

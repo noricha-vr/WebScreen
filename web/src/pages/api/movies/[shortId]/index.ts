@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
-import { ERROR_CODES } from '../../../../lib/contracts/api';
+import { ERROR_CODES, validateRenameMovieRequest } from '../../../../lib/contracts/api';
 import { importSigningKey } from '../../../../lib/contracts/session';
 import { requireUser, type AuthDatabase } from '../../../../lib/services/auth';
 import {
@@ -42,16 +42,15 @@ export const PATCH: APIRoute = async ({ request, params }) => {
     return invalidRequest('リクエストボディは JSON である必要があります');
   }
 
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    return invalidRequest('リクエストボディは JSON オブジェクトである必要があります');
-  }
+  const validated = validateRenameMovieRequest(body);
+  if (!validated.ok) return Response.json(validated.error, { status: 400 });
 
   try {
     const response = await renameMovie({
       database: bindings.DB,
       userId: result.user.id,
       shortId: params.shortId ?? '',
-      filename: (body as { filename?: unknown }).filename,
+      filename: validated.value.filename,
     });
     return Response.json(response);
   } catch (error) {
