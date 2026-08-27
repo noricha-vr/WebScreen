@@ -59,10 +59,7 @@
   // A / AAAA を旧 Cloud Run へ戻す（切替前の値は Issue #44 の DNS スナップショット）。
   //
   // workers.dev の URL は残す（切替後も β として検証に使うため）。
-  "routes": [
-    {
-      "pattern": "web-screen.net",
-      "custom_domain": true
-    }
-  ]
+  // routes で custom_domain を指定すると workers.dev のルートが外れる（実測 2026-08-27）。
+  // 本番ドメインを繋ぐ時も β 検証用に workers.dev を残すため、明示的に true にする。
+  "workers_dev": true
 }
