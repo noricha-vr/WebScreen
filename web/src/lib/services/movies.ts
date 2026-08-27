@@ -3,48 +3,22 @@
  *
  * 履歴とプレビューページ（/{shortId}/）の両方がここを通る。SQL とビジネス規則を
  * 1 箇所に閉じ込め、エントリポイント（pages/）は HTTP との I/O 変換だけを担う。
- *
- * 型を contracts/ ではなくここに置いているのは、contracts/ が別タスクで凍結中のため。
- * 契約が解凍されたら HistoryEntry / PinResponse は contracts/api.ts へ移す。
  */
 
 import {
   ERROR_CODES,
-  isSafeFilename,
-  MAX_FILENAME_LENGTH,
   type ErrorCode,
+  type HistoryEntry,
+  type HistoryResponse,
   type MovieStatus,
+  type PinResponse,
+  type RenameMovieResponse,
 } from '../contracts/api';
 import { isShortId, movieKey } from '../contracts/r2key';
 import { MAX_PINNED_MOVIES, MOVIE_RETENTION_MS, UNPIN_GRACE_MS } from './quota';
 
 /** 履歴に返す最大件数。ドロップダウンで一覧できる範囲に抑える。 */
 export const HISTORY_LIMIT = 50;
-
-/** 履歴 1 件。外部公開フィールドなので camelCase（D1 の snake_case は本ファイルで変換する）。 */
-export interface HistoryEntry {
-  shortId: string;
-  filename: string;
-  status: MovieStatus;
-  pinned: boolean;
-  /** ISO8601。D1 の DEFAULT datetime('now') は UTC の "YYYY-MM-DD HH:MM:SS" なのでここで正規化する。 */
-  createdAt: string;
-  /** ISO8601。pin 中は null（自動削除の対象外）。 */
-  expiresAt: string | null;
-  publicUrl: string;
-}
-
-/** `GET /api/history/` の応答。配列を直接返さず包むのは、後で件数などを足せるようにするため。 */
-export interface HistoryResponse {
-  movies: HistoryEntry[];
-}
-
-/** `POST /api/movies/{shortId}/pin/` の応答。 */
-export interface PinResponse {
-  shortId: string;
-  pinned: boolean;
-  expiresAt: string | null;
-}
 
 /** プレビューページが描画に使う、公開済み（ready）の 1 件。 */
 export interface PublicMovie {
@@ -112,12 +86,6 @@ export interface MovieActionInput {
   shortId: string;
 }
 
-/** ファイル名変更の応答。 */
-export interface RenameMovieResponse {
-  shortId: string;
-  filename: string;
-}
-
 /** 自分の movies を新しい順に返す（未完了の pending も進捗確認のために含める）。 */
 export async function listHistory(input: ListHistoryInput): Promise<HistoryResponse> {
   // created_at は秒精度なので、同一秒の挿入で並びが揺れないよう short_id を第 2 キーにする。
@@ -170,30 +138,22 @@ export async function togglePin(
   return { shortId: input.shortId, pinned: nextPinned, expiresAt };
 }
 
-/** 所有者の動画の表示名を変更する。 */
+/**
+ * 所有者の動画の表示名を変更する。
+ *
+ * filename は検証済み（validateRenameMovieRequest 通過後）の値を受け取る前提。
+ * 形式の正本は contracts/api.ts なので、ここでは所有者チェックだけを行う。
+ */
 export async function renameMovie(
-  input: MovieActionInput & { filename: unknown }
+  input: MovieActionInput & { filename: string }
 ): Promise<RenameMovieResponse> {
-  if (typeof input.filename !== 'string') {
-    throw new MovieActionError(400, ERROR_CODES.invalidRequest, 'filename が不正です');
-  }
-
-  const filename = input.filename.trim();
-  if (
-    filename.length === 0 ||
-    filename.length > MAX_FILENAME_LENGTH ||
-    !isSafeFilename(filename)
-  ) {
-    throw new MovieActionError(400, ERROR_CODES.invalidRequest, 'filename が不正です');
-  }
-
   await findOwnedMovie(input.database, input.userId, input.shortId);
   await input.database
     .prepare('UPDATE movies SET filename = ? WHERE short_id = ? AND user_id = ?')
-    .bind(filename, input.shortId, input.userId)
+    .bind(input.filename, input.shortId, input.userId)
     .run();
 
-  return { shortId: input.shortId, filename };
+  return { shortId: input.shortId, filename: input.filename };
 }
 
 /**

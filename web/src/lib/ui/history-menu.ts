@@ -6,7 +6,7 @@
  * 古い一覧のまま見せないため。
  */
 
-import type { HistoryEntry } from '../services/movies';
+import type { HistoryEntry } from '../contracts/api';
 import {
   HISTORY_ENDPOINT,
   formatRelativeTime,
