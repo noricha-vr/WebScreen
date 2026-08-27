@@ -21,6 +21,8 @@ const t = useTranslations(lang);
   data-msg-failed={t.convert.errorFailed}
   data-label-converting={t.convert.converting}
   data-label-uploading={t.convert.uploading}
+  data-label-selected-file={t.convert.selectedFile}
+  data-label-source-url={t.convert.sourceUrl}
   data-batch-name-suffix={t.convert.batchNameSuffix}
   class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
 >
@@ -79,8 +81,8 @@ const t = useTranslations(lang);
       <span data-progress-value class="text-slate-600"></span>
       <span data-progress-count class="text-slate-600"></span>
     </p>
-    <p class="mt-1 text-base text-slate-600">
-      {t.convert.selectedFile}: <span data-source-name></span>
+    <p class="mt-1 break-all text-base text-slate-600">
+      <span data-source-label></span>: <span data-source-name></span>
     </p>
     <div class="mt-3 h-3 w-full overflow-hidden rounded-full bg-slate-200">
       <div
