@@ -7,7 +7,7 @@
 
 import { MAX_FILENAME_LENGTH } from '../contracts/api';
 import { copyToClipboard } from './clipboard';
-import { consumeAutoCopy } from './auto-copy';
+import { AUTO_COPY_FEEDBACK_DELAY_MS, consumeAutoCopy, type SessionStorage } from './auto-copy';
 import { movieEndpoint, pinEndpoint } from './history-view';
 
 // 遷移直後の自動コピーでも見逃しにくい長さ（2000ms は短すぎるとの報告で延長）
@@ -21,6 +21,8 @@ export interface PreviewActionsOptions {
   schedule?: Schedule;
   /** pin 成功後の再読み込み。保管期限の表示はサーバーが持つので画面を作り直す。 */
   reload?: () => void;
+  /** 自動コピー要求の保存先（既定は sessionStorage）。 */
+  storage?: SessionStorage;
 }
 
 function find<T extends HTMLElement>(root: HTMLElement, selector: string): T | null {
@@ -257,9 +259,10 @@ export function mountPreviewActions(
   wireCopy(root, schedule);
   const shortId = root.dataset['shortId'] ?? '';
   const input = find<HTMLInputElement>(root, '[data-preview-url]');
-  if (consumeAutoCopy(shortId) && input) {
+  if (consumeAutoCopy(shortId, options.storage) && input) {
     void copyToClipboard(input.value, input).then((copied) => {
-      if (copied) showCopied(root, schedule);
+      // コピーは即時（離脱で取りこぼさないため）。表示だけ遅らせて、ボタンが変わる瞬間を見せる。
+      if (copied) schedule(() => showCopied(root, schedule), AUTO_COPY_FEEDBACK_DELAY_MS);
     });
   }
   wirePin(root, fetchImpl, reload);
