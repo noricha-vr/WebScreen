@@ -1,21 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { buildFrameEncodeArgs, buildVideoEncodeArgs, frameFileName } from '../../src/lib/convert/encode';
+import { buildFrameEncodeArgs, frameFileName } from '../../src/lib/convert/encode';
 import { fetchImagesInOrder } from '../../src/lib/convert/imageUrls';
 import { assertPdfPageCount, MAX_PDF_PAGES } from '../../src/lib/convert/pdf';
 
 describe('VRChat 向け FFmpeg 引数', () => {
   test('フレーム列の出力に互換性契約の全引数を含める', () => {
     const args = buildFrameEncodeArgs();
-
-    expect(args).toEqual(expect.arrayContaining([
-      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'baseline',
-      '-bf', '0', '-g', '1', '-movflags', '+faststart',
-    ]));
-  });
-
-  test('動画トランスコードにも同じ互換性契約を適用する', () => {
-    const args = buildVideoEncodeArgs('input.webm');
 
     expect(args).toEqual(expect.arrayContaining([
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'baseline',

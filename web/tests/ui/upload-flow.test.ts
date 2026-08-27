@@ -5,6 +5,7 @@ import {
   ACCEPT_ATTRIBUTE,
   INITIAL_UPLOAD_STATE,
   detectUploadKind,
+  preflightInputFiles,
   reduceUpload,
   type UploadState,
 } from '../../src/lib/ui/upload-flow';
@@ -18,7 +19,6 @@ describe('detectUploadKind', () => {
     ['slides.pdf', 'pdf'],
     ['photo.PNG', 'image'],
     ['photo.jpeg', 'image'],
-    ['clip.mp4', 'video'],
   ])('%s は %s として扱う', (filename, expected) => {
     expect(detectUploadKind(filename as string)).toBe(expected as never);
   });
@@ -36,9 +36,6 @@ describe('detectUploadKind', () => {
       '.jpeg',
       '.webp',
       '.gif',
-      '.mp4',
-      '.webm',
-      '.mov',
     ]);
   });
 
@@ -74,14 +71,14 @@ describe('ファイル選択', () => {
   });
 
   test('上限を超えるサイズはエラーになる', () => {
-    const state = select('huge.mp4', MAX_UPLOAD_BYTES + 1);
+    const state = select('huge.png', MAX_UPLOAD_BYTES + 1);
 
     expect(state.phase).toBe('error');
     expect(state.errorCode).toBe('tooLarge');
   });
 
   test('上限ちょうどは受け付ける', () => {
-    expect(select('limit.mp4', MAX_UPLOAD_BYTES).phase).toBe('converting');
+    expect(select('limit.png', MAX_UPLOAD_BYTES).phase).toBe('converting');
   });
 
   test('エラーの後に選び直すとエラー表示が消える', () => {
@@ -94,6 +91,40 @@ describe('ファイル選択', () => {
 
     expect(retried.phase).toBe('converting');
     expect(retried.errorCode).toBeNull();
+  });
+});
+
+function file(name: string, bytes: number[], type = ''): File {
+  return new File([new Uint8Array(bytes)], name, { type });
+}
+
+describe('ローカル入力の preflight', () => {
+  test.each([
+    ['PDF', file('slides.pdf', [0x25, 0x50, 0x44, 0x46, 0x2d], 'application/pdf'), 'pdf'],
+    ['PNG', file('photo.png', [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'image/png'), 'image'],
+    ['JPEG', file('photo.jpeg', [0xff, 0xd8, 0xff], 'image/jpeg'), 'image'],
+    ['GIF', file('photo.gif', [0x47, 0x49, 0x46, 0x38, 0x39, 0x61], 'image/gif'), 'image'],
+    ['WebP', file('photo.webp', [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50], 'image/webp'), 'image'],
+  ])('%s の署名と拡張子が整合すると受け付ける', async (_label, input, kind) => {
+    await expect(preflightInputFiles([input])).resolves.toEqual({ ok: true, kind: kind as 'pdf' | 'image' });
+  });
+
+  test.each([
+    ['動画', file('clip.mp4', [0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70], 'video/mp4')],
+    ['署名不足', file('short.png', [0x89, 0x50], 'image/png')],
+    ['拡張子と署名の不一致', file('photo.png', [0xff, 0xd8, 0xff], 'image/jpeg')],
+    ['既知 MIME の不一致', file('photo.png', [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'image/jpeg')],
+    ['PDF と画像の混在', [file('slides.pdf', [0x25, 0x50, 0x44, 0x46, 0x2d]), file('photo.png', [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])]],
+    ['複数 PDF', [file('one.pdf', [0x25, 0x50, 0x44, 0x46, 0x2d]), file('two.pdf', [0x25, 0x50, 0x44, 0x46, 0x2d])]],
+  ])('%s は変換前に拒否する', async (_label, value) => {
+    const files = Array.isArray(value) ? value : [value];
+    await expect(preflightInputFiles(files)).resolves.toEqual({ ok: false });
+  });
+
+  test('空または generic MIME は署名と拡張子が整合すれば補助情報として無視する', async () => {
+    const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    await expect(preflightInputFiles([file('empty.png', png)])).resolves.toEqual({ ok: true, kind: 'image' });
+    await expect(preflightInputFiles([file('generic.png', png, 'application/octet-stream')])).resolves.toEqual({ ok: true, kind: 'image' });
   });
 });
 

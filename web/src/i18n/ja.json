@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "WebScreen β — Web・画像・PDF を VRChat 用の動画に変換",
-    "description": "PDF・画像・動画をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
+    "description": "PDF・画像をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
     "privacyTitle": "Cookie とプライバシー — WebScreen β"
   },
   "nav": {
@@ -15,13 +15,13 @@
   },
   "hero": {
     "title": "VRChat に映せる動画 URL を、ドラッグ&ドロップで。",
-    "lead": "PDF・画像・動画をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
+    "lead": "PDF・画像をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
     "cta": "Discord でログインしてアップロード",
     "ctaNote": "ログインに使うのは Discord アカウントだけです。パスワードの登録は必要ありません。"
   },
   "spec": {
     "heading": "アップロードの仕様",
-    "formats": "対応形式は PDF / 画像 (png, jpg, webp, gif) / 動画",
+    "formats": "対応形式は PDF / png / jpg / jpeg / webp / gif",
     "maxSize": "1 ファイルあたり 50 MB まで",
     "retention": "保管期間は 30 日",
     "pinned": "ピン留めした 10 件は無期限で保管",
@@ -32,7 +32,7 @@
     "dropzoneTitle": "ここにファイルをドロップ",
     "dropzoneOr": "または",
     "chooseFile": "ファイルを選択",
-    "accepted": "PDF / png / jpg / webp / gif / 動画 — 50 MB まで",
+    "accepted": "PDF / png / jpg / jpeg / webp / gif — 50 MB まで",
     "selectedFile": "選択中のファイル",
     "sourceUrl": "変換する URL",
     "urlHeading": "Webページを動画に変換",
@@ -41,7 +41,7 @@
     "converting": "変換しています",
     "uploading": "アップロードしています",
     "errorTooLarge": "ファイルサイズが上限の 50 MB を超えています",
-    "errorUnsupported": "対応していないファイル形式です",
+    "errorUnsupported": "対応形式は PDF / png / jpg / jpeg / webp / gif です。動画やその他のファイルはアップロードできません。",
     "errorTooManyPages": "PDF は 200 ページ以下にしてください",
     "errorFailed": "変換に失敗しました。時間をおいて再度お試しください",
     "batchNameSuffix": "他{count}枚"
@@ -116,7 +116,7 @@
     ],
     "paragraphs": [
       "Discord でログインすると、Discord のユーザー ID・表示名・アバター画像の URL を保存します。メールアドレスやパスワードは受け取りません。",
-      "アップロードされた動画の URL は、推測されにくいランダムな ID を含む公開 URL です。VRChat のビデオプレイヤーが認証なしで再生できるようにするため、URL を知っている人は誰でも再生できます。他人に知られたくない内容はアップロードしないでください。",
+      "変換後の動画 URL は、推測されにくいランダムな ID を含む公開 URL です。VRChat のビデオプレイヤーが認証なしで再生できるようにするため、URL を知っている人は誰でも再生できます。他人に知られたくない内容はアップロードしないでください。",
       "Cookie はブラウザの設定で削除・無効化できます。無効にした場合はログインが必要な機能を利用できません。"
     ]
   },

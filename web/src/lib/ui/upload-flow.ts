@@ -9,30 +9,15 @@
  */
 
 import { MAX_UPLOAD_BYTES, type UploadKind } from '../contracts/api';
+import { ACCEPT_ATTRIBUTE, detectInputKind } from './input-formats';
+
+export { ACCEPT_ATTRIBUTE, preflightInputFiles } from './input-formats';
 
 export const UPLOAD_PHASES = ['idle', 'converting', 'uploading', 'done', 'error'] as const;
 export type UploadPhase = (typeof UPLOAD_PHASES)[number];
 
 export const UPLOAD_ERROR_CODES = ['tooLarge', 'unsupported', 'tooManyPages', 'failed'] as const;
 export type UploadErrorCode = (typeof UPLOAD_ERROR_CODES)[number];
-
-/** 拡張子 → アップロード種別。UPLOAD_KINDS（契約）に無い種別は増やさない。 */
-const EXTENSION_KINDS: Readonly<Record<string, UploadKind>> = {
-  pdf: 'pdf',
-  png: 'image',
-  jpg: 'image',
-  jpeg: 'image',
-  webp: 'image',
-  gif: 'image',
-  mp4: 'video',
-  webm: 'video',
-  mov: 'video',
-};
-
-/** <input type="file"> の accept 属性値。表示上の対応形式リストと同じ集合にする。 */
-export const ACCEPT_ATTRIBUTE = Object.keys(EXTENSION_KINDS)
-  .map((extension) => `.${extension}`)
-  .join(',');
 
 export interface UploadState {
   phase: UploadPhase;
@@ -74,11 +59,7 @@ export type UploadEvent =
   | { type: 'reset' };
 
 export function detectUploadKind(filename: string): UploadKind | null {
-  const dot = filename.lastIndexOf('.');
-  if (dot < 0) return null;
-
-  const extension = filename.slice(dot + 1).toLowerCase();
-  return EXTENSION_KINDS[extension] ?? null;
+  return detectInputKind(filename);
 }
 
 function clampProgress(value: number): number {

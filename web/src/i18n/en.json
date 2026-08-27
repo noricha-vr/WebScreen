@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "WebScreen β — Turn web pages, images and PDFs into VRChat videos",
-    "description": "Upload a PDF, image or video and get an MP4 URL that plays in VRChat video players.",
+    "description": "Upload a PDF or image and get an MP4 URL that plays in VRChat video players.",
     "privacyTitle": "Cookies and privacy — WebScreen β"
   },
   "nav": {
@@ -15,13 +15,13 @@
   },
   "hero": {
     "title": "Drag and drop a file, get a video URL for VRChat.",
-    "lead": "Upload a PDF, image or video and WebScreen returns an MP4 URL that plays in VRChat video players.",
+    "lead": "Upload a PDF or image and WebScreen returns an MP4 URL that plays in VRChat video players.",
     "cta": "Sign in with Discord to upload",
     "ctaNote": "A Discord account is all you need. There is no password to create."
   },
   "spec": {
     "heading": "Upload limits",
-    "formats": "PDF, images (png, jpg, webp, gif) and video files",
+    "formats": "PDF / png / jpg / jpeg / webp / gif",
     "maxSize": "Up to 50 MB per file",
     "retention": "Stored for 30 days",
     "pinned": "Up to 10 pinned videos are kept indefinitely",
@@ -32,7 +32,7 @@
     "dropzoneTitle": "Drop your file here",
     "dropzoneOr": "or",
     "chooseFile": "Choose a file",
-    "accepted": "PDF / png / jpg / webp / gif / video — up to 50 MB",
+    "accepted": "PDF / png / jpg / jpeg / webp / gif — up to 50 MB",
     "selectedFile": "Selected file",
     "sourceUrl": "URL to convert",
     "urlHeading": "Convert a web page to video",
@@ -41,7 +41,7 @@
     "converting": "Converting",
     "uploading": "Uploading",
     "errorTooLarge": "This file is larger than the 50 MB limit",
-    "errorUnsupported": "This file type is not supported",
+    "errorUnsupported": "Supported files: PDF, PNG, JPG, JPEG, WebP, and GIF. Videos and other files can't be uploaded.",
     "errorTooManyPages": "PDF files must have 200 pages or fewer",
     "errorFailed": "Conversion failed. Please try again in a moment",
     "batchNameSuffix": "+{count}"
@@ -116,7 +116,7 @@
     ],
     "paragraphs": [
       "When you sign in with Discord we store your Discord user ID, display name and avatar URL. We never receive your email address or password.",
-      "Uploaded videos get a public URL containing a hard-to-guess random ID. VRChat video players fetch it without authentication, so anyone who knows the URL can play it. Please do not upload anything you need to keep private.",
+      "Converted videos get a public URL containing a hard-to-guess random ID. VRChat video players fetch it without authentication, so anyone who knows the URL can play it. Please do not upload anything you need to keep private.",
       "You can delete or block cookies in your browser settings. Features that require signing in will not work if you do."
     ]
   },

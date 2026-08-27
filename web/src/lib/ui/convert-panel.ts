@@ -10,13 +10,14 @@ import { isShortId } from '../contracts/r2key';
 import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
 import {
   INITIAL_UPLOAD_STATE,
+  preflightInputFiles,
   reduceUpload,
   type UploadErrorCode,
   type UploadEvent,
-  type UploadState,
 } from './upload-flow';
 import { markAutoCopy } from './auto-copy';
 import { movieNameForFiles, movieNameForUrl } from './upload-name';
+import { renderConvertPanel } from './convert-panel-view';
 
 /** data-batch-name-suffix が無いときの接尾辞（ロケール非依存で読める形）。 */
 const DEFAULT_BATCH_NAME_SUFFIX = '+{count}';
@@ -39,60 +40,6 @@ export interface ConvertPanelOptions {
 
 function element<T extends HTMLElement>(root: HTMLElement, selector: string): T | null {
   return root.querySelector<T>(selector);
-}
-
-/** 同じ表示項目が状態別ブロックに複数あるため、書き換えは全件に適用する。 */
-function elements<T extends HTMLElement>(root: HTMLElement, selector: string): T[] {
-  return [...root.querySelectorAll<T>(selector)];
-}
-
-function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
-  const messages: Record<UploadErrorCode, string | undefined> = {
-    tooLarge: panel.dataset['msgTooLarge'],
-    unsupported: panel.dataset['msgUnsupported'],
-    tooManyPages: panel.dataset['msgTooManyPages'],
-    failed: panel.dataset['msgFailed'],
-  };
-  return messages[code] ?? '';
-}
-
-function phaseLabel(panel: HTMLElement, state: UploadState): string {
-  if (state.phase === 'converting') return panel.dataset['labelConverting'] ?? '';
-  if (state.phase === 'uploading') return panel.dataset['labelUploading'] ?? '';
-  return '';
-}
-
-/** URL 変換では表示するのがファイル名ではなく URL なので、見出し語も切り替える。 */
-function sourceLabel(panel: HTMLElement, state: UploadState): string {
-  if (state.kind === 'web') return panel.dataset['labelSourceUrl'] ?? '';
-  return panel.dataset['labelSelectedFile'] ?? '';
-}
-
-function render(panel: HTMLElement, state: UploadState): void {
-  panel.dataset['phase'] = state.phase;
-
-  const label = phaseLabel(panel, state);
-  for (const node of elements(panel, '[data-phase-label]')) node.textContent = label;
-
-  const source = sourceLabel(panel, state);
-  for (const node of elements(panel, '[data-source-label]')) node.textContent = source;
-
-  for (const node of elements(panel, '[data-source-name]')) node.textContent = state.source ?? '';
-
-  for (const bar of elements(panel, '[data-progress-bar]')) {
-    bar.style.width = `${state.progress}%`;
-    bar.setAttribute('aria-valuenow', String(state.progress));
-  }
-
-  for (const node of elements(panel, '[data-progress-value]')) {
-    node.textContent = `${state.progress}%`;
-  }
-
-  const count = state.current !== null && state.total !== null ? `${state.current}/${state.total}` : '';
-  for (const node of elements(panel, '[data-progress-count]')) node.textContent = count;
-
-  const message = state.errorCode ? errorMessage(panel, state.errorCode) : '';
-  for (const node of elements(panel, '[data-error-message]')) node.textContent = message;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -192,7 +139,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (next === state) return;
 
     state = next;
-    render(panel, state);
+    renderConvertPanel(panel, state);
     if (next.phase === 'done' && next.shortId) {
       markAutoCopy(next.shortId);
       navigate(`/${next.shortId}/`);
@@ -204,20 +151,25 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (!event.persisted) return;
     generation += 1;
     state = INITIAL_UPLOAD_STATE;
-    render(panel, state);
+    renderConvertPanel(panel, state);
   });
 
   const fileInput = element<HTMLInputElement>(panel, '[data-file-input]');
-  const startFiles = (files: readonly File[]): void => {
+  const startFiles = async (files: readonly File[]): Promise<void> => {
     if (files.length === 0) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
+    const preflight = await preflightInputFiles(files);
+    if (!preflight.ok) {
+      dispatch({ type: 'failed', errorCode: 'unsupported' });
+      return;
+    }
     const event: UploadEvent = {
       type: 'selectFiles',
       files: files.map((file) => ({ filename: file.name, sizeBytes: file.size })),
     };
     const next = reduceUpload(state, event);
     dispatch(event);
-    if (next.phase !== 'converting' || next.kind === null || next.kind === 'web') return;
+    if (next.phase !== 'converting' || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
     const current = generation;
     const kind = next.kind;
     void convertFilesToMp4(files, kind, (progress) => {
@@ -241,7 +193,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       });
   };
   fileInput?.addEventListener('change', () => {
-    startFiles(Array.from(fileInput.files ?? []));
+    void startFiles(Array.from(fileInput.files ?? []));
     fileInput.value = '';
   });
 
@@ -260,7 +212,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       event.preventDefault();
       delete dropzone.dataset['dragover'];
 
-      startFiles(Array.from(event.dataTransfer?.files ?? []));
+      void startFiles(Array.from(event.dataTransfer?.files ?? []));
     });
   }
 
@@ -302,5 +254,5 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       });
   });
 
-  render(panel, state);
+  renderConvertPanel(panel, state);
 }
