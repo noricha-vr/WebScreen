@@ -17,6 +17,32 @@ const LEGACY_PATHS = [
 
 const LOCALES = ['ja', 'en'] as const;
 
+test.describe('言語なしの旧 URL（router/main.py）', () => {
+  // 旧版は Accept-Language を見て /{lang}/xxx/ へ 301 していた。_redirects は静的で言語判定
+  // できないため、ルート / へ送って index.astro の判定に委ねる。
+  const LEGACY_ROOT_PATHS = [...LEGACY_PATHS, 'record-screen'] as const;
+
+  for (const path of LEGACY_ROOT_PATHS) {
+    test(`/${path}/ は / へ 301 で転送される`, async ({ request }) => {
+      const response = await request.get(`/${path}/`, { maxRedirects: 0 });
+
+      expect(response.status()).toBe(301);
+      expect(response.headers()['location']).toBe('/');
+    });
+  }
+
+  test('転送先の / は Accept-Language で言語トップへ振り分ける', async ({ request }) => {
+    // 言語なし URL の 2 ホップ目。ここが動かないと旧 URL の利用者がトップに辿り着けない。
+    const response = await request.get('/', {
+      headers: { 'accept-language': 'en-US,en;q=0.9' },
+      maxRedirects: 0,
+    });
+
+    expect(response.status()).toBe(302);
+    expect(response.headers()['location']).toBe('/en/');
+  });
+});
+
 test.describe('旧サイトの機能別 URL', () => {
   for (const locale of LOCALES) {
     for (const path of LEGACY_PATHS) {
