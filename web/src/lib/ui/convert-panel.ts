@@ -164,9 +164,12 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
   const startFiles = async (files: readonly File[]): Promise<void> => {
     if (files.length === 0) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
+    // 署名読み取り中に別の入力へ切り替わった場合、古い検証結果で状態を上書きしない。
+    const current = ++generation;
     const preflight = await preflightInputFiles(files);
+    if (current !== generation) return;
     if (!preflight.ok) {
-      dispatch({ type: 'failed', errorCode: 'unsupported' });
+      dispatch({ type: 'failed', errorCode: 'unsupported' }, current);
       return;
     }
     const event: UploadEvent = {
@@ -174,9 +177,8 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       files: files.map((file) => ({ filename: file.name, sizeBytes: file.size })),
     };
     const next = reduceUpload(state, event);
-    dispatch(event);
+    dispatch(event, current);
     if (next.phase !== 'converting' || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
-    const current = generation;
     const kind = next.kind;
     void convertFilesToMp4(files, kind, (progress) => {
       dispatch({ type: 'conversionProgress', ...progress }, current);
@@ -230,8 +232,8 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     const url = input?.value.trim();
     if (!url) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
-    dispatch({ type: 'selectUrl', url });
-    const current = generation;
+    const current = ++generation;
+    dispatch({ type: 'selectUrl', url }, current);
 
     let pseudoProgress = CAPTURE_PSEUDO_PROGRESS_START - 1;
     const pseudoTimer = window.setInterval(() => {
