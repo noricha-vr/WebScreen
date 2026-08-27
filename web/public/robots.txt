@@ -1,0 +1,10 @@
+# 旧 FastAPI 版は機能別ページ（/web/ /image/ ...）を Disallow していたが、新版では
+# それらの URL 自体が無く、_redirects で言語トップへ 301 するだけなので除外指定は不要。
+#
+# 動画のプレビューページ /{shortId}/ は shortId が動的でパターン化できないため、
+# ここではなく BaseLayout の noindex メタタグで検索結果から外す
+# （robots.txt で弾くとクローラが noindex 自体を読めなくなる）。
+User-agent: *
+Disallow: /api/
+
+Sitemap: https://web-screen.net/sitemap.xml
