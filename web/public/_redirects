@@ -1,0 +1,28 @@
+# 旧 FastAPI 版（web-screen.net）にあって新版に存在しない機能別ページを、言語トップへ転送する。
+# ドメイン切替後に旧 URL が 404 になるのを防ぐ目的。被リンクを引き継ぐため 301（既定は 302）。
+#
+# ja / en を明示列挙しているのは意図的。`/:lang/web/ /:lang/ 301` と書くと未対応言語まで
+# マッチし、`/fr/web/` → `/fr/`（404）と 2 ホップさせてしまう。対応言語は astro.config.mjs の
+# i18n.locales で 2 つに固定されているので、増えた時にここへ追記する。
+#
+# 転送先はすべて言語トップ。web / pdf / image はトップの変換パネルに、history はヘッダーの
+# 履歴ドロップダウンに統合済み。recording / streaming / github は新版に機能自体が無い
+# （再実装しない方針。必要になった時点で Issue を立てる）。
+# 旧版の privacy は末尾スラッシュ無し（router/main_page.py の @router.get("/{lang}/privacy")）。
+# Static Assets の自動正規化に任せると 307（一時）になり被リンクが継承されないため、301 を明示する。
+/ja/privacy /ja/privacy/ 301
+/en/privacy /en/privacy/ 301
+/ja/web/ /ja/ 301
+/ja/pdf/ /ja/ 301
+/ja/image/ /ja/ 301
+/ja/history/ /ja/ 301
+/ja/recording/ /ja/ 301
+/ja/streaming/ /ja/ 301
+/ja/github/ /ja/ 301
+/en/web/ /en/ 301
+/en/pdf/ /en/ 301
+/en/image/ /en/ 301
+/en/history/ /en/ 301
+/en/recording/ /en/ 301
+/en/streaming/ /en/ 301
+/en/github/ /en/ 301
