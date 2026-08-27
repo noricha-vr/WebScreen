@@ -59,7 +59,20 @@
   // A / AAAA を旧 Cloud Run へ戻す（切替前の値は Issue #44 の DNS スナップショット）。
   //
   // workers.dev の URL は残す（切替後も β として検証に使うため）。
-  // routes で custom_domain を指定すると workers.dev のルートが外れる（実測 2026-08-27）。
+  // routes を書くと workers.dev のルートが外れる（実測 2026-08-27）。
   // 本番ドメインを繋ぐ時も β 検証用に workers.dev を残すため、明示的に true にする。
-  "workers_dev": true
+  "workers_dev": true,
+  // 本番ドメイン。custom_domain ではなく Route 方式を使う。
+  // Custom Domain は Cloudflare が DNS レコードを管理する仕組みで、旧 Cloud Run を指す
+  // A/AAAA の削除が要る（削除〜設定の間ドメインが解決しない）。Route なら既存レコードを
+  // Proxied にするだけでよく、ロールバックもこの routes を外して再デプロイするだけで済む。
+  //
+  // 効くのは A/AAAA が Proxied（オレンジ雲）の時だけ。DNS only の間はここに書いても
+  // トラフィックが Cloudflare を通らないため何も起きない（切替は雲の切り替えで発火する）。
+  "routes": [
+    {
+      "pattern": "web-screen.net/*",
+      "zone_name": "web-screen.net"
+    }
+  ]
 }
