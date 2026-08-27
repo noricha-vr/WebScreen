@@ -8,9 +8,17 @@ interface Props {
   lang: Locale;
   title: string;
   description?: string;
+  /**
+   * アクセス解析を読み込むか。
+   *
+   * 既定は true。プレビューページだけ false にしている: GA4 は page_title / page_location を
+   * 既定で送るため、タイトルに入るアップロード済みファイル名と、共有 URL そのものである
+   * shortId が Google へ渡ってしまう。
+   */
+  analytics?: boolean;
 }
 
-const { lang, title, description } = Astro.props;
+const { lang, title, description, analytics = true } = Astro.props;
 const t = useTranslations(lang);
 const other = alternateLocale(lang);
 
@@ -21,6 +29,10 @@ const FONT_AWESOME_SRI = 'sha384-YgSbYtJcfPnMV/aJ0UdQk84ctht/ckX0MrfQwxOhw43RMBw
 // 旧 FastAPI 版と同じ測定 ID。ドメイン切替の前後でレポートを分断させないため引き継ぐ。
 // HTML に出力される公開値なので環境変数に隠さない（隠しても意味がなく、参照が増えるだけ）。
 const GA_MEASUREMENT_ID = 'G-W7D0GRPM2Y';
+
+// 計測するホスト。β Worker（*.workers.dev）・localhost・E2E のトラフィックを
+// 本番レポートへ混ぜないため、ここに一致した時だけタグを読み込む。
+const GA_TRACKED_HOST = 'web-screen.net';
 ---
 
 <!doctype html>
@@ -38,17 +50,31 @@ const GA_MEASUREMENT_ID = 'G-W7D0GRPM2Y';
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
-    {/* GA4。COEP: credentialless 下でも no-cors のサブリソースは読めるため crossorigin は付けない
-        （付けると gtag.js 側が CORS ヘッダーを返さず逆にブロックされる）。 */}
-    <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}></script>
-    <script is:inline define:vars={{ gaMeasurementId: GA_MEASUREMENT_ID }}>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() {
-        window.dataLayer.push(arguments);
-      }
-      gtag('js', new Date());
-      gtag('config', gaMeasurementId);
-    </script>
+    {
+      analytics && (
+        <script
+          is:inline
+          define:vars={{ gaMeasurementId: GA_MEASUREMENT_ID, gaTrackedHost: GA_TRACKED_HOST }}
+        >
+          // 静的ページはビルド時に生成されるためサーバー側でホストを判定できない。描画時に見る。
+          if (location.hostname === gaTrackedHost) {
+            window.dataLayer = window.dataLayer || [];
+            function gtag() {
+              window.dataLayer.push(arguments);
+            }
+            gtag('js', new Date());
+            gtag('config', gaMeasurementId);
+
+            // COEP: credentialless 下でも no-cors のサブリソースは読めるため crossorigin を
+            // 付けない（付けると CORS モードになり、gtag.js 側が ACAO を返さず逆に落ちる）。
+            const tag = document.createElement('script');
+            tag.async = true;
+            tag.src = 'https://www.googletagmanager.com/gtag/js?id=' + gaMeasurementId;
+            document.head.appendChild(tag);
+          }
+        </script>
+      )
+    }
   </head>
   <body class="flex min-h-screen flex-col bg-white text-slate-900 antialiased">
     <SiteHeader lang={lang} />

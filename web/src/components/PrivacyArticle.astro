@@ -31,7 +31,7 @@ const t = useTranslations(lang);
               <td class="py-2 pr-4 font-mono">{cookie.name}</td>
               <td class="py-2 pr-4">{cookie.purpose}</td>
               <td class="py-2 pr-4">{cookie.expiry}</td>
-              <td class="py-2">{t.privacy.notShared}</td>
+              <td class="py-2">{cookie.shared}</td>
             </tr>
           ))
         }

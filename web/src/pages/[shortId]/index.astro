@@ -52,9 +52,12 @@ const isOwner = movie === null ? false : await resolveIsOwner(movie.ownerId);
 if (movie === null) Astro.response.status = 404;
 ---
 
+{/* analytics={false}: title にアップロード済みファイル名、URL に共有 ID そのものである
+    shortId が入るため、GA4 の page_title / page_location として Google へ送らせない。 */}
 <BaseLayout
   lang={lang}
   title={movie === null ? t.preview.notFoundHeading : `${movie.filename} — WebScreen`}
+  analytics={false}
 >
   {
     movie === null ? (
