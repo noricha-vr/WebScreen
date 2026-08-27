@@ -50,5 +50,19 @@
       "binding": "SESSION",
       "id": "8318e211fb8c4caebb81bc04745b438b"
     }
+  ],
+  // 本番ドメイン。custom_domain: true にすると wrangler が DNS レコードと証明書まで
+  // 面倒を見る（ゾーンが同一 Cloudflare アカウントにあることが前提）。
+  //
+  // デプロイした瞬間に web-screen.net の配信先が旧 FastAPI 版（Cloud Run）から
+  // この Worker へ切り替わる。ロールバックは Cloudflare の DNS で web-screen.net の
+  // A / AAAA を旧 Cloud Run へ戻す（切替前の値は Issue #44 の DNS スナップショット）。
+  //
+  // workers.dev の URL は残す（切替後も β として検証に使うため）。
+  "routes": [
+    {
+      "pattern": "web-screen.net",
+      "custom_domain": true
+    }
   ]
 }
