@@ -140,6 +140,9 @@ describe('validateRenameMovieRequest', () => {
     ['filename が空白のみ', { filename: '   ' }],
     ['filename が 256 文字', { filename: 'a'.repeat(256) }],
     ['filename がパス区切りを含む', { filename: 'folder/file.mp4' }],
+    // isSafeFilename を通していることの確認。全パターンは validatePresignRequest 側で網羅する。
+    ['filename が親ディレクトリ参照', { filename: '..' }],
+    ['filename が RTL override を含む', { filename: 'report\u202egpj.exe' }],
     ['filename が欠落', {}],
     ['filename が数値', { filename: 42 }],
     ['ボディが配列', []],
