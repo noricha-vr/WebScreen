@@ -33,6 +33,13 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
 
+### 動画入力廃止に伴う互換性
+
+2026-08-27 から `PresignRequest.kind` の入力元は PDF・画像・Web ページだけとし、旧画面や直接 API からの
+`video` は `400 INVALID_REQUEST` で拒否する。互換期間は設けない。この変更は入力元の申告値だけを対象とし、
+生成物の `video/mp4`、既存動画の履歴・再生・pin・rename・delete・retention 契約には影響しない。
+元ファイルは Worker へ送られないため、`kind` は製品契約でありファイル内容を保証するセキュリティ境界ではない。
+
 ## web-capture API
 
 Worker とは別サービス（ヘッドレスブラウザを持つ実行環境）。Worker からのみ呼ぶ。
