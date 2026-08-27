@@ -4,9 +4,7 @@ import { mountConvertPanel } from '../../src/lib/ui/convert-panel';
 
 type Listener = (event: Event) => void;
 
-class FakeFileInput {
-  files: File[] = [];
-  value = '';
+class FakeEventTarget {
   readonly listeners = new Map<string, Listener>();
 
   addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
@@ -18,22 +16,39 @@ class FakeFileInput {
   }
 }
 
+class FakeFileInput extends FakeEventTarget {
+  files: File[] = [];
+  value = '';
+}
+
 class FakePanel {
   readonly dataset: DOMStringMap = {};
+  readonly sourceName = { textContent: '' };
+  readonly urlForm = new FakeEventTarget();
+  readonly urlInput: { value: string };
 
-  constructor(private readonly fileInput: FakeFileInput) {}
-
-  querySelector<T extends Element>(selector: string): T | null {
-    return (selector === '[data-file-input]' ? this.fileInput : null) as T | null;
+  constructor(private readonly fileInput: FakeFileInput, url = '') {
+    this.urlInput = { value: url };
   }
 
-  querySelectorAll<T extends Element>(): T[] {
-    return [];
+  querySelector<T extends Element>(selector: string): T | null {
+    const elements: Record<string, unknown> = {
+      '[data-file-input]': this.fileInput,
+      '[data-url-form]': this.urlForm,
+      '[data-url-input]': this.urlInput,
+    };
+    return (elements[selector] ?? null) as T | null;
+  }
+
+  querySelectorAll<T extends Element>(selector: string): T[] {
+    return (selector === '[data-source-name]' ? [this.sourceName] : []) as T[];
   }
 }
 
-function controlledPng(): { file: File; release: () => void } {
-  const header = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+function controlledPng(
+  bytes = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+): { file: File; release: () => void } {
+  const header = new Uint8Array(bytes);
   let release = (): void => {};
   const ready = new Promise<void>((resolve) => {
     release = resolve;
@@ -52,6 +67,35 @@ function controlledPng(): { file: File; release: () => void } {
   return { file, release };
 }
 
+function installBrowserFakes(): { conversionStarts: () => number; restore: () => void } {
+  const originalWindow = globalThis.window;
+  const originalCreateImageBitmap = globalThis.createImageBitmap;
+  const originalFetch = globalThis.fetch;
+  let conversionStarts = 0;
+  Object.assign(globalThis, {
+    window: {
+      addEventListener: () => {},
+      setInterval: () => 1,
+      clearInterval: () => {},
+    },
+    createImageBitmap: () => {
+      conversionStarts += 1;
+      return new Promise<ImageBitmap>(() => {});
+    },
+    fetch: () => new Promise<Response>(() => {}),
+  });
+  return {
+    conversionStarts: () => conversionStarts,
+    restore: () => {
+      Object.assign(globalThis, {
+        window: originalWindow,
+        createImageBitmap: originalCreateImageBitmap,
+        fetch: originalFetch,
+      });
+    },
+  };
+}
+
 async function flushPromises(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -60,16 +104,7 @@ async function flushPromises(): Promise<void> {
 
 describe('mountConvertPanel', () => {
   test('遅い1件目のpreflight完了は後続ファイルの状態と変換開始を上書きしない', async () => {
-    const originalWindow = globalThis.window;
-    const originalCreateImageBitmap = globalThis.createImageBitmap;
-    let conversionStarts = 0;
-    Object.assign(globalThis, {
-      window: { addEventListener: () => {} },
-      createImageBitmap: () => {
-        conversionStarts += 1;
-        return new Promise<ImageBitmap>(() => {});
-      },
-    });
+    const browser = installBrowserFakes();
 
     try {
       const input = new FakeFileInput();
@@ -88,12 +123,37 @@ describe('mountConvertPanel', () => {
       await flushPromises();
 
       expect(panel.dataset['phase']).toBe('error');
-      expect(conversionStarts).toBe(0);
+      expect(browser.conversionStarts()).toBe(0);
     } finally {
-      Object.assign(globalThis, {
-        window: originalWindow,
-        createImageBitmap: originalCreateImageBitmap,
-      });
+      browser.restore();
+    }
+  });
+
+  test('遅いファイルpreflight完了は後続URLの状態と変換開始を上書きしない', async () => {
+    const browser = installBrowserFakes();
+    const url = 'https://example.com/articles/latest';
+
+    try {
+      const input = new FakeFileInput();
+      const panel = new FakePanel(input, url);
+      const slowInvalid = controlledPng([0x00]);
+      mountConvertPanel(panel as unknown as HTMLElement);
+
+      input.files = [slowInvalid.file];
+      input.dispatch('change');
+      panel.urlForm.dispatch('submit');
+      await flushPromises();
+      expect(panel.dataset['phase']).toBe('converting');
+      expect(panel.sourceName.textContent).toBe(url);
+
+      slowInvalid.release();
+      await flushPromises();
+
+      expect(panel.dataset['phase']).toBe('converting');
+      expect(panel.sourceName.textContent).toBe(url);
+      expect(browser.conversionStarts()).toBe(0);
+    } finally {
+      browser.restore();
     }
   });
 });
