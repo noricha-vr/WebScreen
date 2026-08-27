@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  検索エンジンに知らせる公開ページ。tests/contracts/sitemap.test.ts が src/pages/ の
+  実体と突合しているので、ページを増減させたらここも直すこと（テストが落ちて気づく）。
+
+  載せないもの:
+    - /            言語振り分けの 302 で、実体は /ja/ と /en/
+    - /{shortId}/  動画のプレビュー。共有 URL を知っている人だけが開く前提（noindex）
+    - /api/*       HTML ではない
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+    <url>
+        <loc>https://web-screen.net/ja/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/"/>
+        <changefreq>monthly</changefreq>
+        <priority>1.0</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/en/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/"/>
+        <changefreq>monthly</changefreq>
+        <priority>1.0</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/ja/privacy/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/privacy/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/privacy/"/>
+        <changefreq>yearly</changefreq>
+        <priority>0.3</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/en/privacy/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/privacy/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/privacy/"/>
+        <changefreq>yearly</changefreq>
+        <priority>0.3</priority>
+    </url>
+</urlset>

@@ -58,6 +58,7 @@ if (movie === null) Astro.response.status = 404;
   lang={lang}
   title={movie === null ? t.preview.notFoundHeading : `${movie.filename} — WebScreen`}
   analytics={false}
+  noindex={true}
 >
   {
     movie === null ? (

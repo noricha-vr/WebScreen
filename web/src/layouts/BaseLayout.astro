@@ -16,9 +16,18 @@ interface Props {
    * shortId が Google へ渡ってしまう。
    */
   analytics?: boolean;
+  /**
+   * 検索結果に載せないか。
+   *
+   * 既定は false。プレビューページだけ true にしている: 共有 URL を知っている人だけが
+   * 開く前提のページなので、アップロード内容が検索結果から辿れる状態にしない。
+   * robots.txt ではなくメタタグで外すのは、shortId が動的でパターン化できないうえ、
+   * robots.txt で弾くとクローラが noindex 自体を読めなくなるため。
+   */
+  noindex?: boolean;
 }
 
-const { lang, title, description, analytics = true } = Astro.props;
+const { lang, title, description, analytics = true, noindex = false } = Astro.props;
 const t = useTranslations(lang);
 const other = alternateLocale(lang);
 
@@ -42,6 +51,8 @@ const GA_TRACKED_HOST = 'web-screen.net';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description ?? t.meta.description} />
+    {noindex && <meta name="robots" content="noindex" />}
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="alternate" hreflang={other} href={switchLocalePath(Astro.url.pathname, other)} />
     <link
       rel="stylesheet"
