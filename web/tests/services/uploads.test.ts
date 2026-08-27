@@ -133,7 +133,7 @@ function movie(overrides: Partial<TestMovie> = {}): TestMovie {
 }
 
 function validPresignRequest(sizeBytes = 100): PresignRequest {
-  return { filename: 'movie.mp4', sizeBytes, kind: 'video' };
+  return { filename: 'movie.mp4', sizeBytes, kind: 'pdf' };
 }
 
 describe('アップロードのクォータと検証', () => {

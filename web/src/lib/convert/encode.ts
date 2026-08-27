@@ -39,31 +39,6 @@ export function buildFrameEncodeArgs(outputFile = 'output.mp4'): string[] {
   ];
 }
 
-/** 動画入力を VRChat 互換 MP4 にする引数を生成する。 */
-export function buildVideoEncodeArgs(inputFile: string, outputFile = 'output.mp4'): string[] {
-  return [
-    '-i',
-    inputFile,
-    '-vf',
-    'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-    '-c:v',
-    'libx264',
-    '-pix_fmt',
-    'yuv420p',
-    '-profile:v',
-    'baseline',
-    '-bf',
-    '0',
-    '-g',
-    '1',
-    '-movflags',
-    '+faststart',
-    '-an',
-    '-y',
-    outputFile,
-  ];
-}
-
 async function loadFfmpeg(report?: ProgressReporter): Promise<FFmpeg> {
   report?.({ current: 0, total: 1 });
   const ffmpeg = new FFmpeg();
@@ -94,21 +69,6 @@ export async function encodeFramesToMp4(frames: readonly VideoFrame[], report?: 
     }
     ffmpeg.on('progress', ({ progress }) => report?.({ current: Math.round(progress * 100), total: 100 }));
     const status = await ffmpeg.exec(buildFrameEncodeArgs());
-    if (status !== 0) throw new Error(`FFmpeg exited with ${status}`);
-    return await readMp4(ffmpeg, 'output.mp4');
-  } finally {
-    ffmpeg.terminate();
-  }
-}
-
-/** 動画バイト列を VRChat 互換 MP4 へトランスコードする。 */
-export async function encodeVideoToMp4(video: File, report?: ProgressReporter): Promise<Blob> {
-  const ffmpeg = await loadFfmpeg();
-  try {
-    const inputFile = `input.${video.name.split('.').pop()?.toLowerCase() || 'video'}`;
-    await ffmpeg.writeFile(inputFile, new Uint8Array(await video.arrayBuffer()));
-    ffmpeg.on('progress', ({ progress }) => report?.({ current: Math.round(progress * 100), total: 100 }));
-    const status = await ffmpeg.exec(buildVideoEncodeArgs(inputFile));
     if (status !== 0) throw new Error(`FFmpeg exited with ${status}`);
     return await readMp4(ffmpeg, 'output.mp4');
   } finally {

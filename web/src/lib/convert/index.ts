@@ -4,7 +4,6 @@ import { imageFilesToFrames } from './image';
 import { imageUrlsToFrames } from './imageUrls';
 import { pdfToFrames } from './pdf';
 import type { ProgressReporter } from './types';
-import { videoToMp4 } from './video';
 
 /** ファイル種別に応じてブラウザ内で VRChat 互換 MP4 を生成する。 */
 export async function convertFilesToMp4(
@@ -13,7 +12,6 @@ export async function convertFilesToMp4(
   report?: ProgressReporter
 ): Promise<Blob> {
   if (files.length === 0) throw new Error('At least one file is required');
-  if (kind === 'video') return videoToMp4(files[0]!, report);
   const frames = kind === 'pdf' ? await pdfToFrames(files[0]!, report) : await imageFilesToFrames(files, report);
   return encodeFramesToMp4(frames, report);
 }

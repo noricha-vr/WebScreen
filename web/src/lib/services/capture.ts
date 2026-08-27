@@ -8,6 +8,20 @@ import { requireUser, type AuthDatabase } from './auth';
 
 const CAPTURE_TIMEOUT_MS = 150_000;
 
+const UPSTREAM_CAPTURE_ERROR_CODES = {
+  pdfUrlNotSupported: 'pdf_url_not_supported',
+  imageUrlNotSupported: 'image_url_not_supported',
+  videoUrlNotSupported: 'video_url_not_supported',
+  nonWebPageUrl: 'non_web_page_url',
+} as const;
+
+const CAPTURE_ERROR_CODE_MAP: Readonly<Record<string, ErrorResponse['errorCode']>> = {
+  [UPSTREAM_CAPTURE_ERROR_CODES.pdfUrlNotSupported]: ERROR_CODES.pdfUrlNotSupported,
+  [UPSTREAM_CAPTURE_ERROR_CODES.imageUrlNotSupported]: ERROR_CODES.imageUrlNotSupported,
+  [UPSTREAM_CAPTURE_ERROR_CODES.videoUrlNotSupported]: ERROR_CODES.videoUrlNotSupported,
+  [UPSTREAM_CAPTURE_ERROR_CODES.nonWebPageUrl]: ERROR_CODES.nonWebPageUrl,
+};
+
 /** web-capture 呼び出しをテストから差し替えるための fetch 境界。 */
 export type CaptureFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -41,7 +55,7 @@ export async function proxyCapture(
   const validation = validateCaptureRequest(await readJson(request));
   if (!validation.ok) return json(validation.error, 400);
   if (!isPublicCaptureUrl(validation.value.url)) {
-    return errorResponse(400, 'url はローカルまたはプライベートネットワークを指定できません');
+    return errorResponse(400, ERROR_CODES.captureFailed, 'url はローカルまたはプライベートネットワークを指定できません');
   }
 
   const controller = new AbortController();
@@ -63,14 +77,13 @@ export async function proxyCapture(
         signal: controller.signal,
       }
     );
-    if (!upstream.ok) return captureFailedResponse();
-
-    const body = await upstream.json();
+    const body = await readResponseJson(upstream);
+    if (!upstream.ok) return captureErrorResponse(upstream.status, body);
     if (!isCaptureResponse(body)) return captureFailedResponse();
     return json(body, 200);
   } catch {
     if (controller.signal.aborted) {
-      return errorResponse(504, 'キャプチャサービスがタイムアウトしました');
+      return errorResponse(504, ERROR_CODES.captureFailed, 'キャプチャサービスがタイムアウトしました');
     }
     return captureFailedResponse();
   } finally {
@@ -153,11 +166,34 @@ function isCaptureResponse(value: unknown): value is CaptureResponse {
 }
 
 function captureFailedResponse(): Response {
-  return errorResponse(502, 'キャプチャサービスへのリクエストに失敗しました');
+  return errorResponse(502, ERROR_CODES.captureFailed, 'キャプチャサービスへのリクエストに失敗しました');
 }
 
-function errorResponse(status: number, message: string): Response {
-  const body: ErrorResponse = { errorCode: ERROR_CODES.captureFailed, message };
+function captureErrorResponse(status: number, body: unknown): Response {
+  const errorCode = status === 422 ? captureErrorCode(body) : null;
+  if (errorCode) return errorResponse(422, errorCode, '指定した URL は変換できません');
+  return captureFailedResponse();
+}
+
+function captureErrorCode(body: unknown): ErrorResponse['errorCode'] | null {
+  if (!isRecord(body) || typeof body.errorCode !== 'string') return null;
+  return CAPTURE_ERROR_CODE_MAP[body.errorCode] ?? null;
+}
+
+async function readResponseJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function errorResponse(status: number, errorCode: ErrorResponse['errorCode'], message: string): Response {
+  const body: ErrorResponse = { errorCode, message };
   return json(body, status);
 }
 

@@ -10,13 +10,15 @@ import { isShortId } from '../contracts/r2key';
 import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
 import {
   INITIAL_UPLOAD_STATE,
+  preflightInputFiles,
   reduceUpload,
   type UploadErrorCode,
   type UploadEvent,
-  type UploadState,
 } from './upload-flow';
 import { markAutoCopy } from './auto-copy';
 import { movieNameForFiles, movieNameForUrl } from './upload-name';
+import { renderConvertPanel } from './convert-panel-view';
+import { JsonRequestError, requestJson } from './request-json';
 
 /** data-batch-name-suffix が無いときの接尾辞（ロケール非依存で読める形）。 */
 const DEFAULT_BATCH_NAME_SUFFIX = '+{count}';
@@ -41,68 +43,8 @@ function element<T extends HTMLElement>(root: HTMLElement, selector: string): T 
   return root.querySelector<T>(selector);
 }
 
-/** 同じ表示項目が状態別ブロックに複数あるため、書き換えは全件に適用する。 */
-function elements<T extends HTMLElement>(root: HTMLElement, selector: string): T[] {
-  return [...root.querySelectorAll<T>(selector)];
-}
-
-function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
-  const messages: Record<UploadErrorCode, string | undefined> = {
-    tooLarge: panel.dataset['msgTooLarge'],
-    unsupported: panel.dataset['msgUnsupported'],
-    tooManyPages: panel.dataset['msgTooManyPages'],
-    failed: panel.dataset['msgFailed'],
-  };
-  return messages[code] ?? '';
-}
-
-function phaseLabel(panel: HTMLElement, state: UploadState): string {
-  if (state.phase === 'converting') return panel.dataset['labelConverting'] ?? '';
-  if (state.phase === 'uploading') return panel.dataset['labelUploading'] ?? '';
-  return '';
-}
-
-/** URL 変換では表示するのがファイル名ではなく URL なので、見出し語も切り替える。 */
-function sourceLabel(panel: HTMLElement, state: UploadState): string {
-  if (state.kind === 'web') return panel.dataset['labelSourceUrl'] ?? '';
-  return panel.dataset['labelSelectedFile'] ?? '';
-}
-
-function render(panel: HTMLElement, state: UploadState): void {
-  panel.dataset['phase'] = state.phase;
-
-  const label = phaseLabel(panel, state);
-  for (const node of elements(panel, '[data-phase-label]')) node.textContent = label;
-
-  const source = sourceLabel(panel, state);
-  for (const node of elements(panel, '[data-source-label]')) node.textContent = source;
-
-  for (const node of elements(panel, '[data-source-name]')) node.textContent = state.source ?? '';
-
-  for (const bar of elements(panel, '[data-progress-bar]')) {
-    bar.style.width = `${state.progress}%`;
-    bar.setAttribute('aria-valuenow', String(state.progress));
-  }
-
-  for (const node of elements(panel, '[data-progress-value]')) {
-    node.textContent = `${state.progress}%`;
-  }
-
-  const count = state.current !== null && state.total !== null ? `${state.current}/${state.total}` : '';
-  for (const node of elements(panel, '[data-progress-count]')) node.textContent = count;
-
-  const message = state.errorCode ? errorMessage(panel, state.errorCode) : '';
-  for (const node of elements(panel, '[data-error-message]')) node.textContent = message;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-async function requestJson(url: string, init: RequestInit): Promise<unknown> {
-  const response = await fetch(url, { ...init, credentials: 'same-origin' });
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return response.json();
 }
 
 function asPresignResponse(value: unknown): PresignResponse {
@@ -179,6 +121,17 @@ function conversionErrorCode(error: unknown): UploadErrorCode {
   return error instanceof ConversionError && error.code === 'tooManyPages' ? 'tooManyPages' : 'failed';
 }
 
+function captureErrorCode(error: unknown): UploadErrorCode {
+  if (!(error instanceof JsonRequestError)) return 'failed';
+  const codes: Readonly<Record<string, UploadErrorCode>> = {
+    PDF_URL_NOT_SUPPORTED: 'pdfUrlNotSupported',
+    IMAGE_URL_NOT_SUPPORTED: 'imageUrlNotSupported',
+    VIDEO_URL_NOT_SUPPORTED: 'videoUrlNotSupported',
+    NON_WEB_PAGE_URL: 'nonWebPageUrl',
+  };
+  return error.errorCode ? (codes[error.errorCode] ?? 'failed') : 'failed';
+}
+
 export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptions = {}): void {
   const navigate: Navigate = options.navigate ?? ((url) => window.location.assign(url));
 
@@ -192,7 +145,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (next === state) return;
 
     state = next;
-    render(panel, state);
+    renderConvertPanel(panel, state);
     if (next.phase === 'done' && next.shortId) {
       markAutoCopy(next.shortId);
       navigate(`/${next.shortId}/`);
@@ -204,21 +157,28 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (!event.persisted) return;
     generation += 1;
     state = INITIAL_UPLOAD_STATE;
-    render(panel, state);
+    renderConvertPanel(panel, state);
   });
 
   const fileInput = element<HTMLInputElement>(panel, '[data-file-input]');
-  const startFiles = (files: readonly File[]): void => {
+  const startFiles = async (files: readonly File[]): Promise<void> => {
     if (files.length === 0) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
+    // 署名読み取り中に別の入力へ切り替わった場合、古い検証結果で状態を上書きしない。
+    const current = ++generation;
+    const preflight = await preflightInputFiles(files);
+    if (current !== generation) return;
+    if (!preflight.ok) {
+      dispatch({ type: 'failed', errorCode: 'unsupported' }, current);
+      return;
+    }
     const event: UploadEvent = {
       type: 'selectFiles',
       files: files.map((file) => ({ filename: file.name, sizeBytes: file.size })),
     };
     const next = reduceUpload(state, event);
-    dispatch(event);
-    if (next.phase !== 'converting' || next.kind === null || next.kind === 'web') return;
-    const current = generation;
+    dispatch(event, current);
+    if (next.phase !== 'converting' || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
     const kind = next.kind;
     void convertFilesToMp4(files, kind, (progress) => {
       dispatch({ type: 'conversionProgress', ...progress }, current);
@@ -241,7 +201,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       });
   };
   fileInput?.addEventListener('change', () => {
-    startFiles(Array.from(fileInput.files ?? []));
+    void startFiles(Array.from(fileInput.files ?? []));
     fileInput.value = '';
   });
 
@@ -260,7 +220,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       event.preventDefault();
       delete dropzone.dataset['dragover'];
 
-      startFiles(Array.from(event.dataTransfer?.files ?? []));
+      void startFiles(Array.from(event.dataTransfer?.files ?? []));
     });
   }
 
@@ -272,8 +232,8 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     const url = input?.value.trim();
     if (!url) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
-    dispatch({ type: 'selectUrl', url });
-    const current = generation;
+    const current = ++generation;
+    dispatch({ type: 'selectUrl', url }, current);
 
     let pseudoProgress = CAPTURE_PSEUDO_PROGRESS_START - 1;
     const pseudoTimer = window.setInterval(() => {
@@ -298,9 +258,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current))
       .catch((error: unknown) => {
         console.error('conversion failed', error);
-        dispatch({ type: 'failed', errorCode: conversionErrorCode(error) }, current);
+        dispatch({ type: 'failed', errorCode: captureErrorCode(error), target: 'url' }, current);
       });
   });
 
-  render(panel, state);
+  renderConvertPanel(panel, state);
 }

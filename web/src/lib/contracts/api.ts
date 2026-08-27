@@ -14,8 +14,8 @@ import { isShortId } from './r2key';
 /** 1 ファイルあたりのアップロード上限（50 MiB）。R2 の単発 PUT で扱える範囲に収める。 */
 export const MAX_UPLOAD_BYTES = 52_428_800;
 
-/** アップロード元の種別。動画の生成経路ごとに集計・制限を変えられるように保持する。 */
-export const UPLOAD_KINDS = ['pdf', 'image', 'video', 'web'] as const;
+/** アップロード元の種別。ローカル入力は PDF / 画像、URL 変換は web に限定する。 */
+export const UPLOAD_KINDS = ['pdf', 'image', 'web'] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
 
 /** 動画のライフサイクル。D1 movies.status の CHECK 制約と一致させること。 */
@@ -46,6 +46,10 @@ export const ERROR_CODES = {
   notFound: 'NOT_FOUND',
   payloadTooLarge: 'PAYLOAD_TOO_LARGE',
   captureFailed: 'CAPTURE_FAILED',
+  pdfUrlNotSupported: 'PDF_URL_NOT_SUPPORTED',
+  imageUrlNotSupported: 'IMAGE_URL_NOT_SUPPORTED',
+  videoUrlNotSupported: 'VIDEO_URL_NOT_SUPPORTED',
+  nonWebPageUrl: 'NON_WEB_PAGE_URL',
   internalError: 'INTERNAL_ERROR',
 } as const;
 

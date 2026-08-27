@@ -69,6 +69,43 @@ describe('proxyCapture', () => {
     expect(await response.json()).toMatchObject({ errorCode: 'CAPTURE_FAILED' });
   });
 
+  test.each([
+    ['pdf_url_not_supported', 'PDF_URL_NOT_SUPPORTED'],
+    ['image_url_not_supported', 'IMAGE_URL_NOT_SUPPORTED'],
+    ['video_url_not_supported', 'VIDEO_URL_NOT_SUPPORTED'],
+    ['non_web_page_url', 'NON_WEB_PAGE_URL'],
+  ])('許可した下流コード %s だけを %s の 422 に変換する', async (lowerCode, upperCode) => {
+    const rawMessage = 'upstream internal detail';
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      fetcher: async () => Response.json({ errorCode: lowerCode, message: rawMessage }, { status: 422 }),
+    });
+
+    const body = await response.json() as { errorCode: string; message: string };
+    expect(response.status).toBe(422);
+    expect(body.errorCode).toBe(upperCode);
+    expect(body.message).not.toContain(rawMessage);
+  });
+
+  test.each([
+    ['未知コード', Response.json({ errorCode: 'unexpected_failure', message: 'raw detail' }, { status: 422 })],
+    ['errorCode が無い JSON', Response.json({ message: 'raw detail' }, { status: 422 })],
+    ['非 JSON', new Response('raw detail', { status: 422 })],
+    ['401', Response.json({ errorCode: 'pdf_url_not_supported', message: 'raw detail' }, { status: 401 })],
+    ['429', Response.json({ errorCode: 'pdf_url_not_supported', message: 'raw detail' }, { status: 429 })],
+    ['5xx', Response.json({ errorCode: 'pdf_url_not_supported', message: 'raw detail' }, { status: 503 })],
+  ])('%s は CAPTURE_FAILED に留め、下流メッセージを公開しない', async (_label, upstream) => {
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      fetcher: async () => upstream.clone(),
+    });
+
+    const body = await response.json() as { errorCode: string; message: string };
+    expect(response.status).toBe(502);
+    expect(body.errorCode).toBe('CAPTURE_FAILED');
+    expect(body.message).not.toContain('raw detail');
+  });
+
   test('下流タイムアウトを 504 に変換する', async () => {
     const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
       ...authenticatedDependencies(),

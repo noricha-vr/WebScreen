@@ -31,6 +31,13 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
 
+### 動画入力廃止に伴う互換性
+
+2026-08-27 から `PresignRequest.kind` の入力元は PDF・画像・Web ページだけとし、旧画面や直接 API からの
+`video` は `400 INVALID_REQUEST` で拒否する。互換期間は設けない。この変更は入力元の申告値だけを対象とし、
+生成物の `video/mp4`、既存動画の履歴・再生・pin・rename・delete・retention 契約には影響しない。
+元ファイルは Worker へ送られないため、`kind` は製品契約でありファイル内容を保証するセキュリティ境界ではない。
+
 ## web-capture API
 
 Worker とは別サービス（ヘッドレスブラウザを持つ実行環境）。Worker からのみ呼ぶ。
@@ -41,6 +48,17 @@ Worker とは別サービス（ヘッドレスブラウザを持つ実行環境�
 
 - `CaptureResponse.images` は**撮影（スクロール）順**で返す。順序が狂うとスクロール動画が破綻する（詳細は `api.ts` の該当コメント）
 - web-capture は動画化しない。画像を R2 に置いて URL を返すだけ（[encode-contract.md](encode-contract.md)）
+- 非 Web ページを表す web-capture の lower code は、`HTTP 422` かつ JSON の `errorCode` が
+  allowlist に一致した場合だけ Worker の公開コードへ変換する。下流の `message` は返さない。
+
+| web-capture lower code | Worker 公開 `errorCode` | HTTP |
+|---|---|---|
+| `pdf_url_not_supported` | `PDF_URL_NOT_SUPPORTED` | 422 |
+| `image_url_not_supported` | `IMAGE_URL_NOT_SUPPORTED` | 422 |
+| `video_url_not_supported` | `VIDEO_URL_NOT_SUPPORTED` | 422 |
+| `non_web_page_url` | `NON_WEB_PAGE_URL` | 422 |
+
+未知コード、JSON でない応答、401 / 429 / 5xx、タイムアウトは `CAPTURE_FAILED` のまま扱う。
 
 ## 公開範囲の契約
 

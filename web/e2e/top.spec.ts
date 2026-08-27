@@ -202,10 +202,9 @@ test.describe('ログイン済み', () => {
 
   // 実ファイルをブラウザ内変換パイプライン（PDF.js / FFmpeg.wasm）に通し、
   // 出力 mp4 が faststart mp4（先頭ボックスが ftyp）であることを確認する。
-  // 画像・PDF・動画の3経路がそれぞれ実データで mp4 を生成できることの機械実証。
+  // PDF 入力経路が実データで mp4 を生成できることの機械実証。
   for (const c of [
     { label: 'PDF（3ページ）', file: 'sample-3page.pdf', mimeType: 'application/pdf' },
-    { label: '動画ファイル', file: 'sample-clip.mp4', mimeType: 'video/mp4' },
   ]) {
     test(`${c.label}を MP4 に変換し、ftyp を含む成果物をアップロードする`, async ({ page }) => {
       test.setTimeout(180_000);
@@ -282,6 +281,61 @@ test.describe('ログイン済み', () => {
     });
 
     await expect(panel).toHaveAttribute('data-phase', 'error');
-    await expect(page.getByText(ja.convert.errorUnsupported)).toBeVisible();
+    await expect(panel.locator('[data-file-error-message]')).toHaveText(ja.convert.errorUnsupported);
+  });
+
+  test('動画 picker と D&D は presign / PUT 前に拒否する', async ({ page }) => {
+    let presignCalls = 0;
+    let putCalls = 0;
+    await signIn(page);
+    await page.route('**/api/uploads/presign/', (route) => {
+      presignCalls += 1;
+      return route.fulfill({ status: 500 });
+    });
+    await page.route('https://upload.test/**', (route) => {
+      putCalls += 1;
+      return route.fulfill({ status: 500 });
+    });
+    await page.goto('/ja/');
+
+    const panel = page.locator('[data-convert-panel]');
+    await panel.locator('[data-file-input]').setInputFiles({
+      name: 'picker.mp4',
+      mimeType: 'video/mp4',
+      buffer: Buffer.from([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]),
+    });
+    await expect(panel).toHaveAttribute('data-phase', 'error');
+    await expect(panel.locator('[data-file-error-message]')).toHaveText(ja.convert.errorUnsupported);
+
+    await panel.locator('[data-dropzone]').evaluate((dropzone) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70])], 'dropped.mp4', { type: 'video/mp4' }));
+      dropzone.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
+    });
+    await expect(panel).toHaveAttribute('data-phase', 'error');
+    expect(presignCalls).toBe(0);
+    expect(putCalls).toBe(0);
+  });
+
+  test('非Webページ URL の案内は URL 欄にだけ表示し、下流メッセージを出さない', async ({ page }) => {
+    const rawMessage = 'internal upstream detail';
+    await signIn(page);
+    await page.route('**/api/capture/', (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({ errorCode: 'PDF_URL_NOT_SUPPORTED', message: rawMessage }),
+      })
+    );
+    await page.goto('/ja/');
+
+    const panel = page.locator('[data-convert-panel]');
+    await panel.locator('[data-url-input]').fill('https://example.com/report.pdf');
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    await expect(panel.locator('[data-url-error-message]')).toHaveText(ja.convert.errorPdfUrlNotSupported);
+    await expect(panel.locator('[data-url-error]')).toBeVisible();
+    await expect(panel.locator('[data-file-error]')).toBeHidden();
+    await expect(panel.getByText(rawMessage)).toHaveCount(0);
   });
 });

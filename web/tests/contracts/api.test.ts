@@ -31,7 +31,7 @@ describe('validatePresignRequest', () => {
     const result = validatePresignRequest({
       filename: 'a.mp4',
       sizeBytes: MAX_UPLOAD_BYTES,
-      kind: 'video',
+      kind: 'pdf',
     });
 
     expect(result.ok).toBe(true);
@@ -41,7 +41,7 @@ describe('validatePresignRequest', () => {
     const result = validatePresignRequest({
       filename: 'a.mp4',
       sizeBytes: MAX_UPLOAD_BYTES + 1,
-      kind: 'video',
+      kind: 'pdf',
     });
 
     expect(result).toMatchObject({
@@ -61,6 +61,7 @@ describe('validatePresignRequest', () => {
     ['sizeBytes が 0', { filename: 'a.mp4', sizeBytes: 0, kind: 'pdf' }],
     ['sizeBytes が小数', { filename: 'a.mp4', sizeBytes: 1.5, kind: 'pdf' }],
     ['kind が未知の値', { filename: 'a.mp4', sizeBytes: 1, kind: 'audio' }],
+    ['kind が video', { filename: 'a.mp4', sizeBytes: 1, kind: 'video' }],
     ['kind が欠落', { filename: 'a.mp4', sizeBytes: 1 }],
   ])('%s は INVALID_REQUEST で拒否する', (_label, input) => {
     const result = validatePresignRequest(input);
@@ -69,6 +70,15 @@ describe('validatePresignRequest', () => {
       ok: false,
       error: { errorCode: ERROR_CODES.invalidRequest },
     });
+  });
+});
+
+test('非Webページ URL の公開エラーコードを固定する', () => {
+  expect(ERROR_CODES).toMatchObject({
+    pdfUrlNotSupported: 'PDF_URL_NOT_SUPPORTED',
+    imageUrlNotSupported: 'IMAGE_URL_NOT_SUPPORTED',
+    videoUrlNotSupported: 'VIDEO_URL_NOT_SUPPORTED',
+    nonWebPageUrl: 'NON_WEB_PAGE_URL',
   });
 });
 
