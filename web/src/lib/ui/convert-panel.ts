@@ -53,11 +53,20 @@ function phaseLabel(panel: HTMLElement, state: UploadState): string {
   return '';
 }
 
+/** URL 変換では表示するのがファイル名ではなく URL なので、見出し語も切り替える。 */
+function sourceLabel(panel: HTMLElement, state: UploadState): string {
+  if (state.kind === 'web') return panel.dataset['labelSourceUrl'] ?? '';
+  return panel.dataset['labelSelectedFile'] ?? '';
+}
+
 function render(panel: HTMLElement, state: UploadState): void {
   panel.dataset['phase'] = state.phase;
 
   const label = phaseLabel(panel, state);
   for (const node of elements(panel, '[data-phase-label]')) node.textContent = label;
+
+  const source = sourceLabel(panel, state);
+  for (const node of elements(panel, '[data-source-label]')) node.textContent = source;
 
   for (const node of elements(panel, '[data-source-name]')) node.textContent = state.source ?? '';
 

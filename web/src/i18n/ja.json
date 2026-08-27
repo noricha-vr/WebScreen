@@ -28,12 +28,13 @@
     "quota": "1 ユーザーあたり合計 500 MB"
   },
   "convert": {
-    "heading": "ファイルを動画に変換",
+    "heading": "コンテンツを動画に変換",
     "dropzoneTitle": "ここにファイルをドロップ",
     "dropzoneOr": "または",
     "chooseFile": "ファイルを選択",
     "accepted": "PDF / png / jpg / webp / gif / 動画 — 50 MB まで",
     "selectedFile": "選択中のファイル",
+    "sourceUrl": "変換する URL",
     "urlHeading": "Webページを動画に変換",
     "urlPlaceholder": "https://example.com",
     "urlSubmit": "URL を変換",

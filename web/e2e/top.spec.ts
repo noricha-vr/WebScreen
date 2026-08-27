@@ -166,6 +166,10 @@ test.describe('ログイン済み', () => {
       { name: 'second.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG },
     ]);
 
+    // ファイル変換中はラベルが「選択中のファイル」+ 先頭ファイル名になる
+    await expect(panel.locator('[data-source-label]')).toHaveText(ja.convert.selectedFile);
+    await expect(panel.locator('[data-source-name]')).toHaveText('first.png');
+
     // 複数枚は「先頭ファイル名 + 残り枚数」で保存される（/ja/ なので日本語の接尾辞）
     expect((await presignRequest).postDataJSON().filename).toBe(
       `first ${ja.convert.batchNameSuffix.replace('{count}', '1')}.mp4`
@@ -250,6 +254,10 @@ test.describe('ログイン済み', () => {
     const presignRequest = page.waitForRequest('**/api/uploads/presign/');
     await panel.locator('[data-url-input]').fill('https://example.com/');
     await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    // URL 変換中はラベルが「変換する URL」+ 入力 URL に切り替わる
+    await expect(panel.locator('[data-source-label]')).toHaveText(ja.convert.sourceUrl);
+    await expect(panel.locator('[data-source-name]')).toHaveText('https://example.com/');
 
     // 変換元の URL から名前を作る（ルート直下なのでホスト名だけ）
     expect((await presignRequest).postDataJSON().filename).toBe('example.com.mp4');

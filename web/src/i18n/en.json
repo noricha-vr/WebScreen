@@ -28,12 +28,13 @@
     "quota": "500 MB of storage per user"
   },
   "convert": {
-    "heading": "Convert a file to video",
+    "heading": "Convert content to video",
     "dropzoneTitle": "Drop your file here",
     "dropzoneOr": "or",
     "chooseFile": "Choose a file",
     "accepted": "PDF / png / jpg / webp / gif / video — up to 50 MB",
     "selectedFile": "Selected file",
+    "sourceUrl": "URL to convert",
     "urlHeading": "Convert a web page to video",
     "urlPlaceholder": "https://example.com",
     "urlSubmit": "Convert URL",
