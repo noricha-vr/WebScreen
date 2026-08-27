@@ -21,25 +21,34 @@ const EXCLUDED = new Set([
   'api',
 ]);
 
+/**
+ * Astro がページとして扱う拡張子。`.astro` だけを見ていると、Markdown ページを足した時に
+ * sitemap の更新漏れを見逃す。増やす時は Astro のドキュメントと突き合わせること。
+ */
+const PAGE_EXTENSIONS = ['.astro', '.md', '.mdx', '.html'];
+
 /** src/pages/ を辿って、検索エンジンに出したい静的ページの URL を組み立てる。 */
 function collectPublicPaths(dir: string, prefix = ''): string[] {
   const paths: string[] = [];
 
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (EXCLUDED.has(entry.name)) continue;
-    // ルート直下の index.astro だけは言語振り分けの 302 なので載せない（/ja/ /en/ が実体）。
-    // 配下の ja/index.astro・en/index.astro は載せる対象なので、prefix で区別する。
-    if (prefix === '' && entry.name === 'index.astro') continue;
-
     if (entry.isDirectory()) {
       paths.push(...collectPublicPaths(join(dir, entry.name), `${prefix}/${entry.name}`));
       continue;
     }
-    if (!entry.name.endsWith('.astro')) continue;
 
-    // trailingSlash: 'always' なので、index.astro はディレクトリ URL、それ以外は自身の名前。
-    const slug = entry.name === 'index.astro' ? '' : `/${entry.name.replace(/\.astro$/, '')}`;
-    paths.push(`${SITE_ORIGIN}${prefix}${slug}/`);
+    const extension = PAGE_EXTENSIONS.find((candidate) => entry.name.endsWith(candidate));
+    if (extension === undefined) continue;
+
+    const basename = entry.name.slice(0, -extension.length);
+
+    // ルート直下の index だけは言語振り分けの 302 なので載せない（/ja/ /en/ が実体）。
+    // 配下の ja/index・en/index は載せる対象なので、prefix で区別する。
+    if (prefix === '' && basename === 'index') continue;
+
+    // trailingSlash: 'always' なので、index はディレクトリ URL、それ以外は自身の名前。
+    paths.push(`${SITE_ORIGIN}${prefix}${basename === 'index' ? '' : `/${basename}`}/`);
   }
 
   return paths;
@@ -60,14 +69,36 @@ describe('sitemap.xml', () => {
 
   test('URL はすべて本番オリジンの絶対 URL で書く', () => {
     // 相対パスや workers.dev のままだと Search Console が受け付けない。
-    for (const loc of sitemapLocations()) {
-      expect(loc.startsWith(`${SITE_ORIGIN}/`)).toBe(true);
+    // hreflang の alternate も同じ制約を受けるので一緒に見る。
+    const xml = readFileSync(SITEMAP_PATH, 'utf-8');
+    const alternates = [...xml.matchAll(/<xhtml:link[^>]+href="([^"]+)"/g)].map((m) => m[1]!);
+
+    expect(alternates.length).toBeGreaterThan(0);
+    for (const url of [...sitemapLocations(), ...alternates]) {
+      expect(url.startsWith(`${SITE_ORIGIN}/`)).toBe(true);
     }
   });
 
-  test('robots.txt が sitemap の場所を指している', () => {
-    const robots = readFileSync(join(import.meta.dir, '../../public/robots.txt'), 'utf-8');
+  test('alternate は sitemap に載せた URL だけを指す', () => {
+    // 除外したページ（プレビュー等）へ alternate で誘導してしまう事故を防ぐ。
+    const xml = readFileSync(SITEMAP_PATH, 'utf-8');
+    const alternates = new Set(
+      [...xml.matchAll(/<xhtml:link[^>]+href="([^"]+)"/g)].map((m) => m[1]!)
+    );
 
+    expect([...alternates].sort()).toEqual(sitemapLocations().sort());
+  });
+});
+
+describe('robots.txt', () => {
+  const robots = readFileSync(join(import.meta.dir, '../../public/robots.txt'), 'utf-8');
+
+  test('sitemap の場所を指している', () => {
     expect(robots).toContain(`Sitemap: ${SITE_ORIGIN}/sitemap.xml`);
+  });
+
+  test('API をクロール対象から外している', () => {
+    // 全 API が /api/ 配下にある前提。エンドポイントを別の階層へ移したらここが落ちる。
+    expect(robots).toContain('Disallow: /api/');
   });
 });

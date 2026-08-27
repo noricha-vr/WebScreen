@@ -35,13 +35,21 @@ test.describe('noindex', () => {
     const response = await request.get(`/${E2E_FIXTURES.readyShortId}/`);
 
     expect(response.status()).toBe(200);
-    expect(await response.text()).toContain('name="robots" content="noindex, nofollow"');
+    expect(await response.text()).toContain('name="robots" content="noindex"');
   });
 
-  test('通常ページには noindex を付けない', async ({ request }) => {
-    // 全ページに付けてしまうと検索流入が消えるので、既定が false であることを固定する。
-    const response = await request.get('/ja/');
+  // 全ページに付けてしまうと検索流入が消える。sitemap に載せた 4 ページすべてで確認する
+  // （/ja/ だけ見ていると、privacy や英語版だけ誤って除外された事故に気づけない）。
+  const INDEXABLE_PATHS = ['/ja/', '/en/', '/ja/privacy/', '/en/privacy/'] as const;
 
-    expect(await response.text()).not.toContain('noindex');
-  });
+  for (const path of INDEXABLE_PATHS) {
+    test(`${path} には noindex を付けない`, async ({ request }) => {
+      const response = await request.get(path);
+
+      expect(response.status()).toBe(200);
+      expect(await response.text()).not.toContain('noindex');
+      // メタタグを消しただけではヘッダー経由で除外されうるので両方見る。
+      expect(response.headers()['x-robots-tag']).toBeUndefined();
+    });
+  }
 });
