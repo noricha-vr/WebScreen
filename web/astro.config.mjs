@@ -6,6 +6,8 @@ import tailwindcss from '@tailwindcss/vite';
 // trailingSlash: 'always' なので API ルートも末尾スラッシュ必須（/api/health/ で叩く）。
 // スラッシュ無しの /api/health は 404 になるため、fetch 側の URL も必ず末尾に / を付ける。
 export default defineConfig({
+  // OG の画像・URL は絶対パスでないとクローラが解決できないため、正となるオリジンをここに置く。
+  site: 'https://web-screen.net',
   adapter: cloudflare(),
   output: 'static',
   trailingSlash: 'always',

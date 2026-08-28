@@ -60,6 +60,42 @@ test.describe('未ログイン', () => {
   });
 });
 
+test.describe('リンクプレビュー', () => {
+  const content = (page: Page, selector: string): Promise<string | null> =>
+    page.locator(selector).getAttribute('content');
+
+  test('日本語トップに OG タグと配信中の画像を出す', async ({ page, request }) => {
+    await page.goto('/ja/');
+
+    // 絶対 URL であること。相対だとクローラが解決できず画像が出ない
+    expect(await content(page, 'meta[property="og:image"]')).toBe('https://web-screen.net/og.png');
+    expect(await content(page, 'meta[property="og:url"]')).toBe('https://web-screen.net/ja/');
+    expect(await content(page, 'meta[property="og:title"]')).toBe(ja.meta.title);
+    expect(await content(page, 'meta[property="og:description"]')).toBe(ja.meta.description);
+    expect(await content(page, 'meta[property="og:image:alt"]')).toBe(ja.meta.imageAlt);
+    expect(await content(page, 'meta[property="og:locale"]')).toBe('ja_JP');
+    expect(await content(page, 'meta[name="twitter:card"]')).toBe('summary_large_image');
+
+    // 宣言した実寸と配信物が食い違うと、縮小表示や枠ズレになる
+    expect(await content(page, 'meta[property="og:image:width"]')).toBe('1200');
+    expect(await content(page, 'meta[property="og:image:height"]')).toBe('630');
+
+    const image = await request.get('/og.png');
+    expect(image.status()).toBe(200);
+    expect(image.headers()['content-type']).toContain('image/png');
+  });
+
+  test('英語トップは英語の OG タグを出す', async ({ page }) => {
+    await page.goto('/en/');
+
+    expect(await content(page, 'meta[property="og:title"]')).toBe(en.meta.title);
+    expect(await content(page, 'meta[property="og:locale"]')).toBe('en_US');
+    expect(await content(page, 'meta[property="og:url"]')).toBe('https://web-screen.net/en/');
+    // 画像は 1 枚を共用する（言語別に作らない）
+    expect(await content(page, 'meta[property="og:image"]')).toBe('https://web-screen.net/og.png');
+  });
+});
+
 test.describe('ルートのリダイレクト', () => {
   test('既定は日本語トップへ送る', async ({ request }) => {
     const response = await request.get('/', { maxRedirects: 0 });

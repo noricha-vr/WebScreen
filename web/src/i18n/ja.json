@@ -2,6 +2,7 @@
   "meta": {
     "title": "WebScreen β — Web・画像・PDF を VRChat 用の動画に変換",
     "description": "PDF・画像をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
+    "imageAlt": "WebScreen — PDF・画像・Web ページを VRChat 用の動画 URL に変換するサービス",
     "privacyTitle": "Cookie とプライバシー — WebScreen β"
   },
   "nav": {

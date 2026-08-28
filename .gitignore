@@ -18,6 +18,9 @@ test_slides/*.pdf
 web/node_modules/
 web/dist/
 web/.astro/
+
+# OG 画像は配信物なので、先頭の *.png 除外から戻す
+!web/public/og.png
 web/.dev.vars
 
 # wrangler のローカルキャッシュ（Cloudflare アカウント情報を含む）
