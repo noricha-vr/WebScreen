@@ -34,6 +34,8 @@ interface TestMovie {
 /** D1 binding の代役。SQL の先頭句で分岐し、実際の movies テーブルの挙動だけを真似る。 */
 class FakeMoviesDatabase implements MoviesDatabase {
   readonly movies = new Map<string, TestMovie>();
+  /** SQL 内の datetime('now') に相当する D1 側の時刻。テストから進められる。 */
+  now = new Date('2026-08-30T00:00:00.000Z');
   /** pin の UPDATE 直前に走るフック。期限をまたぐ競合の再現に使う。 */
   onBeforePinUpdate: (() => void) | undefined;
 
@@ -93,17 +95,15 @@ class FakeMoviesDatabase implements MoviesDatabase {
     }
 
     if (query.startsWith('UPDATE movies SET pinned')) {
-      const [pinned, expiresAt, shortId, userId, threshold] = values as [
-        number,
-        string | null,
-        string,
-        number,
-        string,
-      ];
+      const [pinned, expiresAt, shortId, userId] = values as [number, string | null, string, number];
       // UPDATE の直前に走らせるフック（判定から書き込みまでの間の割り込みを再現する）
       this.onBeforePinUpdate?.();
       const movie = this.movies.get(shortId);
-      // 本番の WHERE と同じく、期限が残っている行だけを更新する
+      // 判定に使う時刻は SQL の書き方で決まる。datetime('now') なら実行時点、
+      // バインド値ならその値（実装が古い now を渡していれば、それがそのまま効く）。
+      const threshold = query.includes("datetime('now')")
+        ? this.now.toISOString()
+        : ((values[4] as string | undefined) ?? this.now.toISOString());
       if (!movie || movie.userId !== userId || isPastExpiry(movie.expiresAt, threshold)) {
         return { meta: { changes: 0 } };
       }
@@ -291,6 +291,7 @@ describe('togglePin', () => {
     const database = new FakeMoviesDatabase([
       movie({ expiresAt: '2026-08-31T23:59:59.000Z' }),
     ]);
+    database.now = now;
 
     await expect(
       togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
@@ -306,6 +307,7 @@ describe('togglePin', () => {
     const database = new FakeMoviesDatabase([
       movie({ pinned: 1, expiresAt: '2026-08-31T23:59:59.000Z' }),
     ]);
+    database.now = now;
 
     await expect(
       togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
@@ -318,9 +320,10 @@ describe('togglePin', () => {
     // ここで期限が延び、R2 の実体だけ消えた行が残る（Issue #83）
     const now = new Date('2026-09-01T00:00:00.000Z');
     const database = new FakeMoviesDatabase([movie({ expiresAt: '2026-09-01T00:00:10.000Z' })]);
+    database.now = now;
+    // 期限そのものは動かさず、書き込みまでに実時間が期限を越える
     database.onBeforePinUpdate = () => {
-      const target = database.movies.get(SHORT_ID);
-      if (target) target.expiresAt = '2026-08-31T23:59:00.000Z';
+      database.now = new Date('2026-09-01T00:00:20.000Z');
     };
 
     await expect(
@@ -345,6 +348,7 @@ describe('togglePin', () => {
     // 常にバッチより厳しい側に寄せておく（緩い側に寄せると競合の余地ができる）。
     const expiresAt = '2026-09-01T00:00:00.000Z';
     const database = new FakeMoviesDatabase([movie({ expiresAt })]);
+    database.now = new Date(expiresAt);
 
     await expect(
       togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date(expiresAt) })

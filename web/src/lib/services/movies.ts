@@ -128,8 +128,8 @@ export async function listHistory(input: ListHistoryInput): Promise<HistoryRespo
  * 期限切れの動画は毎時のバッチでどのみち消えるので、延命の余地を残さない。
  *
  * 判定は 2 段構え。読んだ値での事前判定は理由（410）を上限超過（409）より先に返すためで、
- * 競合を防ぐのは UPDATE の WHERE に入れた期限条件の方。読んでから書くまでの間に期限が
- * 過ぎる可能性があるので、事前判定だけでは同じ競合が残る。
+ * 競合を防ぐのは UPDATE の WHERE に入れた期限条件の方（D1 の実行時刻で評価する）。
+ * 事前判定だけでは、判定から書き込みまでの間に期限をまたぐ経路が残る。
  */
 export async function togglePin(
   input: MovieActionInput & { now?: Date }
@@ -162,14 +162,16 @@ export async function togglePin(
     ? new Date(now.getTime() + PINNED_RETENTION_MS).toISOString()
     : restoredExpiry(movie.created_at, now);
 
-  // 比較は保持期間バッチと同じ datetime() で行う（ISO8601 と SQLite の表記が混在し、
-  // 素の文字列比較では大小が逆転するため。精度と演算子も揃えて判定を食い違わせない）。
+  // 期限の判定は D1 の実行時刻（datetime('now')）で行う。リクエスト開始時に読んだ
+  // now を渡すと、件数の問い合わせなどを挟む間に期限をまたいでも更新が通ってしまう。
+  // 比較を datetime() で行うのは保持期間バッチと同じ理由（ISO8601 と SQLite の表記が
+  // 混在し、素の文字列比較では大小が逆転するため）。
   const result = await input.database
     .prepare(
       'UPDATE movies SET pinned = ?, expires_at = ? WHERE short_id = ? AND user_id = ?' +
-        ' AND (expires_at IS NULL OR datetime(expires_at) >= datetime(?))'
+        " AND (expires_at IS NULL OR datetime(expires_at) >= datetime('now'))"
     )
-    .bind(nextPinned ? 1 : 0, expiresAt, input.shortId, input.userId, now.toISOString())
+    .bind(nextPinned ? 1 : 0, expiresAt, input.shortId, input.userId)
     .run();
 
   // 0 件 = 読んだ後に期限が過ぎたか、行そのものが消えた。成功として返すと
