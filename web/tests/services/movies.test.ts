@@ -66,10 +66,14 @@ class FakeMoviesDatabase implements MoviesDatabase {
     return movie && movie.userId === userId ? (toRow(movie) as T) : null;
   }
 
-  private all<T>(_query: string, values: unknown[]): T[] {
+  private all<T>(query: string, values: unknown[]): T[] {
     const [userId, limit] = values as [number, number];
+    // 履歴は ready だけを返す。他の一覧クエリは failed を除くだけに留める。
+    const isVisible = query.includes("status = 'ready'")
+      ? (status: string) => status === 'ready'
+      : (status: string) => status !== 'failed';
     return [...this.movies.values()]
-      .filter((movie) => movie.userId === userId && movie.status !== 'failed')
+      .filter((movie) => movie.userId === userId && isVisible(movie.status))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .slice(0, limit)
       .map((movie) => toRow(movie) as T);
@@ -146,22 +150,34 @@ function pinnedMovies(count: number): TestMovie[] {
 }
 
 describe('listHistory', () => {
-  it('自分の pending と ready を新しい順に返し、日時を ISO8601 へ揃える', async () => {
+  it('ready を新しい順に返し、日時を ISO8601 へ揃える', async () => {
     const database = new FakeMoviesDatabase([
       movie({ shortId: 'old000000001', createdAt: '2026-08-01 00:00:00' }),
-      movie({ shortId: 'new000000002', createdAt: '2026-08-20 09:30:00', status: 'pending' }),
+      movie({ shortId: 'new000000002', createdAt: '2026-08-20 09:30:00' }),
     ]);
 
     const { movies } = await listHistory({ database, userId: USER_ID, publicBaseUrl: PUBLIC_URL });
 
     expect(movies.map((entry) => entry.shortId)).toEqual(['new000000002', 'old000000001']);
     expect(movies[0]).toMatchObject({
-      status: 'pending',
+      status: 'ready',
       pinned: false,
       // "YYYY-MM-DD HH:MM:SS" は UTC。ローカル時刻として解釈すると実行環境でずれる
       createdAt: '2026-08-20T09:30:00.000Z',
       publicUrl: `${PUBLIC_URL}/movies/new000000002.mp4`,
     });
+  });
+
+  it('アップロード未完了（pending）は履歴に出さない', async () => {
+    // 失敗した変換が誰にも failed へ落とされないまま「処理中」として残り続けていた。
+    const database = new FakeMoviesDatabase([
+      movie({ shortId: 'ready0000001' }),
+      movie({ shortId: 'pending00001', status: 'pending' }),
+    ]);
+
+    const { movies } = await listHistory({ database, userId: USER_ID, publicBaseUrl: PUBLIC_URL });
+
+    expect(movies.map((entry) => entry.shortId)).toEqual(['ready0000001']);
   });
 
   it('他人の動画は返さない', async () => {

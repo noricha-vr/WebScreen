@@ -269,6 +269,30 @@ test.describe('ログイン済み', () => {
     await expect(page).toHaveURL(/\/Ab12Cd34Ef56\/$/, { timeout: 120_000 });
   });
 
+  test('アップロードに失敗したら予約した動画を取り消す', async ({ page }) => {
+    // presign を通った時点で pending の行が予約される。ここで失敗を放置すると
+    // 誰も failed へ落とさないまま履歴に「処理中」として残り続けていた。
+    test.setTimeout(180_000);
+    await signIn(page);
+    await mockUploadEndpoints(page, E2E_FIXTURES.readyShortId);
+    // R2 への PUT だけを失敗させる（presign は成功済み = 予約が残る状況を作る）
+    await page.route('https://upload.test/r2-upload', (route) => route.fulfill({ status: 500 }));
+
+    const deleteRequest = page.waitForRequest(
+      (request) =>
+        request.method() === 'DELETE' &&
+        request.url().includes(`/api/movies/${E2E_FIXTURES.readyShortId}/`)
+    );
+
+    await page.goto('/ja/');
+    await page
+      .locator('[data-convert-panel] [data-file-input]')
+      .setInputFiles([{ name: 'first.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG }]);
+
+    await deleteRequest;
+    await expect(page.locator('[data-convert-panel] [data-file-error]')).toBeVisible();
+  });
+
   test('対応外の形式は変換を始めずエラーを出す', async ({ page }) => {
     await signIn(page);
     await page.goto('/ja/');
