@@ -238,7 +238,10 @@ test.describe('ログイン済み', () => {
     // web-capture プロキシは撮影順の画像 URL 配列を返す（順序が動画のスクロール順になる）
     const shots = ['0001', '0002', '0003'].map((n) => `https://shots.test/cap/${n}.png`);
     await page.route('**/api/capture/', (route) =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ images: shots }) })
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ images: shots, totalImages: shots.length }),
+      })
     );
     const png = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
@@ -376,6 +379,49 @@ test.describe('ログイン済み', () => {
     await expect(panel).toHaveAttribute('data-phase', 'error');
     expect(presignCalls).toBe(0);
     expect(putCalls).toBe(0);
+  });
+
+  test('長いページは capture を複数回に分けて取得する', async ({ page }) => {
+    // 1 リクエストの上限を超えるページでも、続きを取りに行って全部を動画にする
+    test.setTimeout(180_000);
+    await signIn(page);
+    await mockUploadEndpoints(page);
+
+    const TOTAL = 5;
+    const PER_REQUEST = 2;
+    const requested: number[] = [];
+    await page.route('**/api/capture/', (route) => {
+      const startIndex = (route.request().postDataJSON() as { startIndex?: number }).startIndex ?? 0;
+      requested.push(startIndex);
+      const images = Array.from(
+        { length: Math.min(PER_REQUEST, Math.max(TOTAL - startIndex, 0)) },
+        (_unused, offset) => `https://shots.test/long/${startIndex + offset + 1}.png`
+      );
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ images, totalImages: TOTAL }),
+      });
+    });
+
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    await page.route('https://shots.test/long/*', (route) =>
+      route.fulfill({ contentType: 'image/png', body: png })
+    );
+
+    const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
+    await page.goto('/ja/');
+    const panel = page.locator('[data-convert-panel]');
+    await panel.locator('[data-url-input]').fill('https://example.com/very-long');
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    const body = (await uploadRequest).postDataBuffer();
+    expect(body).not.toBeNull();
+    expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
+    // 続きの位置を送って 3 回で集め切る
+    expect(requested).toEqual([0, 2, 4]);
   });
 
   test('非Webページ URL の案内は URL 欄にだけ表示し、下流メッセージを出さない', async ({ page }) => {
