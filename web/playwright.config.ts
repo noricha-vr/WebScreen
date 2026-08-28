@@ -38,6 +38,8 @@ const seedCommand = [
   'bun run build',
   `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=migrations/0001_init.sql`,
   `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=e2e/fixtures/seed.sql`,
+  // ダウンロード経路は R2 の実体を読むため、seed した行に対応するオブジェクトも置く。
+  `bunx wrangler r2 object put webscreen-beta/movies/${E2E_FIXTURES.readyShortId}.mp4 --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=e2e/fixtures/sample.mp4 --content-type=video/mp4`,
   `bunx wrangler dev -c dist/server/wrangler.json --persist-to ${STATE_DIR} --port ${PORT} --inspector-port ${INSPECTOR_PORT} --var SESSION_SIGNING_KEY:${E2E_SESSION_SIGNING_KEY}`,
 ].join(' && ');
 

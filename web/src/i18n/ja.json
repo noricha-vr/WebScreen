@@ -85,6 +85,7 @@
     "playbackHint": "この URL を VRChat のビデオプレイヤーに貼り付けると再生できます。"
   },
   "actions": {
+    "download": "ダウンロード",
     "delete": "削除",
     "deleteConfirm": "削除すると元に戻せません",
     "deleteYes": "削除する",

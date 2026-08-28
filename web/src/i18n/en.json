@@ -85,6 +85,7 @@
     "playbackHint": "Paste this URL into a VRChat video player to watch it."
   },
   "actions": {
+    "download": "Download",
     "delete": "Delete",
     "deleteConfirm": "Deleting cannot be undone",
     "deleteYes": "Delete",
