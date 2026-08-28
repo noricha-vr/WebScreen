@@ -15,7 +15,12 @@ import {
   type RenameMovieResponse,
 } from '../contracts/api';
 import { isShortId, movieKey } from '../contracts/r2key';
-import { MAX_PINNED_MOVIES, MOVIE_RETENTION_MS, UNPIN_GRACE_MS } from './quota';
+import {
+  MAX_PINNED_MOVIES,
+  MOVIE_RETENTION_MS,
+  PINNED_RETENTION_MS,
+  UNPIN_GRACE_MS,
+} from './quota';
 
 /** 履歴に返す最大件数。ドロップダウンで一覧できる範囲に抑える。 */
 export const HISTORY_LIMIT = 50;
@@ -113,8 +118,9 @@ export async function listHistory(input: ListHistoryInput): Promise<HistoryRespo
 /**
  * pin を切り替える。
  *
- * pin 時は expires_at を NULL にして自動削除の対象外にし、解除時は元の保管期限
+ * pin 時は expires_at を今から 365 日後へ延ばし、解除時は元の保管期限
  * （created_at + 30 日）へ戻す。既に過ぎている場合は即時削除にならないよう猶予を与える。
+ * pin し直すたびに 365 日後へ延びる（残したい動画は所有者が触り続ける前提）。
  */
 export async function togglePin(
   input: MovieActionInput & { now?: Date }
@@ -133,9 +139,10 @@ export async function togglePin(
     }
   }
 
+  const now = input.now ?? new Date();
   const expiresAt = nextPinned
-    ? null
-    : restoredExpiry(movie.created_at, input.now ?? new Date());
+    ? new Date(now.getTime() + PINNED_RETENTION_MS).toISOString()
+    : restoredExpiry(movie.created_at, now);
 
   await input.database
     .prepare('UPDATE movies SET pinned = ?, expires_at = ? WHERE short_id = ? AND user_id = ?')

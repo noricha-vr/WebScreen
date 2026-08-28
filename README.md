@@ -30,7 +30,7 @@ point instantly.
 | File size | 50 MB per video |
 | Storage per user | 500 MB |
 | Retention | 30 days |
-| Pinned videos | 10 per user, kept indefinitely |
+| Pinned videos | 10 per user, kept for a year |
 
 Videos are served from a public URL — anyone who knows the URL can play it. The only protection is
 that the ID is a random 12-character string. Do not convert anything confidential.

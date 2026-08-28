@@ -29,7 +29,7 @@ VALUES
     'ready',
     1,
     datetime('now', '-3 days'),
-    NULL
+    strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+365 days')
   ),
   (
     'E2EPending01',

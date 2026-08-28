@@ -35,6 +35,11 @@ function parseSqliteTime(value: string): number {
   return Date.parse(/[Z+]|-\d\d:\d\d$/.test(normalized) ? normalized : `${normalized}Z`);
 }
 
+/** 掃除対象の条件（expires_at が設定済みで、かつ閾値より前）。 */
+function isExpired(movie: TestMovie, threshold: number): boolean {
+  return movie.expiresAt !== null && parseSqliteTime(movie.expiresAt) < threshold;
+}
+
 class FakeRetentionDatabase implements RetentionDatabase {
   readonly movies = new Map<string, TestMovie>();
   /** 行を SELECT した直後に走らせるフック（pin の割り込みを再現する）。 */
@@ -58,18 +63,18 @@ class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private select(query: string, values: unknown[]): { short_id: string }[] {
-    if (query.includes('WHERE short_id = ? AND pinned = 0')) {
+    // 削除直前の再確認（short_id と閾値の 2 引数）。pin ではなく status と期限で判定する。
+    if (query.includes('WHERE short_id = ?')) {
       const movie = this.movies.get(values[0] as string);
-      return movie?.pinned === 0 ? [{ short_id: movie.shortId }] : [];
+      if (!movie || !isExpired(movie, parseSqliteTime(values[1] as string))) return [];
+      if (query.includes("status = 'ready'") && movie.status !== 'ready') return [];
+      return [{ short_id: movie.shortId }];
     }
 
     const threshold = parseSqliteTime(values[0] as string);
     const rows = [...this.movies.values()].filter((movie) =>
       query.includes("status = 'ready'")
-        ? movie.status === 'ready' &&
-          movie.pinned === 0 &&
-          movie.expiresAt !== null &&
-          parseSqliteTime(movie.expiresAt) < threshold
+        ? movie.status === 'ready' && isExpired(movie, threshold)
         : movie.status === 'pending' && parseSqliteTime(movie.createdAt) < threshold
     );
     this.onSelect?.(rows);
@@ -77,6 +82,15 @@ class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private delete(query: string, values: unknown[]): number {
+    // backfill の UPDATE も run() を通る。pin 済みで期限を持たない行だけを埋める。
+    if (query.startsWith('UPDATE')) {
+      const targets = [...this.movies.values()].filter(
+        (movie) => movie.pinned === 1 && movie.expiresAt === null
+      );
+      for (const movie of targets) movie.expiresAt = values[0] as string;
+      return targets.length;
+    }
+
     if (query.includes("status = 'failed'")) {
       const threshold = parseSqliteTime(values[0] as string);
       const targets = [...this.movies.values()].filter(
@@ -88,7 +102,10 @@ class FakeRetentionDatabase implements RetentionDatabase {
 
     const movie = this.movies.get(values[0] as string);
     if (!movie) return 0;
-    if (query.includes('pinned = 0') && movie.pinned !== 0) return 0;
+    if (query.includes('expires_at') && !isExpired(movie, parseSqliteTime(values[1] as string))) {
+      return 0;
+    }
+    if (query.includes("status = 'ready'") && movie.status !== 'ready') return 0;
     if (query.includes("status = 'pending'") && movie.status !== 'pending') return 0;
     this.movies.delete(movie.shortId);
     return 1;
@@ -164,7 +181,7 @@ describe('runRetention: 期限切れ動画', () => {
     expect(database.movies.has('expiredAAAAA')).toBe(false);
   });
 
-  it('pin された動画は期限を過ぎていても残す', async () => {
+  it('pin された動画も期限を過ぎていれば消す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'pinnedAAAAAA', pinned: 1, expiresAt: iso(-DAY_MS) }),
     ]);
@@ -172,25 +189,42 @@ describe('runRetention: 期限切れ動画', () => {
 
     const summary = await run(database, bucket);
 
-    expect(summary.deletedMovies).toBe(0);
-    expect(bucket.deleted).toEqual([]);
-    expect(database.movies.has('pinnedAAAAAA')).toBe(true);
+    expect(summary.deletedMovies).toBe(1);
+    expect(bucket.deleted).toEqual([movieKey('pinnedAAAAAA')]);
+    expect(database.movies.has('pinnedAAAAAA')).toBe(false);
   });
 
-  it('SELECT 後・R2 削除前に pin された動画は R2 と D1 の両方を残す', async () => {
+  it('期限内の pin された動画は残す', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'pinnedLiveAA', pinned: 1, expiresAt: iso(300 * DAY_MS) }),
+    ]);
+    const bucket = new FakeRetentionBucket();
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedMovies).toBe(0);
+    expect(bucket.deleted).toEqual([]);
+    expect(database.movies.has('pinnedLiveAA')).toBe(true);
+  });
+
+  it('SELECT 後・R2 削除前に期限が延びた動画は R2 と D1 の両方を残す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'racePinAAAAA', expiresAt: iso(-HOUR_MS) }),
     ]);
     const bucket = new FakeRetentionBucket();
+    // SELECT 直後に所有者が pin した状況（期限が 1 年後へ延びる）。
     database.onSelect = (rows) => {
-      for (const row of rows) row.pinned = 1;
+      for (const row of rows) {
+        row.pinned = 1;
+        row.expiresAt = iso(365 * DAY_MS);
+      }
     };
 
     const summary = await run(database, bucket);
 
     expect(summary.deletedMovies).toBe(0);
     expect(bucket.deleted).toEqual([]);
-    expect(database.movies.get('racePinAAAAA')?.pinned).toBe(1);
+    expect(database.movies.has('racePinAAAAA')).toBe(true);
   });
 
   it('期限内・期限未設定の動画には触れない', async () => {
@@ -330,7 +364,7 @@ describe('runRetention: captures', () => {
 });
 
 describe('runRetention: サマリ', () => {
-  it('4 種類の削除件数をまとめて返す', async () => {
+  it('補完と 4 種類の削除件数をまとめて返す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'expiredBBBBB', expiresAt: iso(-HOUR_MS) }),
       movie({ shortId: 'orphanBBBBBB', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
@@ -343,6 +377,7 @@ describe('runRetention: サマリ', () => {
     const summary = await run(database, bucket);
 
     expect(summary).toEqual({
+      backfilledPinned: 0,
       deletedMovies: 1,
       deletedOrphans: 1,
       deletedFailed: 1,
@@ -363,5 +398,58 @@ describe('runRetention: サマリ', () => {
     const summary = await run(database, new FakeRetentionBucket());
 
     expect(summary.deletedFailed).toBe(1);
+  });
+});
+
+describe('runRetention: pin 済みの期限補完', () => {
+  it('期限を持たない pin 済みの行へ 1 年後の期限を入れる', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'pinnedNullAA', pinned: 1, expiresAt: null }),
+    ]);
+
+    const summary = await run(database, new FakeRetentionBucket());
+
+    expect(summary.backfilledPinned).toBe(1);
+    expect(database.movies.get('pinnedNullAA')?.expiresAt).toBe(iso(365 * DAY_MS));
+    // 期限を入れた直後の行は同じ実行では消えない
+    expect(database.movies.size).toBe(1);
+  });
+
+  it('期限を持つ行には触らない（pin 済みでも上書きしない）', async () => {
+    const kept = iso(10 * DAY_MS);
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'pinnedDatedA', pinned: 1, expiresAt: kept }),
+      movie({ shortId: 'plainDatedAA', pinned: 0, expiresAt: kept }),
+    ]);
+
+    const summary = await run(database, new FakeRetentionBucket());
+
+    expect(summary.backfilledPinned).toBe(0);
+    expect(database.movies.get('pinnedDatedA')?.expiresAt).toBe(kept);
+    expect(database.movies.get('plainDatedAA')?.expiresAt).toBe(kept);
+  });
+});
+
+describe('runRetention: 削除直前の再確認', () => {
+  it('SELECT 後に ready でなくなった行は R2 ごと消さない', async () => {
+    const database = new FakeRetentionDatabase([
+      // created_at を新しくしておく（failed 行の掃除は 24 時間の猶予後なので、
+      // ここで消えると再確認の効果か猶予切れかを区別できない）
+      movie({ shortId: 'statusFlipAA', createdAt: iso(-HOUR_MS), expiresAt: iso(-HOUR_MS) }),
+    ]);
+    // 期限切れとして拾った後に失敗扱いへ変わる（別経路の書き込みとの競合を再現）
+    database.onSelect = (rows) => {
+      for (const row of rows) {
+        const target = database.movies.get(row.shortId);
+        if (target) target.status = 'failed';
+      }
+    };
+    const bucket = new FakeRetentionBucket(new Set([movieKey('statusFlipAA')]));
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedMovies).toBe(0);
+    expect(bucket.deleted).toEqual([]);
+    expect(database.movies.has('statusFlipAA')).toBe(true);
   });
 });

@@ -14,7 +14,7 @@ interface PinBindings {
   SESSION_SIGNING_KEY: string;
 }
 
-/** 所有者の動画の pin を切り替える（pin 中は自動削除の対象外）。 */
+/** 所有者の動画の pin を切り替える（pin 中は保管期限が 1 年後まで延びる）。 */
 export const POST: APIRoute = async ({ request, params }) => {
   const bindings = env as unknown as PinBindings;
   const signingKey = await importSigningKey(bindings.SESSION_SIGNING_KEY);

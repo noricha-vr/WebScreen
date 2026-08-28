@@ -92,7 +92,7 @@ export interface CommitResponse {
   shortId: string;
   publicUrl: string;
   sizeBytes: number;
-  /** ISO8601。pin されている場合は null（自動削除の対象外）。 */
+  /** ISO8601。pin すると 1 年後まで延びる。null は期限を持たない古い行だけ。 */
   expiresAt: string | null;
 }
 
@@ -145,7 +145,7 @@ export interface HistoryEntry {
   pinned: boolean;
   /** ISO8601。D1 の DEFAULT datetime('now') は UTC の "YYYY-MM-DD HH:MM:SS" なので境界で正規化する。 */
   createdAt: string;
-  /** ISO8601。pin 中は null（自動削除の対象外）。 */
+  /** ISO8601。pin 中は 1 年後の期限が入る。null は期限を持たない古い行だけ。 */
   expiresAt: string | null;
   publicUrl: string;
 }

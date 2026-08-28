@@ -159,10 +159,14 @@ test.describe('公開プレビュー', () => {
     await expect(page.locator('[data-preview]')).not.toHaveAttribute('data-copied', 'true');
   });
 
-  test('ピン留め中の動画は無期限と表示する', async ({ page }) => {
+  test('ピン留め中の動画は 1 年後までの残日数を表示する', async ({ page }) => {
     await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);
 
-    await expect(page.getByText(ja.preview.neverExpires)).toBeVisible();
+    await expect(
+      page.getByText(
+        ja.preview.expiresInDays.replace('{days}', String(E2E_FIXTURES.pinnedRemainingDays))
+      )
+    ).toBeVisible();
   });
 
   test.describe('404', () => {

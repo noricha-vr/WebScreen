@@ -19,8 +19,10 @@ const { lang, shortId, filename, publicUrl, pinned, expiresAt, isOwner } = Astro
 const t = useTranslations(lang);
 
 const daysLeft = expiresAt === null ? null : remainingDays(expiresAt, new Date());
+// pin 中も期限（作成 + 1 年）を持つので、残日数はそのまま出す。
+// neverExpires は expires_at を持たない古い行だけのフォールバック。
 const expiryLabel =
-  pinned || daysLeft === null
+  daysLeft === null
     ? t.preview.neverExpires
     : daysLeft > 0
       ? t.preview.expiresInDays.replace('{days}', String(daysLeft))

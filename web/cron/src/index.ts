@@ -48,7 +48,7 @@ export default {
           severity: 'info',
           kind: 'event',
           cron: event.cron,
-          summary: `retention deleted ${summary.deletedMovies} expired movies, ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures.`,
+          summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies, ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures.`,
           detail: summary,
           durationMs: Date.now() - startedAt,
         })

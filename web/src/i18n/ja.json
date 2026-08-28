@@ -24,7 +24,7 @@
     "formats": "対応形式は PDF / png / jpg / jpeg / webp / gif",
     "maxSize": "1 ファイルあたり 50 MB まで",
     "retention": "保管期間は 30 日",
-    "pinned": "ピン留めした 10 件は無期限で保管",
+    "pinned": "ピン留めした 10 件は 1 年間保管",
     "quota": "1 ユーザーあたり合計 500 MB"
   },
   "convert": {
@@ -68,10 +68,10 @@
     "expiry": "保管期限",
     "expiresInDays": "あと {days} 日",
     "expiresToday": "まもなく削除されます",
-    "neverExpires": "無期限（ピン留め中）",
+    "neverExpires": "保管期限は未設定",
     "pin": "ピン留めする",
     "unpin": "ピン留めを解除",
-    "pinHint": "ピン留めした動画は期限なしで保管します（{count} 件まで）",
+    "pinHint": "ピン留めした動画は 1 年間保管します（{count} 件まで）",
     "pinLimit": "ピン留めできるのは {count} 件までです",
     "pinFailed": "ピン留めを変更できませんでした",
     "rename": "ファイル名を編集",
@@ -149,7 +149,7 @@
     "pdfBody": "パワーポイントや Google スライドを PDF で書き出して動画に変換すれば、動画プレイヤーやスライドシステムでプレゼンを始められます。",
     "pdfMediaAlt": "PDF が動画に変換される様子",
     "historyHeading": "履歴を確認",
-    "historyBody": "変換した動画のリンクは、履歴からいつでも確認できます。動画は 30 日間保管し、ピン留めした 10 件は無期限で残ります。",
+    "historyBody": "変換した動画のリンクは、履歴からいつでも確認できます。動画は 30 日間保管し、ピン留めした 10 件は 1 年間残ります。",
     "historyMediaAlt": "変換した動画の履歴",
     "comingSoon": "画面録画・画面共有は対応中です"
   }
