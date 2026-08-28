@@ -94,6 +94,30 @@
 }
 
 /*
+ * ホバー・フォーカスで上に出る補足（OS のヘルプテキスト相当）。
+ * 常時表示のヒント文を畳んで画面の密度を下げるために使う。
+ * display ではなく visibility を切り替えるのは、テストとスクリーンリーダーから
+ * 「隠れている要素」として扱えるようにするため。
+ */
+[data-tooltip] {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+[data-tooltip-scope]:hover [data-tooltip],
+[data-tooltip-scope]:focus-within [data-tooltip] {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Escape で閉じた間は出さない（WCAG 1.4.13 Dismissible）。フラグは離れると外れる。 */
+[data-tooltip-scope][data-tooltip-dismissed] [data-tooltip] {
+  visibility: hidden;
+  opacity: 0;
+}
+
+/*
  * 削除のインライン確認。confirm() を使わず、確認 UI を同じ場所に出し分ける。
  * 履歴の各行とプレビューページの両方で同じ規則を使う。
  */

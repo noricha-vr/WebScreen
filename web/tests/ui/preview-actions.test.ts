@@ -30,6 +30,10 @@ class FakePreview {
   querySelector(selector: string): unknown {
     return selector === '[data-preview-url]' ? this.input : null;
   }
+
+  querySelectorAll(): unknown[] {
+    return [];
+  }
 }
 
 interface ScheduledCall {
@@ -42,6 +46,7 @@ function mount(storage: FakeStorage): { preview: FakePreview; scheduled: Schedul
   const scheduled: ScheduledCall[] = [];
   mountPreviewActions(preview as unknown as HTMLElement, {
     storage,
+    document: { addEventListener: () => {} },
     schedule: (callback, delayMs) => {
       scheduled.push({ callback, delayMs });
     },

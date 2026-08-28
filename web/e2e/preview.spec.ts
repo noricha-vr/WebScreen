@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import en from '../src/i18n/en.json' with { type: 'json' };
 import ja from '../src/i18n/ja.json' with { type: 'json' };
 import { E2E_FIXTURES } from '../playwright.config';
+import { MAX_PINNED_MOVIES } from '../src/lib/services/quota';
 import { signIn } from './session';
 
 // 公開プレビュー /{shortId}/ と履歴ドロップダウンの画面確認。
@@ -33,6 +34,15 @@ async function stubHistory(page: Page, movies: unknown[]): Promise<void> {
       body: JSON.stringify({ movies }),
     })
   );
+}
+
+/** 画面上の位置を比べるための矩形（見えない要素は取れないので失敗させる）。 */
+async function boxOf(
+  locator: Locator
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error('要素が表示されていない');
+  return box;
 }
 
 function historyMovie(overrides: Record<string, unknown> = {}) {
@@ -154,26 +164,85 @@ test.describe('公開プレビュー', () => {
 });
 
 test.describe('所有者の操作', () => {
-  test('タイトル → 保管期限 → ピン留め → URL → 動画 の順に並ぶ', async ({ page, context }) => {
+  test('タイトル → 保管期限 → URL → 動画 の順に並ぶ', async ({ page, context }) => {
     await signIn(context, E2E_FIXTURES.ownerId);
     await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
 
-    const top = async (locator: Locator): Promise<number> => {
-      const box = await locator.boundingBox();
-      if (box === null) throw new Error('要素が表示されていない');
-      return box.y;
-    };
-
-    // VRChat に貼る URL を動画本体より先に見せ、期限とピン留めは同じ話なので隣接させる
+    // VRChat に貼る URL を動画本体より先に見せる
     const positions = [
-      await top(page.getByRole('heading', { level: 1 })),
-      await top(page.getByText(ja.preview.expiry)),
-      await top(page.getByRole('button', { name: ja.preview.pin })),
-      await top(page.locator('[data-preview-url]')),
-      await top(page.locator('[data-preview-video]')),
-    ];
+      await boxOf(page.getByRole('heading', { level: 1 })),
+      await boxOf(page.getByText(ja.preview.expiry)),
+      await boxOf(page.locator('[data-preview-url]')),
+      await boxOf(page.locator('[data-preview-video]')),
+    ].map((box) => box.y);
 
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  test('ピン留めボタンは保管期限の右にあり、ホバーで保管の説明を出す', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+
+    const expiry = await boxOf(page.getByText(ja.preview.expiry));
+    const pinButton = page.getByRole('button', { name: ja.preview.pin });
+    const pin = await boxOf(pinButton);
+
+    // 同じ行の右側（期限テキストとの上下差はボタンのパディング分に収まる）
+    expect(pin.x).toBeGreaterThan(expiry.x);
+    expect(Math.abs(pin.y + pin.height / 2 - (expiry.y + expiry.height / 2))).toBeLessThan(8);
+
+    // 説明文は常時表示せず、ホバーした時だけ出す
+    const hint = page.locator('[data-preview] [data-tooltip]');
+    await expect(hint).toBeHidden();
+    await pinButton.hover();
+    await expect(hint).toBeVisible();
+    await expect(hint).toHaveText(
+      ja.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES))
+    );
+
+    // フェード途中で撮らないようトランジションを終端まで進める
+    await page.screenshot({ path: screenshotPath('05-preview-pin-tooltip'), animations: 'disabled' });
+  });
+
+  test('狭い画面でもツールチップが画面内に収まる', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.setViewportSize({ width: 320, height: 720 });
+    await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);
+
+    const scrollWidth = (): Promise<number> =>
+      page.evaluate(() => document.documentElement.scrollWidth);
+    const before = await scrollWidth();
+
+    await page.getByRole('button', { name: ja.preview.unpin }).hover();
+    const hint = await boxOf(page.locator('[data-preview] [data-tooltip]'));
+
+    expect(hint.x).toBeGreaterThanOrEqual(0);
+    expect(hint.x + hint.width).toBeLessThanOrEqual(320);
+    // ツールチップが新たな横スクロールを作らないこと
+    expect(await scrollWidth()).toBe(before);
+  });
+
+  test('キーボードでフォーカスしてもツールチップが出る', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+
+    const hint = page.locator('[data-preview] [data-tooltip]');
+    await page.getByRole('button', { name: ja.preview.pin }).focus();
+    await expect(hint).toBeVisible();
+
+    // 上のコンテンツを覆ったままにしない（WCAG 1.4.13 Dismissible）
+    await page.keyboard.press('Escape');
+    await expect(hint).toBeHidden();
+  });
+
+  test('ピン留め中はボタンが解除の操作に変わる', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);
+
+    await expect(page.getByRole('button', { name: ja.preview.unpin })).toBeVisible();
+    await expect(page.getByRole('button', { name: ja.preview.pin })).toHaveCount(0);
+
+    await page.screenshot({ path: screenshotPath('06-preview-pinned') });
   });
 
   test('ファイル名を Enter で変更し、再読み込み後も保持する', async ({ page, context }) => {
