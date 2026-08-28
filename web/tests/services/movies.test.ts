@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   MAX_PINNED_MOVIES,
   MOVIE_RETENTION_MS,
+  PINNED_RETENTION_MS,
   UNPIN_GRACE_MS,
 } from '../../src/lib/services/quota';
 import {
@@ -190,15 +191,39 @@ describe('listHistory', () => {
 });
 
 describe('togglePin', () => {
-  it('pin すると期限が無期限（null）になる', async () => {
+  it('pin すると期限が今から 1 年後になる', async () => {
     const database = new FakeMoviesDatabase([movie()]);
+    const now = new Date('2026-08-10T00:00:00.000Z');
+    const expiresAt = new Date(now.getTime() + PINNED_RETENTION_MS).toISOString();
 
-    await expect(togglePin({ database, userId: USER_ID, shortId: SHORT_ID })).resolves.toEqual({
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
+    ).resolves.toEqual({
       shortId: SHORT_ID,
       pinned: true,
-      expiresAt: null,
+      expiresAt,
     });
-    expect(database.movies.get(SHORT_ID)).toMatchObject({ pinned: 1, expiresAt: null });
+    expect(database.movies.get(SHORT_ID)).toMatchObject({ pinned: 1, expiresAt });
+  });
+
+  it('pin し直すと期限がその時点から 1 年後へ延びる', async () => {
+    const database = new FakeMoviesDatabase([movie()]);
+    const pinnedAt = new Date('2026-08-10T00:00:00.000Z');
+    const repinnedAt = new Date('2026-10-10T00:00:00.000Z');
+
+    await togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: pinnedAt });
+    await togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: repinnedAt });
+    const response = await togglePin({
+      database,
+      userId: USER_ID,
+      shortId: SHORT_ID,
+      now: repinnedAt,
+    });
+
+    expect(response.pinned).toBe(true);
+    expect(response.expiresAt).toBe(
+      new Date(repinnedAt.getTime() + PINNED_RETENTION_MS).toISOString()
+    );
   });
 
   it('pin 解除で作成から 30 日後の期限に戻る', async () => {

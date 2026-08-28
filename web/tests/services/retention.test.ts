@@ -35,6 +35,11 @@ function parseSqliteTime(value: string): number {
   return Date.parse(/[Z+]|-\d\d:\d\d$/.test(normalized) ? normalized : `${normalized}Z`);
 }
 
+/** 掃除対象の条件（expires_at が設定済みで、かつ閾値より前）。 */
+function isExpired(movie: TestMovie, threshold: number): boolean {
+  return movie.expiresAt !== null && parseSqliteTime(movie.expiresAt) < threshold;
+}
+
 class FakeRetentionDatabase implements RetentionDatabase {
   readonly movies = new Map<string, TestMovie>();
   /** 行を SELECT した直後に走らせるフック（pin の割り込みを再現する）。 */
@@ -58,18 +63,18 @@ class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private select(query: string, values: unknown[]): { short_id: string }[] {
-    if (query.includes('WHERE short_id = ? AND pinned = 0')) {
+    // 削除直前の再確認（short_id と閾値の 2 引数）。pin ではなく期限で判定する。
+    if (query.includes('WHERE short_id = ?')) {
       const movie = this.movies.get(values[0] as string);
-      return movie?.pinned === 0 ? [{ short_id: movie.shortId }] : [];
+      return movie && isExpired(movie, parseSqliteTime(values[1] as string))
+        ? [{ short_id: movie.shortId }]
+        : [];
     }
 
     const threshold = parseSqliteTime(values[0] as string);
     const rows = [...this.movies.values()].filter((movie) =>
       query.includes("status = 'ready'")
-        ? movie.status === 'ready' &&
-          movie.pinned === 0 &&
-          movie.expiresAt !== null &&
-          parseSqliteTime(movie.expiresAt) < threshold
+        ? movie.status === 'ready' && isExpired(movie, threshold)
         : movie.status === 'pending' && parseSqliteTime(movie.createdAt) < threshold
     );
     this.onSelect?.(rows);
@@ -88,7 +93,9 @@ class FakeRetentionDatabase implements RetentionDatabase {
 
     const movie = this.movies.get(values[0] as string);
     if (!movie) return 0;
-    if (query.includes('pinned = 0') && movie.pinned !== 0) return 0;
+    if (query.includes('expires_at') && !isExpired(movie, parseSqliteTime(values[1] as string))) {
+      return 0;
+    }
     if (query.includes("status = 'pending'") && movie.status !== 'pending') return 0;
     this.movies.delete(movie.shortId);
     return 1;
@@ -164,7 +171,7 @@ describe('runRetention: 期限切れ動画', () => {
     expect(database.movies.has('expiredAAAAA')).toBe(false);
   });
 
-  it('pin された動画は期限を過ぎていても残す', async () => {
+  it('pin された動画も期限を過ぎていれば消す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'pinnedAAAAAA', pinned: 1, expiresAt: iso(-DAY_MS) }),
     ]);
@@ -172,25 +179,42 @@ describe('runRetention: 期限切れ動画', () => {
 
     const summary = await run(database, bucket);
 
-    expect(summary.deletedMovies).toBe(0);
-    expect(bucket.deleted).toEqual([]);
-    expect(database.movies.has('pinnedAAAAAA')).toBe(true);
+    expect(summary.deletedMovies).toBe(1);
+    expect(bucket.deleted).toEqual([movieKey('pinnedAAAAAA')]);
+    expect(database.movies.has('pinnedAAAAAA')).toBe(false);
   });
 
-  it('SELECT 後・R2 削除前に pin された動画は R2 と D1 の両方を残す', async () => {
+  it('期限内の pin された動画は残す', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'pinnedLiveAA', pinned: 1, expiresAt: iso(300 * DAY_MS) }),
+    ]);
+    const bucket = new FakeRetentionBucket();
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedMovies).toBe(0);
+    expect(bucket.deleted).toEqual([]);
+    expect(database.movies.has('pinnedLiveAA')).toBe(true);
+  });
+
+  it('SELECT 後・R2 削除前に期限が延びた動画は R2 と D1 の両方を残す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'racePinAAAAA', expiresAt: iso(-HOUR_MS) }),
     ]);
     const bucket = new FakeRetentionBucket();
+    // SELECT 直後に所有者が pin した状況（期限が 1 年後へ延びる）。
     database.onSelect = (rows) => {
-      for (const row of rows) row.pinned = 1;
+      for (const row of rows) {
+        row.pinned = 1;
+        row.expiresAt = iso(365 * DAY_MS);
+      }
     };
 
     const summary = await run(database, bucket);
 
     expect(summary.deletedMovies).toBe(0);
     expect(bucket.deleted).toEqual([]);
-    expect(database.movies.get('racePinAAAAA')?.pinned).toBe(1);
+    expect(database.movies.has('racePinAAAAA')).toBe(true);
   });
 
   it('期限内・期限未設定の動画には触れない', async () => {

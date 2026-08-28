@@ -98,7 +98,8 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
 }
 
 /**
- * expires_at を過ぎた ready 動画を削除する。
+ * expires_at を過ぎた ready 動画を削除する。pin の有無では絞らない
+ * （pin は保管期間を 365 日へ延ばすだけで、期限が来れば同じように消える）。
  *
  * 比較で datetime() を挟むのは、expires_at が ISO8601（`2026-...T...Z`）、
  * created_at が SQLite の datetime('now')（`2026-... ...`）と表記が混在しており、
@@ -110,20 +111,23 @@ async function deleteExpiredMovies(
   bucket: RetentionBucket,
   now: Date
 ): Promise<number> {
+  const threshold = now.toISOString();
   const { results } = await database
     .prepare(
-      "SELECT short_id FROM movies WHERE status = 'ready' AND pinned = 0 AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)"
+      "SELECT short_id FROM movies WHERE status = 'ready' AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)"
     )
-    .bind(now.toISOString())
+    .bind(threshold)
     .all<ShortIdRow>();
 
   let deleted = 0;
   for (const row of results) {
-    // 初回 SELECT の後に pin された場合、R2 を先に消すと D1 行だけ残る。
-    // R2 削除の直前にも状態を読むことで、実体と行の不整合を防ぐ。
+    // 初回 SELECT の後に pin（= 期限の延長）が入った場合、R2 を先に消すと生きた
+    // 行だけが残る。R2 削除の直前にも期限を読み直し、実体と行の不整合を防ぐ。
     const current = await database
-      .prepare('SELECT short_id FROM movies WHERE short_id = ? AND pinned = 0')
-      .bind(row.short_id)
+      .prepare(
+        'SELECT short_id FROM movies WHERE short_id = ? AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)'
+      )
+      .bind(row.short_id, threshold)
       .all<ShortIdRow>();
     if (current.results.length === 0) continue;
 
@@ -135,10 +139,12 @@ async function deleteExpiredMovies(
       continue;
     }
 
-    // SELECT 後に pin された動画を巻き込まないよう、削除時にも pinned を再確認する。
+    // SELECT 後に期限が延びた動画を巻き込まないよう、削除時にも期限を再確認する。
     const result = await database
-      .prepare('DELETE FROM movies WHERE short_id = ? AND pinned = 0')
-      .bind(row.short_id)
+      .prepare(
+        'DELETE FROM movies WHERE short_id = ? AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)'
+      )
+      .bind(row.short_id, threshold)
       .run();
     deleted += result.meta.changes;
   }
