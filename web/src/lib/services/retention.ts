@@ -181,9 +181,16 @@ async function deleteExpiredMovies(
       .bind(row.short_id, threshold)
       .run();
     deleted += result.meta.changes;
-    // 実体を消したのに行が残った = 上の不変条件が破れている。次回の実行では
-    // R2 が空なので気づけないため、この場で数えて可視化する。
-    if (result.meta.changes === 0) stranded += 1;
+    // 0 件は「行が残った」とは限らない（所有者の削除と競合しただけなら正常）。
+    // 実体を消したのに行が残っている時だけ、不変条件が破れた印として数える。
+    // 次回の実行では R2 が空で気づけないため、この場で確かめる。
+    if (result.meta.changes === 0) {
+      const remaining = await database
+        .prepare('SELECT short_id FROM movies WHERE short_id = ?')
+        .bind(row.short_id)
+        .all<ShortIdRow>();
+      if (remaining.results.length > 0) stranded += 1;
+    }
   }
 
   return { deleted, stranded };

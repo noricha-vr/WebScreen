@@ -41,11 +41,15 @@ export default {
         now: new Date(event.scheduledTime),
       });
 
-      console.log(
+      // 実体だけ消えた行は放置すると壊れた URL が残り続けるので、成功ログに埋もれさせない
+      const severity = summary.strandedMovies > 0 ? 'error' : 'info';
+      const log = severity === 'error' ? console.error : console.log;
+
+      log(
         JSON.stringify({
           timestamp: new Date(event.scheduledTime).toISOString(),
           source: SOURCE,
-          severity: 'info',
+          severity,
           kind: 'event',
           cron: event.cron,
           summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures.`,

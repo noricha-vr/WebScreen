@@ -34,6 +34,8 @@ interface TestMovie {
 /** D1 binding の代役。SQL の先頭句で分岐し、実際の movies テーブルの挙動だけを真似る。 */
 class FakeMoviesDatabase implements MoviesDatabase {
   readonly movies = new Map<string, TestMovie>();
+  /** pin の UPDATE 直前に走るフック。期限をまたぐ競合の再現に使う。 */
+  onBeforePinUpdate: (() => void) | undefined;
 
   constructor(movies: TestMovie[] = []) {
     for (const movie of movies) this.movies.set(movie.shortId, { ...movie });
@@ -44,7 +46,7 @@ class FakeMoviesDatabase implements MoviesDatabase {
       bind: (...values: unknown[]) => ({
         first: async <T>(): Promise<T | null> => this.first<T>(query, values),
         all: async <T>(): Promise<{ results: T[] }> => ({ results: this.all<T>(query, values) }),
-        run: async (): Promise<unknown> => this.run(query, values),
+        run: async (): Promise<{ meta: { changes: number } }> => this.run(query, values),
       }),
     };
   }
@@ -82,29 +84,42 @@ class FakeMoviesDatabase implements MoviesDatabase {
       .map((movie) => toRow(movie) as T);
   }
 
-  private run(query: string, values: unknown[]): void {
+  private run(query: string, values: unknown[]): { meta: { changes: number } } {
     if (query.startsWith('UPDATE movies SET filename')) {
       const [filename, shortId, userId] = values as [string, string, number];
       const movie = this.movies.get(shortId);
       if (movie && movie.userId === userId) movie.filename = filename;
-      return;
+      return { meta: { changes: movie && movie.userId === userId ? 1 : 0 } };
     }
 
     if (query.startsWith('UPDATE movies SET pinned')) {
-      const [pinned, expiresAt, shortId, userId] = values as [number, string | null, string, number];
+      const [pinned, expiresAt, shortId, userId, threshold] = values as [
+        number,
+        string | null,
+        string,
+        number,
+        string,
+      ];
+      // UPDATE の直前に走らせるフック（判定から書き込みまでの間の割り込みを再現する）
+      this.onBeforePinUpdate?.();
       const movie = this.movies.get(shortId);
-      if (movie && movie.userId === userId) {
-        movie.pinned = pinned;
-        movie.expiresAt = expiresAt;
+      // 本番の WHERE と同じく、期限が残っている行だけを更新する
+      if (!movie || movie.userId !== userId || isPastExpiry(movie.expiresAt, threshold)) {
+        return { meta: { changes: 0 } };
       }
-      return;
+      movie.pinned = pinned;
+      movie.expiresAt = expiresAt;
+      return { meta: { changes: 1 } };
     }
 
     if (query.startsWith('DELETE FROM movies')) {
       const [shortId, userId] = values as [string, number];
       const movie = this.movies.get(shortId);
       if (movie && movie.userId === userId) this.movies.delete(shortId);
+      return { meta: { changes: movie && movie.userId === userId ? 1 : 0 } };
     }
+
+    return { meta: { changes: 0 } };
   }
 }
 
@@ -132,6 +147,17 @@ const USER_ID = 10;
 const SHORT_ID = 'AbCdEf123456';
 const PUBLIC_URL = 'https://public.example';
 const CREATED_AT = '2026-08-01 00:00:00';
+
+/** 本番の datetime() 比較に相当する判定（秒精度・両表記を UTC として解釈する）。 */
+function isPastExpiry(expiresAt: string | null, threshold: string): boolean {
+  if (expiresAt === null) return false;
+  const toMs = (value: string): number => {
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+    const parsed = Date.parse(/[Z+]|-\d\d:\d\d$/.test(normalized) ? normalized : `${normalized}Z`);
+    return Math.floor(parsed / 1000) * 1000;
+  };
+  return toMs(expiresAt) < toMs(threshold);
+}
 
 function movie(overrides: Partial<TestMovie> = {}): TestMovie {
   return {
@@ -287,7 +313,36 @@ describe('togglePin', () => {
     expect(database.movies.get(SHORT_ID)).toMatchObject({ pinned: 1 });
   });
 
-  it('期限ちょうどでも過ぎている扱いにする（バッチの閾値と食い違わせない）', async () => {
+  it('判定の後・書き込みの前に期限が過ぎたら更新を通さない', async () => {
+    // 読んでから書くまでの間にバッチが拾える状態になる順序。事前判定だけだと
+    // ここで期限が延び、R2 の実体だけ消えた行が残る（Issue #83）
+    const now = new Date('2026-09-01T00:00:00.000Z');
+    const database = new FakeMoviesDatabase([movie({ expiresAt: '2026-09-01T00:00:10.000Z' })]);
+    database.onBeforePinUpdate = () => {
+      const target = database.movies.get(SHORT_ID);
+      if (target) target.expiresAt = '2026-08-31T23:59:00.000Z';
+    };
+
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
+    ).rejects.toMatchObject({ status: 410, errorCode: ERROR_CODES.expired });
+    expect(database.movies.get(SHORT_ID)).toMatchObject({ pinned: 0 });
+  });
+
+  it('判定の後・書き込みの前に行が消えていたら 404 を返す', async () => {
+    const now = new Date('2026-08-30T00:00:00.000Z');
+    const database = new FakeMoviesDatabase([movie()]);
+    database.onBeforePinUpdate = () => database.movies.delete(SHORT_ID);
+
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
+    ).rejects.toMatchObject({ status: 404, errorCode: ERROR_CODES.notFound });
+  });
+
+  it('期限ちょうどは断る（バッチより厳しい側に倒す）', async () => {
+    // バッチの削除条件は expires_at < 閾値 なので、ちょうどの行はまだ消えない。
+    // ここで通すと「延長できたのに次の実行で消える」わけではないが、判定の向きは
+    // 常にバッチより厳しい側に寄せておく（緩い側に寄せると競合の余地ができる）。
     const expiresAt = '2026-09-01T00:00:00.000Z';
     const database = new FakeMoviesDatabase([movie({ expiresAt })]);
 

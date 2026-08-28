@@ -66,7 +66,10 @@ class FakeRetentionDatabase implements RetentionDatabase {
     // 削除直前の再確認（short_id と閾値の 2 引数）。pin ではなく status と期限で判定する。
     if (query.includes('WHERE short_id = ?')) {
       const movie = this.movies.get(values[0] as string);
-      if (!movie || !isExpired(movie, parseSqliteTime(values[1] as string))) return [];
+      if (!movie) return [];
+      // 引数が short_id だけなら行の存在確認（stranded の判定に使う）
+      if (values.length === 1) return [{ short_id: movie.shortId }];
+      if (!isExpired(movie, parseSqliteTime(values[1] as string))) return [];
       if (query.includes("status = 'ready'") && movie.status !== 'ready') return [];
       return [{ short_id: movie.shortId }];
     }
@@ -454,6 +457,24 @@ describe('runRetention: 不変条件が破れた時の可視化', () => {
     expect(summary.deletedMovies).toBe(0);
     expect(summary.strandedMovies).toBe(1);
     expect(database.movies.has('strandedAAAA')).toBe(true);
+  });
+
+  it('並行して行が消えていた場合は stranded に数えない', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'racedDeleteA', createdAt: iso(-HOUR_MS), expiresAt: iso(-HOUR_MS) }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([movieKey('racedDeleteA')]));
+    // 所有者の削除と競合しただけなら正常（実体も行も無くなる）
+    const originalDelete = bucket.delete.bind(bucket);
+    bucket.delete = async (keys) => {
+      database.movies.delete('racedDeleteA');
+      await originalDelete(keys);
+    };
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedMovies).toBe(0);
+    expect(summary.strandedMovies).toBe(0);
   });
 });
 

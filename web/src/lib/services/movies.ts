@@ -43,7 +43,7 @@ export interface MoviesDatabase {
     bind(...values: unknown[]): {
       first<T>(): Promise<T | null>;
       all<T>(): Promise<{ results: T[] }>;
-      run(): Promise<unknown>;
+      run(): Promise<{ meta: { changes: number } }>;
     };
   };
 }
@@ -126,6 +126,10 @@ export async function listHistory(input: ListHistoryInput): Promise<HistoryRespo
  * 保持期間バッチが R2 の実体を消してから D1 の行を消すまでの間に期限が延びて、
  * 実体だけが消えた行が残る（services/retention.ts の deleteExpiredMovies）。
  * 期限切れの動画は毎時のバッチでどのみち消えるので、延命の余地を残さない。
+ *
+ * 判定は 2 段構え。読んだ値での事前判定は理由（410）を上限超過（409）より先に返すためで、
+ * 競合を防ぐのは UPDATE の WHERE に入れた期限条件の方。読んでから書くまでの間に期限が
+ * 過ぎる可能性があるので、事前判定だけでは同じ競合が残る。
  */
 export async function togglePin(
   input: MovieActionInput & { now?: Date }
@@ -158,12 +162,33 @@ export async function togglePin(
     ? new Date(now.getTime() + PINNED_RETENTION_MS).toISOString()
     : restoredExpiry(movie.created_at, now);
 
-  await input.database
-    .prepare('UPDATE movies SET pinned = ?, expires_at = ? WHERE short_id = ? AND user_id = ?')
-    .bind(nextPinned ? 1 : 0, expiresAt, input.shortId, input.userId)
+  // 比較は保持期間バッチと同じ datetime() で行う（ISO8601 と SQLite の表記が混在し、
+  // 素の文字列比較では大小が逆転するため。精度と演算子も揃えて判定を食い違わせない）。
+  const result = await input.database
+    .prepare(
+      'UPDATE movies SET pinned = ?, expires_at = ? WHERE short_id = ? AND user_id = ?' +
+        ' AND (expires_at IS NULL OR datetime(expires_at) >= datetime(?))'
+    )
+    .bind(nextPinned ? 1 : 0, expiresAt, input.shortId, input.userId, now.toISOString())
     .run();
 
+  // 0 件 = 読んだ後に期限が過ぎたか、行そのものが消えた。成功として返すと
+  // 画面には pin 済みと出るのに実体は消える。
+  if (result.meta.changes === 0) await throwPinConflict(input);
+
   return { shortId: input.shortId, pinned: nextPinned, expiresAt };
+}
+
+/**
+ * pin の UPDATE が 0 件だった理由を引き直して投げる。
+ *
+ * 行が消えていれば 404（他の経路の削除・保持期間バッチと競合）、残っていれば 410（期限切れ）。
+ * 稀な経路なので、通常時に追加のクエリを増やさないようここでだけ読み直す。
+ */
+async function throwPinConflict(input: MovieActionInput): Promise<never> {
+  // 行が消えていればここで 404 になる。残っているなら、WHERE で外れた条件は期限しかない。
+  await findOwnedMovie(input.database, input.userId, input.shortId);
+  throw new MovieActionError(410, ERROR_CODES.expired, '保管期限を過ぎた動画は変更できません');
 }
 
 /**
