@@ -131,43 +131,38 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
 
         {
           isOwner && (
-            <button
-              type="button"
-              data-delete-trigger
-              class="inline-flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-red-50 hover:text-red-700"
-            >
-              <i class="fa-solid fa-trash-can" aria-hidden="true" />
-              <span>{t.actions.delete}</span>
-            </button>
+            <>
+              <button
+                type="button"
+                data-delete-trigger
+                class="inline-flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-red-50 hover:text-red-700"
+              >
+                <i class="fa-solid fa-trash-can" aria-hidden="true" />
+                <span>{t.actions.delete}</span>
+              </button>
+
+              <span data-delete-confirm class="flex flex-wrap items-center justify-end gap-3">
+                <span class="text-base text-slate-700">{t.actions.deleteConfirm}</span>
+                <button
+                  type="button"
+                  data-delete-yes
+                  class="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-base font-semibold text-white hover:bg-red-700"
+                >
+                  <i class="fa-solid fa-trash-can" aria-hidden="true" />
+                  <span>{t.actions.deleteYes}</span>
+                </button>
+                <button
+                  type="button"
+                  data-delete-cancel
+                  class="rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-slate-100"
+                >
+                  {t.actions.deleteCancel}
+                </button>
+              </span>
+            </>
           )
         }
       </div>
-
-      {
-        isOwner && (
-          <div class="flex flex-wrap items-center justify-end gap-3">
-
-            <span data-delete-confirm class="flex flex-wrap items-center justify-end gap-3">
-              <span class="text-base text-slate-700">{t.actions.deleteConfirm}</span>
-              <button
-                type="button"
-                data-delete-yes
-                class="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-base font-semibold text-white hover:bg-red-700"
-              >
-                <i class="fa-solid fa-trash-can" aria-hidden="true" />
-                <span>{t.actions.deleteYes}</span>
-              </button>
-              <button
-                type="button"
-                data-delete-cancel
-                class="rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:bg-slate-100"
-              >
-                {t.actions.deleteCancel}
-              </button>
-            </span>
-          </div>
-        )
-      }
     </div>
     {
       isOwner && (
