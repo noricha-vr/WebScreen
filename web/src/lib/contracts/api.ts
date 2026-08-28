@@ -104,19 +104,33 @@ export interface CaptureRequest {
   url: string;
   width?: number;
   height?: number;
+  /**
+   * 撮影を始める位置（0 始まり）。長いページは 1 リクエストの上限を超えるため、
+   * 前回の続きからを指定して複数回に分けて取得する。
+   *
+   * このフィールドを送ること自体が「分割取得に対応したクライアント」の合図になる。
+   * 送らないリクエストは上限超過時に PAGE_TOO_LONG で失敗する（途中までの動画を
+   * 黙って作らないため）。
+   */
+  startIndex?: number;
 }
 
 export interface CaptureResponse {
   /**
-   * 撮影したスクリーンショットの公開 URL。
+   * このリクエストで撮影したスクリーンショットの公開 URL。
    *
-   * 契約: 配列は「撮影（スクロール）順」で返す。先頭がページ最上部、末尾が最下部。
+   * 契約: 配列は「撮影（スクロール）順」で返す。先頭が startIndex の位置、末尾がその続き。
    * 順序が狂うとスクロール動画が破綻するため、並べ替え・非決定な並列 map の
    * 結果をそのまま詰めることを禁止する（R2 キーの 0 埋め連番と一致させる。
    * キー導出は contracts/r2key.ts の captureKey が正本）。
    */
   images: string[];
+  /** ページ全体で必要な総枚数（開始位置に関わらない）。何回に分けて取るかの判断に使う。 */
+  totalImages: number;
 }
+
+/** 1 ページあたりに許容する分割取得の回数。無限ループと過大なページの歯止め。 */
+export const MAX_CAPTURE_REQUESTS = 6;
 
 // ---------------------------------------------------------------------------
 // 動画メタデータ — GET /api/history/, POST /api/movies/{shortId}/pin/,
@@ -231,7 +245,7 @@ export function validateCaptureRequest(input: unknown): ValidationResult<Capture
   const body = asRecord(input);
   if (!body) return invalid('リクエストボディは JSON オブジェクトである必要があります');
 
-  const { url, width, height } = body;
+  const { url, width, height, startIndex } = body;
 
   if (typeof url !== 'string' || !isHttpUrl(url)) {
     return invalid('url は http/https の絶対 URL である必要があります');
@@ -242,9 +256,15 @@ export function validateCaptureRequest(input: unknown): ValidationResult<Capture
   const validatedHeight = validateDimension(height, 'height');
   if (!validatedHeight.ok) return validatedHeight;
 
+  // 検証で落とすと上流へ届かず、常に先頭からの撮影になって同じ画像を繰り返し繋いでしまう。
+  if (startIndex !== undefined && (!Number.isSafeInteger(startIndex) || (startIndex as number) < 0)) {
+    return invalid('startIndex は 0 以上の整数である必要があります');
+  }
+
   const value: CaptureRequest = { url };
   if (validatedWidth.value !== undefined) value.width = validatedWidth.value;
   if (validatedHeight.value !== undefined) value.height = validatedHeight.value;
+  if (startIndex !== undefined) value.startIndex = startIndex as number;
   return { ok: true, value };
 }
 

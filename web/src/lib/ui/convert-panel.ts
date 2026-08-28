@@ -15,6 +15,7 @@ import {
   type UploadKind,
 } from '../contracts/api';
 import { isShortId } from '../contracts/r2key';
+import { collectCaptures } from './capture-pages';
 import { movieEndpoint } from './history-view';
 import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
 import {
@@ -86,7 +87,14 @@ function asCaptureResponse(value: unknown): CaptureResponse {
   if (!isRecord(value) || !Array.isArray(value.images) || value.images.some((image) => typeof image !== 'string')) {
     throw new Error('Invalid capture response');
   }
-  return { images: value.images as string[] };
+  const images = value.images as string[];
+  // totalImages を返さないのは分割取得より前の web-capture。その版は長いページを
+  // PAGE_TOO_LONG で失敗させるので、返ってきた分がページ全体とみなして構わない。
+  if (value.totalImages === undefined) return { images, totalImages: images.length };
+  if (!Number.isSafeInteger(value.totalImages) || (value.totalImages as number) < 0) {
+    throw new Error('Invalid capture response');
+  }
+  return { images, totalImages: value.totalImages as number };
 }
 
 /**
@@ -301,17 +309,32 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       if (pseudoProgress >= CAPTURE_PSEUDO_PROGRESS_MAX) window.clearInterval(pseudoTimer);
     }, CAPTURE_PSEUDO_PROGRESS_INTERVAL_MS);
 
-    void requestJson('/api/capture/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+    // 長いページは 1 リクエストの上限を超えるため、必要な回数だけ分けて取得する。
+    // 短いページは 1 回で終わるので従来と同じ速度で進む。
+    void collectCaptures({
+      fetchPage: (startIndex) =>
+        requestJson('/api/capture/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, startIndex }),
+        }).then(asCaptureResponse),
+      onProgress: (collected, total) => {
+        // 撮影は変換の前段。conversionProgress へ流すと、変換が始まった時に
+        // 進捗が 100% のまま「1/150」と表示されてしまう（バーは単調増加のため）。
+        // ここでは疑似進捗と同じ帯域だけを動かす。
+        const ratio = total === 0 ? 0 : collected / total;
+        const span = CAPTURE_PSEUDO_PROGRESS_MAX - CAPTURE_PSEUDO_PROGRESS_START;
+        dispatch(
+          { type: 'progress', value: CAPTURE_PSEUDO_PROGRESS_START + Math.round(span * ratio) },
+          current
+        );
+      },
     })
-      .then(asCaptureResponse)
       // 成功・失敗のどちらでも疑似進捗を必ず止める（ここから先は実進捗が来る）。
       .finally(() => {
         window.clearInterval(pseudoTimer);
       })
-      .then((capture) => convertImageUrlsToMp4(capture.images, (progress) => {
+      .then((images) => convertImageUrlsToMp4(images, (progress) => {
         dispatch({ type: 'conversionProgress', ...progress }, current);
       }))
       .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current))
