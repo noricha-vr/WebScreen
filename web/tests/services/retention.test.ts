@@ -63,12 +63,12 @@ class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private select(query: string, values: unknown[]): { short_id: string }[] {
-    // 削除直前の再確認（short_id と閾値の 2 引数）。pin ではなく期限で判定する。
+    // 削除直前の再確認（short_id と閾値の 2 引数）。pin ではなく status と期限で判定する。
     if (query.includes('WHERE short_id = ?')) {
       const movie = this.movies.get(values[0] as string);
-      return movie && isExpired(movie, parseSqliteTime(values[1] as string))
-        ? [{ short_id: movie.shortId }]
-        : [];
+      if (!movie || !isExpired(movie, parseSqliteTime(values[1] as string))) return [];
+      if (query.includes("status = 'ready'") && movie.status !== 'ready') return [];
+      return [{ short_id: movie.shortId }];
     }
 
     const threshold = parseSqliteTime(values[0] as string);
@@ -105,6 +105,7 @@ class FakeRetentionDatabase implements RetentionDatabase {
     if (query.includes('expires_at') && !isExpired(movie, parseSqliteTime(values[1] as string))) {
       return 0;
     }
+    if (query.includes("status = 'ready'") && movie.status !== 'ready') return 0;
     if (query.includes("status = 'pending'") && movie.status !== 'pending') return 0;
     this.movies.delete(movie.shortId);
     return 1;
@@ -426,5 +427,29 @@ describe('runRetention: pin 済みの期限補完', () => {
     expect(summary.backfilledPinned).toBe(0);
     expect(database.movies.get('pinnedDatedA')?.expiresAt).toBe(kept);
     expect(database.movies.get('plainDatedAA')?.expiresAt).toBe(kept);
+  });
+});
+
+describe('runRetention: 削除直前の再確認', () => {
+  it('SELECT 後に ready でなくなった行は R2 ごと消さない', async () => {
+    const database = new FakeRetentionDatabase([
+      // created_at を新しくしておく（failed 行の掃除は 24 時間の猶予後なので、
+      // ここで消えると再確認の効果か猶予切れかを区別できない）
+      movie({ shortId: 'statusFlipAA', createdAt: iso(-HOUR_MS), expiresAt: iso(-HOUR_MS) }),
+    ]);
+    // 期限切れとして拾った後に失敗扱いへ変わる（別経路の書き込みとの競合を再現）
+    database.onSelect = (rows) => {
+      for (const row of rows) {
+        const target = database.movies.get(row.shortId);
+        if (target) target.status = 'failed';
+      }
+    };
+    const bucket = new FakeRetentionBucket(new Set([movieKey('statusFlipAA')]));
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedMovies).toBe(0);
+    expect(bucket.deleted).toEqual([]);
+    expect(database.movies.has('statusFlipAA')).toBe(true);
   });
 });

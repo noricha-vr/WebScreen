@@ -21,7 +21,7 @@ CREATE TABLE movies (
   size_bytes INTEGER NOT NULL DEFAULT 0,
   -- pending: presign 済みで実体未確定 / ready: commit 済み / failed: アップロード失敗
   status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'failed')),
-  -- pin された動画は expires_at による自動削除の対象外にする（0/1 の真偽値）。
+  -- pin された動画は expires_at が延びる（保管期間の値は services/quota.ts が正本。0/1 の真偽値）。
   pinned INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT

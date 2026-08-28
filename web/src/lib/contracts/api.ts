@@ -92,7 +92,7 @@ export interface CommitResponse {
   shortId: string;
   publicUrl: string;
   sizeBytes: number;
-  /** ISO8601。pin されている場合は null（自動削除の対象外）。 */
+  /** ISO8601。pin すると 1 年後まで延びる。null は期限を持たない古い行だけ。 */
   expiresAt: string | null;
 }
 
