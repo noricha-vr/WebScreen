@@ -43,6 +43,11 @@
       "bucket_name": "webscreen-beta"
     }
   ],
+  // /api/health/ が自分のバージョンを名乗るために使う。デプロイ直後の疎通確認で
+  // 「新しい版が配信されているか」を判定できないと、旧版が返す 200 を成功と誤認する。
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
   // Astro のセッション機能が既定で要求する KV。初回 deploy で wrangler が
   // 自動プロビジョニングしたものを、再デプロイ時の取り違えを防ぐため明示している。
   "kv_namespaces": [
