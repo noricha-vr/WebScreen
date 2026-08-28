@@ -22,12 +22,15 @@ const LOGOUT_URL = '/api/auth/logout/';
   <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-0">
     <div class="flex items-center gap-3">
       <a href={`/${lang}/`} class="flex items-center gap-2 no-underline">
+        {/* logo-text.png は左余白 6px に対し右余白が 135px と非対称なので、表示比を
+            731:200 にして右を切り落とす（object-left でクロップ位置を左端に固定）。
+            画像自体は他サービスからも参照しているため差し替えない。 */}
         <img
           src={`${BANNER_BASE_URL}logo-text.png`}
           alt={t.nav.bannerAlt}
-          width="860"
+          width="731"
           height="200"
-          class="h-11 w-auto sm:h-14"
+          class="h-11 w-auto aspect-[731/200] object-cover object-left sm:h-14"
         />
         <span class="rounded-full bg-brand-50 px-2 py-0.5 text-sm font-semibold text-brand-700">
           β
