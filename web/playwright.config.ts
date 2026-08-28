@@ -26,6 +26,8 @@ export const E2E_FIXTURES = {
   readyRemainingDays: 15,
   pinnedShortId: 'E2EPinned001',
   pinnedFilename: 'pinned-clip.mp4',
+  /** seed.sql が now + 365 日で入れるため、pin 中の表示は「あと 365 日」で安定する。 */
+  pinnedRemainingDays: 365,
   /** 3 日前に作られているので、pin を外すと作成 + 30 日 = あと 27 日に戻る。 */
   pinnedRemainingDaysAfterUnpin: 27,
   pendingShortId: 'E2EPending01',

@@ -24,7 +24,7 @@
     "formats": "PDF / png / jpg / jpeg / webp / gif",
     "maxSize": "Up to 50 MB per file",
     "retention": "Stored for 30 days",
-    "pinned": "Up to 10 pinned videos are kept indefinitely",
+    "pinned": "Up to 10 pinned videos are kept for a year",
     "quota": "500 MB of storage per user"
   },
   "convert": {
@@ -68,10 +68,10 @@
     "expiry": "Retention",
     "expiresInDays": "{days} days left",
     "expiresToday": "less than a day left",
-    "neverExpires": "no expiry (pinned)",
+    "neverExpires": "retention not set",
     "pin": "Pin this video",
     "unpin": "Remove pin",
-    "pinHint": "Pinned videos are kept with no expiry (up to {count})",
+    "pinHint": "Pinned videos are kept for one year (up to {count})",
     "pinLimit": "You can pin up to {count} videos",
     "pinFailed": "Could not change the pin",
     "rename": "Rename",
@@ -149,7 +149,7 @@
     "pdfBody": "Export PowerPoint or Google Slides as a PDF and convert it to video to run your presentation on a video player or a slide system.",
     "pdfMediaAlt": "A PDF being turned into a video",
     "historyHeading": "Check your history",
-    "historyBody": "Your history keeps the link to every video you converted. Videos are stored for 30 days, and the 10 videos you pin are kept indefinitely.",
+    "historyBody": "Your history keeps the link to every video you converted. Videos are stored for 30 days, and the 10 videos you pin are kept for one year.",
     "historyMediaAlt": "The history of converted videos",
     "comingSoon": "Screen recording and screen sharing are still on the way"
   }
