@@ -64,7 +64,7 @@ test.describe('リンクプレビュー', () => {
   const content = (page: Page, selector: string): Promise<string | null> =>
     page.locator(selector).getAttribute('content');
 
-  test('日本語トップに OG タグと配信中の画像を出す', async ({ page, request }) => {
+  test('日本語トップに OG タグを出す', async ({ page }) => {
     await page.goto('/ja/');
 
     // 絶対 URL であること。相対だとクローラが解決できず画像が出ない
@@ -76,13 +76,9 @@ test.describe('リンクプレビュー', () => {
     expect(await content(page, 'meta[property="og:locale"]')).toBe('ja_JP');
     expect(await content(page, 'meta[name="twitter:card"]')).toBe('summary_large_image');
 
-    // 宣言した実寸と配信物が食い違うと、縮小表示や枠ズレになる
+    // 実寸との一致は seo.spec.ts が配信物側で見る
     expect(await content(page, 'meta[property="og:image:width"]')).toBe('1200');
     expect(await content(page, 'meta[property="og:image:height"]')).toBe('630');
-
-    const image = await request.get('/og.png');
-    expect(image.status()).toBe(200);
-    expect(image.headers()['content-type']).toContain('image/png');
   });
 
   test('英語トップは英語の OG タグを出す', async ({ page }) => {
