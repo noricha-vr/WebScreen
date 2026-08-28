@@ -92,7 +92,7 @@ test.describe('公開プレビュー', () => {
     await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
 
     await expect(page.getByRole('button', { name: en.preview.copy })).toBeVisible();
-    await expect(page.getByText(ja.preview.urlLabel)).toHaveCount(0);
+    await expect(page.getByText(ja.preview.expiry)).toHaveCount(0);
 
     await page.screenshot({ path: screenshotPath('02-preview-en'), fullPage: true });
     await context.close();
