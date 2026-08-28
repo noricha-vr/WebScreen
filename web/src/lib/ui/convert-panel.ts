@@ -7,6 +7,7 @@
 
 import {
   ERROR_CODES,
+  MAX_CAPTURE_REQUESTS,
   MAX_UPLOAD_BYTES,
   type CaptureResponse,
   type CommitResponse,
@@ -34,13 +35,18 @@ import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './req
 const DEFAULT_BATCH_NAME_SUFFIX = '+{count}';
 
 /**
- * URL 変換のキャプチャ待ち（数十秒）は進捗イベントが一切来ないため、バーが 0% で静止する。
- * その間だけ疑似進捗をゆっくり進めて「動いている」ことを示す。実進捗を先取りしないよう
- * 上限は低く抑え、キャプチャ完了後は実進捗（conversionProgress）へ引き継ぐ。
+ * 撮影は 1 回目の応答が返るまで進捗が来ないため、その間だけ疑似進捗で撮影段階の
+ * 帯域の先端を埋める。天井は実進捗の初回値より必ず下に置く（分割取得は最大
+ * MAX_CAPTURE_REQUESTS 回なので、1 回目の報告でも撮影全体の 1/MAX_CAPTURE_REQUESTS は進む）。
+ * こうしておけば実進捗へ引き継ぐときにバーが戻らない。
  */
-const CAPTURE_PSEUDO_PROGRESS_INTERVAL_MS = 800;
-const CAPTURE_PSEUDO_PROGRESS_START = 2;
-const CAPTURE_PSEUDO_PROGRESS_MAX = 12;
+const CAPTURE_PSEUDO_INTERVAL_MS = 800;
+const CAPTURE_PSEUDO_RATIO_STEP = 0.01;
+const CAPTURE_PSEUDO_RATIO_MAX = 1 / MAX_CAPTURE_REQUESTS / 2;
+
+/** アップロード段階の進み具合。presign 完了と R2 への PUT 完了で段階内を進める。 */
+const UPLOAD_PRESIGNED_RATIO = 0.2;
+const UPLOAD_STORED_RATIO = 0.8;
 
 type Dispatch = (event: UploadEvent, runGeneration?: number) => void;
 type Navigate = (url: string) => void;
@@ -134,7 +140,7 @@ async function uploadMp4(
       body: JSON.stringify({ filename, sizeBytes: mp4.size, kind }),
     })
   );
-  dispatch({ type: 'progress', value: 20 }, runGeneration);
+  dispatch({ type: 'stageRatio', stage: 'uploading', ratio: UPLOAD_PRESIGNED_RATIO }, runGeneration);
 
   // presign を通った時点で pending の行が予約されている。ここから先で失敗すると
   // 誰も failed へ落とさないまま残り、cron が回収するまで容量を占め続ける。
@@ -152,7 +158,7 @@ async function uploadMp4(
     throw error;
   }
 
-  dispatch({ type: 'progress', value: 80 }, runGeneration);
+  dispatch({ type: 'stageRatio', stage: 'uploading', ratio: UPLOAD_STORED_RATIO }, runGeneration);
 
   try {
     const committed = asCommitResponse(
@@ -248,7 +254,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (next.phase !== 'converting' || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
     const kind = next.kind;
     void convertFilesToMp4(files, kind, (progress) => {
-      dispatch({ type: 'conversionProgress', ...progress }, current);
+      dispatch({ type: 'stageProgress', ...progress }, current);
     })
       .then((mp4) =>
         uploadMp4(
@@ -302,12 +308,12 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     const current = ++generation;
     dispatch({ type: 'selectUrl', url }, current);
 
-    let pseudoProgress = CAPTURE_PSEUDO_PROGRESS_START - 1;
+    let pseudoRatio = 0;
     const pseudoTimer = window.setInterval(() => {
-      pseudoProgress += 1;
-      dispatch({ type: 'progress', value: pseudoProgress }, current);
-      if (pseudoProgress >= CAPTURE_PSEUDO_PROGRESS_MAX) window.clearInterval(pseudoTimer);
-    }, CAPTURE_PSEUDO_PROGRESS_INTERVAL_MS);
+      pseudoRatio = Math.min(CAPTURE_PSEUDO_RATIO_MAX, pseudoRatio + CAPTURE_PSEUDO_RATIO_STEP);
+      dispatch({ type: 'stageRatio', stage: 'capturing', ratio: pseudoRatio }, current);
+      if (pseudoRatio >= CAPTURE_PSEUDO_RATIO_MAX) window.clearInterval(pseudoTimer);
+    }, CAPTURE_PSEUDO_INTERVAL_MS);
 
     // 長いページは 1 リクエストの上限を超えるため、必要な回数だけ分けて取得する。
     // 短いページは 1 回で終わるので従来と同じ速度で進む。
@@ -319,15 +325,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
           body: JSON.stringify({ url, startIndex }),
         }).then(asCaptureResponse),
       onProgress: (collected, total) => {
-        // 撮影は変換の前段。conversionProgress へ流すと、変換が始まった時に
-        // 進捗が 100% のまま「1/150」と表示されてしまう（バーは単調増加のため）。
-        // ここでは疑似進捗と同じ帯域だけを動かす。
-        const ratio = total === 0 ? 0 : collected / total;
-        const span = CAPTURE_PSEUDO_PROGRESS_MAX - CAPTURE_PSEUDO_PROGRESS_START;
-        dispatch(
-          { type: 'progress', value: CAPTURE_PSEUDO_PROGRESS_START + Math.round(span * ratio) },
-          current
-        );
+        // 実進捗が来たら疑似進捗は用済み。天井へ届く前の tick が後から入ると戻るので止める。
+        window.clearInterval(pseudoTimer);
+        dispatch({ type: 'stageProgress', stage: 'capturing', current: collected, total }, current);
       },
     })
       // 成功・失敗のどちらでも疑似進捗を必ず止める（ここから先は実進捗が来る）。
@@ -335,7 +335,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         window.clearInterval(pseudoTimer);
       })
       .then((images) => convertImageUrlsToMp4(images, (progress) => {
-        dispatch({ type: 'conversionProgress', ...progress }, current);
+        dispatch({ type: 'stageProgress', ...progress }, current);
       }))
       .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current))
       .catch((error: unknown) => {

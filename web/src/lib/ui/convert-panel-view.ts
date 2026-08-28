@@ -1,4 +1,4 @@
-import type { UploadErrorCode, UploadState } from './upload-flow';
+import type { ProgressStage, UploadErrorCode, UploadState } from './upload-flow';
 
 /** 同じ表示項目が状態別ブロックに複数あるため、書き換えは全件に適用する。 */
 function elements<T extends HTMLElement>(root: HTMLElement, selector: string): T[] {
@@ -22,10 +22,17 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
   return messages[code] ?? '';
 }
 
-function phaseLabel(panel: HTMLElement, state: UploadState): string {
-  if (state.phase === 'converting') return panel.dataset['labelConverting'] ?? '';
-  if (state.phase === 'uploading') return panel.dataset['labelUploading'] ?? '';
-  return '';
+/** 段階名は辞書から data 属性で渡ってくる（文言をコードに直書きしないため）。 */
+const STAGE_LABEL_KEYS: Readonly<Record<ProgressStage, string>> = {
+  capturing: 'labelCapturing',
+  preparing: 'labelPreparing',
+  encoding: 'labelEncoding',
+  uploading: 'labelUploading',
+};
+
+function stageLabel(panel: HTMLElement, state: UploadState): string {
+  if (state.stage === null) return '';
+  return panel.dataset[STAGE_LABEL_KEYS[state.stage]] ?? '';
 }
 
 /** URL 変換では表示するのがファイル名ではなく URL なので、見出し語も切り替える。 */
@@ -38,7 +45,7 @@ function sourceLabel(panel: HTMLElement, state: UploadState): string {
 export function renderConvertPanel(panel: HTMLElement, state: UploadState): void {
   panel.dataset['phase'] = state.phase;
 
-  for (const node of elements(panel, '[data-phase-label]')) node.textContent = phaseLabel(panel, state);
+  for (const node of elements(panel, '[data-stage-label]')) node.textContent = stageLabel(panel, state);
   for (const node of elements(panel, '[data-source-label]')) node.textContent = sourceLabel(panel, state);
   for (const node of elements(panel, '[data-source-name]')) node.textContent = state.source ?? '';
 

@@ -26,8 +26,10 @@ const t = useTranslations(lang);
   data-msg-image-url-not-supported={t.convert.errorImageUrlNotSupported}
   data-msg-video-url-not-supported={t.convert.errorVideoUrlNotSupported}
   data-msg-non-web-page-url={t.convert.errorNonWebPageUrl}
-  data-label-converting={t.convert.converting}
-  data-label-uploading={t.convert.uploading}
+  data-label-capturing={t.convert.stageCapturing}
+  data-label-preparing={t.convert.stagePreparing}
+  data-label-encoding={t.convert.stageEncoding}
+  data-label-uploading={t.convert.stageUploading}
   data-label-selected-file={t.convert.selectedFile}
   data-label-source-url={t.convert.sourceUrl}
   data-batch-name-suffix={t.convert.batchNameSuffix}
@@ -88,7 +90,7 @@ const t = useTranslations(lang);
   <div data-when-phase="converting uploading" class="mt-6">
     <p class="flex items-center gap-2 text-lg font-semibold text-slate-900">
       <i class="fa-solid fa-spinner fa-spin-pulse text-brand-500" aria-hidden="true"></i>
-      <span data-phase-label></span>
+      <span data-stage-label></span>
       <span data-progress-value class="text-slate-600"></span>
       <span data-progress-count class="text-slate-600"></span>
     </p>
