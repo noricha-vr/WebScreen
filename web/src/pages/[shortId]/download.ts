@@ -36,18 +36,29 @@ export const GET: APIRoute = async ({ params }) => {
     shortId,
     publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
   });
-  if (!movie) return new Response(null, { status: 404 });
+  if (!movie) return notFound();
 
   const object = await bindings.BUCKET.get(movieKey(movie.shortId));
-  if (!object?.body) return new Response(null, { status: 404 });
+  if (!object?.body) return notFound();
 
   return new Response(object.body, {
     status: 200,
     headers: {
       'Content-Type': 'video/mp4',
       'Content-Disposition': attachmentDisposition(movie.filename),
-      // 保管期限つきの実体を CDN に長く持たせない（削除後の配信を短く抑える）。
-      'Cache-Control': 'private, max-age=0, must-revalidate',
+      // cdn 側の Transform Rule はこの経路に効かないため、ここで明示する。
+      'X-Robots-Tag': 'noindex',
+      // 同じ動画への連続アクセスをエッジで吸収しつつ、削除後に配信され続ける窓は
+      // 短く抑える（cdn 直の既定 TTL 120 分より大幅に短い）。
+      'Cache-Control': 'public, max-age=300',
     },
   });
 };
+
+/** 存在しない・未完成の動画。ready へ変わった後も 404 が残らないようキャッシュさせない。 */
+function notFound(): Response {
+  return new Response(null, {
+    status: 404,
+    headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' },
+  });
+}

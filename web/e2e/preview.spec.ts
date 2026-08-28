@@ -98,7 +98,14 @@ test.describe('公開プレビュー', () => {
     expect(response.headers()['content-type']).toBe('video/mp4');
     // ページと配信ドメインが別オリジンなので、ここで attachment を付ける必要がある
     expect(response.headers()['content-disposition']).toContain('attachment');
-    expect(response.headers()['content-disposition']).toContain(E2E_FIXTURES.readyFilename);
+    // 表示名は slides.pdf だが、実体は mp4 なので保存名は .mp4 へ正規化する
+    expect(response.headers()['content-disposition']).toContain('filename="slides.mp4"');
+    expect(response.headers()['x-robots-tag']).toBe('noindex');
+
+    // ヘッダーだけでなく実体が流れていることを確認する
+    const body = await response.body();
+    expect(body.byteLength).toBeGreaterThan(0);
+    expect(body.subarray(4, 8).toString('ascii')).toBe('ftyp');
   });
 
   test('存在しない動画のダウンロードは 404', async ({ request }) => {
