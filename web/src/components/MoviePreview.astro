@@ -83,13 +83,41 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
       )
     }
 
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-      <p class="flex items-center gap-2 text-base text-slate-700">
-        <i
-          class={pinned ? 'fa-solid fa-thumbtack text-brand-500' : 'fa-regular fa-clock text-slate-500'}
-          aria-hidden="true"></i>
+    <!-- ツールチップは行の左端を基準に出す（ボタン基準だと狭い画面で左右にはみ出す） -->
+    <div class="relative mt-3 flex flex-wrap items-center justify-between gap-3">
+      <p class="flex flex-wrap items-center gap-2 text-base text-slate-700">
+        <i class="fa-regular fa-clock text-slate-500" aria-hidden="true"></i>
         <span class="text-slate-600">{t.preview.expiry}</span>
         <span class="font-semibold text-slate-900">{expiryLabel}</span>
+        {
+          isOwner && (
+            <span data-tooltip-scope class="inline-flex">
+              {/* ラベル自体が状態の裏返し（ピン留め中なら「解除」）なので aria-pressed は重ねない */}
+              <button
+                type="button"
+                data-pin-button
+                aria-label={pinned ? t.preview.unpin : t.preview.pin}
+                aria-describedby="pin-hint"
+                class={`inline-flex h-9 w-9 items-center justify-center rounded-md border text-base ${
+                  pinned
+                    ? 'border-brand-500 bg-brand-500 text-white hover:bg-brand-700'
+                    : 'border-slate-300 text-slate-500 hover:bg-brand-50 hover:text-brand-700'
+                }`}
+              >
+                <i class="fa-solid fa-thumbtack" aria-hidden="true" />
+              </button>
+              {/* 常時表示のヒント文を畳んで画面を軽くする（説明はホバー・フォーカス時だけ） */}
+              <span
+                id="pin-hint"
+                data-tooltip
+                role="tooltip"
+                class="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[min(18rem,100%)] rounded-md bg-slate-900 px-3 py-2 text-sm leading-snug text-white shadow-lg"
+              >
+                {pinHint}
+              </span>
+            </span>
+          )
+        }
       </p>
 
       {
@@ -128,28 +156,12 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
     </div>
     {
       isOwner && (
-        <p data-delete-failed hidden role="alert" class="mt-2 text-base text-red-700">
-          {t.actions.deleteFailed}
-        </p>
-      )
-    }
-
-    {
-      isOwner && (
-        <div class="mt-4 flex flex-col gap-3">
-          <div class="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              data-pin-button
-              class="inline-flex items-center gap-2 rounded-md border border-brand-500 px-4 py-2 text-base font-semibold text-brand-700 hover:bg-brand-50"
-            >
-              <i class="fa-solid fa-thumbtack" aria-hidden="true" />
-              <span>{pinned ? t.preview.unpin : t.preview.pin}</span>
-            </button>
-            <span class="text-base text-slate-600">{pinHint}</span>
-          </div>
-          <p data-pin-failed hidden role="alert" class="text-base text-red-700" />
-        </div>
+        <>
+          <p data-pin-failed hidden role="alert" class="mt-2 text-base text-red-700" />
+          <p data-delete-failed hidden role="alert" class="mt-2 text-base text-red-700">
+            {t.actions.deleteFailed}
+          </p>
+        </>
       )
     }
 

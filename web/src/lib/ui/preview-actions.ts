@@ -16,6 +16,11 @@ const RENAME_SAVED_FEEDBACK_MS = 2000;
 
 type Schedule = (callback: () => void, delayMs: number) => void;
 
+/** Escape を拾うためだけの document。テストから差し替えられるよう最小限に絞る。 */
+interface DocumentEventTarget {
+  addEventListener(type: string, listener: (event: Event) => void): void;
+}
+
 export interface PreviewActionsOptions {
   fetchImpl?: typeof fetch;
   schedule?: Schedule;
@@ -23,6 +28,8 @@ export interface PreviewActionsOptions {
   reload?: () => void;
   /** 自動コピー要求の保存先（既定は sessionStorage）。 */
   storage?: SessionStorage;
+  /** ツールチップを閉じる Escape の取得先（既定は document）。 */
+  document?: DocumentEventTarget;
 }
 
 function find<T extends HTMLElement>(root: HTMLElement, selector: string): T | null {
@@ -43,6 +50,30 @@ function wireCopy(root: HTMLElement, schedule: Schedule): void {
       if (copied) showCopied(root, schedule);
     });
   });
+}
+
+/**
+ * ホバー / フォーカスで出る補足を Escape で閉じられるようにする（WCAG 1.4.13 Dismissible）。
+ *
+ * ポインタでホバーしている間はフォーカスが別の場所にあるため、キー入力は document で拾う。
+ * 閉じたことを示すフラグは、その要素から離れた時に外す（次のホバーでまた出す）。
+ */
+function wireTooltips(root: HTMLElement, doc: DocumentEventTarget): void {
+  const scopes = [...root.querySelectorAll<HTMLElement>('[data-tooltip-scope]')];
+  if (scopes.length === 0) return;
+
+  doc.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key !== 'Escape') return;
+    for (const scope of scopes) scope.dataset['tooltipDismissed'] = 'true';
+  });
+
+  for (const scope of scopes) {
+    const restore = (): void => {
+      delete scope.dataset['tooltipDismissed'];
+    };
+    scope.addEventListener('mouseleave', restore);
+    scope.addEventListener('focusout', restore);
+  }
 }
 
 function wirePin(root: HTMLElement, fetchImpl: typeof fetch, reload: () => void): void {
@@ -257,6 +288,7 @@ export function mountPreviewActions(
   const reload = options.reload ?? (() => window.location.reload());
 
   wireCopy(root, schedule);
+  wireTooltips(root, options.document ?? document);
   const shortId = root.dataset['shortId'] ?? '';
   const input = find<HTMLInputElement>(root, '[data-preview-url]');
   if (consumeAutoCopy(shortId, options.storage) && input) {
