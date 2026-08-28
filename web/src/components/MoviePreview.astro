@@ -81,8 +81,46 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
       )
     }
 
+    <label for="preview-url" class="mt-8 block text-base font-semibold text-slate-700">
+      {t.preview.urlLabel}
+    </label>
+    <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+      <input
+        id="preview-url"
+        data-preview-url
+        type="text"
+        readonly
+        value={publicUrl}
+        class="min-w-0 flex-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-base text-slate-900"
+      />
+      <button
+        type="button"
+        data-copy-button
+        class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white hover:bg-brand-700"
+      >
+        <span data-when-copied="idle" class="inline-flex items-center gap-2">
+          <i class="fa-solid fa-copy" aria-hidden="true"></i>
+          <span>{t.preview.copy}</span>
+        </span>
+        <span data-when-copied="copied" role="status" class="inline-flex items-center gap-2">
+          <i class="fa-solid fa-check" aria-hidden="true"></i>
+          <span>{t.preview.copied}</span>
+        </span>
+      </button>
+    </div>
+    <p class="mt-2 text-base text-slate-600">{t.preview.playbackHint}</p>
+
+    <video
+      data-preview-video
+      src={publicUrl}
+      controls
+      playsinline
+      preload="metadata"
+      class="mt-8 aspect-video w-full rounded-xl bg-slate-900"
+    ></video>
+
     <!-- ツールチップは行の左端を基準に出す（ボタン基準だと狭い画面で左右にはみ出す） -->
-    <div class="relative mt-3 flex flex-wrap items-center justify-between gap-3">
+    <div class="relative mt-4 flex flex-wrap items-center justify-between gap-3">
       <p class="flex flex-wrap items-center gap-2 text-base text-slate-700">
         <i class="fa-regular fa-clock text-slate-500" aria-hidden="true"></i>
         <span class="text-slate-600">{t.preview.expiry}</span>
@@ -104,12 +142,13 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
               >
                 <i class="fa-solid fa-thumbtack" aria-hidden="true" />
               </button>
-              {/* 常時表示のヒント文を畳んで画面を軽くする（説明はホバー・フォーカス時だけ） */}
+              {/* 常時表示のヒント文を畳んで画面を軽くする（説明はホバー・フォーカス時だけ）。
+                  行が動画の下にあるので、上へ出すと再生コントロールを覆う */}
               <span
                 id="pin-hint"
                 data-tooltip
                 role="tooltip"
-                class="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[min(18rem,100%)] rounded-md bg-slate-900 px-3 py-2 text-sm leading-snug text-white shadow-lg"
+                class="absolute top-full left-0 z-10 mt-2 w-max max-w-[min(18rem,100%)] rounded-md bg-slate-900 px-3 py-2 text-sm leading-snug text-white shadow-lg"
               >
                 {pinHint}
               </span>
@@ -172,43 +211,6 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
         </>
       )
     }
-
-    <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-      {/* 見出しラベルは画面から外したが、読み上げには用途が必要なので aria-label に残す。 */}
-      <input
-        id="preview-url"
-        data-preview-url
-        type="text"
-        readonly
-        aria-label={t.preview.urlLabel}
-        value={publicUrl}
-        class="min-w-0 flex-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-base text-slate-900"
-      />
-      <button
-        type="button"
-        data-copy-button
-        class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white hover:bg-brand-700"
-      >
-        <span data-when-copied="idle" class="inline-flex items-center gap-2">
-          <i class="fa-solid fa-copy" aria-hidden="true"></i>
-          <span>{t.preview.copy}</span>
-        </span>
-        <span data-when-copied="copied" role="status" class="inline-flex items-center gap-2">
-          <i class="fa-solid fa-check" aria-hidden="true"></i>
-          <span>{t.preview.copied}</span>
-        </span>
-      </button>
-    </div>
-    <p class="mt-2 text-base text-slate-600">{t.preview.playbackHint}</p>
-
-    <video
-      data-preview-video
-      src={publicUrl}
-      controls
-      playsinline
-      preload="metadata"
-      class="mt-8 aspect-video w-full rounded-xl bg-slate-900"
-    ></video>
   </div>
 
   <div data-when-preview="deleted" class="py-10 text-center">

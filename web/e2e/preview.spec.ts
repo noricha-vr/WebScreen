@@ -191,19 +191,28 @@ test.describe('公開プレビュー', () => {
 });
 
 test.describe('所有者の操作', () => {
-  test('タイトル → 保管期限 → URL → 動画 の順に並ぶ', async ({ page, context }) => {
+  test('タイトル → URL → 動画 → 保管期限 の順に並ぶ', async ({ page, context }) => {
     await signIn(context, E2E_FIXTURES.ownerId);
     await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
 
-    // VRChat に貼る URL を動画本体より先に見せる
+    // VRChat に貼る URL を動画本体より先に見せ、保管期限と操作は動画の下へ置く
     const positions = [
       await boxOf(page.getByRole('heading', { level: 1 })),
-      await boxOf(page.getByText(ja.preview.expiry)),
+      await boxOf(page.getByText(ja.preview.urlLabel, { exact: true })),
       await boxOf(page.locator('[data-preview-url]')),
       await boxOf(page.locator('[data-preview-video]')),
+      await boxOf(page.getByText(ja.preview.expiry)),
     ].map((box) => box.y);
 
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  test('URL 入力に見出しが結び付いている', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+
+    // 読み上げ用の aria-label ではなく、画面に見える見出しで用途を伝える
+    await expect(page.getByLabel(ja.preview.urlLabel)).toHaveAttribute('data-preview-url', '');
   });
 
   test('ピン留めボタンは保管期限の右にあり、ホバーで保管の説明を出す', async ({ page, context }) => {
