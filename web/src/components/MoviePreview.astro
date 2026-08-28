@@ -118,9 +118,19 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
         }
       </p>
 
-      {
-        isOwner && (
-          <div class="flex flex-wrap items-center justify-end gap-3">
+      <div class="flex flex-wrap items-center justify-end gap-3">
+        {/* 動画自体が公開なので、ダウンロードは所有者に限定しない。配信ドメインが
+            別オリジンで `download` 属性が効かないため、Worker 中継の専用ルートへ送る。 */}
+        <a
+          href={`/${shortId}/download/`}
+          class="inline-flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 no-underline hover:bg-brand-50 hover:text-brand-700"
+        >
+          <i class="fa-solid fa-download" aria-hidden="true" />
+          <span>{t.actions.download}</span>
+        </a>
+
+        {
+          isOwner && (
             <button
               type="button"
               data-delete-trigger
@@ -129,6 +139,13 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
               <i class="fa-solid fa-trash-can" aria-hidden="true" />
               <span>{t.actions.delete}</span>
             </button>
+          )
+        }
+      </div>
+
+      {
+        isOwner && (
+          <div class="flex flex-wrap items-center justify-end gap-3">
 
             <span data-delete-confirm class="flex flex-wrap items-center justify-end gap-3">
               <span class="text-base text-slate-700">{t.actions.deleteConfirm}</span>

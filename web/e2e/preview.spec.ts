@@ -85,6 +85,33 @@ test.describe('公開プレビュー', () => {
     await page.screenshot({ path: screenshotPath('01-preview-ja'), fullPage: true });
   });
 
+  test('ダウンロードボタンが実体を attachment として返す', async ({ page, request }) => {
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+
+    // 閲覧者（未ログイン）にも出す
+    const link = page.getByRole('link', { name: ja.actions.download });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('href', `/${E2E_FIXTURES.readyShortId}/download/`);
+
+    const response = await request.get(`/${E2E_FIXTURES.readyShortId}/download/`);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toBe('video/mp4');
+    // ページと配信ドメインが別オリジンなので、ここで attachment を付ける必要がある
+    expect(response.headers()['content-disposition']).toContain('attachment');
+    // 表示名は slides.pdf だが、実体は mp4 なので保存名は .mp4 へ正規化する
+    expect(response.headers()['content-disposition']).toContain('filename="slides.mp4"');
+    expect(response.headers()['x-robots-tag']).toBe('noindex');
+
+    // ヘッダーだけでなく実体が流れていることを確認する
+    const body = await response.body();
+    expect(body.byteLength).toBeGreaterThan(0);
+    expect(body.subarray(4, 8).toString('ascii')).toBe('ftyp');
+  });
+
+  test('存在しない動画のダウンロードは 404', async ({ request }) => {
+    expect((await request.get('/E2EMissing001/download/')).status()).toBe(404);
+  });
+
   test('英語の Accept-Language では英語で出る', async ({ browser }) => {
     // Accept-Language は locale から組み立てられる（extraHTTPHeaders だけでは効かない）
     const context = await browser.newContext({ locale: 'en-US' });
