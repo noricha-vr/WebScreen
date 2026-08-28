@@ -10,6 +10,7 @@
  */
 
 import { movieKey } from '../contracts/r2key';
+import { PINNED_RETENTION_MS } from './quota';
 
 /** pending のまま放置された予約を孤児とみなすまでの猶予。 */
 const PENDING_ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -61,8 +62,9 @@ export interface RetentionBucket {
   list(options: { prefix: string; cursor?: string }): Promise<RetentionListResult>;
 }
 
-/** 1 回の実行で削除した件数。cron の構造化ログにそのまま載せる。 */
+/** 1 回の実行で処理した件数。cron の構造化ログにそのまま載せる。 */
 export interface RetentionSummary {
+  backfilledPinned: number;
   deletedMovies: number;
   deletedOrphans: number;
   deletedFailed: number;
@@ -90,11 +92,31 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   const { database, bucket, now } = input;
 
   return {
+    // 掃除より先に走らせる。期限を入れた直後の行は 1 年先なので同じ実行では消えない。
+    backfilledPinned: await backfillPinnedExpiry(database, now),
     deletedMovies: await deleteExpiredMovies(database, bucket, now),
     deletedOrphans: await deletePendingOrphans(database, bucket, now),
     deletedFailed: await deleteFailedMovies(database, now),
     deletedCaptures: await deleteStaleCaptures(bucket, now),
   };
+}
+
+/**
+ * pin 済みなのに期限を持たない行へ、1 年後の期限を入れる。
+ *
+ * 保管期間を有限にする前の行（pin で expires_at を NULL にしていた頃のもの）と、
+ * デプロイの切り替え中に旧コードが書いた行が対象。掃除は expires_at でしか
+ * 判定しないため、NULL のまま残ると永久に対象外になる。毎時の実行で何度通っても
+ * 同じ結果になる形にして、取りこぼしを次の実行が拾えるようにする。
+ */
+async function backfillPinnedExpiry(database: RetentionDatabase, now: Date): Promise<number> {
+  const expiresAt = new Date(now.getTime() + PINNED_RETENTION_MS).toISOString();
+  const result = await database
+    .prepare('UPDATE movies SET expires_at = ? WHERE pinned = 1 AND expires_at IS NULL')
+    .bind(expiresAt)
+    .run();
+
+  return result.meta.changes;
 }
 
 /**
@@ -125,7 +147,7 @@ async function deleteExpiredMovies(
     // 行だけが残る。R2 削除の直前にも期限を読み直し、実体と行の不整合を防ぐ。
     const current = await database
       .prepare(
-        'SELECT short_id FROM movies WHERE short_id = ? AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)'
+        "SELECT short_id FROM movies WHERE short_id = ? AND status = 'ready' AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)"
       )
       .bind(row.short_id, threshold)
       .all<ShortIdRow>();
@@ -142,7 +164,7 @@ async function deleteExpiredMovies(
     // SELECT 後に期限が延びた動画を巻き込まないよう、削除時にも期限を再確認する。
     const result = await database
       .prepare(
-        'DELETE FROM movies WHERE short_id = ? AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)'
+        "DELETE FROM movies WHERE short_id = ? AND status = 'ready' AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)"
       )
       .bind(row.short_id, threshold)
       .run();

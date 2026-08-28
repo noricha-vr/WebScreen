@@ -82,6 +82,15 @@ class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private delete(query: string, values: unknown[]): number {
+    // backfill の UPDATE も run() を通る。pin 済みで期限を持たない行だけを埋める。
+    if (query.startsWith('UPDATE')) {
+      const targets = [...this.movies.values()].filter(
+        (movie) => movie.pinned === 1 && movie.expiresAt === null
+      );
+      for (const movie of targets) movie.expiresAt = values[0] as string;
+      return targets.length;
+    }
+
     if (query.includes("status = 'failed'")) {
       const threshold = parseSqliteTime(values[0] as string);
       const targets = [...this.movies.values()].filter(
@@ -354,7 +363,7 @@ describe('runRetention: captures', () => {
 });
 
 describe('runRetention: サマリ', () => {
-  it('4 種類の削除件数をまとめて返す', async () => {
+  it('補完と 4 種類の削除件数をまとめて返す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'expiredBBBBB', expiresAt: iso(-HOUR_MS) }),
       movie({ shortId: 'orphanBBBBBB', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
@@ -367,6 +376,7 @@ describe('runRetention: サマリ', () => {
     const summary = await run(database, bucket);
 
     expect(summary).toEqual({
+      backfilledPinned: 0,
       deletedMovies: 1,
       deletedOrphans: 1,
       deletedFailed: 1,
@@ -387,5 +397,34 @@ describe('runRetention: サマリ', () => {
     const summary = await run(database, new FakeRetentionBucket());
 
     expect(summary.deletedFailed).toBe(1);
+  });
+});
+
+describe('runRetention: pin 済みの期限補完', () => {
+  it('期限を持たない pin 済みの行へ 1 年後の期限を入れる', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'pinnedNullAA', pinned: 1, expiresAt: null }),
+    ]);
+
+    const summary = await run(database, new FakeRetentionBucket());
+
+    expect(summary.backfilledPinned).toBe(1);
+    expect(database.movies.get('pinnedNullAA')?.expiresAt).toBe(iso(365 * DAY_MS));
+    // 期限を入れた直後の行は同じ実行では消えない
+    expect(database.movies.size).toBe(1);
+  });
+
+  it('期限を持つ行には触らない（pin 済みでも上書きしない）', async () => {
+    const kept = iso(10 * DAY_MS);
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'pinnedDatedA', pinned: 1, expiresAt: kept }),
+      movie({ shortId: 'plainDatedAA', pinned: 0, expiresAt: kept }),
+    ]);
+
+    const summary = await run(database, new FakeRetentionBucket());
+
+    expect(summary.backfilledPinned).toBe(0);
+    expect(database.movies.get('pinnedDatedA')?.expiresAt).toBe(kept);
+    expect(database.movies.get('plainDatedAA')?.expiresAt).toBe(kept);
   });
 });
