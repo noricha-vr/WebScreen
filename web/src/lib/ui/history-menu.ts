@@ -44,9 +44,6 @@ function fillRow(
 
   const pin = row.querySelector<HTMLElement>('[data-entry-pinned]');
   if (pin) pin.hidden = !entry.pinned;
-
-  const processing = row.querySelector<HTMLElement>('[data-entry-processing]');
-  if (processing) processing.hidden = entry.status !== 'pending';
 }
 
 /** 削除の 2 段階確認（トリガー → 確認 → 実行）。confirm() は使わない。 */

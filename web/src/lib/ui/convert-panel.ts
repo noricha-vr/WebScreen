@@ -15,6 +15,7 @@ import {
   type UploadKind,
 } from '../contracts/api';
 import { isShortId } from '../contracts/r2key';
+import { movieEndpoint } from './history-view';
 import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
 import {
   INITIAL_UPLOAD_STATE,
@@ -88,6 +89,24 @@ function asCaptureResponse(value: unknown): CaptureResponse {
   return { images: value.images as string[] };
 }
 
+/**
+ * 予約だけ済んで実体が上がらなかった動画を取り消す。
+ *
+ * keepalive を付けるのは、タブを閉じる直前の失敗でも送信を試みるため。ここが
+ * 失敗しても利用者に見せる情報は無い（cron の回収に委ねる）ので握りつぶす。
+ */
+function abandonUpload(shortId: string): void {
+  try {
+    void fetch(movieEndpoint(shortId), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    // 送信自体が組み立てられない場合も、変換失敗の表示を優先して無視する
+  }
+}
+
 async function uploadMp4(
   mp4: Blob,
   filename: string,
@@ -108,21 +127,43 @@ async function uploadMp4(
     })
   );
   dispatch({ type: 'progress', value: 20 }, runGeneration);
-  const upload = await fetch(presign.uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'video/mp4' },
-    body: mp4,
-  });
-  if (!upload.ok) throw new Error(`Upload failed: ${upload.status}`);
+
+  // presign を通った時点で pending の行が予約されている。ここから先で失敗すると
+  // 誰も failed へ落とさないまま残り、cron が回収するまで容量を占め続ける。
+  // ただし取り消してよいのは「まだ ready になっていないと確信できる」失敗だけ。
+  try {
+    const upload = await fetch(presign.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'video/mp4' },
+      body: mp4,
+    });
+    if (!upload.ok) throw new Error(`Upload failed: ${upload.status}`);
+  } catch (error) {
+    // R2 への PUT 段階の失敗。commit を送っていないので確実に pending のまま。
+    abandonUpload(presign.shortId);
+    throw error;
+  }
+
   dispatch({ type: 'progress', value: 80 }, runGeneration);
-  const committed = asCommitResponse(
-    await requestJson('/api/uploads/commit/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shortId: presign.shortId }),
-    })
-  );
-  dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
+
+  try {
+    const committed = asCommitResponse(
+      await requestJson('/api/uploads/commit/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shortId: presign.shortId }),
+      })
+    );
+    dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
+  } catch (error) {
+    // サーバーが 4xx / 5xx を返した時だけ取り消す。通信断や、200 なのに本文が
+    // 壊れている応答では commit が成功して ready になっている可能性があり、
+    // 消すと完成した動画を失う（その場合の pending 残りは cron の回収に委ねる）。
+    if (error instanceof JsonRequestError && error.status >= 400) {
+      abandonUpload(presign.shortId);
+    }
+    throw error;
+  }
 }
 
 const API_ERROR_TO_UPLOAD_ERROR: Readonly<Partial<Record<ErrorCode, UploadErrorCode>>> = {

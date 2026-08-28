@@ -57,7 +57,6 @@
     "loading": "読み込んでいます",
     "empty": "変換した動画はまだありません",
     "error": "履歴を取得できませんでした",
-    "processing": "処理中",
     "pinned": "ピン留め中"
   },
   "preview": {
@@ -97,7 +96,7 @@
     "github": "GitHub",
     "privacy": "Cookie とプライバシー",
     "langSwitch": "English",
-    "note": "WebScreen β — Cloudflare 版の先行公開です"
+    "note": "WebScreen β"
   },
   "privacy": {
     "heading": "Cookie とプライバシー",

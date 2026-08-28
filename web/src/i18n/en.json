@@ -57,7 +57,6 @@
     "loading": "Loading",
     "empty": "You have not converted any video yet",
     "error": "Could not load your history",
-    "processing": "Processing",
     "pinned": "Pinned"
   },
   "preview": {
@@ -97,7 +96,7 @@
     "github": "GitHub",
     "privacy": "Cookies and privacy",
     "langSwitch": "日本語",
-    "note": "WebScreen β — an early release of the Cloudflare edition"
+    "note": "WebScreen β"
   },
   "privacy": {
     "heading": "Cookies and privacy",

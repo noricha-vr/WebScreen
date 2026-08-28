@@ -86,14 +86,21 @@ export interface MovieActionInput {
   shortId: string;
 }
 
-/** 自分の movies を新しい順に返す（未完了の pending も進捗確認のために含める）。 */
+/**
+ * 自分の movies を新しい順に返す。
+ *
+ * ready だけを返すのは、履歴を「共有できる動画の一覧」に揃えるため。pending は
+ * presign から commit までの数秒しか続かない一方、アップロードが失敗すると誰も
+ * failed へ落とさないまま残り、cron が回収する 24 時間後まで「処理中」と表示され
+ * 続けていた（進捗は変換パネル側が持っているので履歴に出す必要がない）。
+ */
 export async function listHistory(input: ListHistoryInput): Promise<HistoryResponse> {
   // created_at は秒精度なので、同一秒の挿入で並びが揺れないよう short_id を第 2 キーにする。
   const { results } = await input.database
     .prepare(
       `SELECT short_id, user_id, filename, status, pinned, created_at, expires_at
        FROM movies
-       WHERE user_id = ? AND status IN ('pending', 'ready')
+       WHERE user_id = ? AND status = 'ready'
        ORDER BY created_at DESC, short_id DESC
        LIMIT ?`
     )

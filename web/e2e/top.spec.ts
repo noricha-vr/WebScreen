@@ -6,6 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
 import en from '../src/i18n/en.json' with { type: 'json' };
 import ja from '../src/i18n/ja.json' with { type: 'json' };
 import { E2E_FIXTURES } from '../playwright.config';
+import { signIn as signInAsOwner } from './session';
 import { signIn as signInWithSessionCookie } from './session';
 import { SESSION_COOKIE_NAME } from '../src/lib/contracts/session';
 
@@ -267,6 +268,66 @@ test.describe('ログイン済み', () => {
     expect(body).not.toBeNull();
     expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
     await expect(page).toHaveURL(/\/Ab12Cd34Ef56\/$/, { timeout: 120_000 });
+  });
+
+  test('アップロードに失敗したら予約した動画を実際に取り消す', async ({ page, context }) => {
+    // presign を通った時点で pending の行が予約される。ここで失敗を放置すると
+    // 誰も failed へ落とさないまま履歴に「処理中」として残り続けていた。
+    test.setTimeout(180_000);
+    // 実セッションを張る（DELETE が 401 でも通ってしまうテストにしない）
+    await signInAsOwner(context, E2E_FIXTURES.ownerId);
+    await signIn(page);
+    // seed 済みの pending 行を予約結果に見立てる
+    await mockUploadEndpoints(page, E2E_FIXTURES.pendingShortId);
+    // R2 への PUT だけを失敗させる（presign は成功済み = 予約が残る状況を作る）
+    await page.route('https://upload.test/r2-upload', (route) => route.fulfill({ status: 500 }));
+
+    const deleteResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' &&
+        response.url().includes(`/api/movies/${E2E_FIXTURES.pendingShortId}/`)
+    );
+
+    await page.goto('/ja/');
+    await page
+      .locator('[data-convert-panel] [data-file-input]')
+      .setInputFiles([{ name: 'first.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG }]);
+
+    // 送信されたことではなく、サーバーが受理したことを確認する
+    expect((await deleteResponse).status()).toBe(204);
+    await expect(page.locator('[data-convert-panel] [data-file-error]')).toBeVisible();
+
+    // 対象が実際に消えている（pending は元から公開されないので、2 回目の DELETE が 404）
+    // Astro の origin チェック（CSRF 保護）が効いているため Origin を明示する
+    const second = await context.request.delete(`/api/movies/${E2E_FIXTURES.pendingShortId}/`, {
+      headers: { Origin: new URL(page.url()).origin },
+    });
+    expect(second.status()).toBe(404);
+  });
+
+  test('commit の応答が壊れていても完成した動画は消さない', async ({ page, context }) => {
+    // commit が成功して ready になった後に応答だけ失われるケース。ここで取り消すと
+    // 完成した動画を失うため、サーバーがエラーを返した時以外は触らない。
+    test.setTimeout(180_000);
+    await signInAsOwner(context, E2E_FIXTURES.ownerId);
+    await signIn(page);
+    await mockUploadEndpoints(page, E2E_FIXTURES.pinnedShortId);
+    await page.route('**/api/uploads/commit/', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: 'not-json' })
+    );
+
+    let deleteSeen = false;
+    page.on('request', (req) => {
+      if (req.method() === 'DELETE' && req.url().includes('/api/movies/')) deleteSeen = true;
+    });
+
+    await page.goto('/ja/');
+    await page
+      .locator('[data-convert-panel] [data-file-input]')
+      .setInputFiles([{ name: 'first.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG }]);
+
+    await expect(page.locator('[data-convert-panel] [data-file-error]')).toBeVisible();
+    expect(deleteSeen).toBe(false);
   });
 
   test('対応外の形式は変換を始めずエラーを出す', async ({ page }) => {

@@ -361,7 +361,6 @@ test.describe('履歴ドロップダウン', () => {
     await stubHistory(page, [
       historyMovie(),
       historyMovie({ shortId: E2E_FIXTURES.pinnedShortId, filename: 'pinned.mp4', pinned: true }),
-      historyMovie({ shortId: 'E2EPending99', filename: 'wip.pdf', status: 'pending' }),
     ]);
     await page.goto('/ja/');
 
@@ -369,11 +368,10 @@ test.describe('履歴ドロップダウン', () => {
     await menu.locator('summary').click();
 
     const rows = menu.locator('[data-history-row]');
-    await expect(rows).toHaveCount(3);
+    await expect(rows).toHaveCount(2);
     await expect(rows.first().getByText(E2E_FIXTURES.readyFilename)).toBeVisible();
     await expect(rows.first().getByText('3 分前')).toBeVisible();
     await expect(rows.nth(1).getByText(ja.history.pinned)).toBeVisible();
-    await expect(rows.nth(2).getByText(ja.history.processing)).toBeVisible();
 
     await page.screenshot({ path: screenshotPath('03-history-ja') });
 
