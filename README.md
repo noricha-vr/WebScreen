@@ -1,63 +1,68 @@
-# web_screen
+# WebScreen
 
-This project is for displaying web pages, images and desktop on the VRChat video player.
-Also, in the future I would like to display input images, pdfs and the user's desktop.
+**[日本語](README.ja.md)**
 
-## Setup
+Turn web pages, images and PDFs into MP4 videos you can play on a VRChat video player.
 
-```bash
-git clone git+https://github.com/noricha-vr/screen_capture.git web_screen
-cd web_screen
-docker compose build
-docker-compose up
-```
+https://web-screen.net
 
-When you stop the container, you can use the following command.
+VRChat video players cannot open a web page, a slide deck or a screenshot — they only play video.
+WebScreen converts those into an MP4 that scrolls through the content, and gives you a URL to paste
+into the player.
 
-```bash
-docker-compose down
-```
+## How to use
 
-or `ctrl + c`
+1. Open https://web-screen.net and sign in with Discord.
+2. Give it something to convert:
+   - **A URL** — the page is captured top to bottom and turned into a scrolling video.
+   - **A PDF** — one page per frame.
+   - **Images** (png / jpg / jpeg / webp / gif) — one image per frame.
+3. Copy the video URL that appears.
+4. Paste it into a VRChat video player.
 
-### Pycharm settings
+The video is encoded so that every frame is a keyframe, which is what lets VRChat players seek to any
+point instantly.
 
-#### Run/Debug Configurations
+## Limits
 
-- Select: FastAPI
-- Path: absolute path to `router/main.py`
-- Uvicorn options: --reload --host=0.0.0.0 --port=8080
+| | |
+|---|---|
+| File size | 50 MB per video |
+| Storage per user | 500 MB |
+| Retention | 30 days |
+| Pinned videos | 10 per user, kept indefinitely |
 
-#### Interpreter settings
+Videos are served from a public URL — anyone who knows the URL can play it. The only protection is
+that the ID is a random 12-character string. Do not convert anything confidential.
 
-1. Select `docker-compose` interpreter
-2. Select `docker-compose.yaml` file
-3. Select `web_screen` service
+## Privacy
 
-### VSCode settings
+Sign-in uses Discord OAuth. Converted videos are stored on Cloudflare R2 and deleted automatically
+after the retention period. See the privacy page on the site for details.
 
-## Usage
+## Development
 
-1. Open the http://0.0.0.0:8080/ on your browser.
-2. Enter the URL of the web page you want to display in VRChat video player.
-3. Copy the URL, then paste it into the VRChat video player.
-4. Enjoy!
-
-## Useful docker commands
-
-```bash
-docker build -t web_screen .
-docker-compose up
-docker exec -it web_screen bash
-docker-compose down
-```
-
-## Useful translation commands
-
-Update translation files
+The service runs on Cloudflare Workers (Astro + D1 + R2). The screenshot service that captures web
+pages lives in a separate repository: [web-capture](https://github.com/noricha-vr/web-capture).
 
 ```bash
-pybabel extract -F babel.cfg -o messages.pot . templates # update messages.pot
-pybabel update -i messages.pot -d lang # update translation files ".po"
-pybabel compile -d lang # compile translation files ".po" to ".mo"
+cd web
+bun install
+cp .dev.vars.example .dev.vars   # fill in the values
+bun run dev                      # http://localhost:4321
+bun test
+bunx playwright test
 ```
+
+Pushing to `main` deploys to production through GitHub Actions.
+
+Repository layout, conventions and the things you must not break are documented in
+[CLAUDE.md](CLAUDE.md).
+
+> [!NOTE]
+> The files at the repository root (`router/`, `movie_maker/`, `templates/`, `Dockerfile`, …) are the
+> previous FastAPI implementation. It is no longer developed and will be removed.
+
+## License
+
+See [LICENSE.md](LICENSE.md).
