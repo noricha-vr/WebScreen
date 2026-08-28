@@ -8,8 +8,17 @@ export interface VideoFrame {
   height: number;
 }
 
+/**
+ * 変換工程の段階。UI は段階ごとに進捗バーの帯域を割り当てるため、
+ * どの工程の進捗かを進捗そのものと一緒に受け取る必要がある。
+ * 撮影・アップロードは convert の外側の工程なのでここには含めない。
+ */
+export type ConversionStage = 'preparing' | 'encoding';
+
 /** 変換工程から UI へ返す進捗。 */
 export interface ConversionProgress {
+  /** どの工程の進捗か。% と枚数を同じ段階のものへ揃えるために必須。 */
+  stage: ConversionStage;
   current: number;
   total: number;
 }

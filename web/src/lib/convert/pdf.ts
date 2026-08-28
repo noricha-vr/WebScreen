@@ -60,7 +60,7 @@ export async function pdfToFrames(pdfFile: File, report?: ProgressReporter): Pro
         width: canvas.width,
         height: canvas.height,
       });
-      report?.({ current: index, total: pdfDocument.numPages });
+      report?.({ stage: 'preparing', current: index, total: pdfDocument.numPages });
     }
     return frames;
   } finally {

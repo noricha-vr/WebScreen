@@ -59,7 +59,7 @@ export async function imageFilesToFrames(files: readonly File[], report?: Progre
   const frames: VideoFrame[] = [];
   for (const [index, file] of files.entries()) {
     frames.push(await normalizeImageBlob(file));
-    report?.({ current: index + 1, total: files.length });
+    report?.({ stage: 'preparing', current: index + 1, total: files.length });
   }
   return frames;
 }

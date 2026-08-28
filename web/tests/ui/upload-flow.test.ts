@@ -7,6 +7,7 @@ import {
   detectUploadKind,
   preflightInputFiles,
   reduceUpload,
+  type UploadEvent,
   type UploadState,
 } from '../../src/lib/ui/upload-flow';
 
@@ -131,12 +132,13 @@ describe('ローカル入力の preflight', () => {
 describe('変換の進行', () => {
   test('変換 → アップロード → 完了で公開 URL が入る', () => {
     let state = select('slides.pdf');
-    state = reduceUpload(state, { type: 'progress', value: 40 });
-    expect(state.progress).toBe(40);
+    state = reduceUpload(state, { type: 'stageProgress', stage: 'preparing', current: 2, total: 4 });
+    expect(state.progress).toBe(35);
 
     state = reduceUpload(state, { type: 'converted' });
     expect(state.phase).toBe('uploading');
-    expect(state.progress).toBe(0);
+    expect(state.stage).toBe('uploading');
+    expect(state.progress).toBe(95);
 
     state = reduceUpload(state, {
       type: 'uploaded',
@@ -149,10 +151,14 @@ describe('変換の進行', () => {
     expect(state.shortId).toBe('Ab12Cd34Ef56');
   });
 
-  test('進捗は 0〜100 に丸める', () => {
-    const state = reduceUpload(select('slides.pdf'), { type: 'progress', value: 140 });
+  test('段階内の進み具合は帯域からはみ出さない', () => {
+    const state = reduceUpload(select('slides.pdf'), {
+      type: 'stageRatio',
+      stage: 'preparing',
+      ratio: 1.4,
+    });
 
-    expect(state.progress).toBe(100);
+    expect(state.progress).toBe(70);
   });
 
   test('変換中の再選択は無視する（二重投入させない）', () => {
@@ -202,49 +208,172 @@ describe('URL からの変換', () => {
   });
 });
 
-describe('変換ページの進捗', () => {
+describe('段階ごとの進捗', () => {
   function convertingUrl(): UploadState {
     return reduceUpload(INITIAL_UPLOAD_STATE, { type: 'selectUrl', url: 'https://example.com' });
   }
 
-  test('現在位置と総数から進捗率を出す', () => {
-    const state = reduceUpload(select('slides.pdf'), {
-      type: 'conversionProgress',
-      current: 3,
-      total: 10,
+  test('% と枚数は必ず同じ段階のものになる', () => {
+    // 撮影が終わっても変換段階の % は撮影の 100% を引き継がない（「100% なのに 88/100」を作らない）。
+    let state = reduceUpload(convertingUrl(), {
+      type: 'stageProgress',
+      stage: 'capturing',
+      current: 213,
+      total: 213,
+    });
+    expect(state.progress).toBe(55);
+    expect([state.current, state.total]).toEqual([213, 213]);
+
+    state = reduceUpload(state, { type: 'stageProgress', stage: 'encoding', current: 88, total: 100 });
+
+    expect(state.stage).toBe('encoding');
+    expect([state.current, state.total]).toEqual([88, 100]);
+    // 70〜95% の帯域を 88/100 まで進んだところ。枚数と % が同じ段階を指す。
+    expect(state.progress).toBe(92);
+  });
+
+  test('段階が進むとバーは後退しない', () => {
+    const events: UploadEvent[] = [
+      { type: 'stageRatio', stage: 'capturing', ratio: 0.08 },
+      { type: 'stageProgress', stage: 'capturing', current: 30, total: 213 },
+      { type: 'stageProgress', stage: 'capturing', current: 213, total: 213 },
+      { type: 'stageProgress', stage: 'preparing', current: 1, total: 213 },
+      { type: 'stageProgress', stage: 'preparing', current: 213, total: 213 },
+      { type: 'stageProgress', stage: 'encoding', current: 0, total: 213 },
+      { type: 'stageProgress', stage: 'encoding', current: 213, total: 213 },
+      { type: 'converted' },
+      { type: 'stageRatio', stage: 'uploading', ratio: 0.2 },
+      { type: 'stageRatio', stage: 'uploading', ratio: 0.8 },
+    ];
+
+    const progresses: number[] = [];
+    let state = convertingUrl();
+    for (const event of events) {
+      state = reduceUpload(state, event);
+      progresses.push(state.progress);
+    }
+
+    expect(progresses).toEqual([...progresses].sort((a, b) => a - b));
+    expect(progresses.at(-1)).toBe(99);
+  });
+
+  test('撮影中に総枚数が増えてもバーは戻さない', () => {
+    // 遅延読み込みで伸びるページでは総枚数が途中で増える（capture-pages.ts が許容している）。
+    // 比率だけ見ると 100/150 → 200/500 で後退するため、到達済みの値を下限にする必要がある。
+    let state = convertingUrl();
+    state = reduceUpload(state, { type: 'stageProgress', stage: 'capturing', current: 100, total: 150 });
+    const before = state.progress;
+
+    state = reduceUpload(state, { type: 'stageProgress', stage: 'capturing', current: 200, total: 500 });
+
+    expect(state.progress).toBeGreaterThanOrEqual(before);
+    // 枚数の表示は最新の実態に追従する（バーだけを据え置く）
+    expect([state.current, state.total]).toEqual([200, 500]);
+  });
+
+  test('遅れて届いた同じ段階の疑似進捗ではバーを戻さない', () => {
+    // 疑似進捗のタイマーは実進捗が来た後にも 1 回発火しうる
+    let state = convertingUrl();
+    state = reduceUpload(state, { type: 'stageProgress', stage: 'capturing', current: 120, total: 213 });
+    const before = state.progress;
+
+    state = reduceUpload(state, { type: 'stageRatio', stage: 'capturing', ratio: 0.01 });
+
+    expect(state.progress).toBe(before);
+  });
+
+  test('同じ段階で報告が逆行してもバーは戻さない', () => {
+    // ffmpeg の progress は稀に前の値より小さい値を返す
+    let state = convertingUrl();
+    state = reduceUpload(state, { type: 'stageProgress', stage: 'encoding', current: 90, total: 100 });
+    const before = state.progress;
+
+    state = reduceUpload(state, { type: 'stageProgress', stage: 'encoding', current: 40, total: 100 });
+
+    expect(state.progress).toBe(before);
+    expect([state.current, state.total]).toEqual([40, 100]);
+  });
+
+  test('遅れて届いた前の段階の報告ではバーを戻さない', () => {
+    let state = reduceUpload(convertingUrl(), {
+      type: 'stageProgress',
+      stage: 'encoding',
+      current: 50,
+      total: 100,
+    });
+    const encoding = state.progress;
+
+    state = reduceUpload(state, { type: 'stageProgress', stage: 'capturing', current: 213, total: 213 });
+
+    expect(state.progress).toBe(encoding);
+    expect(state.stage).toBe('encoding');
+    expect([state.current, state.total]).toEqual([50, 100]);
+  });
+
+  test('URL 変換とファイル変換で帯域が切り替わる', () => {
+    const url = reduceUpload(convertingUrl(), {
+      type: 'stageProgress',
+      stage: 'preparing',
+      current: 1,
+      total: 1,
+    });
+    const file = reduceUpload(select('slides.pdf'), {
+      type: 'stageProgress',
+      stage: 'preparing',
+      current: 1,
+      total: 1,
     });
 
-    expect(state.progress).toBe(30);
-    expect(state.current).toBe(3);
-    expect(state.total).toBe(10);
+    // 撮影段階がある URL 変換は準備を 55〜70%、撮影の無いファイル変換は 0〜70% に割り当てる。
+    expect(url.progress).toBe(70);
+    expect(file.progress).toBe(70);
+    expect(reduceUpload(convertingUrl(), { type: 'stageRatio', stage: 'preparing', ratio: 0 }).progress).toBe(55);
+    expect(reduceUpload(select('slides.pdf'), { type: 'stageRatio', stage: 'preparing', ratio: 0 }).progress).toBe(0);
   });
 
-  test('実進捗が疑似進捗より小さくてもバーは戻さず、現在位置と総数だけ更新する', () => {
-    const pseudo = reduceUpload(convertingUrl(), { type: 'progress', value: 12 });
+  test('撮影段階はファイル変換では進まない', () => {
+    const state = reduceUpload(select('photo.png'), {
+      type: 'stageProgress',
+      stage: 'capturing',
+      current: 1,
+      total: 1,
+    });
 
-    const state = reduceUpload(pseudo, { type: 'conversionProgress', current: 1, total: 30 });
-
-    expect(state.progress).toBe(12);
-    expect(state.current).toBe(1);
-    expect(state.total).toBe(30);
+    expect(state.progress).toBe(0);
   });
 
-  test('実進捗が疑似進捗を追い越したら実進捗の値になる', () => {
-    let state = reduceUpload(convertingUrl(), { type: 'progress', value: 12 });
-    state = reduceUpload(state, { type: 'conversionProgress', current: 1, total: 30 });
+  test('アップロード段階は枚数を持たない', () => {
+    const state = reduceUpload(
+      reduceUpload(select('slides.pdf'), { type: 'converted' }),
+      { type: 'stageRatio', stage: 'uploading', ratio: 0.8 }
+    );
 
-    state = reduceUpload(state, { type: 'conversionProgress', current: 5, total: 30 });
-
-    expect(state.progress).toBe(17);
-    expect(state.current).toBe(5);
+    expect(state.progress).toBe(99);
+    expect(state.current).toBeNull();
+    expect(state.total).toBeNull();
   });
 
-  test('変換中でなければ進捗イベントを無視する', () => {
-    const uploading = reduceUpload(select('slides.pdf'), { type: 'converted' });
-    expect(uploading.phase).toBe('uploading');
+  test('選択した時点で段階が決まる', () => {
+    expect(convertingUrl().stage).toBe('capturing');
+    expect(select('slides.pdf').stage).toBe('preparing');
+  });
 
-    expect(reduceUpload(uploading, { type: 'conversionProgress', current: 1, total: 4 })).toBe(
-      uploading
+  test('変換前後は進捗イベントを無視する', () => {
+    const idle = INITIAL_UPLOAD_STATE;
+    expect(reduceUpload(idle, { type: 'stageProgress', stage: 'preparing', current: 1, total: 4 })).toBe(idle);
+
+    const done = reduceUpload(reduceUpload(select('slides.pdf'), { type: 'converted' }), {
+      type: 'uploaded',
+      publicUrl: 'https://example.com/movies/x.mp4',
+      shortId: 'Ab12Cd34Ef56',
+    });
+    expect(reduceUpload(done, { type: 'stageRatio', stage: 'uploading', ratio: 1 })).toBe(done);
+  });
+
+  test('総数が 0 以下の報告は捨てる', () => {
+    const converting = select('slides.pdf');
+    expect(reduceUpload(converting, { type: 'stageProgress', stage: 'preparing', current: 0, total: 0 })).toBe(
+      converting
     );
   });
 });

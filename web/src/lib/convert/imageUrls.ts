@@ -19,11 +19,14 @@ export async function fetchImagesInOrder(
 
 /** CaptureResponse.images の撮影順を保ったまま正規化フレームへ変換する。 */
 export async function imageUrlsToFrames(urls: readonly string[], report?: ProgressReporter): Promise<VideoFrame[]> {
+  // 取得（枚数分の fetch）は正規化より前に時間を使うため、段階の切り替わりを先に知らせる。
+  // 撮影完了の表示のまま数十秒止まって見えるのを避ける。
+  report?.({ stage: 'preparing', current: 0, total: urls.length });
   const images = await fetchImagesInOrder(urls);
   const frames: VideoFrame[] = [];
   for (const [index, image] of images.entries()) {
     frames.push(await normalizeImageBlob(image));
-    report?.({ current: index + 1, total: images.length });
+    report?.({ stage: 'preparing', current: index + 1, total: images.length });
   }
   return frames;
 }

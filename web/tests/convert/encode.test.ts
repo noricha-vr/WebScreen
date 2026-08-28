@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { buildFrameEncodeArgs, frameFileName } from '../../src/lib/convert/encode';
+import { buildFrameEncodeArgs, encodedFrameCount, frameFileName } from '../../src/lib/convert/encode';
 import { fetchImagesInOrder } from '../../src/lib/convert/imageUrls';
 import { assertPdfPageCount, MAX_PDF_PAGES } from '../../src/lib/convert/pdf';
 
@@ -18,6 +18,17 @@ describe('VRChat 向け FFmpeg 引数', () => {
     expect([frameFileName(0), frameFileName(1), frameFileName(10)]).toEqual([
       'frame-000000.png', 'frame-000001.png', 'frame-000010.png',
     ]);
+  });
+});
+
+describe('エンコードの進捗', () => {
+  test('FFmpeg の進み具合をフレーム枚数へ換算する', () => {
+    expect([0, 0.5, 1].map((progress) => encodedFrameCount(progress, 100))).toEqual([0, 50, 100]);
+  });
+
+  test('範囲外の進み具合でも枚数は 0〜総数に収まる', () => {
+    // FFmpeg は 1 を超える進み具合や NaN を返すことがあり、そのまま表示すると枚数が総数を超える。
+    expect([1.2, -0.1, Number.NaN].map((progress) => encodedFrameCount(progress, 100))).toEqual([100, 0, 0]);
   });
 });
 

@@ -1,3 +1,6 @@
+# 旧 FastAPI 実装（リポジトリ直下の router/ movie_maker/ 等）を Cloud Run へ出すための設定。
+# 現行の実装は web/ の Cloudflare Workers で、デプロイは .github/workflows/deploy.yml が行う。
+# この設定を起動する Cloud Build のトリガーは無効化済み（2026-08-28 時点）。
 steps:
   - name: 'gcr.io/kaniko-project/executor'
     args:

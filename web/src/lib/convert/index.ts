@@ -21,4 +21,4 @@ export async function convertImageUrlsToMp4(urls: readonly string[], report?: Pr
   return encodeFramesToMp4(await imageUrlsToFrames(urls, report), report);
 }
 
-export { ConversionError, type ConversionProgress, type VideoFrame } from './types';
+export { ConversionError, type ConversionProgress, type ConversionStage, type VideoFrame } from './types';
