@@ -424,6 +424,35 @@ test.describe('ログイン済み', () => {
     expect(requested).toEqual([0, 2, 4]);
   });
 
+  test('totalImages を返さない旧 upstream でも変換できる', async ({ page }) => {
+    // 段階リリース中やロールバック直後に、返ってきた分で変換を続けられること
+    test.setTimeout(180_000);
+    await signIn(page);
+    await mockUploadEndpoints(page);
+
+    const shots = ['0001', '0002'].map((n) => `https://shots.test/legacy/${n}.png`);
+    await page.route('**/api/capture/', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ images: shots }) })
+    );
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    await page.route('https://shots.test/legacy/*', (route) =>
+      route.fulfill({ contentType: 'image/png', body: png })
+    );
+
+    const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
+    await page.goto('/ja/');
+    const panel = page.locator('[data-convert-panel]');
+    await panel.locator('[data-url-input]').fill('https://example.com/legacy');
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    const body = (await uploadRequest).postDataBuffer();
+    expect(body).not.toBeNull();
+    expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
+  });
+
   test('非Webページ URL の案内は URL 欄にだけ表示し、下流メッセージを出さない', async ({ page }) => {
     const rawMessage = 'internal upstream detail';
     await signIn(page);

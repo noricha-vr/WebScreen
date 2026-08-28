@@ -87,10 +87,14 @@ function asCaptureResponse(value: unknown): CaptureResponse {
   if (!isRecord(value) || !Array.isArray(value.images) || value.images.some((image) => typeof image !== 'string')) {
     throw new Error('Invalid capture response');
   }
-  if (typeof value.totalImages !== 'number' || !Number.isFinite(value.totalImages)) {
+  const images = value.images as string[];
+  // totalImages を返さないのは分割取得より前の web-capture。その版は長いページを
+  // PAGE_TOO_LONG で失敗させるので、返ってきた分がページ全体とみなして構わない。
+  if (value.totalImages === undefined) return { images, totalImages: images.length };
+  if (!Number.isSafeInteger(value.totalImages) || (value.totalImages as number) < 0) {
     throw new Error('Invalid capture response');
   }
-  return { images: value.images as string[], totalImages: value.totalImages };
+  return { images, totalImages: value.totalImages as number };
 }
 
 /**
@@ -315,7 +319,15 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
           body: JSON.stringify({ url, startIndex }),
         }).then(asCaptureResponse),
       onProgress: (collected, total) => {
-        dispatch({ type: 'conversionProgress', current: collected, total }, current);
+        // 撮影は変換の前段。conversionProgress へ流すと、変換が始まった時に
+        // 進捗が 100% のまま「1/150」と表示されてしまう（バーは単調増加のため）。
+        // ここでは疑似進捗と同じ帯域だけを動かす。
+        const ratio = total === 0 ? 0 : collected / total;
+        const span = CAPTURE_PSEUDO_PROGRESS_MAX - CAPTURE_PSEUDO_PROGRESS_START;
+        dispatch(
+          { type: 'progress', value: CAPTURE_PSEUDO_PROGRESS_START + Math.round(span * ratio) },
+          current
+        );
       },
     })
       // 成功・失敗のどちらでも疑似進捗を必ず止める（ここから先は実進捗が来る）。

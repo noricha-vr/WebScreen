@@ -108,6 +108,21 @@ describe('validateCaptureRequest', () => {
     });
   });
 
+  test('startIndex を上流へ渡す', () => {
+    // ここで落とすと常に先頭からの撮影になり、同じ画像を繰り返し繋いでしまう
+    expect(validateCaptureRequest({ url: 'https://example.com/', startIndex: 100 })).toEqual({
+      ok: true,
+      value: { url: 'https://example.com/', startIndex: 100 },
+    });
+  });
+
+  test('負数や小数の startIndex を拒否する', () => {
+    for (const startIndex of [-1, 1.5, Number.NaN, '10']) {
+      const result = validateCaptureRequest({ url: 'https://example.com/', startIndex });
+      expect(result.ok).toBe(false);
+    }
+  });
+
   test('範囲内の width / height を受理する', () => {
     const result = validateCaptureRequest({
       url: 'https://example.com/',

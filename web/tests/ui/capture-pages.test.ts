@@ -80,13 +80,24 @@ describe('collectCaptures', () => {
   });
 
   it('総枚数が減る応答は矛盾として扱う', async () => {
+    // 取得の途中でページ自体が変わった証拠。別世代の画像を繋ぐと動画が破綻する
     let call = 0;
     const fetchPage = async (): Promise<CaptureResponse> => {
       call += 1;
       return call === 1
-        ? { images: ['https://cdn.test/captures/1.png'], totalImages: 10 }
-        : { images: [], totalImages: 0 };
+        ? { images: ['https://cdn.test/captures/1.png'], totalImages: 213 }
+        : { images: ['https://cdn.test/other/2.png'], totalImages: 150 };
     };
+
+    expect(collectCaptures({ fetchPage })).rejects.toThrow();
+  });
+
+  it('残り枚数より多く返す応答を拒否する', async () => {
+    // 開始位置が無視されて先頭から返ってきている等の異常
+    const fetchPage = async (): Promise<CaptureResponse> => ({
+      images: ['a', 'b', 'c'],
+      totalImages: 2,
+    });
 
     expect(collectCaptures({ fetchPage })).rejects.toThrow();
   });

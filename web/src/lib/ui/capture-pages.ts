@@ -23,10 +23,17 @@ export async function collectCaptures(input: CollectCapturesInput): Promise<stri
   let total = 0;
 
   for (let attempt = 0; attempt < MAX_CAPTURE_REQUESTS; attempt += 1) {
-    const page = await input.fetchPage(images.length);
+    const startIndex = images.length;
+    const page = await input.fetchPage(startIndex);
 
-    if (page.totalImages < images.length) {
+    // 総枚数が前回より減るのは、取得の途中でページ自体が変わった証拠。
+    // 別世代の画像を繋ぐと動画の連続性が壊れるので続行しない。
+    if (attempt > 0 && page.totalImages < total) {
       throw new Error('Capture total shrank between requests');
+    }
+    // 残り枚数より多く返ってくるのも、開始位置が無視されている等の異常。
+    if (page.images.length > Math.max(page.totalImages - startIndex, 0)) {
+      throw new Error('Capture returned more images than the remaining count');
     }
     total = page.totalImages;
 

@@ -245,7 +245,7 @@ export function validateCaptureRequest(input: unknown): ValidationResult<Capture
   const body = asRecord(input);
   if (!body) return invalid('リクエストボディは JSON オブジェクトである必要があります');
 
-  const { url, width, height } = body;
+  const { url, width, height, startIndex } = body;
 
   if (typeof url !== 'string' || !isHttpUrl(url)) {
     return invalid('url は http/https の絶対 URL である必要があります');
@@ -256,9 +256,15 @@ export function validateCaptureRequest(input: unknown): ValidationResult<Capture
   const validatedHeight = validateDimension(height, 'height');
   if (!validatedHeight.ok) return validatedHeight;
 
+  // 検証で落とすと上流へ届かず、常に先頭からの撮影になって同じ画像を繰り返し繋いでしまう。
+  if (startIndex !== undefined && (!Number.isSafeInteger(startIndex) || (startIndex as number) < 0)) {
+    return invalid('startIndex は 0 以上の整数である必要があります');
+  }
+
   const value: CaptureRequest = { url };
   if (validatedWidth.value !== undefined) value.width = validatedWidth.value;
   if (validatedHeight.value !== undefined) value.height = validatedHeight.value;
+  if (startIndex !== undefined) value.startIndex = startIndex as number;
   return { ok: true, value };
 }
 
