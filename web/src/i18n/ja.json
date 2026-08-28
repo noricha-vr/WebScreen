@@ -73,6 +73,7 @@
     "unpin": "ピン留めを解除",
     "pinHint": "ピン留めした動画は 1 年間保管します（{count} 件まで）",
     "pinLimit": "ピン留めできるのは {count} 件までです",
+    "pinExpired": "保管期限を過ぎているため変更できません",
     "pinFailed": "ピン留めを変更できませんでした",
     "rename": "ファイル名を編集",
     "renameSave": "保存",

@@ -302,6 +302,16 @@ test.describe('所有者の操作', () => {
     await expect(hint).toBeHidden();
   });
 
+  test('保管期限を過ぎた動画は pin できず、理由を表示する', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.expiredShortId}/`);
+
+    await page.getByRole('button', { name: ja.preview.pin }).click();
+
+    // 上限超過（409）と同じ扱いにすると「10 件まで」と出て理由が伝わらない
+    await expect(page.locator('[data-pin-failed]')).toHaveText(ja.preview.pinExpired);
+  });
+
   test('ピン留め中はボタンが解除の操作に変わる', async ({ page, context }) => {
     await signIn(context, E2E_FIXTURES.ownerId);
     await page.goto(`/${E2E_FIXTURES.pinnedShortId}/`);

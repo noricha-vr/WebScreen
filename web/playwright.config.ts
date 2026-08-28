@@ -30,6 +30,8 @@ export const E2E_FIXTURES = {
   pinnedRemainingDays: 365,
   /** 3 日前に作られているので、pin を外すと作成 + 30 日 = あと 27 日に戻る。 */
   pinnedRemainingDaysAfterUnpin: 27,
+  /** seed.sql が 1 日前の期限で入れる。pin が 410 で断られることの確認に使う。 */
+  expiredShortId: 'E2EExpired01',
   pendingShortId: 'E2EPending01',
   deletableShortId: 'E2EDelete001',
 } as const;

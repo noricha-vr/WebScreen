@@ -41,6 +41,17 @@ VALUES
     datetime('now', '-1 hours'),
     strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+30 days')
   ),
+  -- 期限切れ専用。保持期間バッチは e2e では走らないので、行はそのまま残る。
+  (
+    'E2EExpired01',
+    1,
+    'expired.pdf',
+    1024,
+    'ready',
+    0,
+    datetime('now', '-40 days'),
+    strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 days')
+  ),
   -- 削除テスト専用。テストは並列実行されるので、状態を変える試験ごとに行を分ける。
   (
     'E2EDelete001',

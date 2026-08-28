@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
+import { ERROR_CODES } from '../../src/lib/contracts/api';
+
 import {
   MAX_PINNED_MOVIES,
   MOVIE_RETENTION_MS,
@@ -254,6 +256,44 @@ describe('togglePin', () => {
       togglePin({ database, userId: USER_ID, shortId: SHORT_ID })
     ).rejects.toMatchObject({ status: 409 });
     expect(database.movies.get(SHORT_ID)?.pinned).toBe(0);
+  });
+
+  it('保管期限を過ぎた動画は pin できない', async () => {
+    // 期限切れを終端の状態にしておかないと、保持期間バッチが R2 を消してから
+    // D1 の行を消すまでの間に期限が延び、実体だけ消えた行が残る
+    const now = new Date('2026-09-01T00:00:00.000Z');
+    const database = new FakeMoviesDatabase([
+      movie({ expiresAt: '2026-08-31T23:59:59.000Z' }),
+    ]);
+
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
+    ).rejects.toMatchObject({ status: 410, errorCode: ERROR_CODES.expired });
+    expect(database.movies.get(SHORT_ID)).toMatchObject({
+      pinned: 0,
+      expiresAt: '2026-08-31T23:59:59.000Z',
+    });
+  });
+
+  it('保管期限を過ぎた動画は pin の解除もできない（解除も期限を延ばすため）', async () => {
+    const now = new Date('2026-09-01T00:00:00.000Z');
+    const database = new FakeMoviesDatabase([
+      movie({ pinned: 1, expiresAt: '2026-08-31T23:59:59.000Z' }),
+    ]);
+
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
+    ).rejects.toMatchObject({ status: 410, errorCode: ERROR_CODES.expired });
+    expect(database.movies.get(SHORT_ID)).toMatchObject({ pinned: 1 });
+  });
+
+  it('期限ちょうどでも過ぎている扱いにする（バッチの閾値と食い違わせない）', async () => {
+    const expiresAt = '2026-09-01T00:00:00.000Z';
+    const database = new FakeMoviesDatabase([movie({ expiresAt })]);
+
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date(expiresAt) })
+    ).rejects.toMatchObject({ status: 410 });
   });
 
   it('9 件なら 10 件目を pin できる', async () => {

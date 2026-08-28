@@ -56,7 +56,7 @@ export interface MovieBucket {
 /** エントリポイントが HTTP 応答へ変換するドメインエラー。 */
 export class MovieActionError extends Error {
   constructor(
-    public readonly status: 400 | 404 | 409,
+    public readonly status: 400 | 404 | 409 | 410,
     public readonly errorCode: ErrorCode,
     message: string
   ) {
@@ -121,11 +121,26 @@ export async function listHistory(input: ListHistoryInput): Promise<HistoryRespo
  * pin 時は expires_at を今から 365 日後へ延ばし、解除時は元の保管期限
  * （created_at + 30 日）へ戻す。既に過ぎている場合は即時削除にならないよう猶予を与える。
  * pin し直すたびに 365 日後へ延びる（残したい動画は所有者が触り続ける前提）。
+ *
+ * 保管期限を過ぎた動画は 410 で断る。ここを通すと「期限切れ」が終端の状態でなくなり、
+ * 保持期間バッチが R2 の実体を消してから D1 の行を消すまでの間に期限が延びて、
+ * 実体だけが消えた行が残る（services/retention.ts の deleteExpiredMovies）。
+ * 期限切れの動画は毎時のバッチでどのみち消えるので、延命の余地を残さない。
  */
 export async function togglePin(
   input: MovieActionInput & { now?: Date }
 ): Promise<PinResponse> {
   const movie = await findOwnedMovie(input.database, input.userId, input.shortId);
+  const now = input.now ?? new Date();
+
+  if (isExpired(movie.expires_at, now)) {
+    throw new MovieActionError(
+      410,
+      ERROR_CODES.expired,
+      '保管期限を過ぎた動画は変更できません'
+    );
+  }
+
   const nextPinned = movie.pinned === 0;
 
   if (nextPinned) {
@@ -139,7 +154,6 @@ export async function togglePin(
     }
   }
 
-  const now = input.now ?? new Date();
   const expiresAt = nextPinned
     ? new Date(now.getTime() + PINNED_RETENTION_MS).toISOString()
     : restoredExpiry(movie.created_at, now);
@@ -256,6 +270,16 @@ async function countPinnedMovies(database: MoviesDatabase, userId: number): Prom
 }
 
 /** pin 解除時の期限。元の期限が既に過ぎていたら、その場で消えないよう猶予を足す。 */
+/**
+ * 保管期限を過ぎているか。表記が ISO8601 と SQLite の datetime('now') で混在するため
+ * toIsoString で揃えてから比較する（保持期間バッチの datetime() 比較と同じ理由）。
+ */
+function isExpired(expiresAt: string | null, now: Date): boolean {
+  if (expiresAt === null) return false;
+  const timestamp = Date.parse(toIsoString(expiresAt));
+  return Number.isFinite(timestamp) && timestamp <= now.getTime();
+}
+
 function restoredExpiry(createdAt: string, now: Date): string {
   const restored = new Date(new Date(toIsoString(createdAt)).getTime() + MOVIE_RETENTION_MS);
   if (restored.getTime() > now.getTime()) return restored.toISOString();

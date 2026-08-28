@@ -57,6 +57,15 @@ function requestFailureMessage(root: HTMLElement, error: unknown, fallback: stri
   return isUnauthorizedRequestError(error) ? (root.dataset['msgSessionExpired'] ?? fallback) : fallback;
 }
 
+/** pin の失敗理由を文言に落とす。理由ごとに次の行動が変わるので status で分ける。 */
+function pinFailureMessage(root: HTMLElement, error: unknown): string {
+  if (error instanceof JsonRequestError) {
+    if (error.status === 409) return root.dataset['msgPinLimit'] ?? '';
+    if (error.status === 410) return root.dataset['msgPinExpired'] ?? '';
+  }
+  return requestFailureMessage(root, error, root.dataset['msgPinFailed'] ?? '');
+}
+
 /**
  * ホバー / フォーカスで出る補足を Escape で閉じられるようにする（WCAG 1.4.13 Dismissible）。
  *
@@ -107,11 +116,8 @@ function wirePin(root: HTMLElement, fetchImpl: typeof fetch, reload: () => void)
 
       button.disabled = false;
       if (!failure) return;
-      // 409 は「上限に達した」で、それ以外は汎用の失敗として扱う
-      failure.textContent =
-        error instanceof JsonRequestError && error.status === 409
-          ? (root.dataset['msgPinLimit'] ?? '')
-          : requestFailureMessage(root, error, root.dataset['msgPinFailed'] ?? '');
+      // 409 は「上限に達した」、410 は「保管期限を過ぎた」。それ以外は汎用の失敗
+      failure.textContent = pinFailureMessage(root, error);
       failure.hidden = false;
     })();
   });

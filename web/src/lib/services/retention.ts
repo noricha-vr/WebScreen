@@ -66,6 +66,8 @@ export interface RetentionBucket {
 export interface RetentionSummary {
   backfilledPinned: number;
   deletedMovies: number;
+  /** R2 の実体を消したのに行が残った件数。0 以外は不変条件が破れた印。 */
+  strandedMovies: number;
   deletedOrphans: number;
   deletedFailed: number;
   deletedCaptures: number;
@@ -91,10 +93,14 @@ interface ShortIdRow {
 export async function runRetention(input: RetentionInput): Promise<RetentionSummary> {
   const { database, bucket, now } = input;
 
+  // 掃除より先に走らせる。期限を入れた直後の行は 1 年先なので同じ実行では消えない。
+  const backfilledPinned = await backfillPinnedExpiry(database, now);
+  const expired = await deleteExpiredMovies(database, bucket, now);
+
   return {
-    // 掃除より先に走らせる。期限を入れた直後の行は 1 年先なので同じ実行では消えない。
-    backfilledPinned: await backfillPinnedExpiry(database, now),
-    deletedMovies: await deleteExpiredMovies(database, bucket, now),
+    backfilledPinned,
+    deletedMovies: expired.deleted,
+    strandedMovies: expired.stranded,
     deletedOrphans: await deletePendingOrphans(database, bucket, now),
     deletedFailed: await deleteFailedMovies(database, now),
     deletedCaptures: await deleteStaleCaptures(bucket, now),
@@ -123,6 +129,11 @@ async function backfillPinnedExpiry(database: RetentionDatabase, now: Date): Pro
  * expires_at を過ぎた ready 動画を削除する。pin の有無では絞らない
  * （pin は保管期間を 365 日へ延ばすだけで、期限が来れば同じように消える）。
  *
+ * R2 と D1 をまたぐ削除は原子的にできないので、「期限切れは終端の状態である」ことに
+ * 依存している。期限を延ばせるのは services/movies.ts の togglePin だけで、そこが
+ * 期限切れの行を 410 で断るため、SELECT から DELETE までの間に期限が延びることはない。
+ * それでも行が残った場合は stranded として数え、cron のログに出す（Fail Loud）。
+ *
  * 比較で datetime() を挟むのは、expires_at が ISO8601（`2026-...T...Z`）、
  * created_at が SQLite の datetime('now')（`2026-... ...`）と表記が混在しており、
  * 素の文字列比較では大小が逆転するため。idx_movies_expires_at は効かなくなるが、
@@ -132,7 +143,7 @@ async function deleteExpiredMovies(
   database: RetentionDatabase,
   bucket: RetentionBucket,
   now: Date
-): Promise<number> {
+): Promise<{ deleted: number; stranded: number }> {
   const threshold = now.toISOString();
   const { results } = await database
     .prepare(
@@ -142,6 +153,7 @@ async function deleteExpiredMovies(
     .all<ShortIdRow>();
 
   let deleted = 0;
+  let stranded = 0;
   for (const row of results) {
     // 初回 SELECT の後に pin（= 期限の延長）が入った場合、R2 を先に消すと生きた
     // 行だけが残る。R2 削除の直前にも期限を読み直し、実体と行の不整合を防ぐ。
@@ -169,9 +181,12 @@ async function deleteExpiredMovies(
       .bind(row.short_id, threshold)
       .run();
     deleted += result.meta.changes;
+    // 実体を消したのに行が残った = 上の不変条件が破れている。次回の実行では
+    // R2 が空なので気づけないため、この場で数えて可視化する。
+    if (result.meta.changes === 0) stranded += 1;
   }
 
-  return deleted;
+  return { deleted, stranded };
 }
 
 /**
