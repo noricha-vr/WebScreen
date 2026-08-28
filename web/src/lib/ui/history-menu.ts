@@ -13,11 +13,16 @@ import {
   movieEndpoint,
   parseHistoryEntries,
 } from './history-view';
+import { isUnauthorizedRequestError, requestJson } from './request-json';
 
 type HistoryState = 'loading' | 'ready' | 'empty' | 'error';
 
 function setState(root: HTMLElement, state: HistoryState): void {
   root.dataset['historyState'] = state;
+}
+
+function requestFailureMessage(root: HTMLElement, error: unknown, fallback: string): string {
+  return isUnauthorizedRequestError(error) ? (root.dataset['msgSessionExpired'] ?? fallback) : fallback;
 }
 
 function fillRow(
@@ -60,20 +65,22 @@ function wireDelete(row: HTMLElement, root: HTMLElement, fetchImpl: typeof fetch
 
   row.querySelector<HTMLButtonElement>('[data-delete-yes]')?.addEventListener('click', () => {
     void (async () => {
-      let ok = false;
+      let error: unknown;
       try {
-        const response = await fetchImpl(movieEndpoint(shortId), {
+        await requestJson(movieEndpoint(shortId), {
           method: 'DELETE',
           credentials: 'same-origin',
-        });
-        ok = response.ok;
-      } catch {
-        ok = false;
+        }, fetchImpl);
+      } catch (requestError) {
+        error = requestError;
       }
 
-      if (!ok) {
+      if (error !== undefined) {
         delete row.dataset['confirming'];
-        if (failure) failure.hidden = false;
+        if (failure) {
+          failure.textContent = requestFailureMessage(root, error, root.dataset['msgDeleteFailed'] ?? '');
+          failure.hidden = false;
+        }
         return;
       }
 
@@ -112,20 +119,16 @@ function render(root: HTMLElement, entries: HistoryEntry[], fetchImpl: typeof fe
 async function load(root: HTMLElement, fetchImpl: typeof fetch): Promise<void> {
   setState(root, 'loading');
 
-  let payload: unknown;
   try {
-    const response = await fetchImpl(HISTORY_ENDPOINT, { credentials: 'same-origin' });
-    if (!response.ok) {
-      setState(root, 'error');
-      return;
+    const payload = await requestJson(HISTORY_ENDPOINT, { credentials: 'same-origin' }, fetchImpl);
+    render(root, parseHistoryEntries(payload), fetchImpl);
+  } catch (error) {
+    const message = root.querySelector<HTMLElement>('[data-history-error-message]');
+    if (message) {
+      message.textContent = requestFailureMessage(root, error, root.dataset['msgHistoryFailed'] ?? '');
     }
-    payload = await response.json();
-  } catch {
     setState(root, 'error');
-    return;
   }
-
-  render(root, parseHistoryEntries(payload), fetchImpl);
 }
 
 /** `<details data-history-menu>` に配線する。開いた時に一覧を取得する。 */

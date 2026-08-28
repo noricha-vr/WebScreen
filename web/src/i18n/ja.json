@@ -43,6 +43,8 @@
     "errorTooLarge": "ファイルサイズが上限の 50 MB を超えています",
     "errorUnsupported": "対応形式は PDF / png / jpg / jpeg / webp / gif です。動画やその他のファイルはアップロードできません。",
     "errorTooManyPages": "PDF は 200 ページ以下にしてください",
+    "errorPageTooLong": "このページは長すぎて変換できません。ページを分けてからお試しください。",
+    "errorCaptureTimeout": "ページの読み込みに時間がかかりすぎました。しばらくおいてからお試しください。",
     "errorFailed": "変換に失敗しました。時間をおいて再度お試しください",
     "errorPdfUrlNotSupported": "PDFのURLは変換できません。ダウンロードしたPDFファイルをアップロードしてください。",
     "errorImageUrlNotSupported": "画像のURLは変換できません。画像をダウンロードしてアップロードしてください。",
@@ -88,7 +90,8 @@
     "deleteConfirm": "削除すると元に戻せません",
     "deleteYes": "削除する",
     "deleteCancel": "キャンセル",
-    "deleteFailed": "削除に失敗しました"
+    "deleteFailed": "削除に失敗しました",
+    "sessionExpired": "ログインの有効期限が切れました。ログインし直してからお試しください。"
   },
   "footer": {
     "github": "GitHub",

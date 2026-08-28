@@ -46,6 +46,8 @@ export const ERROR_CODES = {
   notFound: 'NOT_FOUND',
   payloadTooLarge: 'PAYLOAD_TOO_LARGE',
   captureFailed: 'CAPTURE_FAILED',
+  pageTooLong: 'PAGE_TOO_LONG',
+  captureTimeout: 'CAPTURE_TIMEOUT',
   pdfUrlNotSupported: 'PDF_URL_NOT_SUPPORTED',
   imageUrlNotSupported: 'IMAGE_URL_NOT_SUPPORTED',
   videoUrlNotSupported: 'VIDEO_URL_NOT_SUPPORTED',

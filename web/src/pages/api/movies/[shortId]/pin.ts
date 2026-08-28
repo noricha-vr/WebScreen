@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES } from '../../../../lib/contracts/api';
+import { logWorkerFailure } from '../../../../lib/infra/worker-log';
 import { importSigningKey } from '../../../../lib/contracts/session';
 import { requireUser, type AuthDatabase } from '../../../../lib/services/auth';
 import { MovieActionError, togglePin, type MoviesDatabase } from '../../../../lib/services/movies';
@@ -34,6 +35,7 @@ export const POST: APIRoute = async ({ request, params }) => {
         { status: error.status }
       );
     }
+    logWorkerFailure({ event: 'movie_pin_failed', errorCode: ERROR_CODES.internalError, status: 500 });
     return Response.json(
       { errorCode: ERROR_CODES.internalError, message: 'ピン留めを変更できませんでした' },
       { status: 500 }

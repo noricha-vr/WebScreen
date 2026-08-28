@@ -9,6 +9,7 @@ import { MAX_FILENAME_LENGTH } from '../contracts/api';
 import { copyToClipboard } from './clipboard';
 import { AUTO_COPY_FEEDBACK_DELAY_MS, consumeAutoCopy, type SessionStorage } from './auto-copy';
 import { movieEndpoint, pinEndpoint } from './history-view';
+import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
 
 // 遷移直後の自動コピーでも見逃しにくい長さ（2000ms は短すぎるとの報告で延長）
 const COPIED_FEEDBACK_MS = 4000;
@@ -52,6 +53,10 @@ function wireCopy(root: HTMLElement, schedule: Schedule): void {
   });
 }
 
+function requestFailureMessage(root: HTMLElement, error: unknown, fallback: string): string {
+  return isUnauthorizedRequestError(error) ? (root.dataset['msgSessionExpired'] ?? fallback) : fallback;
+}
+
 /**
  * ホバー / フォーカスで出る補足を Escape で閉じられるようにする（WCAG 1.4.13 Dismissible）。
  *
@@ -88,27 +93,25 @@ function wirePin(root: HTMLElement, fetchImpl: typeof fetch, reload: () => void)
       button.disabled = true;
       if (failure) failure.hidden = true;
 
-      let status = 0;
+      let error: unknown;
       try {
-        const response = await fetchImpl(pinEndpoint(shortId), {
+        await requestJson(pinEndpoint(shortId), {
           method: 'POST',
           credentials: 'same-origin',
-        });
-        status = response.status;
-      } catch {
-        status = 0;
-      }
-
-      if (status >= 200 && status < 300) {
+        }, fetchImpl);
         reload();
         return;
+      } catch (requestError) {
+        error = requestError;
       }
 
       button.disabled = false;
       if (!failure) return;
       // 409 は「上限に達した」で、それ以外は汎用の失敗として扱う
       failure.textContent =
-        status === 409 ? (root.dataset['msgPinLimit'] ?? '') : (root.dataset['msgPinFailed'] ?? '');
+        error instanceof JsonRequestError && error.status === 409
+          ? (root.dataset['msgPinLimit'] ?? '')
+          : requestFailureMessage(root, error, root.dataset['msgPinFailed'] ?? '');
       failure.hidden = false;
     })();
   });
@@ -170,23 +173,22 @@ function wireRename(root: HTMLElement, fetchImpl: typeof fetch, schedule: Schedu
       button.disabled = true;
       if (failure) failure.hidden = true;
 
-      let ok = false;
+      let error: unknown;
       try {
-        const response = await fetchImpl(movieEndpoint(shortId), {
+        await requestJson(movieEndpoint(shortId), {
           method: 'PATCH',
           credentials: 'same-origin',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ filename }),
-        });
-        ok = response.ok;
-      } catch {
-        ok = false;
+        }, fetchImpl);
+      } catch (requestError) {
+        error = requestError;
       }
 
       button.disabled = false;
-      if (!ok) {
+      if (error !== undefined) {
         if (failure) {
-          failure.textContent = root.dataset['msgRenameFailed'] ?? '';
+          failure.textContent = requestFailureMessage(root, error, root.dataset['msgRenameFailed'] ?? '');
           failure.hidden = false;
         }
         setState('editing');
@@ -254,25 +256,27 @@ function wireDelete(root: HTMLElement, fetchImpl: typeof fetch): void {
     void (async () => {
       confirmButton.disabled = true;
 
-      let ok = false;
+      let error: unknown;
       try {
-        const response = await fetchImpl(movieEndpoint(shortId), {
+        await requestJson(movieEndpoint(shortId), {
           method: 'DELETE',
           credentials: 'same-origin',
-        });
-        ok = response.ok;
-      } catch {
-        ok = false;
+        }, fetchImpl);
+      } catch (requestError) {
+        error = requestError;
       }
 
-      if (ok) {
+      if (error === undefined) {
         root.dataset['previewState'] = 'deleted';
         return;
       }
 
       confirmButton.disabled = false;
       delete root.dataset['confirming'];
-      if (failure) failure.hidden = false;
+      if (failure) {
+        failure.textContent = requestFailureMessage(root, error, root.dataset['msgDeleteFailed'] ?? '');
+        failure.hidden = false;
+      }
     })();
   });
 }

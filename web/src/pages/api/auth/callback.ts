@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES, type ErrorResponse } from '../../../lib/contracts/api';
+import { logWorkerFailure } from '../../../lib/infra/worker-log';
 import { resolveLocale } from '../../../i18n';
 import {
   OAUTH_STATE_COOKIE_NAME,
@@ -63,8 +64,10 @@ export const GET: APIRoute = async ({ cookies, redirect, request, url }) => {
     return redirect(`/${resolveLocale(request.headers.get('accept-language'))}/`, 302);
   } catch (error) {
     if (error instanceof OAuthUpstreamError) {
+      logWorkerFailure({ event: 'oauth_upstream_request_failed', errorCode: ERROR_CODES.internalError, status: 502 });
       return jsonError(502, ERROR_CODES.internalError, 'Discord API への接続に失敗しました');
     }
+    logWorkerFailure({ event: 'oauth_callback_failed', errorCode: ERROR_CODES.internalError, status: 500 });
     return jsonError(500, ERROR_CODES.internalError, 'ログイン処理に失敗しました');
   }
 };

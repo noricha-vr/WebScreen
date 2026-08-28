@@ -36,6 +36,38 @@ class FakePreview {
   }
 }
 
+class FakeButton {
+  disabled = false;
+  private readonly listeners = new Map<string, (event: Event) => void>();
+
+  addEventListener(type: string, listener: (event: Event) => void): void {
+    this.listeners.set(type, listener);
+  }
+
+  click(): void {
+    this.listeners.get('click')?.(new Event('click'));
+  }
+
+  setAttribute(): void {}
+}
+
+class SessionExpiredPreview extends FakePreview {
+  readonly pinButton = new FakeButton();
+  readonly pinFailure = { hidden: true, textContent: '' };
+
+  constructor() {
+    super();
+    this.dataset['msgPinFailed'] = 'pin failed';
+    this.dataset['msgSessionExpired'] = 'session expired';
+  }
+
+  override querySelector(selector: string): unknown {
+    if (selector === '[data-pin-button]') return this.pinButton;
+    if (selector === '[data-pin-failed]') return this.pinFailure;
+    return super.querySelector(selector);
+  }
+}
+
 interface ScheduledCall {
   callback: () => void;
   delayMs: number;
@@ -105,5 +137,23 @@ describe('プレビューの自動コピー', () => {
 
     expect(scheduled).toEqual([]);
     expect(clipboard.writes).toEqual([]);
+  });
+});
+
+describe('プレビューの操作失敗', () => {
+  test('pin の 401 はセッション切れの文言を表示する', async () => {
+    const preview = new SessionExpiredPreview();
+    mountPreviewActions(preview as unknown as HTMLElement, {
+      document: { addEventListener: () => {} },
+      fetchImpl: (async () =>
+        Response.json({ errorCode: 'UNAUTHORIZED' }, { status: 401 })) as unknown as typeof fetch,
+      schedule: () => {},
+    });
+
+    preview.pinButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(preview.pinFailure.hidden).toBe(false);
+    expect(preview.pinFailure.textContent).toBe('session expired');
   });
 });

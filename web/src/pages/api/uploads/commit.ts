@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES, type ErrorResponse, validateCommitRequest } from '../../../lib/contracts/api';
+import { logWorkerFailure } from '../../../lib/infra/worker-log';
 import { importSigningKey } from '../../../lib/contracts/session';
 import { requireUser, type AuthDatabase } from '../../../lib/services/auth';
 import {
@@ -54,6 +55,7 @@ async function readJson(request: Request): Promise<unknown> {
 
 function uploadErrorResponse(error: unknown): Response {
   if (error instanceof UploadError) return errorResponse(error.status, error.errorCode, error.message);
+  logWorkerFailure({ event: 'upload_commit_failed', errorCode: ERROR_CODES.internalError, status: 500 });
   return errorResponse(500, ERROR_CODES.internalError, 'アップロードの確定に失敗しました');
 }
 
