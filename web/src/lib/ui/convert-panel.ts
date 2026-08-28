@@ -129,8 +129,8 @@ async function uploadMp4(
   dispatch({ type: 'progress', value: 20 }, runGeneration);
 
   // presign を通った時点で pending の行が予約されている。ここから先で失敗すると
-  // 誰も failed へ落とさないまま残り、cron が回収するまで容量を占め続けるため、
-  // 失敗を検知したその場で予約を取り消す。
+  // 誰も failed へ落とさないまま残り、cron が回収するまで容量を占め続ける。
+  // ただし取り消してよいのは「まだ ready になっていないと確信できる」失敗だけ。
   try {
     const upload = await fetch(presign.uploadUrl, {
       method: 'PUT',
@@ -138,7 +138,15 @@ async function uploadMp4(
       body: mp4,
     });
     if (!upload.ok) throw new Error(`Upload failed: ${upload.status}`);
-    dispatch({ type: 'progress', value: 80 }, runGeneration);
+  } catch (error) {
+    // R2 への PUT 段階の失敗。commit を送っていないので確実に pending のまま。
+    abandonUpload(presign.shortId);
+    throw error;
+  }
+
+  dispatch({ type: 'progress', value: 80 }, runGeneration);
+
+  try {
     const committed = asCommitResponse(
       await requestJson('/api/uploads/commit/', {
         method: 'POST',
@@ -148,7 +156,12 @@ async function uploadMp4(
     );
     dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
   } catch (error) {
-    abandonUpload(presign.shortId);
+    // サーバーが 4xx / 5xx を返した時だけ取り消す。通信断や、200 なのに本文が
+    // 壊れている応答では commit が成功して ready になっている可能性があり、
+    // 消すと完成した動画を失う（その場合の pending 残りは cron の回収に委ねる）。
+    if (error instanceof JsonRequestError && error.status >= 400) {
+      abandonUpload(presign.shortId);
+    }
     throw error;
   }
 }
