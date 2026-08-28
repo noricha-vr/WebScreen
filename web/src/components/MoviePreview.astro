@@ -47,11 +47,7 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
   class="mx-auto max-w-3xl px-4 py-10"
 >
   <div data-when-preview="ready">
-    <p class="flex items-center gap-2 text-base font-semibold text-brand-700">
-      <i class="fa-solid fa-film" aria-hidden="true"></i>
-      <span>{t.preview.heading}</span>
-    </p>
-    <h1 class="mt-2 flex min-w-0 items-center gap-2 text-3xl font-bold tracking-tight text-slate-900">
+    <h1 class="flex min-w-0 items-center gap-2 text-3xl font-bold tracking-tight text-slate-900">
       <span data-filename-text class="min-w-0 truncate">{filename}</span>
       {
         isOwner && (
@@ -165,15 +161,14 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
       )
     }
 
-    <label for="preview-url" class="mt-8 block text-base font-semibold text-slate-700">
-      {t.preview.urlLabel}
-    </label>
-    <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+    <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+      {/* 見出しラベルは画面から外したが、読み上げには用途が必要なので aria-label に残す。 */}
       <input
         id="preview-url"
         data-preview-url
         type="text"
         readonly
+        aria-label={t.preview.urlLabel}
         value={publicUrl}
         class="min-w-0 flex-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-base text-slate-900"
       />
