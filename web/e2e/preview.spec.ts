@@ -205,14 +205,41 @@ test.describe('所有者の操作', () => {
     ].map((box) => box.y);
 
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+
+    // 操作は保管期限と同じ行（動画より下）に並ぶ
+    const video = await boxOf(page.locator('[data-preview-video]'));
+    for (const control of [
+      page.getByRole('link', { name: ja.actions.download }),
+      page.getByRole('button', { name: ja.actions.delete }),
+    ]) {
+      expect((await boxOf(control)).y).toBeGreaterThan(video.y + video.height);
+    }
   });
 
-  test('URL 入力に見出しが結び付いている', async ({ page, context }) => {
+  test('URL 入力に可視の見出しが結び付いている', async ({ page, context }) => {
     await signIn(context, E2E_FIXTURES.ownerId);
     await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
 
-    // 読み上げ用の aria-label ではなく、画面に見える見出しで用途を伝える
-    await expect(page.getByLabel(ja.preview.urlLabel)).toHaveAttribute('data-preview-url', '');
+    // 読み上げ用の aria-label ではなく、画面に見える label で用途を伝える
+    // （getByLabel は aria-label でも通るので for / id の結び付きを直接見る）
+    await expect(page.locator('label[for="preview-url"]')).toHaveText(ja.preview.urlLabel);
+    await expect(page.locator('input#preview-url')).toHaveAttribute('data-preview-url', '');
+  });
+
+  test('ピン留めの失敗表示がツールチップに隠れない', async ({ page, context }) => {
+    await signIn(context, E2E_FIXTURES.ownerId);
+    await page.goto(`/${E2E_FIXTURES.readyShortId}/`);
+
+    // 失敗表示は上限超過や通信断でしか出ないため、重なりだけを見るために直接可視化する
+    await page.locator('[data-pin-failed]').evaluate((alert) => {
+      alert.textContent = 'x';
+      alert.removeAttribute('hidden');
+    });
+    await page.getByRole('button', { name: ja.preview.pin }).hover();
+
+    const alertBox = await boxOf(page.locator('[data-pin-failed]'));
+    const hint = await boxOf(page.locator('[data-preview] [data-tooltip]'));
+    expect(hint.y).toBeGreaterThanOrEqual(alertBox.y + alertBox.height);
   });
 
   test('ピン留めボタンは保管期限の右にあり、ホバーで保管の説明を出す', async ({ page, context }) => {

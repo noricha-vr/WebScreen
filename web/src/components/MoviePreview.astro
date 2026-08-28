@@ -119,6 +119,17 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
       class="mt-8 aspect-video w-full rounded-xl bg-slate-900"
     ></video>
 
+    {/* 失敗表示は操作行の上に置く。行の下はピン留めの補足が出る位置で、
+        重なると 409 や通信断の理由がツールチップに覆われる */}
+    {
+      isOwner && (
+        <>
+          <p data-pin-failed hidden role="alert" class="mt-2 text-base text-red-700" />
+          <p data-delete-failed hidden role="alert" class="mt-2 text-base text-red-700" />
+        </>
+      )
+    }
+
     <!-- ツールチップは行の左端を基準に出す（ボタン基準だと狭い画面で左右にはみ出す） -->
     <div class="relative mt-4 flex flex-wrap items-center justify-between gap-3">
       <p class="flex flex-wrap items-center gap-2 text-base text-slate-700">
@@ -203,14 +214,6 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
         }
       </div>
     </div>
-    {
-      isOwner && (
-        <>
-          <p data-pin-failed hidden role="alert" class="mt-2 text-base text-red-700" />
-          <p data-delete-failed hidden role="alert" class="mt-2 text-base text-red-700" />
-        </>
-      )
-    }
   </div>
 
   <div data-when-preview="deleted" class="py-10 text-center">
