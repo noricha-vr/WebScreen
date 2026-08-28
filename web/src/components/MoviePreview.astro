@@ -39,6 +39,8 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
   data-msg-pin-limit={pinLimitMessage}
   data-msg-pin-failed={t.preview.pinFailed}
   data-msg-rename-failed={t.preview.renameFailed}
+  data-msg-delete-failed={t.actions.deleteFailed}
+  data-msg-session-expired={t.actions.sessionExpired}
   data-msg-rename-too-long={t.preview.renameTooLong.replace('{max}', String(MAX_FILENAME_LENGTH))}
   data-label-rename={t.preview.rename}
   data-label-rename-save={t.preview.renameSave}
@@ -154,9 +156,7 @@ const pinHint = t.preview.pinHint.replace('{count}', String(MAX_PINNED_MOVIES));
       isOwner && (
         <>
           <p data-pin-failed hidden role="alert" class="mt-2 text-base text-red-700" />
-          <p data-delete-failed hidden role="alert" class="mt-2 text-base text-red-700">
-            {t.actions.deleteFailed}
-          </p>
+          <p data-delete-failed hidden role="alert" class="mt-2 text-base text-red-700" />
         </>
       )
     }

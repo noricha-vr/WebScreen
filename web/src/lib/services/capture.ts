@@ -4,6 +4,7 @@ import {
   type ErrorResponse,
   validateCaptureRequest,
 } from '../contracts/api';
+import { logWorkerFailure } from '../infra/worker-log';
 import { requireUser, type AuthDatabase } from './auth';
 
 const CAPTURE_TIMEOUT_MS = 150_000;
@@ -13,13 +14,43 @@ const UPSTREAM_CAPTURE_ERROR_CODES = {
   imageUrlNotSupported: 'image_url_not_supported',
   videoUrlNotSupported: 'video_url_not_supported',
   nonWebPageUrl: 'non_web_page_url',
+  captureLimitExceeded: 'capture_limit_exceeded',
+  captureTimeout: 'capture_timeout',
 } as const;
 
-const CAPTURE_ERROR_CODE_MAP: Readonly<Record<string, ErrorResponse['errorCode']>> = {
-  [UPSTREAM_CAPTURE_ERROR_CODES.pdfUrlNotSupported]: ERROR_CODES.pdfUrlNotSupported,
-  [UPSTREAM_CAPTURE_ERROR_CODES.imageUrlNotSupported]: ERROR_CODES.imageUrlNotSupported,
-  [UPSTREAM_CAPTURE_ERROR_CODES.videoUrlNotSupported]: ERROR_CODES.videoUrlNotSupported,
-  [UPSTREAM_CAPTURE_ERROR_CODES.nonWebPageUrl]: ERROR_CODES.nonWebPageUrl,
+const CAPTURE_ERROR_CODE_MAP: Readonly<
+  Record<string, { status: number; errorCode: ErrorResponse['errorCode']; message: string }>
+> = {
+  [UPSTREAM_CAPTURE_ERROR_CODES.pdfUrlNotSupported]: {
+    status: 422,
+    errorCode: ERROR_CODES.pdfUrlNotSupported,
+    message: '指定した URL は変換できません',
+  },
+  [UPSTREAM_CAPTURE_ERROR_CODES.imageUrlNotSupported]: {
+    status: 422,
+    errorCode: ERROR_CODES.imageUrlNotSupported,
+    message: '指定した URL は変換できません',
+  },
+  [UPSTREAM_CAPTURE_ERROR_CODES.videoUrlNotSupported]: {
+    status: 422,
+    errorCode: ERROR_CODES.videoUrlNotSupported,
+    message: '指定した URL は変換できません',
+  },
+  [UPSTREAM_CAPTURE_ERROR_CODES.nonWebPageUrl]: {
+    status: 422,
+    errorCode: ERROR_CODES.nonWebPageUrl,
+    message: '指定した URL は変換できません',
+  },
+  [UPSTREAM_CAPTURE_ERROR_CODES.captureLimitExceeded]: {
+    status: 400,
+    errorCode: ERROR_CODES.pageTooLong,
+    message: 'ページが長すぎるため変換できません',
+  },
+  [UPSTREAM_CAPTURE_ERROR_CODES.captureTimeout]: {
+    status: 504,
+    errorCode: ERROR_CODES.captureTimeout,
+    message: 'キャプチャサービスがタイムアウトしました',
+  },
 };
 
 /** web-capture 呼び出しをテストから差し替えるための fetch 境界。 */
@@ -79,12 +110,30 @@ export async function proxyCapture(
     );
     const body = await readResponseJson(upstream);
     if (!upstream.ok) return captureErrorResponse(upstream.status, body);
-    if (!isCaptureResponse(body)) return captureFailedResponse();
+    if (!isCaptureResponse(body)) {
+      logWorkerFailure({
+        event: 'capture_upstream_response_invalid',
+        errorCode: ERROR_CODES.captureFailed,
+        status: 502,
+        upstreamStatus: upstream.status,
+      });
+      return captureFailedResponse();
+    }
     return json(body, 200);
   } catch {
     if (controller.signal.aborted) {
-      return errorResponse(504, ERROR_CODES.captureFailed, 'キャプチャサービスがタイムアウトしました');
+      logWorkerFailure({
+        event: 'capture_worker_timeout',
+        errorCode: ERROR_CODES.captureTimeout,
+        status: 504,
+      });
+      return errorResponse(504, ERROR_CODES.captureTimeout, 'キャプチャサービスがタイムアウトしました');
     }
+    logWorkerFailure({
+      event: 'capture_upstream_request_failed',
+      errorCode: ERROR_CODES.captureFailed,
+      status: 502,
+    });
     return captureFailedResponse();
   } finally {
     clearTimeout(timeout);
@@ -98,6 +147,12 @@ async function readJson(request: Request): Promise<unknown> {
   try {
     return await request.json();
   } catch {
+    logWorkerFailure({
+      level: 'warn',
+      event: 'capture_request_json_invalid',
+      errorCode: ERROR_CODES.invalidRequest,
+      status: 400,
+    });
     return null;
   }
 }
@@ -170,12 +225,27 @@ function captureFailedResponse(): Response {
 }
 
 function captureErrorResponse(status: number, body: unknown): Response {
-  const errorCode = status === 422 ? captureErrorCode(body) : null;
-  if (errorCode) return errorResponse(422, errorCode, '指定した URL は変換できません');
+  const error = captureErrorCode(body);
+  if (error?.status === status) {
+    logWorkerFailure({
+      level: 'warn',
+      event: 'capture_upstream_rejected',
+      errorCode: error.errorCode,
+      status,
+    });
+    return errorResponse(status, error.errorCode, error.message);
+  }
+
+  logWorkerFailure({
+    event: 'capture_upstream_error_unmapped',
+    errorCode: ERROR_CODES.captureFailed,
+    status: 502,
+    upstreamStatus: status,
+  });
   return captureFailedResponse();
 }
 
-function captureErrorCode(body: unknown): ErrorResponse['errorCode'] | null {
+function captureErrorCode(body: unknown): (typeof CAPTURE_ERROR_CODE_MAP)[string] | null {
   if (!isRecord(body) || typeof body.errorCode !== 'string') return null;
   return CAPTURE_ERROR_CODE_MAP[body.errorCode] ?? null;
 }
@@ -184,6 +254,7 @@ async function readResponseJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
   } catch {
+    // 非 JSON のエラー応答は captureErrorResponse が 1 回だけ記録する。
     return null;
   }
 }

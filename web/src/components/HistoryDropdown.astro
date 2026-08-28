@@ -9,7 +9,15 @@ const { lang } = Astro.props;
 const t = useTranslations(lang);
 ---
 
-<details data-history-menu data-history-state="idle" data-locale={lang} class="relative">
+<details
+  data-history-menu
+  data-history-state="idle"
+  data-locale={lang}
+  data-msg-history-failed={t.history.error}
+  data-msg-delete-failed={t.actions.deleteFailed}
+  data-msg-session-expired={t.actions.sessionExpired}
+  class="relative"
+>
   <summary
     class="flex cursor-pointer list-none items-center gap-2 whitespace-nowrap rounded-md border border-slate-300 px-3 py-2 text-base font-semibold text-slate-800 hover:bg-slate-100"
   >
@@ -35,7 +43,7 @@ const t = useTranslations(lang);
       class="flex items-center gap-2 px-1 py-3 text-base text-red-700"
     >
       <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
-      <span>{t.history.error}</span>
+      <span data-history-error-message>{t.history.error}</span>
     </p>
 
     <ul
@@ -102,9 +110,7 @@ const t = useTranslations(lang);
           </button>
         </span>
 
-        <span data-delete-failed hidden role="alert" class="text-red-700">
-          {t.actions.deleteFailed}
-        </span>
+        <span data-delete-failed hidden role="alert" class="text-red-700" />
       </div>
     </li>
   </template>

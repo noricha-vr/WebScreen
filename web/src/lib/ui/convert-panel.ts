@@ -5,7 +5,15 @@
  * 変換とアップロードはここで順につなぎ、状態そのものは upload-flow.ts の純粋関数に委ねる。
  */
 
-import { MAX_UPLOAD_BYTES, type CaptureResponse, type CommitResponse, type PresignResponse, type UploadKind } from '../contracts/api';
+import {
+  ERROR_CODES,
+  MAX_UPLOAD_BYTES,
+  type CaptureResponse,
+  type CommitResponse,
+  type ErrorCode,
+  type PresignResponse,
+  type UploadKind,
+} from '../contracts/api';
 import { isShortId } from '../contracts/r2key';
 import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
 import {
@@ -18,7 +26,7 @@ import {
 import { markAutoCopy } from './auto-copy';
 import { movieNameForFiles, movieNameForUrl } from './upload-name';
 import { renderConvertPanel } from './convert-panel-view';
-import { JsonRequestError, requestJson } from './request-json';
+import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
 
 /** data-batch-name-suffix が無いときの接尾辞（ロケール非依存で読める形）。 */
 const DEFAULT_BATCH_NAME_SUFFIX = '+{count}';
@@ -117,19 +125,29 @@ async function uploadMp4(
   dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
 }
 
-function conversionErrorCode(error: unknown): UploadErrorCode {
-  return error instanceof ConversionError && error.code === 'tooManyPages' ? 'tooManyPages' : 'failed';
-}
+const API_ERROR_TO_UPLOAD_ERROR: Readonly<Partial<Record<ErrorCode, UploadErrorCode>>> = {
+  [ERROR_CODES.payloadTooLarge]: 'tooLarge',
+  [ERROR_CODES.pageTooLong]: 'pageTooLong',
+  [ERROR_CODES.captureTimeout]: 'captureTimeout',
+  [ERROR_CODES.unauthorized]: 'sessionExpired',
+  [ERROR_CODES.pdfUrlNotSupported]: 'pdfUrlNotSupported',
+  [ERROR_CODES.imageUrlNotSupported]: 'imageUrlNotSupported',
+  [ERROR_CODES.videoUrlNotSupported]: 'videoUrlNotSupported',
+  [ERROR_CODES.nonWebPageUrl]: 'nonWebPageUrl',
+};
 
-function captureErrorCode(error: unknown): UploadErrorCode {
+/** API とブラウザ内変換の失敗を、辞書で表示できるエラーコードへ正規化する。 */
+export function uploadErrorCode(error: unknown): UploadErrorCode {
+  if (error instanceof ConversionError) {
+    return error.code === 'tooManyPages' ? 'tooManyPages' : 'failed';
+  }
   if (!(error instanceof JsonRequestError)) return 'failed';
-  const codes: Readonly<Record<string, UploadErrorCode>> = {
-    PDF_URL_NOT_SUPPORTED: 'pdfUrlNotSupported',
-    IMAGE_URL_NOT_SUPPORTED: 'imageUrlNotSupported',
-    VIDEO_URL_NOT_SUPPORTED: 'videoUrlNotSupported',
-    NON_WEB_PAGE_URL: 'nonWebPageUrl',
-  };
-  return error.errorCode ? (codes[error.errorCode] ?? 'failed') : 'failed';
+
+  const mapped = error.errorCode
+    ? API_ERROR_TO_UPLOAD_ERROR[error.errorCode as ErrorCode]
+    : undefined;
+  if (mapped) return mapped;
+  return isUnauthorizedRequestError(error) ? 'sessionExpired' : 'failed';
 }
 
 export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptions = {}): void {
@@ -197,7 +215,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       )
       .catch((error: unknown) => {
         console.error('conversion failed', error);
-        dispatch({ type: 'failed', errorCode: conversionErrorCode(error) }, current);
+        dispatch({ type: 'failed', errorCode: uploadErrorCode(error) }, current);
       });
   };
   fileInput?.addEventListener('change', () => {
@@ -258,7 +276,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current))
       .catch((error: unknown) => {
         console.error('conversion failed', error);
-        dispatch({ type: 'failed', errorCode: captureErrorCode(error), target: 'url' }, current);
+        dispatch({ type: 'failed', errorCode: uploadErrorCode(error), target: 'url' }, current);
       });
   });
 

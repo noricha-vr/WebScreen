@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES, validateRenameMovieRequest } from '../../../../lib/contracts/api';
+import { logWorkerFailure } from '../../../../lib/infra/worker-log';
 import { importSigningKey } from '../../../../lib/contracts/session';
 import { requireUser, type AuthDatabase } from '../../../../lib/services/auth';
 import {
@@ -60,6 +61,7 @@ export const PATCH: APIRoute = async ({ request, params }) => {
         { status: error.status }
       );
     }
+    logWorkerFailure({ event: 'movie_rename_failed', errorCode: ERROR_CODES.internalError, status: 500 });
     return Response.json(
       { errorCode: ERROR_CODES.internalError, message: 'ファイル名を変更できませんでした' },
       { status: 500 }
@@ -89,6 +91,7 @@ export const DELETE: APIRoute = async ({ request, params }) => {
         { status: error.status }
       );
     }
+    logWorkerFailure({ event: 'movie_delete_failed', errorCode: ERROR_CODES.internalError, status: 500 });
     return Response.json(
       { errorCode: ERROR_CODES.internalError, message: '動画を削除できませんでした' },
       { status: 500 }

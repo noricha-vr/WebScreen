@@ -69,6 +69,48 @@ describe('proxyCapture', () => {
     expect(await response.json()).toMatchObject({ errorCode: 'CAPTURE_FAILED' });
   });
 
+  test('非 JSON の下流エラーは 1 件だけ構造化ログに記録する', async () => {
+    const originalError = console.error;
+    const entries: string[] = [];
+    console.error = ((entry: string) => entries.push(entry)) as typeof console.error;
+
+    try {
+      const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+        ...authenticatedDependencies(),
+        fetcher: async () => new Response('upstream error', { status: 422 }),
+      });
+
+      expect(response.status).toBe(502);
+      expect(entries).toHaveLength(1);
+      expect(JSON.parse(entries[0] ?? '{}')).toMatchObject({
+        event: 'capture_upstream_error_unmapped',
+        errorCode: 'CAPTURE_FAILED',
+      });
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  test('下流の capture_limit_exceeded を PAGE_TOO_LONG の 400 に変換する', async () => {
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      fetcher: async () => Response.json({ errorCode: 'capture_limit_exceeded' }, { status: 400 }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ errorCode: 'PAGE_TOO_LONG' });
+  });
+
+  test('下流の capture_timeout を CAPTURE_TIMEOUT の 504 に変換する', async () => {
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      fetcher: async () => Response.json({ errorCode: 'capture_timeout' }, { status: 504 }),
+    });
+
+    expect(response.status).toBe(504);
+    expect(await response.json()).toMatchObject({ errorCode: 'CAPTURE_TIMEOUT' });
+  });
+
   test.each([
     ['pdf_url_not_supported', 'PDF_URL_NOT_SUPPORTED'],
     ['image_url_not_supported', 'IMAGE_URL_NOT_SUPPORTED'],
@@ -114,7 +156,7 @@ describe('proxyCapture', () => {
     });
 
     expect(response.status).toBe(504);
-    expect(await response.json()).toMatchObject({ errorCode: 'CAPTURE_FAILED' });
+    expect(await response.json()).toMatchObject({ errorCode: 'CAPTURE_TIMEOUT' });
   });
 
   test('下流の images 配列を順序を変えず返す', async () => {

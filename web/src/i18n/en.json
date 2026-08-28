@@ -43,6 +43,8 @@
     "errorTooLarge": "This file is larger than the 50 MB limit",
     "errorUnsupported": "Supported files: PDF, PNG, JPG, JPEG, WebP, and GIF. Videos and other files can't be uploaded.",
     "errorTooManyPages": "PDF files must have 200 pages or fewer",
+    "errorPageTooLong": "This page is too long to convert. Try splitting it into shorter pages.",
+    "errorCaptureTimeout": "Loading the page took too long. Please try again in a little while.",
     "errorFailed": "Conversion failed. Please try again in a moment",
     "errorPdfUrlNotSupported": "PDF URLs can't be converted. Download the PDF, then upload the file.",
     "errorImageUrlNotSupported": "Image URLs can't be converted. Download the image, then upload the file.",
@@ -88,7 +90,8 @@
     "deleteConfirm": "Deleting cannot be undone",
     "deleteYes": "Delete",
     "deleteCancel": "Cancel",
-    "deleteFailed": "Could not delete the video"
+    "deleteFailed": "Could not delete the video",
+    "sessionExpired": "Your session has expired. Please log in again and retry."
   },
   "footer": {
     "github": "GitHub",

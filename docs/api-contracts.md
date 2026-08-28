@@ -48,8 +48,8 @@ Worker とは別サービス（ヘッドレスブラウザを持つ実行環境�
 
 - `CaptureResponse.images` は**撮影（スクロール）順**で返す。順序が狂うとスクロール動画が破綻する（詳細は `api.ts` の該当コメント）
 - web-capture は動画化しない。画像を R2 に置いて URL を返すだけ（[encode-contract.md](encode-contract.md)）
-- 非 Web ページを表す web-capture の lower code は、`HTTP 422` かつ JSON の `errorCode` が
-  allowlist に一致した場合だけ Worker の公開コードへ変換する。下流の `message` は返さない。
+- web-capture の lower code は、上流の HTTP ステータスと JSON の `errorCode` が
+  allowlist の組み合わせに一致した場合だけ Worker の公開コードへ変換する。下流の `message` は返さない。
 
 | web-capture lower code | Worker 公開 `errorCode` | HTTP |
 |---|---|---|
@@ -57,8 +57,13 @@ Worker とは別サービス（ヘッドレスブラウザを持つ実行環境�
 | `image_url_not_supported` | `IMAGE_URL_NOT_SUPPORTED` | 422 |
 | `video_url_not_supported` | `VIDEO_URL_NOT_SUPPORTED` | 422 |
 | `non_web_page_url` | `NON_WEB_PAGE_URL` | 422 |
+| `capture_limit_exceeded` | `PAGE_TOO_LONG` | 400 |
+| `capture_timeout` | `CAPTURE_TIMEOUT` | 504 |
 
-未知コード、JSON でない応答、401 / 429 / 5xx、タイムアウトは `CAPTURE_FAILED` のまま扱う。
+Worker 自身のタイムアウト（上流への 150 秒 abort）も `CAPTURE_TIMEOUT` / 504 で返す。
+上の表の組み合わせに一致しないもの（未知コード、JSON でない応答、401 / 429 / その他の 5xx）は
+すべて `CAPTURE_FAILED` として扱う。
+これらの変換は Worker の構造化ログ（`lib/infra/worker-log.ts`）に 1 件だけ記録する。
 
 ## 公開範囲の契約
 

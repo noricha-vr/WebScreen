@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { mountConvertPanel } from '../../src/lib/ui/convert-panel';
+import { ConversionError } from '../../src/lib/convert';
+import { mountConvertPanel, uploadErrorCode } from '../../src/lib/ui/convert-panel';
+import { JsonRequestError } from '../../src/lib/ui/request-json';
 
 type Listener = (event: Event) => void;
 
@@ -155,5 +157,22 @@ describe('mountConvertPanel', () => {
     } finally {
       browser.restore();
     }
+  });
+});
+
+describe('uploadErrorCode', () => {
+  test.each([
+    ['PAGE_TOO_LONG', 400, 'pageTooLong'],
+    ['CAPTURE_TIMEOUT', 504, 'captureTimeout'],
+    ['PAYLOAD_TOO_LARGE', 413, 'tooLarge'],
+    ['UNAUTHORIZED', 401, 'sessionExpired'],
+  ])('%s を %s へ変換する', (errorCode, status, expected) => {
+    expect(uploadErrorCode(new JsonRequestError(status as number, errorCode as string))).toBe(
+      expected as ReturnType<typeof uploadErrorCode>
+    );
+  });
+
+  test('ブラウザ内のページ数上限は同じ経路で変換する', () => {
+    expect(uploadErrorCode(new ConversionError('tooManyPages', 'too many pages'))).toBe('tooManyPages');
   });
 });
