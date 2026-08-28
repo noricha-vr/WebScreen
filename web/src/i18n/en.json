@@ -2,6 +2,7 @@
   "meta": {
     "title": "WebScreen β — Turn web pages, images and PDFs into VRChat videos",
     "description": "Upload a PDF or image and get an MP4 URL that plays in VRChat video players.",
+    "imageAlt": "WebScreen — turn PDFs, images and web pages into video URLs for VRChat",
     "privacyTitle": "Cookies and privacy — WebScreen β"
   },
   "nav": {

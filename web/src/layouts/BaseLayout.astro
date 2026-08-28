@@ -30,6 +30,16 @@ interface Props {
 const { lang, title, description, analytics = true, noindex = false } = Astro.props;
 const t = useTranslations(lang);
 const other = alternateLocale(lang);
+const summary = description ?? t.meta.description;
+
+// OG の URL は絶対でないとクローラが解決できない。site は astro.config.mjs で固定しており、
+// 未設定なら OG が壊れたまま出るのでビルドを落とす。
+if (!Astro.site) throw new Error('astro.config.mjs の site が未設定です（OG の絶対 URL を作れません）');
+const pageUrl = new URL(Astro.url.pathname, Astro.site);
+const ogImageUrl = new URL('/og.png', Astro.site);
+// 画像の実寸。クローラが先読みで枠を確保できるようにする（差異があると縮小表示になる）。
+const OG_IMAGE_SIZE = { width: '1200', height: '630' };
+const OG_LOCALES: Record<Locale, string> = { ja: 'ja_JP', en: 'en_US' };
 
 // SRI 付きで固定バージョンを読む（CDN 側の差し替えをブラウザが検出できるようにする）。
 const FONT_AWESOME_URL = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.1.0/css/all.min.css';
@@ -50,9 +60,22 @@ const GA_TRACKED_HOST = 'web-screen.net';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
-    <meta name="description" content={description ?? t.meta.description} />
+    <meta name="description" content={summary} />
     {noindex && <meta name="robots" content="noindex" />}
     <link rel="icon" href="/favicon.ico" sizes="any" />
+
+    <!-- SNS・チャットのリンクプレビュー。X は twitter:* が無ければ og:* を読むため card だけ足す。 -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="WebScreen" />
+    <meta property="og:locale" content={OG_LOCALES[lang]} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={summary} />
+    <meta property="og:url" content={pageUrl.href} />
+    <meta property="og:image" content={ogImageUrl.href} />
+    <meta property="og:image:width" content={OG_IMAGE_SIZE.width} />
+    <meta property="og:image:height" content={OG_IMAGE_SIZE.height} />
+    <meta property="og:image:alt" content={t.meta.imageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="alternate" hreflang={other} href={switchLocalePath(Astro.url.pathname, other)} />
     <link
       rel="stylesheet"
