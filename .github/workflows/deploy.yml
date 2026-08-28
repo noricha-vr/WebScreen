@@ -1,0 +1,160 @@
+# main への push で Cloudflare Workers（本体 + cron）を本番へ反映する。
+#
+# 2 つの Worker を常に両方デプロイするのは、同じ D1 / R2 を共有していて
+# compatibility_date を揃える必要があるため（paths で分けると片方だけ古い版が残る）。
+# E2E はここに入れない: CI 上の wrangler dev + Playwright はハングの報告があり、
+# デプロイが止まる損失の方が大きい（workers-sdk#6280）。
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+# 同時デプロイでバージョンが交差しないよう直列化する。進行中のものは殺さない
+# （デプロイ途中で止めると D1 とコードの版がずれる）。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+# 本番資格情報を扱う workflow なので、GITHUB_TOKEN はリポジトリ既定値に任せず最小にする。
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # workflow_dispatch は UI から任意のブランチを選べる。main 以外のコードが
+    # 本番トークン付きで走らないよう、ここで弾く。
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      # サードパーティを含め commit SHA で固定する（タグは動かせるため）。
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.6
+
+      - run: bun install --frozen-lockfile
+
+      - name: 型チェック
+        run: bun run typecheck
+
+      - name: ユニットテスト
+        run: bun test
+
+      # ビルドは本番へ触る前に済ませる。D1 を先に更新してからビルドが落ちると、
+      # 新しいスキーマと古いコードだけが残り、ロールバックでも戻せない。
+      - name: ビルド
+        run: bun run build
+
+      # ロールバック先を「この実行が始まる前に稼働していた版」に固定する。
+      # ID を省略すると直前に upload された別の版が選ばれうる。
+      - name: 現在の本番バージョンを記録
+        id: baseline
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+          app=$(bunx wrangler deployments status 2>/dev/null | grep -oE "$uuid" | head -1 || true)
+          cron=$(bunx wrangler deployments status -c cron/wrangler.jsonc 2>/dev/null | grep -oE "$uuid" | head -1 || true)
+          echo "app=${app}" >> "$GITHUB_OUTPUT"
+          echo "cron=${cron}" >> "$GITHUB_OUTPUT"
+          echo "baseline app=${app:-none} cron=${cron:-none}"
+
+      # D1 に down マイグレーションは無いため、ここを通すのは後方互換な変更だけ
+      # （破壊的変更は「追加 → 切替 → 削除」の 3 段階に分ける）。
+      - name: D1 マイグレーション適用
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bunx wrangler d1 migrations apply webscreen-beta-db --remote
+
+      - name: 本体 Worker をデプロイ
+        id: deploy_app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bunx wrangler deploy -c dist/server/wrangler.json | tee deploy-app.log
+          uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+          version=$(grep -oiE "Current Version ID: ?$uuid" deploy-app.log | grep -oE "$uuid" | head -1 || true)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "deployed version=${version:-unknown}"
+
+      - name: cron Worker をデプロイ
+        id: deploy_cron
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bunx wrangler deploy -c cron/wrangler.jsonc
+
+      # 200 が返るだけでは旧版が生きている可能性を否定できないので、
+      # /api/health/ が名乗るバージョンとデプロイしたバージョンを突き合わせる。
+      - name: 疎通確認
+        id: smoke
+        env:
+          EXPECTED_VERSION: ${{ steps.deploy_app.outputs.version }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            body=$(curl -s --connect-timeout 5 --max-time 15 https://web-screen.net/api/health/ || true)
+            case "$body" in
+              *'"status":"ok"'*)
+                if [ -z "$EXPECTED_VERSION" ]; then
+                  echo "health ok (attempt ${attempt}, バージョン照合はスキップ)"
+                  exit 0
+                fi
+                case "$body" in
+                  *"$EXPECTED_VERSION"*)
+                    echo "health ok かつバージョン一致 (attempt ${attempt})"
+                    exit 0
+                    ;;
+                esac
+                echo "health は ok だがバージョン未反映 (attempt ${attempt})"
+                ;;
+              *)
+                echo "health 応答なし (attempt ${attempt})"
+                ;;
+            esac
+            sleep 10
+          done
+          echo "::error::デプロイ後の疎通確認に失敗しました"
+          exit 1
+
+      # 本番へ触った後に失敗した時だけ戻す。rollback が戻すのは Worker のコードだけで、
+      # D1 / R2 のデータや cron スケジュール・ルートなどの設定は戻らない。
+      # スキーマを変えた回はこれだけでは復旧しないため、必ずログを確認すること。
+      - name: 失敗時のロールバック
+        if: failure() && (steps.deploy_cron.outcome == 'failure' || steps.smoke.outcome == 'failure')
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BASELINE_APP: ${{ steps.baseline.outputs.app }}
+          BASELINE_CRON: ${{ steps.baseline.outputs.cron }}
+        run: |
+          if [ -n "$BASELINE_APP" ]; then
+            bunx wrangler rollback "$BASELINE_APP" --yes \
+              || echo "::warning::本体 Worker のロールバックに失敗しました"
+          else
+            echo "::warning::ロールバック先のバージョンを記録できていないため本体は戻しません"
+          fi
+
+          if [ "${{ steps.deploy_cron.outcome }}" != "skipped" ] && [ -n "$BASELINE_CRON" ]; then
+            bunx wrangler rollback "$BASELINE_CRON" -c cron/wrangler.jsonc --yes \
+              || echo "::warning::cron Worker のロールバックに失敗しました"
+          fi
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 15 \
+            https://web-screen.net/api/health/ || echo 000)
+          echo "ロールバック後の health: ${code}"
