@@ -25,7 +25,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `POST /api/uploads/presign/` | R2 へのアップロード先を払い出し、movies に `pending` 行を作る | 本人 | `PresignRequest` / `PresignResponse` |
 | `POST /api/uploads/commit/` | アップロード完了を確定し `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse` |
 | `GET /api/history/` | 自分の動画一覧 | 本人 | `HistoryResponse` |
-| `POST /api/movies/{shortId}/pin/` | pin の切り替え（保管期限を 1 年後まで延ばす） | 本人（所有者） | `PinResponse` |
+| `POST /api/movies/{shortId}/pin/` | pin の切り替え（保管期限を 1 年後まで延ばす。期限切れは 410 `EXPIRED`） | 本人（所有者） | `PinResponse` |
 | `PATCH /api/movies/{shortId}/` | ファイル名の変更 | 本人（所有者） | `RenameMovieRequest` / `RenameMovieResponse` |
 | `DELETE /api/movies/{shortId}/` | 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | — |
 

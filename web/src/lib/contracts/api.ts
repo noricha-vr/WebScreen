@@ -44,6 +44,7 @@ export const ERROR_CODES = {
   unauthorized: 'UNAUTHORIZED',
   forbidden: 'FORBIDDEN',
   notFound: 'NOT_FOUND',
+  expired: 'EXPIRED',
   payloadTooLarge: 'PAYLOAD_TOO_LARGE',
   captureFailed: 'CAPTURE_FAILED',
   pageTooLong: 'PAGE_TOO_LONG',

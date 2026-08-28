@@ -66,7 +66,10 @@ class FakeRetentionDatabase implements RetentionDatabase {
     // 削除直前の再確認（short_id と閾値の 2 引数）。pin ではなく status と期限で判定する。
     if (query.includes('WHERE short_id = ?')) {
       const movie = this.movies.get(values[0] as string);
-      if (!movie || !isExpired(movie, parseSqliteTime(values[1] as string))) return [];
+      if (!movie) return [];
+      // 引数が short_id だけなら行の存在確認（stranded の判定に使う）
+      if (values.length === 1) return [{ short_id: movie.shortId }];
+      if (!isExpired(movie, parseSqliteTime(values[1] as string))) return [];
       if (query.includes("status = 'ready'") && movie.status !== 'ready') return [];
       return [{ short_id: movie.shortId }];
     }
@@ -379,6 +382,7 @@ describe('runRetention: サマリ', () => {
     expect(summary).toEqual({
       backfilledPinned: 0,
       deletedMovies: 1,
+      strandedMovies: 0,
       deletedOrphans: 1,
       deletedFailed: 1,
       deletedCaptures: 1,
@@ -427,6 +431,50 @@ describe('runRetention: pin 済みの期限補完', () => {
     expect(summary.backfilledPinned).toBe(0);
     expect(database.movies.get('pinnedDatedA')?.expiresAt).toBe(kept);
     expect(database.movies.get('plainDatedAA')?.expiresAt).toBe(kept);
+  });
+});
+
+describe('runRetention: 不変条件が破れた時の可視化', () => {
+  it('R2 を消したのに行が残ったら stranded として数える', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'strandedAAAA', createdAt: iso(-HOUR_MS), expiresAt: iso(-HOUR_MS) }),
+    ]);
+    // 再確認の後・R2 削除の前に期限が延びる順序を再現する。togglePin は期限切れを
+    // 410 で断るので本来起きないが、起きた時に黙らないことを固定する。
+    const bucket = new FakeRetentionBucket(new Set([movieKey('strandedAAAA')]));
+    const extend = (): void => {
+      const target = database.movies.get('strandedAAAA');
+      if (target) target.expiresAt = iso(365 * DAY_MS);
+    };
+    const originalDelete = bucket.delete.bind(bucket);
+    bucket.delete = async (keys) => {
+      extend();
+      await originalDelete(keys);
+    };
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedMovies).toBe(0);
+    expect(summary.strandedMovies).toBe(1);
+    expect(database.movies.has('strandedAAAA')).toBe(true);
+  });
+
+  it('並行して行が消えていた場合は stranded に数えない', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'racedDeleteA', createdAt: iso(-HOUR_MS), expiresAt: iso(-HOUR_MS) }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([movieKey('racedDeleteA')]));
+    // 所有者の削除と競合しただけなら正常（実体も行も無くなる）
+    const originalDelete = bucket.delete.bind(bucket);
+    bucket.delete = async (keys) => {
+      database.movies.delete('racedDeleteA');
+      await originalDelete(keys);
+    };
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedMovies).toBe(0);
+    expect(summary.strandedMovies).toBe(0);
   });
 });
 
