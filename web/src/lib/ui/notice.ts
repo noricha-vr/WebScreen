@@ -46,8 +46,19 @@ export function isNoticeExpired(until: string, now: Date): boolean {
   return now.getTime() >= timestamp + MS_PER_DAY;
 }
 
+/**
+ * `mountNotice` が触る最小の面。
+ *
+ * `HTMLElement` 全体を要求しないのは、配線（data 属性の読みと hidden の反映）を
+ * DOM 実装なしでテストするため。実行時は HTMLElement をそのまま渡せる。
+ */
+export interface NoticeElement {
+  dataset: DOMStringMap;
+  hidden: boolean;
+}
+
 /** `data-notice-until` を読み、期限切れなら枠を隠す。 */
-export function mountNotice(element: HTMLElement, now: Date = new Date()): void {
+export function mountNotice(element: NoticeElement, now: Date = new Date()): void {
   const until = element.dataset['noticeUntil'];
   if (until === undefined) return;
 
