@@ -1,0 +1,55 @@
+---
+import { useTranslations, type Locale } from '../i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+const RELEASES_URL = 'https://github.com/noricha-vr/WebScreen/releases';
+
+/**
+ * 掲載をやめる日（この日いっぱいまで表示）。
+ *
+ * ここでは日付を評価しない。ページは静的生成なので、ビルド時に判定するとデプロイ時刻で
+ * 結果が焼き付き、期限が来ても消えない。判定は lib/ui/notice.ts が描画後に行う。
+ */
+const NOTICE_UNTIL = '2026-10-31';
+---
+
+<!-- ルートに display ユーティリティを置かない（hidden 属性での非表示と競合させないため）。 -->
+<aside
+  data-notice
+  data-notice-until={NOTICE_UNTIL}
+  class="mb-10 rounded-lg border border-slate-200 bg-slate-50 p-5"
+>
+  <div class="flex items-start gap-3">
+    <i class="fa-solid fa-circle-info mt-1 text-brand-500" aria-hidden="true"></i>
+
+    <div>
+      <h2 class="text-lg font-semibold tracking-tight text-slate-900">{t.notice.heading}</h2>
+      <p class="mt-2 text-base leading-relaxed text-slate-700">{t.notice.body}</p>
+
+      <a
+        href={RELEASES_URL}
+        target="_blank"
+        rel="noopener"
+        class="mt-3 inline-flex items-center gap-2 text-base text-slate-700 underline hover:text-brand-700"
+      >
+        <i class="fa-solid fa-tag" aria-hidden="true"></i>
+        <span>{t.notice.link}</span>
+      </a>
+    </div>
+  </div>
+</aside>
+
+<script>
+  // 期限判定はビルド時ではなく描画時に行う（静的生成のため）。
+  import { mountNotice } from '../lib/ui/notice';
+
+  for (const notice of document.querySelectorAll<HTMLElement>('[data-notice]')) {
+    mountNotice(notice);
+  }
+</script>

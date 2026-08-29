@@ -14,6 +14,11 @@
     "bannerAlt": "WebScreen のロゴ",
     "avatarAlt": "アカウントのアバター"
   },
+  "notice": {
+    "heading": "WebScreen は新しくなりました",
+    "body": "変換した動画を履歴から探せるようにするため、Discord でのログインをお願いしています。パスワードの登録は必要ありません。",
+    "link": "更新内容を見る"
+  },
   "hero": {
     "title": "VRChat に映せる動画 URL を、ドラッグ&ドロップで。",
     "lead": "PDF・画像をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
@@ -99,6 +104,7 @@
   },
   "footer": {
     "github": "GitHub",
+    "releases": "更新履歴",
     "privacy": "Cookie とプライバシー",
     "langSwitch": "English",
     "note": "WebScreen β"
@@ -151,8 +157,15 @@
     "pdfBody": "パワーポイントや Google スライドを PDF で書き出して動画に変換すれば、動画プレイヤーやスライドシステムでプレゼンを始められます。",
     "pdfMediaAlt": "PDF が動画に変換される様子",
     "historyHeading": "履歴を確認",
-    "historyBody": "変換した動画のリンクは、履歴からいつでも確認できます。動画は 30 日間保管し、ピン留めした 10 件は 1 年間残ります。",
+    "historyBody": "変換した動画のリンクは、履歴からいつでも確認できます。",
     "historyMediaAlt": "変換した動画の履歴",
+    "pinHeading": "大事な動画は 1 年間残せる",
+    "pinNormalLabel": "通常",
+    "pinNormalValue": "{days} 日",
+    "pinPinnedLabel": "ピン留め",
+    "pinPinnedValue": "1 年",
+    "pinLimit": "{count} 件まで",
+    "pinBody": "ワールドやポスターに貼った URL が途中で切れません。",
     "comingSoon": "画面録画・画面共有は対応中です"
   }
 }

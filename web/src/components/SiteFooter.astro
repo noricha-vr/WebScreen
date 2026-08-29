@@ -10,6 +10,7 @@ const t = useTranslations(lang);
 const other = alternateLocale(lang);
 
 const REPOSITORY_URL = 'https://github.com/noricha-vr/WebScreen';
+const RELEASES_URL = `${REPOSITORY_URL}/releases`;
 ---
 
 <footer class="mt-16 border-t border-slate-200 bg-slate-50">
@@ -27,6 +28,15 @@ const REPOSITORY_URL = 'https://github.com/noricha-vr/WebScreen';
       >
         <i class="fa-brands fa-github" aria-hidden="true"></i>
         <span>{t.footer.github}</span>
+      </a>
+      <a
+        href={RELEASES_URL}
+        target="_blank"
+        rel="noopener"
+        class="inline-flex items-center gap-2 text-slate-700 underline hover:text-brand-700"
+      >
+        <i class="fa-solid fa-tag" aria-hidden="true"></i>
+        <span>{t.footer.releases}</span>
       </a>
       <a
         href={`/${lang}/privacy/`}

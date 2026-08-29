@@ -1,4 +1,5 @@
 ---
+import PinHighlight from './PinHighlight.astro';
 import { useTranslations, type Locale } from '../i18n';
 
 interface Props {
@@ -108,6 +109,10 @@ const sections: Section[] = [
         </article>
       ))
     }
+  </div>
+
+  <div class="mt-14">
+    <PinHighlight lang={lang} />
   </div>
 
   <p class="mt-12 text-sm text-slate-500">{t.lp.comingSoon}</p>
