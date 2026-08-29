@@ -57,3 +57,9 @@ ffprobe -v trace -i output.mp4 2>&1 | grep -o 'type:.moov\|type:.mdat' | head -2
 
 - API の契約（撮影順序の保証を含む）: [api-contracts.md](api-contracts.md)
 - 型の正本: `web/src/lib/contracts/api.ts`
+- ライブ配信（**未実装**。実装時にこの契約の改定を伴う）: [streaming/](streaming/)
+
+ライブ配信を実装する場合、エンコードはユーザーのブラウザの WebRTC が行う。
+**サーバー側にエンコーダは増えない**が、「エンコード系統は 1 つだけ」の節は改定が要る。
+上記の必須パラメータは維持し、GOP だけ例外（`g=1` は 1fps のスライドでは実質無料だが、
+30fps のライブでは 30 倍の無駄になるため通常 GOP に戻す）。詳細は [streaming/architecture.md](streaming/architecture.md)。

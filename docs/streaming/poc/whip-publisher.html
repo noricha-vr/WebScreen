@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebScreen WHIP publisher (PoC)</title>
+<body style="margin:0;background:#111;color:#eee;font-family:sans-serif">
+<canvas id="c" width="1920" height="1080"></canvas>
+<pre id="log" style="font-size:20px"></pre>
+<script>
+const q = new URLSearchParams(location.search);
+const WHIP = q.get('whip') || 'http://localhost:28889/live/test/whip';
+const KBPS = parseInt(q.get('kbps') || '2000', 10);
+const log = (m) => { document.getElementById('log').textContent += m + "\n"; console.log('[whip] ' + m); };
+
+// --- 1. 検証用の映像を canvas で作る（大きな時刻 + 日本語の文字梯子） ---
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+function draw() {
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 1920, 1080);
+  ctx.fillStyle = '#000';
+  // 遅延測定用: ミリ秒までの時刻を巨大に描く
+  ctx.font = 'bold 150px monospace';
+  const t = new Date();
+  const ms = String(t.getTime() % 100000).padStart(5, '0');
+  ctx.fillText(ms, 60, 200);
+  ctx.font = 'bold 60px monospace';
+  ctx.fillText(t.toISOString().slice(11, 23), 60, 290);
+  // 可読性確認用: 日本語の文字梯子
+  let y = 380;
+  for (const px of [28, 22, 18, 16, 14, 12]) {
+    ctx.font = px + 'px sans-serif';
+    ctx.fillText(px + 'px 憂鬱な薔薇と檸檬 — The quick brown fox 0123456789', 60, y);
+    y += px + 26;
+  }
+  // 動きの指標（フレームが進んでいるか目視できる）
+  ctx.fillStyle = '#c00';
+  ctx.fillRect(60 + (t.getTime() / 10 % 1600), 700, 60, 60);
+  requestAnimationFrame(draw);
+}
+draw();
+
+// --- 2. WHIP で publish する ---
+(async () => {
+  const stream = c.captureStream(30);
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  const tr = pc.addTransceiver(stream.getVideoTracks()[0], { direction: 'sendonly' });
+
+  // H.264 を明示的に最優先へ（既定の受入順は AV1→VP9→VP8→H265→H264 で H.264 が最後）
+  const caps = RTCRtpSender.getCapabilities('video');
+  const h264 = caps.codecs.filter(x => /H264/i.test(x.mimeType));
+  const rest = caps.codecs.filter(x => !/H264/i.test(x.mimeType));
+  log('codecs available: ' + caps.codecs.map(x => x.mimeType.split('/')[1]).join(','));
+  log('H264 entries: ' + JSON.stringify(h264.map(x => x.sdpFmtpLine)));
+  if (h264.length) tr.setCodecPreferences([...h264, ...rest]);
+  else log('!! H264 が見つからない');
+
+  // ビットレート固定 + 静止テキスト向けの劣化ポリシー
+  const p = tr.sender.getParameters();
+  p.encodings = p.encodings && p.encodings.length ? p.encodings : [{}];
+  p.encodings[0].maxBitrate = KBPS * 1000;
+  p.degradationPreference = 'maintain-resolution';  // 解像度を守る（文字が潰れないように）
+  await tr.sender.setParameters(p);
+  stream.getVideoTracks()[0].contentHint = 'detail';
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await new Promise(r => {
+    if (pc.iceGatheringState === 'complete') return r();
+    pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && r());
+    setTimeout(r, 3000);
+  });
+
+  const res = await fetch(WHIP, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/sdp' },
+    body: pc.localDescription.sdp,
+  });
+  if (!res.ok) { log('WHIP failed: ' + res.status + ' ' + await res.text()); return; }
+  await pc.setRemoteDescription({ type: 'answer', sdp: await res.text() });
+  log('WHIP posted -> ' + WHIP);
+
+  pc.addEventListener('connectionstatechange', () => log('pc: ' + pc.connectionState));
+  // 実際に送出されているコーデックとビットレートを定期報告
+  setInterval(async () => {
+    const st = await pc.getStats();
+    let out, codec;
+    st.forEach(r => { if (r.type === 'outbound-rtp' && r.kind === 'video') out = r; });
+    st.forEach(r => { if (out && r.type === 'codec' && r.id === out.codecId) codec = r; });
+    if (out) log(`sent codec=${codec ? codec.mimeType : '?'} fmtp=${codec ? codec.sdpFmtpLine : '?'} bytes=${out.bytesSent} frames=${out.framesEncoded} keyframes=${out.keyFramesEncoded} w=${out.frameWidth} h=${out.frameHeight}`);
+  }, 5000);
+})();
+</script>
