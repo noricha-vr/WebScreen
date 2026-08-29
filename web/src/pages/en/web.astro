@@ -1,0 +1,13 @@
+---
+import UseCaseArticle from '../../components/UseCaseArticle.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { useTranslations } from '../../i18n';
+
+const lang = 'en' as const;
+const page = 'web' as const;
+const t = useTranslations(lang);
+---
+
+<BaseLayout lang={lang} title={t.useCases[page].title} description={t.useCases[page].lead}>
+  <UseCaseArticle lang={lang} page={page} />
+</BaseLayout>

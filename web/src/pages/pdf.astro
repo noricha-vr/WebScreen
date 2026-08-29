@@ -1,0 +1,11 @@
+---
+import { resolveLocale } from '../i18n';
+
+// 言語なしの旧 URL（旧版は Accept-Language を見て /{lang}/xxx/ へ 301 していた）。
+// _redirects は静的でリクエストヘッダーを読めず、転送先に /ja/pdf/ と書くと日本語へ
+// 決め打ちになる。用途を保ったまま言語だけ振り分けるため、このルートだけ Worker で実行する。
+export const prerender = false;
+
+const locale = resolveLocale(Astro.request.headers.get('accept-language'));
+return Astro.redirect(`/${locale}/pdf/`, 302);
+---

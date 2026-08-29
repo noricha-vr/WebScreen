@@ -166,6 +166,118 @@
     "pinPinnedValue": "1 year",
     "pinLimit": "up to {count}",
     "pinBody": "A link you put in a world or on a poster will not stop working partway through.",
+    "webLink": "More about converting web pages",
+    "imageLink": "More about converting images",
+    "pdfLink": "More about converting PDFs",
+    "screenShareLink": "About screen sharing in VRChat",
     "comingSoon": "Screen recording and screen sharing are still on the way"
+  },
+  "useCases": {
+    "stepsHeading": "How to use it",
+    "relatedHeading": "Related pages",
+    "web": {
+      "title": "Show a web page in VRChat: convert a URL to video — WebScreen β",
+      "navLabel": "Turn a web page into video",
+      "heading": "Show a web page in VRChat",
+      "lead": "VRChat video players only play video. WebScreen captures a whole web page and encodes it as an MP4, so you can show the page itself by pasting the URL it gives you.",
+      "sections": [
+        {
+          "heading": "You cannot paste a web page URL into a video player",
+          "body": "The video players placed in VRChat worlds only play video. Typing a web page URL into one shows nothing. To show what is on the page, you have to turn it into a video first."
+        },
+        {
+          "heading": "The whole page becomes one video",
+          "body": "WebScreen captures the page from top to bottom and encodes the scroll into an MP4. The seek bar of the video player becomes the scroll of the page, so you can stop wherever you want to talk."
+        },
+        {
+          "heading": "Long pages are not cut off",
+          "body": "When a page does not fit in a single capture, the rest is fetched automatically and joined into one video. Pages that are still too long cannot be converted, so split them into shorter pages first."
+        }
+      ],
+      "steps": [
+        "Sign in with Discord. There is no password to create.",
+        "Paste the URL of the page into \"Convert a web page to video\" on the home page.",
+        "The conversion returns a video URL. Paste it into a VRChat video player to watch it."
+      ],
+      "cta": "Convert a web page"
+    },
+    "screenShare": {
+      "title": "Screen sharing in VRChat, and what to use instead — WebScreen β",
+      "navLabel": "Instead of screen sharing",
+      "heading": "When you want to share your screen in VRChat",
+      "lead": "Sharing your screen in VRChat usually means showing someone a web page, a slide deck or a photo. WebScreen turns that content into a video URL that plays in any world with a video player.",
+      "sections": [
+        {
+          "heading": "How people show things in VRChat",
+          "body": "VRChat has no built-in way to mirror your desktop. To show something you use the video players and slide systems placed in worlds. Both of them play video, so whatever you want to show has to be a video first."
+        },
+        {
+          "heading": "For web pages, slides and images, converting to video is the reliable option",
+          "body": "A video plays in any world that has a video player. There is no streaming delay and no audio drift, and because the URL keeps working you can show the same thing again the next time you meet."
+        },
+        {
+          "heading": "Real-time screen sharing and screen recording are not supported",
+          "body": "WebScreen converts web pages, images and PDFs. It cannot mirror what is on your screen right now, and it cannot record you using an application and stream that. Both are still on the way."
+        }
+      ],
+      "steps": [
+        "Decide what you want to show: a URL for a web page, a PDF for slides, an image file for photos.",
+        "Sign in with Discord, then enter the URL or upload the file on the home page.",
+        "Paste the video URL into the video player in the world."
+      ],
+      "cta": "Convert what you want to show"
+    },
+    "image": {
+      "title": "Show images and photos in VRChat: convert images to video — WebScreen β",
+      "navLabel": "Turn images into video",
+      "heading": "Show images and photos in VRChat",
+      "lead": "Turn the photos you took on a world tour or with friends into a video so everyone in VRChat can look at them together. Several images become one video, and you only share one URL.",
+      "sections": [
+        {
+          "heading": "Show the photos you just took",
+          "body": "Screenshots from a world or an event become playable on a video player once they are converted. You do not have to send files to anyone or point them at an external uploader."
+        },
+        {
+          "heading": "Several images become one video",
+          "body": "Upload a few images at once and they are lined up in order in a single video. There is no need to convert them one by one and swap the URL each time."
+        },
+        {
+          "heading": "Supported image formats",
+          "body": "png, jpg, jpeg, webp and gif are supported, up to 50 MB per file."
+        }
+      ],
+      "steps": [
+        "Sign in with Discord. There is no password to create.",
+        "Drag and drop your images onto the home page. You can select several at once.",
+        "Paste the video URL into a VRChat video player."
+      ],
+      "cta": "Convert images"
+    },
+    "pdf": {
+      "title": "Show slides in VRChat: convert a PDF to video — WebScreen β",
+      "navLabel": "Turn slides and PDFs into video",
+      "heading": "Show slides and PDFs in VRChat",
+      "lead": "Export PowerPoint or Google Slides as a PDF, convert it, and present straight from a VRChat video player. Up to 200 pages per file.",
+      "sections": [
+        {
+          "heading": "Export slides as a PDF first",
+          "body": "PowerPoint, Keynote and Google Slides can all export a PDF. Upload that PDF and each page becomes one frame of the video, with fonts and layout exactly as you exported them."
+        },
+        {
+          "heading": "Move between pages with the seek bar",
+          "body": "Drag the seek bar of the video player to reach the page you want. You can go back as well, which helps when you answer questions while you present."
+        },
+        {
+          "heading": "Up to 200 pages",
+          "body": "A single PDF can hold up to 200 pages, and up to 50 MB. Export long documents chapter by chapter."
+        }
+      ],
+      "steps": [
+        "Export your slides as a PDF.",
+        "Sign in with Discord and drop the PDF onto the home page.",
+        "Paste the video URL into the video player or the slide system in the world."
+      ],
+      "cta": "Convert a PDF"
+    }
   }
 }
