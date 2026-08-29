@@ -24,6 +24,62 @@
         <priority>1.0</priority>
     </url>
     <url>
+        <loc>https://web-screen.net/ja/web/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/web/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/web/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/en/web/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/web/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/web/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/ja/screen-share/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/screen-share/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/screen-share/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/en/screen-share/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/screen-share/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/screen-share/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/ja/image/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/image/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/image/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/en/image/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/image/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/image/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/ja/pdf/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/pdf/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/pdf/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/en/pdf/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/pdf/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/pdf/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
         <loc>https://web-screen.net/ja/privacy/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/privacy/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/privacy/"/>
