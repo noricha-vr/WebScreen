@@ -48,10 +48,10 @@
 | 設定 | 値 | 補足 |
 |---|---|---|
 | コーデック | `setCodecPreferences` で H.264 を先頭へ | R1 |
-| ビットレート上限 | `encodings[0].maxBitrate` | 1080p の静止テキストなら実効 604〜664 kbps |
+| ビットレート上限 | `encodings[0].maxBitrate = 600_000`（既定）/ `300_000`（省帯域） | 実効 352 kbps・24.5 fps。段の設計は [quality-tiers.md](quality-tiers.md) |
 | 劣化ポリシー | `degradationPreference = 'maintain-resolution'` | R10 |
-| コンテンツヒント | `track.contentHint = 'text'` | R10 |
-| 解像度 | **1920x1080 を既定**、720p を省帯域オプション。**480p は作らない** | 480p は 14px 以下が判読不能で、帯域を足しても直らない |
+| コンテンツヒント | `track.contentHint = 'text'` | R10。**`'detail'` ではない** |
+| 解像度 | **1920x1080 固定**（省帯域でも下げない） | `maintain-resolution` が解像度を守り、足りなければ fps が落ちる。**720p / 480p の段は作らない**（[quality-tiers.md](quality-tiers.md)） |
 | 画面取得 | `getDisplayMedia({ preferCurrentTab: true })`（自タブ共有） | **画面全体の共有は macOS の画面収録許可が要り、未付与だとピッカーが解決しない。**自タブ共有はこれを回避でき 300ms で解決する |
 
 ### 対応ブラウザ

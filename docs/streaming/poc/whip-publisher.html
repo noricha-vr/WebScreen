@@ -8,6 +8,9 @@
 const q = new URLSearchParams(location.search);
 const WHIP = q.get('whip') || 'http://localhost:28889/live/test/whip';
 const KBPS = parseInt(q.get('kbps') || '2000', 10);
+const HINT = q.get('hint') || 'text';
+const MOTION = q.get('motion') !== '0';
+const SCROLL = parseInt(q.get('scroll') || '0', 10);  // px/秒。0 で静止
 const log = (m) => { document.getElementById('log').textContent += m + "\n"; console.log('[whip] ' + m); };
 
 // --- 1. 検証用の映像を canvas で作る（大きな時刻 + 日本語の文字梯子） ---
@@ -15,6 +18,8 @@ const c = document.getElementById('c'), ctx = c.getContext('2d');
 function draw() {
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 1920, 1080);
   ctx.fillStyle = '#000';
+  ctx.save();
+  if (SCROLL) ctx.translate(0, -((Date.now() / 1000 * SCROLL) % 400));
   // 遅延測定用: ミリ秒までの時刻を巨大に描く
   ctx.font = 'bold 150px monospace';
   const t = new Date();
@@ -29,9 +34,9 @@ function draw() {
     ctx.fillText(px + 'px 憂鬱な薔薇と檸檬 — The quick brown fox 0123456789', 60, y);
     y += px + 26;
   }
-  // 動きの指標（フレームが進んでいるか目視できる）
-  ctx.fillStyle = '#c00';
-  ctx.fillRect(60 + (t.getTime() / 10 % 1600), 700, 60, 60);
+  // 動きの指標（motion=0 で止める。静止した Web ページを模す）
+  if (MOTION) { ctx.fillStyle = '#c00'; ctx.fillRect(60 + (t.getTime() / 10 % 1600), 700, 60, 60); }
+  ctx.restore();
   requestAnimationFrame(draw);
 }
 draw();
@@ -57,7 +62,7 @@ draw();
   p.encodings[0].maxBitrate = KBPS * 1000;
   p.degradationPreference = 'maintain-resolution';  // 解像度を守る（文字が潰れないように）
   await tr.sender.setParameters(p);
-  stream.getVideoTracks()[0].contentHint = 'detail';
+  stream.getVideoTracks()[0].contentHint = HINT;
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);

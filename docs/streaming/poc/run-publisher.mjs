@@ -7,7 +7,9 @@ const { chromium } = pkg;
 
 const secs = parseInt(process.argv[2] || '60', 10);
 const kbps = process.argv[3] || '2000';
-const url = `http://localhost:28080/whip-publisher.html?whip=http://localhost:28889/live/test/whip&kbps=${kbps}`;
+const extra = process.argv[4] || '';
+const path = process.argv[5] || 'test';
+const url = `http://localhost:28080/whip-publisher.html?whip=http://localhost:28889/live/${path}/whip&kbps=${kbps}${extra}`;
 
 const browser = await chromium.launch({
   channel: 'chrome',            // 実物の Google Chrome（H.264 エンコーダを持つ）
