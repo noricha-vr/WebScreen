@@ -29,6 +29,11 @@ interface Section {
   body: string;
   mediaAlt: string;
   media: Media;
+  /**
+   * 用途別ページへの内部リンク。sitemap だけだとクロールの優先度が上がらないので、
+   * トップから各ページへ辿れる導線を持たせる。対応するページが無い項目は付けない。
+   */
+  link?: { href: string; label: string };
 }
 
 const sections: Section[] = [
@@ -38,6 +43,7 @@ const sections: Section[] = [
     body: t.lp.webBody,
     mediaAlt: t.lp.webMediaAlt,
     media: { kind: 'video', src: `${MEDIA_BASE}/url.webm`, poster: `${MEDIA_BASE}/url-600.jpg` },
+    link: { href: `/${lang}/web/`, label: t.lp.webLink },
   },
   {
     icon: 'fa-image',
@@ -46,6 +52,7 @@ const sections: Section[] = [
     mediaAlt: t.lp.imageMediaAlt,
     // image.webm には対応する静止画（image-600.jpg）が GCS に無いため poster を付けない。
     media: { kind: 'video', src: `${MEDIA_BASE}/image.webm` },
+    link: { href: `/${lang}/image/`, label: t.lp.imageLink },
   },
   {
     icon: 'fa-file-pdf',
@@ -53,6 +60,7 @@ const sections: Section[] = [
     body: t.lp.pdfBody,
     mediaAlt: t.lp.pdfMediaAlt,
     media: { kind: 'image', src: `${MEDIA_BASE}/pdf.png` },
+    link: { href: `/${lang}/pdf/`, label: t.lp.pdfLink },
   },
   {
     icon: 'fa-clock-rotate-left',
@@ -78,6 +86,16 @@ const sections: Section[] = [
               <span>{section.heading}</span>
             </h2>
             <p class="mt-4 text-base leading-relaxed text-slate-700">{section.body}</p>
+
+            {section.link && (
+              <a
+                href={section.link.href}
+                class="mt-4 inline-flex items-center gap-2 text-base text-brand-700 underline hover:text-brand-500"
+              >
+                <span>{section.link.label}</span>
+                <i class="fa-solid fa-arrow-right text-sm" aria-hidden="true" />
+              </a>
+            )}
           </div>
 
           <div class={index % 2 === 1 ? 'md:order-1' : ''}>
@@ -115,5 +133,15 @@ const sections: Section[] = [
     <PinHighlight lang={lang} />
   </div>
 
-  <p class="mt-12 text-sm text-slate-500">{t.lp.comingSoon}</p>
+  <p class="mt-12 text-base text-slate-600">
+    <a
+      href={`/${lang}/screen-share/`}
+      class="inline-flex items-center gap-2 text-brand-700 underline hover:text-brand-500"
+    >
+      <span>{t.lp.screenShareLink}</span>
+      <i class="fa-solid fa-arrow-right text-sm" aria-hidden="true"></i>
+    </a>
+  </p>
+
+  <p class="mt-3 text-sm text-slate-500">{t.lp.comingSoon}</p>
 </section>

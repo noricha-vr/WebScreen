@@ -166,6 +166,10 @@
     "pinPinnedValue": "1 year",
     "pinLimit": "up to {count}",
     "pinBody": "A link you put in a world or on a poster will not stop working partway through.",
+    "webLink": "More about converting web pages",
+    "imageLink": "More about converting images",
+    "pdfLink": "More about converting PDFs",
+    "screenShareLink": "About screen sharing in VRChat",
     "comingSoon": "Screen recording and screen sharing are still on the way"
   },
   "useCases": {
