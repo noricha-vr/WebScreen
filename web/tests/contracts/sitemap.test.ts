@@ -43,9 +43,9 @@ function collectPublicPaths(dir: string, prefix = ''): string[] {
 
     const basename = entry.name.slice(0, -extension.length);
 
-    // ルート直下の index だけは言語振り分けの 302 なので載せない（/ja/ /en/ が実体）。
-    // 配下の ja/index・en/index は載せる対象なので、prefix で区別する。
-    if (prefix === '' && basename === 'index') continue;
+    // ルート直下のページはすべて言語振り分けの 302（index.astro / web.astro など）。
+    // 実体は /ja/xxx/ と /en/xxx/ の方なので載せない。配下の ja/*・en/* は載せる対象。
+    if (prefix === '') continue;
 
     // trailingSlash: 'always' なので、index はディレクトリ URL、それ以外は自身の名前。
     paths.push(`${SITE_ORIGIN}${prefix}${basename === 'index' ? '' : `/${basename}`}/`);
@@ -87,6 +87,38 @@ describe('sitemap.xml', () => {
     );
 
     expect([...alternates].sort()).toEqual(sitemapLocations().sort());
+  });
+
+  test('各ページの alternate が自分自身と対の言語を指す', () => {
+    // 集合として一致していても、/ja/web/ が /en/image/ を指すような取り違えは検出できない。
+    // url 要素ごとに、loc の言語部分を入れ替えた URL の組になっているかを見る。
+    const xml = readFileSync(SITEMAP_PATH, 'utf-8');
+    const entries = [...xml.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((match) => match[1]!);
+
+    expect(entries.length).toBeGreaterThan(0);
+
+    for (const entry of entries) {
+      const locMatch = /<loc>([^<]+)<\/loc>/.exec(entry);
+      expect(locMatch).not.toBeNull();
+      const loc = locMatch![1]!;
+
+      const alternates = Object.fromEntries(
+        [...entry.matchAll(/<xhtml:link[^>]+hreflang="([^"]+)"[^>]+href="([^"]+)"/g)].map((m) => [
+          m[1]!,
+          m[2]!,
+        ])
+      );
+
+      // 自分自身の言語と、もう一方の言語の 2 本が揃っていること。
+      expect(Object.keys(alternates).sort()).toEqual(['en', 'ja']);
+
+      const path = loc.slice(SITE_ORIGIN.length);
+      const lang = path.startsWith('/en/') ? 'en' : 'ja';
+      const other = lang === 'ja' ? 'en' : 'ja';
+
+      expect(alternates[lang]).toBe(loc);
+      expect(alternates[other]).toBe(`${SITE_ORIGIN}${path.replace(`/${lang}/`, `/${other}/`)}`);
+    }
   });
 });
 

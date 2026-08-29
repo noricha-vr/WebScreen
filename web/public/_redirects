@@ -17,18 +17,17 @@
 
 # --- 言語なし（router/main.py）---
 # 旧版は Accept-Language を見て /{lang}/xxx/ へ 301 していたが、_redirects は静的なので
-# 言語判定できない。ルート / へ送り、src/pages/index.astro の Accept-Language 判定に委ねる。
-# web / pdf / image は用途別ページがあるが、ここで /ja/web/ と書くと日本語に決め打ちになる。
-# 言語を誤るより 1 ホップ増える方がましなので、言語トップ経由のままにしている。
-# /record-screen/ は言語付きの対応 URL が無く、旧版でも /{lang}/recording/ へ寄せていた。
-/web/ / 301
-/pdf/ / 301
-/image/ / 301
+# 言語判定できない。用途別ページを持つ web / pdf / image / screen-share は、ここに転送行を
+# 書かず src/pages/{name}.astro（prerender: false）に任せる。そちらが Accept-Language を見て
+# /{lang}/{name}/ へ 302 する。ここで /ja/web/ と書くと日本語に決め打ちになるため。
+# 対応する単独ページが無い history / github だけ、ルート / 経由で言語トップへ送る。
+# /record-screen/ と /streaming/ /recording/ は用途がいちばん近い /screen-share/ へ寄せる
+# （旧版でも /record-screen/ は /{lang}/recording/ に寄せていた）。
 /history/ / 301
-/recording/ / 301
-/record-screen/ / 301
-/streaming/ / 301
 /github/ / 301
+/recording/ /screen-share/ 301
+/record-screen/ /screen-share/ 301
+/streaming/ /screen-share/ 301
 # 旧版は robots.txt を末尾スラッシュ付きで配信していた（router/main.py の @app.get("/robots.txt/")）。
 # クローラが旧 URL を保持しているため、正規の /robots.txt へ転送する。
 /robots.txt/ /robots.txt 301
