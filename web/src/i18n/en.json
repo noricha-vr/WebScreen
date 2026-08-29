@@ -14,6 +14,11 @@
     "bannerAlt": "WebScreen logo",
     "avatarAlt": "Account avatar"
   },
+  "notice": {
+    "heading": "WebScreen has been rebuilt",
+    "body": "We now ask you to sign in with Discord so that you can find your converted videos in your history. There is no password to create.",
+    "link": "See what changed"
+  },
   "hero": {
     "title": "Drag and drop a file, get a video URL for VRChat.",
     "lead": "Upload a PDF or image and WebScreen returns an MP4 URL that plays in VRChat video players.",
@@ -99,6 +104,7 @@
   },
   "footer": {
     "github": "GitHub",
+    "releases": "Release notes",
     "privacy": "Cookies and privacy",
     "langSwitch": "日本語",
     "note": "WebScreen β"
@@ -151,8 +157,15 @@
     "pdfBody": "Export PowerPoint or Google Slides as a PDF and convert it to video to run your presentation on a video player or a slide system.",
     "pdfMediaAlt": "A PDF being turned into a video",
     "historyHeading": "Check your history",
-    "historyBody": "Your history keeps the link to every video you converted. Videos are stored for 30 days, and the 10 videos you pin are kept for one year.",
+    "historyBody": "Your history keeps the link to every video you converted.",
     "historyMediaAlt": "The history of converted videos",
+    "pinHeading": "Keep the videos that matter for a year",
+    "pinNormalLabel": "Standard",
+    "pinNormalValue": "{days} days",
+    "pinPinnedLabel": "Pinned",
+    "pinPinnedValue": "1 year",
+    "pinLimit": "up to {count}",
+    "pinBody": "A link you put in a world or on a poster will not stop working partway through.",
     "comingSoon": "Screen recording and screen sharing are still on the way"
   }
 }

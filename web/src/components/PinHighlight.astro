@@ -1,0 +1,47 @@
+---
+import { useTranslations, type Locale } from '../i18n';
+import { MAX_PINNED_MOVIES, MOVIE_RETENTION_MS } from '../lib/services/quota';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// 保管期間と件数は quota.ts の定数が正本。文言側に数字を焼き付けない。
+const normalValue = t.lp.pinNormalValue.replace('{days}', String(MOVIE_RETENTION_MS / MS_PER_DAY));
+const pinLimit = t.lp.pinLimit.replace('{count}', String(MAX_PINNED_MOVIES));
+// ピン留め側の「1 年」は quota.ts の PINNED_RETENTION_MS（365 日）に対応する。
+---
+
+<article class="rounded-xl border border-slate-200 bg-slate-50 p-6 sm:p-8">
+  <h2
+    class="flex items-start justify-center gap-3 text-center text-2xl font-bold leading-snug tracking-tight text-slate-900"
+  >
+    <i class="fa-solid fa-thumbtack mt-1 text-brand-500" aria-hidden="true"></i>
+    <span>{t.lp.pinHeading}</span>
+  </h2>
+
+  <!-- 縦積みになるモバイルでは矢印も下向きにする（横向きのまま折り返すと流れが読めない）。 -->
+  <div class="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
+    <div class="text-center text-slate-500">
+      <p class="text-base">{t.lp.pinNormalLabel}</p>
+      <p class="mt-1 text-3xl font-semibold">{normalValue}</p>
+    </div>
+
+    <i
+      class="fa-solid fa-arrow-right rotate-90 text-xl text-slate-400 sm:rotate-0"
+      aria-hidden="true"></i>
+
+    <div class="text-center text-brand-700">
+      <p class="text-base font-semibold">{t.lp.pinPinnedLabel}</p>
+      <p class="mt-1 text-4xl font-bold">{t.lp.pinPinnedValue}</p>
+      <p class="mt-1 text-base text-slate-600">{pinLimit}</p>
+    </div>
+  </div>
+
+  <p class="mt-8 text-center text-base leading-relaxed text-slate-700">{t.lp.pinBody}</p>
+</article>
