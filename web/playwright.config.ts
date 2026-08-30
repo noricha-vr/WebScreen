@@ -41,6 +41,8 @@ const seedCommand = [
   `rm -rf ${STATE_DIR}`,
   'bun run build',
   `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=migrations/0001_init.sql`,
+  // migrations/ に追加したら必ずここにも足す（seed.sql と /api/health/ の cron が先に落ちる）。
+  `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=migrations/0002_cron_runs.sql`,
   `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=e2e/fixtures/seed.sql`,
   // ダウンロード経路は R2 の実体を読むため、seed した行に対応するオブジェクトも置く。
   `bunx wrangler r2 object put webscreen-beta/movies/${E2E_FIXTURES.readyShortId}.mp4 --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=e2e/fixtures/sample.mp4 --content-type=video/mp4`,

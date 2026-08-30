@@ -63,3 +63,14 @@ VALUES
     datetime('now', '-1 days'),
     strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+29 days')
   );
+
+-- 保持期間バッチの実行記録。e2e ではバッチが走らないので、直前に成功した状態を作って
+-- /api/health/ が stale: false を返すことを確認する（0002 の適用漏れもここで落ちる）。
+DELETE FROM cron_runs;
+
+INSERT INTO cron_runs (name, last_success_at, last_summary)
+VALUES (
+  'retention',
+  strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-13 minutes'),
+  '{"deletedMovies":0,"deletedCaptures":0}'
+);

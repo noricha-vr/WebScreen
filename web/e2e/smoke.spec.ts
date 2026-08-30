@@ -19,6 +19,18 @@ test('英語トップページが表示される', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 });
 
+test('health が保持期間バッチの鮮度を返す', async ({ request }) => {
+  // Cloudflare のダッシュボードを見に行かなくても、バッチが動いているかを外から確認できること。
+  // stale まで見るのは、migration の適用漏れ（cron が読めず error になる）を検出するため。
+  const response = await request.get('/api/health/');
+  const body = await response.json();
+
+  expect(body.status).toBe('ok');
+  expect(body.cron.stale).toBe(false);
+  expect(typeof body.cron.lastSuccessAt).toBe('string');
+  expect(body.cron.ageSeconds).toBeGreaterThanOrEqual(0);
+});
+
 test.describe('cross-origin isolation', () => {
   // 静的アセット（public/_headers）と Worker レスポンス（middleware）は
   // ヘッダーの供給元が別なので、両方を確認しないと片方の欠落に気づけない。
