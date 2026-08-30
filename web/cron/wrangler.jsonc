@@ -1,7 +1,7 @@
 {
   // 保持期間バッチ専用の独立 Worker。Astro のビルドを通さない素の TS で、
   // wrangler が esbuild して単体デプロイする:
-  //   bunx wrangler deploy -c web/cron/wrangler.jsonc
+  //   bunx wrangler deploy -c cron/wrangler.jsonc
   // 本体（webscreen-beta）と分けるのは、cron の失敗・実行時間が
   // リクエスト処理側の可観測性に混ざらないようにするため。
   "$schema": "../node_modules/wrangler/config-schema.json",

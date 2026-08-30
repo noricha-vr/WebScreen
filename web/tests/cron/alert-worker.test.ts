@@ -33,7 +33,8 @@ class FakeCronRunsDatabase implements CronRunDatabase {
           return { results: row === undefined ? [] : ([row] as T[]) };
         },
         run: async (): Promise<{ meta: { changes: number } }> => {
-          if (!query.includes('INSERT INTO cron_runs')) throw new Error(`unexpected: ${query}`);
+          // cron_runs 以外（保持期間バッチの UPDATE / DELETE）は「対象 0 件」で素通しする。
+          if (!query.includes('INSERT INTO cron_runs')) return { meta: { changes: 0 } };
           this.rows.set(values[0] as string, {
             last_success_at: values[1] as string,
             last_summary: values[2] as string | null,
@@ -46,7 +47,10 @@ class FakeCronRunsDatabase implements CronRunDatabase {
 }
 
 interface ScheduledRun {
-  logs: { level: 'log' | 'warn' | 'error'; entry: { severity: string; summary: string } }[];
+  logs: {
+    level: 'log' | 'warn' | 'error';
+    entry: { severity: string; summary: string; cron: string };
+  }[];
   posts: { url: string; content: string }[];
 }
 
@@ -74,10 +78,17 @@ async function runScheduled(
     return new Response(null, { status: 204 });
   }) as typeof globalThis.fetch;
 
+  // 掃除対象が無い R2（fail-open で retention 側へ落ちる分岐でも動くようにする）。
+  const bucket = {
+    head: async () => null,
+    delete: async () => {},
+    list: async () => ({ objects: [], truncated: false }),
+  };
+
   try {
     await worker.scheduled({ scheduledTime: SCHEDULED_TIME, cron }, {
       DB: database,
-      BUCKET: {} as never,
+      BUCKET: bucket,
       DISCORD_ALERT_WEBHOOK_URL: env.webhookUrl,
     } as never);
   } finally {
@@ -161,15 +172,30 @@ describe('監視 cron（47 分）', () => {
   });
 });
 
-describe('未知の cron 式', () => {
-  test('どちらのハンドラも呼ばず error を残す', async () => {
+describe('cron 式の振り分け', () => {
+  test('空白がゆれていても監視 cron として扱う', async () => {
+    const database = new FakeCronRunsDatabase({
+      [RETENTION_RUN_NAME]: {
+        last_success_at: new Date(SCHEDULED_TIME - 3 * HOUR_MS).toISOString(),
+        last_summary: '{}',
+      },
+    });
+
+    const run = await runScheduled('  47   *  *  *  * ', database);
+
+    expect(run.posts).toHaveLength(1);
+    expect(run.logs[0]!.entry.cron).toBe('47 * * * *');
+  });
+
+  test('未知の式は error を残しつつ保持期間バッチを実行する（掃除を止めない）', async () => {
     const database = new FakeCronRunsDatabase();
 
     const run = await runScheduled('0 3 * * *', database);
 
     expect(run.posts).toHaveLength(0);
-    expect(database.rows.size).toBe(0);
     expect(run.logs[0]!.level).toBe('error');
     expect(run.logs[0]!.entry.summary).toContain('No handler is registered');
+    // fail-open: 掃除は走り、実行記録も残る。
+    expect(database.rows.has(RETENTION_RUN_NAME)).toBe(true);
   });
 });

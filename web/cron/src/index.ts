@@ -41,41 +41,51 @@ const SOURCE = 'webscreen-beta-cron';
 
 /**
  * 受け付けるスケジュール式。web/cron/wrangler.jsonc の triggers.crons と一致させること
- * （wrangler の設定と TS で二重化は避けられないため、片方だけ変えると下の default に落ちる）。
- *
- * 両方を明示マッチさせ、知らない式は error にする。「alert 以外は retention」と書くと、
- * 式を変えた時に監視側が黙って動かなくなり、dead-man's switch 自身が静かに死ぬ。
+ * （wrangler の設定と TS で二重化は避けられないため）。
  */
 const RETENTION_CRON = '17 * * * *';
 const ALERT_CRON = '47 * * * *';
 
+/**
+ * 式の表記ゆれ（前後の空白・フィールド間の連続空白）を吸収する。workerd が渡す文字列は
+ * 設定の書き方に依存するので、素の === だけで振り分けると空白 1 つで分岐が変わる。
+ */
+function normalizeCron(expression: string): string {
+  return expression.trim().replace(/\s+/g, ' ');
+}
+
 export default {
   async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
-    if (event.cron === ALERT_CRON) {
-      await runAlertCron(env, event.scheduledTime, event.cron);
-      return;
-    }
-    if (event.cron === RETENTION_CRON) {
-      await runRetentionCron(env, event);
+    const cron = normalizeCron(event.cron);
+
+    // 監視だけを厳密一致にする。残りは retention へ倒す（fail-open）。式を変えた時に
+    // 掃除が止まる方が、監視が 1 回鳴らないより高くつくため。知らない式は error に出して
+    // 気づけるようにする（黙って握り潰さない）。
+    if (cron === ALERT_CRON) {
+      await runAlertCron(env, event.scheduledTime, cron);
       return;
     }
 
-    console.error(
-      JSON.stringify({
-        timestamp: new Date(event.scheduledTime).toISOString(),
-        source: SOURCE,
-        severity: 'error',
-        kind: 'event',
-        cron: event.cron,
-        event: 'cron_trigger_unknown',
-        summary: 'No handler is registered for this cron expression.',
-      })
-    );
+    if (cron !== RETENTION_CRON) {
+      console.error(
+        JSON.stringify({
+          timestamp: new Date(event.scheduledTime).toISOString(),
+          source: SOURCE,
+          severity: 'error',
+          kind: 'event',
+          cron,
+          event: 'cron_trigger_unknown',
+          summary:
+            'No handler is registered for this cron expression; running retention as a fallback.',
+        })
+      );
+    }
+    await runRetentionCron(env, event, cron);
   },
 };
 
 /** 保持期間バッチ本体。成功したら実行記録を残し、件数を 1 行 JSON で出す。 */
-async function runRetentionCron(env: Env, event: ScheduledEvent): Promise<void> {
+async function runRetentionCron(env: Env, event: ScheduledEvent, cron: string): Promise<void> {
   // Date.now を呼んでよいのはこの層だけ。サービスへは値として渡す。
   const startedAt = Date.now();
 
@@ -125,7 +135,7 @@ async function runRetentionCron(env: Env, event: ScheduledEvent): Promise<void> 
         source: SOURCE,
         severity,
         kind: 'event',
-        cron: event.cron,
+        cron,
         summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures; audited ${summary.checkedReadyRows} ready rows (${summary.missingObjectRows} missing objects).${deferred}${capped}${skipped}${auditErrors}`,
         detail: summary,
         durationMs: Date.now() - startedAt,
@@ -138,7 +148,7 @@ async function runRetentionCron(env: Env, event: ScheduledEvent): Promise<void> 
         source: SOURCE,
         severity: 'error',
         kind: 'event',
-        cron: event.cron,
+        cron,
         summary: 'retention run failed.',
         error_message: error instanceof Error ? error.message : String(error),
         stack_trace: error instanceof Error ? error.stack : undefined,
