@@ -38,6 +38,16 @@ export const MAX_CAPTURE_DELETIONS_PER_RUN = 1000;
  */
 export const CAPTURE_KEY_PREFIX = 'captures/';
 
+/**
+ * 1 回の実行で処理する movies の行数の上限（pending の回収と failed の掃除で共通）。
+ * failed は容量計算の対象外なので行数は利用者側から無制限に増やせる。上限を置かないと
+ * D1 のクエリ数と Workers の subrequest を使い切って実行ごと落ちる。残りは次回が拾う。
+ */
+export const MAX_MOVIE_DELETIONS_PER_RUN = 500;
+
+/** 1 文の DELETE に載せる short_id の数。D1 のバインド変数の上限（100）に収める。 */
+const MAX_IDS_PER_DELETE = 50;
+
 /** D1 の最小操作面。バッチが必要とするのは all / run だけ。 */
 export interface RetentionDatabase {
   prepare(query: string): {
@@ -77,6 +87,8 @@ export interface RetentionSummary {
   deletedFailed: number;
   /** R2 の削除に失敗して次回の実行へ持ち越した件数。行は残るので取り残しにはならない。 */
   deferredObjectDeletions: number;
+  /** movies の掃除が 1 回の上限に達して打ち切ったか。true なら残りは次回の実行が拾う。 */
+  sweepCapped: boolean;
   deletedCaptures: number;
 }
 
@@ -103,7 +115,7 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   // 掃除より先に走らせる。期限を入れた直後の行は 1 年先なので同じ実行では消えない。
   const backfilledPinned = await backfillPinnedExpiry(database, now);
   const expired = await deleteExpiredMovies(database, bucket, now);
-  const deletedOrphans = await deletePendingOrphans(database, bucket, now);
+  const orphans = await deletePendingOrphans(database, bucket, now);
   // 孤児の確保で R2 の削除に失敗した行も failed として残っているため、同じ実行の
   // ここで拾い直せる（猶予はどちらも 24 時間）。取りこぼしても次回の実行が同じ条件で拾う。
   const failed = await deleteFailedMovies(database, bucket, now);
@@ -112,9 +124,10 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
     backfilledPinned,
     deletedMovies: expired.deleted,
     strandedMovies: expired.stranded,
-    deletedOrphans,
+    deletedOrphans: orphans.deleted,
     deletedFailed: failed.deleted,
     deferredObjectDeletions: failed.deferred,
+    sweepCapped: orphans.capped || failed.capped,
     deletedCaptures: await deleteStaleCaptures(bucket, now),
   };
 }
@@ -222,13 +235,13 @@ async function deletePendingOrphans(
   database: RetentionDatabase,
   bucket: RetentionBucket,
   now: Date
-): Promise<number> {
+): Promise<{ deleted: number; capped: boolean }> {
   const threshold = new Date(now.getTime() - PENDING_ORPHAN_GRACE_MS).toISOString();
   const { results } = await database
     .prepare(
-      "SELECT short_id FROM movies WHERE status = 'pending' AND datetime(created_at) < datetime(?)"
+      "SELECT short_id FROM movies WHERE status = 'pending' AND datetime(created_at) < datetime(?) LIMIT ?"
     )
-    .bind(threshold)
+    .bind(threshold, MAX_MOVIE_DELETIONS_PER_RUN)
     .all<ShortIdRow>();
 
   let deleted = 0;
@@ -252,7 +265,7 @@ async function deletePendingOrphans(
     deleted += result.meta.changes;
   }
 
-  return deleted;
+  return { deleted, capped: results.length === MAX_MOVIE_DELETIONS_PER_RUN };
 }
 
 /**
@@ -275,38 +288,46 @@ async function deleteMovieObject(bucket: RetentionBucket, shortId: string): Prom
  * 一定期間を過ぎた failed 行を削除する。
  *
  * 通常の failed（commit の上限超過）は実体が削除済みだが、pending の確保で R2 の削除に
- * 失敗した行もここへ来る。存在しないキーの delete は成功するので、どちらも同じ
- * 「R2 → D1」の順序で扱える。R2 が落ちている行だけ次回へ持ち越す。
+ * 失敗した行もここへ来る。存在しないキーの delete は成功するので head で確認せず、
+ * まとめて delete してから行を消す（R2 → D1 の順は維持する）。R2 が落ちていれば
+ * 行を残したまま次回へ持ち越す。
  */
 async function deleteFailedMovies(
   database: RetentionDatabase,
   bucket: RetentionBucket,
   now: Date
-): Promise<{ deleted: number; deferred: number }> {
+): Promise<{ deleted: number; deferred: number; capped: boolean }> {
   const threshold = new Date(now.getTime() - FAILED_RETENTION_MS).toISOString();
   const { results } = await database
     .prepare(
-      "SELECT short_id FROM movies WHERE status = 'failed' AND datetime(created_at) < datetime(?)"
+      "SELECT short_id FROM movies WHERE status = 'failed' AND datetime(created_at) < datetime(?) LIMIT ?"
     )
-    .bind(threshold)
+    .bind(threshold, MAX_MOVIE_DELETIONS_PER_RUN)
     .all<ShortIdRow>();
 
-  let deleted = 0;
-  let deferred = 0;
-  for (const row of results) {
-    if (!(await deleteMovieObject(bucket, row.short_id))) {
-      deferred += 1;
-      continue;
-    }
+  const capped = results.length === MAX_MOVIE_DELETIONS_PER_RUN;
+  if (results.length === 0) return { deleted: 0, deferred: 0, capped };
 
+  const shortIds = results.map((row) => row.short_id);
+  try {
+    await bucket.delete(shortIds.map(movieKey));
+  } catch {
+    // R2 が落ちている間に行だけ消すと実体が孤児になるため、この実行では行を残す。
+    return { deleted: 0, deferred: shortIds.length, capped };
+  }
+
+  let deleted = 0;
+  for (let index = 0; index < shortIds.length; index += MAX_IDS_PER_DELETE) {
+    const chunk = shortIds.slice(index, index + MAX_IDS_PER_DELETE);
+    const placeholders = chunk.map(() => '?').join(', ');
     const result = await database
-      .prepare("DELETE FROM movies WHERE short_id = ? AND status = 'failed'")
-      .bind(row.short_id)
+      .prepare(`DELETE FROM movies WHERE status = 'failed' AND short_id IN (${placeholders})`)
+      .bind(...chunk)
       .run();
     deleted += result.meta.changes;
   }
 
-  return { deleted, deferred };
+  return { deleted, deferred: 0, capped };
 }
 
 /**

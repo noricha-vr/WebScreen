@@ -44,13 +44,18 @@ export default {
       // error は回収不能な異常だけに使う。実体だけ消えた行（stranded）は壊れた URL が
       // 残り続けるので error、R2 の削除失敗（deferred）は行が残っていて次回に回収できるので warn。
       const severity =
-        summary.strandedMovies > 0 ? 'error' : summary.deferredObjectDeletions > 0 ? 'warn' : 'info';
+        summary.strandedMovies > 0
+          ? 'error'
+          : summary.deferredObjectDeletions > 0 || summary.sweepCapped
+            ? 'warn'
+            : 'info';
       const log =
         severity === 'error' ? console.error : severity === 'warn' ? console.warn : console.log;
       const deferred =
         summary.deferredObjectDeletions > 0
           ? ` ${summary.deferredObjectDeletions} object deletions deferred to the next run.`
           : '';
+      const capped = summary.sweepCapped ? ' Movie sweep hit the per-run cap; the rest waits for the next run.' : '';
 
       log(
         JSON.stringify({
@@ -59,7 +64,7 @@ export default {
           severity,
           kind: 'event',
           cron: event.cron,
-          summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures.${deferred}`,
+          summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures.${deferred}${capped}`,
           detail: summary,
           durationMs: Date.now() - startedAt,
         })

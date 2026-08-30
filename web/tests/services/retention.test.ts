@@ -4,6 +4,7 @@ import { captureKey, movieKey } from '../../src/lib/contracts/r2key';
 import {
   CAPTURE_KEY_PREFIX,
   MAX_CAPTURE_DELETIONS_PER_RUN,
+  MAX_MOVIE_DELETIONS_PER_RUN,
   runRetention,
   type RetentionBucket,
   type RetentionDatabase,
@@ -75,11 +76,12 @@ class FakeRetentionDatabase implements RetentionDatabase {
     }
 
     const threshold = parseSqliteTime(values[0] as string);
-    const rows = [...this.movies.values()].filter((movie) => {
+    const matched = [...this.movies.values()].filter((movie) => {
       if (query.includes("status = 'ready'")) return movie.status === 'ready' && isExpired(movie, threshold);
       const status = query.includes("status = 'failed'") ? 'failed' : 'pending';
       return movie.status === status && parseSqliteTime(movie.createdAt) < threshold;
     });
+    const rows = query.includes('LIMIT ?') ? matched.slice(0, values[1] as number) : matched;
     this.onSelect?.(rows);
     return rows.map((movie) => ({ short_id: movie.shortId }));
   }
@@ -101,6 +103,15 @@ class FakeRetentionDatabase implements RetentionDatabase {
       if (parseSqliteTime(target.createdAt) >= parseSqliteTime(values[1] as string)) return 0;
       target.status = 'failed';
       return 1;
+    }
+
+    // failed のまとめ削除（DELETE ... short_id IN (?, ...)）。
+    if (query.includes('short_id IN (')) {
+      const targets = (values as string[]).filter(
+        (shortId) => this.movies.get(shortId)?.status === 'failed'
+      );
+      for (const shortId of targets) this.movies.delete(shortId);
+      return targets.length;
     }
 
     const movie = this.movies.get(values[0] as string);
@@ -358,6 +369,27 @@ describe('runRetention: pending 孤児と failed', () => {
     expect(database.movies.has('oldFailedAAA')).toBe(false);
     expect(database.movies.has('newFailedAAA')).toBe(true);
   });
+
+  it('上限を超える failed 行は上限分だけ処理し、残りは次回へ持ち越す', async () => {
+    const overflow = 2;
+    const database = new FakeRetentionDatabase(
+      Array.from({ length: MAX_MOVIE_DELETIONS_PER_RUN + overflow }, (_, index) =>
+        movie({
+          shortId: `failed${String(index).padStart(6, '0')}`,
+          status: 'failed',
+          createdAt: iso(-2 * DAY_MS),
+        })
+      )
+    );
+    const bucket = new FakeRetentionBucket();
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedFailed).toBe(MAX_MOVIE_DELETIONS_PER_RUN);
+    expect(summary.sweepCapped).toBe(true);
+    expect(bucket.deleted).toHaveLength(MAX_MOVIE_DELETIONS_PER_RUN);
+    expect(database.movies.size).toBe(overflow);
+  });
 });
 
 describe('runRetention: captures', () => {
@@ -432,6 +464,7 @@ describe('runRetention: サマリ', () => {
       deletedOrphans: 1,
       deletedFailed: 1,
       deferredObjectDeletions: 0,
+      sweepCapped: false,
       deletedCaptures: 1,
     });
     expect(database.movies.size).toBe(0);
