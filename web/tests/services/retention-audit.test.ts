@@ -38,10 +38,18 @@ class FakeAuditDatabase implements AuditDatabase {
   }
 
   private select(query: string, values: unknown[]): { short_id: string }[] {
-    const ready = this.rows.filter((row) => row.status === 'ready');
-    if (query.includes('ORDER BY RANDOM()')) {
-      return ready.slice(0, values[0] as number).map((row) => ({ short_id: row.shortId }));
+    const ready = this.rows
+      .filter((row) => row.status === 'ready')
+      .sort((left, right) => (left.shortId < right.shortId ? -1 : 1));
+
+    // 開始点からの範囲走査（監査のサンプル抽出）。
+    if (query.includes('short_id >= ?')) {
+      return ready
+        .filter((row) => row.shortId >= (values[0] as string))
+        .slice(0, values[1] as number)
+        .map((row) => ({ short_id: row.shortId }));
     }
+
     return ready
       .filter((row) => row.shortId === (values[0] as string))
       .map((row) => ({ short_id: row.shortId }));
@@ -66,6 +74,9 @@ class FakeAuditBucket implements AuditBucket {
   }
 }
 
+/** 先頭から走査させる開始点（ランダム開始では対象行が範囲外になり得るため固定する）。 */
+const FROM_HEAD = () => '';
+
 function readyRow(shortId: string): TestRow {
   return { shortId, status: 'ready' };
 }
@@ -75,11 +86,11 @@ describe('auditReadyObjects', () => {
     const database = new FakeAuditDatabase([readyRow('strandedAAAA'), readyRow('healthyAAAAA')]);
     const bucket = new FakeAuditBucket(new Set([movieKey('healthyAAAAA')]));
 
-    const audit = await auditReadyObjects(database, bucket);
+    const audit = await auditReadyObjects(database, bucket, FROM_HEAD);
 
-    expect(audit).toEqual({ checkedReadyRows: 2, missingObjectRows: 1, skippedRows: 0 });
+    expect(audit).toEqual({ checkedReadyRows: 2, missingObjectRows: 1, auditErrors: 0 });
     // 検出だけを行う。行が残っていることは次の実行でも同じ結果になることで確かめる。
-    expect(await auditReadyObjects(database, bucket)).toMatchObject({ missingObjectRows: 1 });
+    expect(await auditReadyObjects(database, bucket, FROM_HEAD)).toMatchObject({ missingObjectRows: 1 });
   });
 
   it('所有者の削除の途中（R2 だけ消えた瞬間）は不整合に数えない', async () => {
@@ -87,19 +98,19 @@ describe('auditReadyObjects', () => {
     // head の後に行が消える = deleteMovie が R2 → D1 の順で進んでいる最中。
     const bucket = new FakeAuditBucket(new Set(), () => database.removeRow('deletingAAAA'));
 
-    const audit = await auditReadyObjects(database, bucket);
+    const audit = await auditReadyObjects(database, bucket, FROM_HEAD);
 
-    expect(audit).toEqual({ checkedReadyRows: 1, missingObjectRows: 0, skippedRows: 0 });
+    expect(audit).toEqual({ checkedReadyRows: 1, missingObjectRows: 0, auditErrors: 0 });
   });
 
-  it('R2 の一時失敗は実体なしと読まず、skipped として次回に委ねる', async () => {
+  it('R2 の一時失敗は実体なしと読まず、auditErrors として数える', async () => {
     const database = new FakeAuditDatabase([readyRow('unreachableA'), readyRow('healthyAAAAA')]);
     const bucket = new FakeAuditBucket(new Set([movieKey('healthyAAAAA')]));
     bucket.failingKeys.add(movieKey('unreachableA'));
 
-    const audit = await auditReadyObjects(database, bucket);
+    const audit = await auditReadyObjects(database, bucket, FROM_HEAD);
 
-    expect(audit).toEqual({ checkedReadyRows: 1, missingObjectRows: 0, skippedRows: 1 });
+    expect(audit).toEqual({ checkedReadyRows: 1, missingObjectRows: 0, auditErrors: 1 });
   });
 
   it('1 回の実行で確認する行数は上限で打ち切る', async () => {
@@ -109,10 +120,21 @@ describe('auditReadyObjects', () => {
     const database = new FakeAuditDatabase(rows);
     const bucket = new FakeAuditBucket(new Set(rows.map((row) => movieKey(row.shortId))));
 
-    const audit = await auditReadyObjects(database, bucket);
+    const audit = await auditReadyObjects(database, bucket, FROM_HEAD);
 
     expect(audit.checkedReadyRows).toBe(MAX_OBJECT_CHECKS_PER_RUN);
     expect(bucket.checkedKeys).toHaveLength(MAX_OBJECT_CHECKS_PER_RUN);
+  });
+
+  it('開始点が末尾より後ろでも、先頭へ回り込んで確認する', async () => {
+    const database = new FakeAuditDatabase([readyRow('aaaaaaaaaaaa')]);
+    const bucket = new FakeAuditBucket(new Set([movieKey('aaaaaaaaaaaa')]));
+
+    // すべての short_id より後ろの開始点を引いた実行（1 回目の走査は 0 件になる）。
+    const audit = await auditReadyObjects(database, bucket, () => 'zzzzzzzzzzzz');
+
+    expect(audit.checkedReadyRows).toBe(1);
+    expect(bucket.checkedKeys).toEqual([movieKey('aaaaaaaaaaaa')]);
   });
 
   it('ready 以外の行は見ない（pending と failed は掃除の担当）', async () => {
@@ -122,9 +144,9 @@ describe('auditReadyObjects', () => {
     ]);
     const bucket = new FakeAuditBucket(new Set());
 
-    const audit = await auditReadyObjects(database, bucket);
+    const audit = await auditReadyObjects(database, bucket, FROM_HEAD);
 
-    expect(audit).toEqual({ checkedReadyRows: 0, missingObjectRows: 0, skippedRows: 0 });
+    expect(audit).toEqual({ checkedReadyRows: 0, missingObjectRows: 0, auditErrors: 0 });
     expect(bucket.checkedKeys).toEqual([]);
   });
 });

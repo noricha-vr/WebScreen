@@ -30,8 +30,11 @@ class FakeCronDatabase implements RetentionDatabase {
   }
 
   private select(query: string, values: unknown[]): { short_id: string }[] {
-    if (query.includes('ORDER BY RANDOM()')) {
-      return this.readyRows.map((shortId) => ({ short_id: shortId }));
+    // 監査のサンプル抽出（開始点以降を LIMIT 件。0 件なら監査側が先頭から引き直す）。
+    if (query.includes('short_id >= ?')) {
+      return this.readyRows
+        .filter((shortId) => shortId >= (values[0] as string))
+        .map((shortId) => ({ short_id: shortId }));
     }
     // 監査の再確認（行がまだ ready で残っているか）。
     if (query.includes('WHERE short_id = ?') && query.includes("status = 'ready'")) {
@@ -45,7 +48,10 @@ class FakeCronDatabase implements RetentionDatabase {
 
 /** 実体を 1 つも持たない R2 のフェイク（監査が「実体なし」を見つける）。 */
 class FakeCronBucket implements RetentionBucket {
+  constructor(private readonly failHead = false) {}
+
   async head(): Promise<{ size: number } | null> {
+    if (this.failHead) throw new Error('R2 unavailable');
     return null;
   }
 
@@ -59,12 +65,18 @@ class FakeCronBucket implements RetentionBucket {
 interface CronLogEntry {
   severity: string;
   summary: string;
-  detail: { missingObjectRows: number; checkedReadyRows: number; skippedRows: number };
+  detail: {
+    missingObjectRows: number;
+    checkedReadyRows: number;
+    skippedRows: number;
+    auditErrors: number;
+  };
 }
 
 /** scheduled() が出した 1 行 JSON を、出力先（log / warn / error）と一緒に取る。 */
 async function runScheduled(
-  database: RetentionDatabase
+  database: RetentionDatabase,
+  bucket: RetentionBucket = new FakeCronBucket()
 ): Promise<{ level: 'log' | 'warn' | 'error'; entry: CronLogEntry }> {
   const original = { log: console.log, warn: console.warn, error: console.error };
   let captured: { level: 'log' | 'warn' | 'error'; entry: CronLogEntry } | undefined;
@@ -80,7 +92,7 @@ async function runScheduled(
   try {
     await worker.scheduled(
       { scheduledTime: SCHEDULED_TIME, cron: '0 * * * *' },
-      { DB: database, BUCKET: new FakeCronBucket() }
+      { DB: database, BUCKET: bucket }
     );
   } finally {
     console.log = original.log;
@@ -100,6 +112,18 @@ describe('保持期間バッチの cron ログ', () => {
     expect(entry.severity).toBe('error');
     expect(entry.summary).toContain('audited 1 ready rows (1 missing objects)');
     expect(entry.detail.missingObjectRows).toBe(1);
+  });
+
+  it('監査の head が失敗したら warn で記録し、実体なしとは数えない', async () => {
+    const { level, entry } = await runScheduled(
+      new FakeCronDatabase(['unreachableA']),
+      new FakeCronBucket(true)
+    );
+
+    expect(level).toBe('warn');
+    expect(entry.detail.auditErrors).toBe(1);
+    expect(entry.detail.missingObjectRows).toBe(0);
+    expect(entry.summary).toContain('1 audit checks failed');
   });
 
   it('不整合が無ければ info で、確認した件数だけを summary に出す', async () => {

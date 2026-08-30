@@ -30,11 +30,20 @@ const PENDING_ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
 const FAILED_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /**
- * 1 回の実行で確保する pending の行数の上限。1 行あたり最大 4 subrequest
- * （確保 UPDATE / head / delete / DELETE）を使うため、4 × 200 = 800 で Workers の
- * 上限（1000）に収まる値にしている。残りは次回の実行が拾う。
+ * 1 回の実行で処理する期限切れ動画の行数の上限。1 行あたり最大 4 subrequest
+ * （再確認 SELECT / delete / DELETE / 残存確認 SELECT）。残りは次回の実行が拾う。
  */
-export const MAX_PENDING_CLAIMS_PER_RUN = 200;
+export const MAX_EXPIRED_DELETIONS_PER_RUN = 50;
+
+/**
+ * 1 回の実行で確保する pending の行数の上限。1 行あたり最大 4 subrequest
+ * （確保 UPDATE / head / delete / DELETE）を使う。残りは次回の実行が拾う。
+ *
+ * 各フェーズの最悪ケースの合計を Workers の上限（1 回の実行で 1000 subrequest）より
+ * 下に保つ: 期限切れ 50 × 4 = 200、pending 150 × 4 = 600、failed は 1 + 10 = 11、
+ * captures は 10 ページ × 2 = 20、監査は 2 + 50 + 50 = 102。合計 933。
+ */
+export const MAX_PENDING_CLAIMS_PER_RUN = 150;
 
 /**
  * 1 回の実行で削除する failed の行数の上限。failed は容量計算の対象外なので行数は
@@ -76,13 +85,15 @@ export interface RetentionSummary {
    * 恒久的に失敗するキーを黙って毎時 retry し続けないよう、件数だけは必ず出す。
    */
   skippedRows: number;
-  /** movies の掃除が 1 回の上限に達して打ち切ったか。true なら残りは次回の実行が拾う。 */
+  /** どこかの掃除が 1 回の上限に達して打ち切ったか。true なら残りは次回の実行が拾う。 */
   sweepCapped: boolean;
   deletedCaptures: number;
   /** 実体の有無を確かめた ready 行のサンプル数（services/retention-audit.ts）。 */
   checkedReadyRows: number;
   /** R2 に実体が無い ready 行の検出数。検出のみで、削除は行わない。 */
   missingObjectRows: number;
+  /** 監査の head が失敗した件数。0 以外は監査自体が機能していない印。 */
+  auditErrors: number;
 }
 
 export interface RetentionInput {
@@ -112,7 +123,7 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   // 孤児の確保で R2 の削除に失敗した行も failed として残っているため、同じ実行の
   // ここで拾い直せる（猶予はどちらも 24 時間）。取りこぼしても次回の実行が同じ条件で拾う。
   const failed = await deleteFailedMovies(database, bucket, now);
-  const deletedCaptures = await deleteStaleCaptures(bucket, now);
+  const captures = await deleteStaleCaptures(bucket, now);
   // 掃除の後に見る（この実行で消した行を実体なしと数えないため）。何も削除しない。
   const audit = await auditReadyObjects(database, bucket);
 
@@ -125,11 +136,12 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
     // 孤児の確保で R2 の削除に失敗した行は failed として残り、同じ実行の failed の
     // 掃除が数え直す。ここで足すと 1 行を 2 回数えることになるので足さない。
     deferredObjectDeletions: expired.deferred + failed.deferred,
-    skippedRows: expired.skipped + orphans.skipped + audit.skippedRows,
-    sweepCapped: orphans.capped || failed.capped,
-    deletedCaptures,
+    skippedRows: expired.skipped + orphans.skipped,
+    sweepCapped: expired.capped || orphans.capped || failed.capped || captures.capped,
+    deletedCaptures: captures.deleted,
     checkedReadyRows: audit.checkedReadyRows,
     missingObjectRows: audit.missingObjectRows,
+    auditErrors: audit.auditErrors,
   };
 }
 
@@ -169,13 +181,19 @@ async function deleteExpiredMovies(
   database: RetentionDatabase,
   bucket: RetentionBucket,
   now: Date
-): Promise<{ deleted: number; stranded: number; skipped: number; deferred: number }> {
+): Promise<{
+  deleted: number;
+  stranded: number;
+  skipped: number;
+  deferred: number;
+  capped: boolean;
+}> {
   const threshold = now.toISOString();
   const { results } = await database
     .prepare(
-      "SELECT short_id FROM movies WHERE status = 'ready' AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?)"
+      "SELECT short_id FROM movies WHERE status = 'ready' AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?) LIMIT ?"
     )
-    .bind(threshold)
+    .bind(threshold, MAX_EXPIRED_DELETIONS_PER_RUN)
     .all<ShortIdRow>();
 
   let deleted = 0;
@@ -226,7 +244,13 @@ async function deleteExpiredMovies(
     }
   }
 
-  return { deleted, stranded, skipped, deferred };
+  return {
+    deleted,
+    stranded,
+    skipped,
+    deferred,
+    capped: results.length === MAX_EXPIRED_DELETIONS_PER_RUN,
+  };
 }
 
 /**

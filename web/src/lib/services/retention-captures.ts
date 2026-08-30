@@ -40,36 +40,50 @@ export const MAX_CAPTURE_DELETIONS_PER_RUN = 1000;
 export const CAPTURE_KEY_PREFIX = 'captures/';
 
 /**
+ * 1 回の実行で辿る list のページ数の上限。list はページ数だけ subrequest を使うため、
+ * 削除対象が無くても走査が伸び続けないように打ち切る。残りは次回の実行が拾う。
+ */
+export const MAX_CAPTURE_LIST_PAGES_PER_RUN = 10;
+
+/**
  * captures/ 配下の古い中間生成物を削除する。
  *
- * list は 1 ページずつ辿り、削除は上限に達した時点で打ち切る。残りは次回の
- * 実行が同じ条件で拾うため、取りこぼしにはならない。
+ * list のページ数と削除件数の両方に上限があり、どちらかに達したら打ち切って
+ * capped を返す。残りは次回の実行が同じ条件で拾うため、取りこぼしにはならない。
  */
-export async function deleteStaleCaptures(bucket: CaptureBucket, now: Date): Promise<number> {
+export async function deleteStaleCaptures(
+  bucket: CaptureBucket,
+  now: Date
+): Promise<{ deleted: number; capped: boolean }> {
   const threshold = now.getTime() - CAPTURE_RETENTION_MS;
   let cursor: string | undefined;
   let deleted = 0;
+  let pages = 0;
+  let hasMore = false;
 
-  while (deleted < MAX_CAPTURE_DELETIONS_PER_RUN) {
+  while (deleted < MAX_CAPTURE_DELETIONS_PER_RUN && pages < MAX_CAPTURE_LIST_PAGES_PER_RUN) {
     const page: CaptureListResult = await bucket.list(
       cursor === undefined
         ? { prefix: CAPTURE_KEY_PREFIX }
         : { prefix: CAPTURE_KEY_PREFIX, cursor }
     );
+    pages += 1;
 
-    const stale = page.objects
+    const matched = page.objects
       .filter((object) => object.uploaded.getTime() < threshold)
-      .map((object) => object.key)
-      .slice(0, MAX_CAPTURE_DELETIONS_PER_RUN - deleted);
+      .map((object) => object.key);
+    const stale = matched.slice(0, MAX_CAPTURE_DELETIONS_PER_RUN - deleted);
 
     if (stale.length > 0) {
       await bucket.delete(stale);
       deleted += stale.length;
     }
 
+    // このページで消し切れなかった分と、次ページの有無の両方が「続きあり」。
+    hasMore = stale.length < matched.length || (page.truncated && page.cursor !== undefined);
     if (!page.truncated || page.cursor === undefined) break;
     cursor = page.cursor;
   }
 
-  return deleted;
+  return { deleted, capped: hasMore };
 }
