@@ -13,6 +13,7 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode, estimatedImages
     tooLarge: panel.dataset['msgTooLarge'],
     unsupported: panel.dataset['msgUnsupported'],
     tooManyPages: panel.dataset['msgTooManyPages'],
+    // pageTooLong は上の早期 return が組み立てるのでここは使わない（網羅性のために残す）。
     pageTooLong: panel.dataset['msgPageTooLong'],
     captureTimeout: panel.dataset['msgCaptureTimeout'],
     sessionExpired: panel.dataset['msgSessionExpired'],
@@ -37,12 +38,14 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode, estimatedImages
  * 出る文が分かる方が翻訳しやすい）。
  */
 function pageTooLongMessage(panel: HTMLElement, estimatedImages: number | null): string {
+  // 上限以下の推定値は「長すぎる」と噛み合わない（上流の不整合・改変）。数を出さない文言へ倒す。
+  const overLimit = estimatedImages !== null && estimatedImages > MAX_CAPTURE_IMAGES;
   const template =
-    (estimatedImages === null ? undefined : panel.dataset['msgPageTooLongEstimated']) ??
+    (overLimit ? panel.dataset['msgPageTooLongEstimated'] : undefined) ??
     panel.dataset['msgPageTooLong'] ??
     '';
   return template
-    .replaceAll('{estimated}', String(estimatedImages ?? ''))
+    .replaceAll('{estimated}', overLimit ? String(estimatedImages) : '')
     .replaceAll('{max}', String(MAX_CAPTURE_IMAGES));
 }
 
