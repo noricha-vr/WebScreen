@@ -79,13 +79,20 @@ describe('captureKey', () => {
     expect(captureKey(SESSION_ID, MAX_CAPTURE_INDEX)).toBe(`captures/${SESSION_ID}/9999.png`);
   });
 
-  test('辞書順が撮影順と一致する（R2 list の並びでコマ順が壊れない）', () => {
-    const shootingOrder = [0, 1, 2, 9, 10, 11, 100, 1000];
-
-    const keys = shootingOrder.map((index) => captureKey(SESSION_ID, index));
-
-    expect([...keys].sort()).toEqual(keys);
+  test('web-capture が jpg を書いても同じ規則でキーを導出できる', () => {
+    expect(captureKey(SESSION_ID, 7, 'jpg')).toBe(`captures/${SESSION_ID}/0007.jpg`);
   });
+
+  test.each([['png'], ['jpg']] as const)(
+    '%s でも辞書順が撮影順と一致する（R2 list の並びでコマ順が壊れない）',
+    (extension) => {
+      const shootingOrder = [0, 1, 2, 9, 10, 11, 100, 1000];
+
+      const keys = shootingOrder.map((index) => captureKey(SESSION_ID, index, extension));
+
+      expect([...keys].sort()).toEqual(keys);
+    }
+  );
 
   test.each([
     ['負の index', -1],

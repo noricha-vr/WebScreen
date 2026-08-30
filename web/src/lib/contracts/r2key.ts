@@ -71,18 +71,32 @@ const CAPTURE_SESSION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
+ * キャプチャの拡張子。どちらを書くかは web-capture 側の設定で決まる
+ * （撮影を速くするため JPEG へ移行中。移行の前後どちらでも WebScreen が壊れないよう両方を受理する）。
+ */
+export type CaptureExtension = 'png' | 'jpg';
+
+/**
  * web-capture が撮ったスクリーンショットの R2 キー。
  *
  * index は 0 埋め 4 桁にする。R2 の list は辞書順で返るため、0 埋めしないと
  * "10" が "2" より前に並び、スクロール動画のコマ順が破綻する
  * （並び順の契約は contracts/api.ts の CaptureResponse.images と対で守る）。
+ *
+ * 既定を png のままにしてあるのは、web-capture の切り替えより先にこちらを本番へ出すため。
+ * 上流が jpg へ切り替わっても取り込み（fetch → createImageBitmap）と掃除（captures/ prefix）は
+ * 拡張子を見ないので、既定値は表示・記録上の意味しか持たない。
  */
-export function captureKey(sessionId: string, index: number): string {
+export function captureKey(
+  sessionId: string,
+  index: number,
+  extension: CaptureExtension = 'png'
+): string {
   if (!CAPTURE_SESSION_ID_PATTERN.test(sessionId)) {
     throw new Error('captureKey: sessionId は小文字の UUID である必要があります');
   }
   if (!Number.isInteger(index) || index < 0 || index > MAX_CAPTURE_INDEX) {
     throw new Error(`captureKey: index は 0〜${MAX_CAPTURE_INDEX} の整数である必要があります`);
   }
-  return `captures/${sessionId}/${String(index).padStart(CAPTURE_INDEX_DIGITS, '0')}.png`;
+  return `captures/${sessionId}/${String(index).padStart(CAPTURE_INDEX_DIGITS, '0')}.${extension}`;
 }
