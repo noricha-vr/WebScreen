@@ -1,5 +1,6 @@
 ---
 import { useTranslations, type Locale } from '../i18n';
+import { USE_CASE_SLUGS, useCasePath, type UseCasePage } from '../lib/use-cases';
 
 /**
  * 用途別ページ（Web / 画面共有 / 画像 / PDF）の本文。
@@ -8,20 +9,6 @@ import { useTranslations, type Locale } from '../i18n';
  * 変換機能そのものはトップに置いたままにする（入口を分散させると、どこで変換するのか分からなくなる）。
  * 文言は i18n の useCases 配下が正本で、ここには構造だけを持たせる。
  */
-
-/** 辞書 useCases のページキー。URL のスラッグとの対応は SLUGS が持つ。 */
-export type UseCasePage = 'web' | 'screenShare' | 'image' | 'pdf';
-
-/**
- * ページキー → URL スラッグ。関連リンクの並び順も兼ねる。
- * キーをそのまま URL にしない（screenShare はハイフン区切りの screen-share で公開している）。
- */
-const SLUGS: Record<UseCasePage, string> = {
-  web: 'web',
-  screenShare: 'screen-share',
-  image: 'image',
-  pdf: 'pdf',
-};
 
 interface Props {
   lang: Locale;
@@ -32,8 +19,8 @@ const { lang, page } = Astro.props;
 const t = useTranslations(lang);
 const content = t.useCases[page];
 
-/** 関連ページは自分以外の 3 つ。SLUGS の宣言順に出す。 */
-const related = (Object.keys(SLUGS) as UseCasePage[]).filter((key) => key !== page);
+/** 関連ページは自分以外の 3 つ。USE_CASE_SLUGS の宣言順に出す。 */
+const related = (Object.keys(USE_CASE_SLUGS) as UseCasePage[]).filter((key) => key !== page);
 ---
 
 <article class="mx-auto max-w-3xl px-4 py-12">
@@ -79,7 +66,7 @@ const related = (Object.keys(SLUGS) as UseCasePage[]).filter((key) => key !== pa
         related.map((key) => (
           <li>
             <a
-              href={`/${lang}/${SLUGS[key]}/`}
+              href={useCasePath(lang, key)}
               class="inline-flex items-center gap-2 text-slate-700 underline hover:text-brand-700"
             >
               <i class="fa-solid fa-arrow-right text-brand-500" aria-hidden="true" />

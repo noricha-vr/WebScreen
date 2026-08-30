@@ -47,6 +47,75 @@ test('og.png が宣言どおりの実寸で配信される', async ({ request })
   expect(body.byteLength).toBeLessThan(1_000_000);
 });
 
+test.describe('用途別ページのメタ情報', () => {
+  /** sitemap に載せた用途別ページ（ja / en）。パンくずと description を持つのはこの 8 本だけ。 */
+  const USE_CASE_PATHS = [
+    '/ja/web/',
+    '/ja/screen-share/',
+    '/ja/image/',
+    '/ja/pdf/',
+    '/en/web/',
+    '/en/screen-share/',
+    '/en/image/',
+    '/en/pdf/',
+  ] as const;
+
+  /** ページの JSON-LD を 1 つ取り出す（無ければ null）。 */
+  async function fetchJsonLd(request: import('@playwright/test').APIRequestContext, path: string) {
+    const html = await (await request.get(path)).text();
+    const matched = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html);
+    return matched === null ? null : JSON.parse(matched[1]!);
+  }
+
+  for (const path of USE_CASE_PATHS) {
+    test(`${path} のパンくずが言語トップから自分自身までを絶対 URL で並べる`, async ({
+      request,
+    }) => {
+      const jsonLd = await fetchJsonLd(request, path);
+      const lang = path.startsWith('/en/') ? 'en' : 'ja';
+
+      expect(jsonLd).not.toBeNull();
+      expect(jsonLd['@type']).toBe('BreadcrumbList');
+
+      const items = jsonLd.itemListElement;
+      expect(items).toHaveLength(2);
+
+      // position は 1 始まり（0 始まりだと Google が無効として扱う）。
+      expect(items.map((item: { position: number }) => item.position)).toEqual([1, 2]);
+      // 相対 URL では解決できないので、必ず本番オリジンの絶対 URL にする。
+      expect(items[0].item).toBe(`https://web-screen.net/${lang}/`);
+      expect(items[1].item).toBe(`https://web-screen.net${path}`);
+      for (const item of items) {
+        expect(item.name.length).toBeGreaterThan(0);
+      }
+    });
+
+    test(`${path} の description が本文の導入文の流用に戻っていない`, async ({ request }) => {
+      // lead を description に流用していた頃は 100 文字前後あり、SERP で切れていた。
+      const html = await (await request.get(path)).text();
+      const matched = /<meta name="description" content="([^"]*)"/.exec(html);
+
+      expect(matched).not.toBeNull();
+      const description = matched![1]!;
+
+      expect(description.length).toBeGreaterThan(0);
+      expect(description.length).toBeLessThanOrEqual(160);
+
+      // 本文の導入文（lead）をそのまま流し込んでいないこと。meta タグ（description と
+      // og:description）を取り除いた残りに同じ文字列が出るなら、本文からの流用を意味する。
+      const withoutMeta = html.replace(/<meta\b[^>]*>/g, '');
+      expect(withoutMeta).not.toContain(description);
+    });
+  }
+
+  // パンくずを持たないページに出すと、階層の無いところに階層を主張することになる。
+  for (const path of ['/ja/', '/en/', '/ja/privacy/'] as const) {
+    test(`${path} にはパンくずを出さない`, async ({ request }) => {
+      expect(await fetchJsonLd(request, path)).toBeNull();
+    });
+  }
+});
+
 test.describe('noindex', () => {
   test('プレビューページは検索結果に載せない', async ({ request }) => {
     const response = await request.get(`/${E2E_FIXTURES.readyShortId}/`);
