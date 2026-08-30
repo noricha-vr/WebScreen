@@ -528,6 +528,34 @@ test.describe('ログイン済み', () => {
     await expect(panel.locator('[data-file-error]')).toBeHidden();
     await expect(panel.getByText(rawMessage)).toHaveCount(0);
   });
+
+  test('変換の失敗は落ちた段と表示コードだけをサーバーへ報告する', async ({ page }) => {
+    await signIn(page);
+    await page.route('**/api/capture/', (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({ errorCode: 'PDF_URL_NOT_SUPPORTED', message: 'internal upstream detail' }),
+      })
+    );
+    await page.goto('/ja/');
+
+    // 失敗を起こす前に待ち受ける（beacon は失敗表示と同時に飛ぶ）。
+    const report = page.waitForRequest((request) => request.url().includes('/api/client-error/'));
+
+    const panel = page.locator('[data-convert-panel]');
+    await panel.locator('[data-url-input]').fill('https://example.com/report.pdf');
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    const request = await report;
+    const body = request.postData() ?? request.postDataBuffer()?.toString('utf8') ?? '';
+    // URL・ファイル名・下流メッセージが混ざらないことを本文の完全一致で固定する。
+    expect(JSON.parse(body)).toEqual({
+      stage: 'capture',
+      errorCode: 'pdfUrlNotSupported',
+      httpStatus: 422,
+    });
+  });
 });
 
 // 320px は想定する最小幅。ここで横スクロールが出ると、狭い画面でヘッダーが
