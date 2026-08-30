@@ -90,6 +90,14 @@ export async function createPendingUpload(
   }
 
   const shortId = (input.generateId ?? generateShortId)();
+  const key = movieKey(shortId);
+
+  // URL の発行を INSERT より先に行う。逆順だと発行に失敗した時に pending 行だけが残り、
+  // 24 時間の孤児掃除が拾うまで保存容量を食い続ける（利用者からは理由が見えない）。
+  // 先に発行して失敗すれば行を作らずに終わる。行の無い署名 URL は呼び出し元へ返らない
+  // ので PUT されず、R2 にも D1 にも何も残らない。
+  const uploadUrl = await input.createUploadUrl(key);
+
   const expiresAt = new Date(
     (input.now ?? new Date()).getTime() + MOVIE_RETENTION_MS
   ).toISOString();
@@ -100,10 +108,9 @@ export async function createPendingUpload(
     .bind(shortId, input.userId, input.request.filename, input.request.sizeBytes, expiresAt)
     .run();
 
-  const key = movieKey(shortId);
   return {
     shortId,
-    uploadUrl: await input.createUploadUrl(key),
+    uploadUrl,
     publicUrl: createPublicUrl(input.publicBaseUrl, key),
   };
 }

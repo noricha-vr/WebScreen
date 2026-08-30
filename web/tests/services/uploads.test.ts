@@ -175,6 +175,26 @@ describe('アップロードのクォータと検証', () => {
     ).rejects.toMatchObject({ status: 413 });
   });
 
+  it('署名 URL の発行に失敗したら pending 行を残さない', async () => {
+    const database = new FakeUploadDatabase();
+
+    await expect(
+      createPendingUpload({
+        database,
+        userId: USER_ID,
+        request: validPresignRequest(100),
+        publicBaseUrl: PUBLIC_URL,
+        createUploadUrl: async () => {
+          throw new Error('signing failed');
+        },
+      })
+    ).rejects.toThrow('signing failed');
+
+    // 行が残ると 24 時間の孤児掃除まで保存容量を食い続ける。
+    expect(database.movies.size).toBe(0);
+    expect(await getUserStorageUsage(database, USER_ID)).toBe(0);
+  });
+
   it('51 MiB と未定義の kind を presign 前に拒否する', () => {
     expect(validatePresignRequest({ ...validPresignRequest(MAX_UPLOAD_BYTES + 1) }).ok).toBe(false);
     expect(validatePresignRequest({ ...validPresignRequest(), kind: 'audio' }).ok).toBe(false);
