@@ -6,6 +6,7 @@
  * 既定値は guest なので、JS が動かない環境でもログイン導線だけは表示される。
  */
 
+import { reportClientError } from './client-error-report';
 import { parseViewer, viewerInitial, type Viewer } from './viewer';
 
 /** trailingSlash: 'always' のためスラッシュ必須。省くと 301 を挟む。 */
@@ -71,6 +72,8 @@ export async function resolveAuthState(
   try {
     response = await fetchImpl(ME_ENDPOINT, { credentials: 'same-origin' });
   } catch (error) {
+    // 到達できないこと自体（CDN 断・オフライン）は運用側から見えないので報告する。
+    reportClientError({ stage: 'session', errorCode: 'failed' });
     return failAuthState(root, error instanceof Error ? error.name : 'UnknownError');
   }
 
@@ -80,6 +83,8 @@ export async function resolveAuthState(
   }
 
   if (!response.ok) {
+    // 401 は上で返しているので、ここに来るのは認証基盤の異常だけ。
+    reportClientError({ stage: 'session', errorCode: 'failed', httpStatus: response.status });
     return failAuthState(root, `status ${response.status}`);
   }
 

@@ -17,6 +17,11 @@ import {
 } from '../contracts/api';
 import { isShortId } from '../contracts/r2key';
 import { collectCaptures } from './capture-pages';
+import {
+  clientErrorHttpStatus,
+  conversionClientStage,
+  reportClientError,
+} from './client-error-report';
 import { movieEndpoint } from './history-view';
 import {
   API_REQUEST_TIMEOUT_MS,
@@ -178,6 +183,7 @@ export async function uploadMp4(
   signal?: AbortSignal
 ): Promise<void> {
   if (mp4.size > MAX_UPLOAD_BYTES) {
+    reportClientError({ stage: 'upload', errorCode: 'tooLarge' });
     dispatch({ type: 'failed', errorCode: 'tooLarge' }, runGeneration);
     return;
   }
@@ -269,6 +275,18 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     }
   };
 
+  /**
+   * 失敗した段を報告する。dispatch より先に呼ぶこと（失敗の状態遷移は stage を
+   * 捨てるので、後から読むとどの段で落ちたか分からなくなる）。
+   */
+  const reportFailure = (error: unknown, errorCode: UploadErrorCode): void => {
+    reportClientError({
+      stage: conversionClientStage(state.stage),
+      errorCode,
+      httpStatus: clientErrorHttpStatus(error),
+    });
+  };
+
   let activeRun: AbortController | null = null;
 
   /** 新しい変換の世代と中止シグナルを起こす。前の変換が残っていれば道連れに止める。 */
@@ -315,6 +333,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       // 選択後にファイルが読めなくなった等。握り潰すと unhandled rejection のまま
       // 画面が idle で固まるので、失敗として見せる。
       console.error('preflight failed', error);
+      reportClientError({ stage: 'convert', errorCode: 'failed' });
       dispatch({ type: 'failed', errorCode: 'failed' }, current);
       return;
     }
@@ -356,7 +375,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         // 中止は失敗ではない。cancelRun が既に初期表示へ戻している。
         if (signal.aborted) return;
         console.error('conversion failed', error);
-        dispatch({ type: 'failed', errorCode: uploadErrorCode(error) }, current);
+        const errorCode = uploadErrorCode(error);
+        reportFailure(error, errorCode);
+        dispatch({ type: 'failed', errorCode }, current);
       });
   };
   fileInput?.addEventListener('change', () => {
@@ -429,7 +450,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         // 中止は失敗ではない。cancelRun が既に初期表示へ戻している。
         if (signal.aborted) return;
         console.error('conversion failed', error);
-        dispatch({ type: 'failed', errorCode: uploadErrorCode(error), target: 'url' }, current);
+        const errorCode = uploadErrorCode(error);
+        reportFailure(error, errorCode);
+        dispatch({ type: 'failed', errorCode, target: 'url' }, current);
       });
   });
 

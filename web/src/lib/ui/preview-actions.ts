@@ -8,6 +8,7 @@
 import { MAX_FILENAME_LENGTH } from '../contracts/api';
 import { copyToClipboard } from './clipboard';
 import { AUTO_COPY_FEEDBACK_DELAY_MS, consumeAutoCopy, type SessionStorage } from './auto-copy';
+import { reportRequestFailure } from './client-error-report';
 import { movieEndpoint, pinEndpoint } from './history-view';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
 
@@ -112,6 +113,7 @@ function wirePin(root: HTMLElement, fetchImpl: typeof fetch, reload: () => void)
         return;
       } catch (requestError) {
         error = requestError;
+        reportRequestFailure('pin', requestError);
       }
 
       button.disabled = false;
@@ -189,6 +191,7 @@ function wireRename(root: HTMLElement, fetchImpl: typeof fetch, schedule: Schedu
         }, fetchImpl);
       } catch (requestError) {
         error = requestError;
+        reportRequestFailure('rename', requestError);
       }
 
       button.disabled = false;
@@ -270,6 +273,7 @@ function wireDelete(root: HTMLElement, fetchImpl: typeof fetch): void {
         }, fetchImpl);
       } catch (requestError) {
         error = requestError;
+        reportRequestFailure('delete', requestError);
       }
 
       if (error === undefined) {
