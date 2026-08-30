@@ -1,9 +1,9 @@
 {
   "meta": {
-    "title": "WebScreen β — Turn web pages, images and PDFs into VRChat videos",
+    "title": "WebScreen — Turn web pages, images and PDFs into VRChat videos",
     "description": "Upload a PDF or image and get an MP4 URL that plays in VRChat video players.",
     "imageAlt": "WebScreen — turn PDFs, images and web pages into video URLs for VRChat",
-    "privacyTitle": "Cookies and privacy — WebScreen β"
+    "privacyTitle": "Cookies and privacy — WebScreen"
   },
   "nav": {
     "home": "Home",
@@ -176,7 +176,7 @@
     "stepsHeading": "How to use it",
     "relatedHeading": "Related pages",
     "web": {
-      "title": "Show a web page in VRChat: convert a URL to video — WebScreen β",
+      "title": "Show a web page in VRChat: convert a URL to video — WebScreen",
       "navLabel": "Turn a web page into video",
       "heading": "Show a web page in VRChat",
       "lead": "VRChat video players only play video. WebScreen captures a whole web page and encodes it as an MP4, so you can show the page itself by pasting the URL it gives you.",
@@ -202,7 +202,7 @@
       "cta": "Convert a web page"
     },
     "screenShare": {
-      "title": "Screen sharing in VRChat, and what to use instead — WebScreen β",
+      "title": "Screen sharing in VRChat, and what to use instead — WebScreen",
       "navLabel": "Instead of screen sharing",
       "heading": "When you want to share your screen in VRChat",
       "lead": "Sharing your screen in VRChat usually means showing someone a web page, a slide deck or a photo. WebScreen turns that content into a video URL that plays in any world with a video player.",
@@ -228,7 +228,7 @@
       "cta": "Convert what you want to show"
     },
     "image": {
-      "title": "Show images and photos in VRChat: convert images to video — WebScreen β",
+      "title": "Show images and photos in VRChat: convert images to video — WebScreen",
       "navLabel": "Turn images into video",
       "heading": "Show images and photos in VRChat",
       "lead": "Turn the photos you took on a world tour or with friends into a video so everyone in VRChat can look at them together. Several images become one video, and you only share one URL.",
@@ -254,7 +254,7 @@
       "cta": "Convert images"
     },
     "pdf": {
-      "title": "Show slides in VRChat: convert a PDF to video — WebScreen β",
+      "title": "Show slides in VRChat: convert a PDF to video — WebScreen",
       "navLabel": "Turn slides and PDFs into video",
       "heading": "Show slides and PDFs in VRChat",
       "lead": "Export PowerPoint or Google Slides as a PDF, convert it, and present straight from a VRChat video player. Up to 200 pages per file.",
