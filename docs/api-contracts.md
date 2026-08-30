@@ -6,6 +6,7 @@
 | 契約 | 正本ファイル |
 |------|-------------|
 | リクエスト / レスポンス型、エラーコード、上限値、バリデータ | `web/src/lib/contracts/api.ts` |
+| クライアント失敗報告（段・受け付けるコードの allowlist・本文上限） | `web/src/lib/contracts/client-error.ts` |
 | セッション Cookie（名前・署名形式・TTL） | `web/src/lib/contracts/session.ts` |
 | R2 オブジェクトキー、shortId 生成 | `web/src/lib/contracts/r2key.ts` |
 | DB スキーマ | `web/migrations/`（連番の全ファイル。適用は `wrangler d1 migrations apply`） |
@@ -28,8 +29,14 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `POST /api/movies/{shortId}/pin/` | pin の切り替え（保管期限を 1 年後まで延ばす。期限切れは 410 `EXPIRED`） | 本人（所有者） | `PinResponse` |
 | `PATCH /api/movies/{shortId}/` | ファイル名の変更 | 本人（所有者） | `RenameMovieRequest` / `RenameMovieResponse` |
 | `DELETE /api/movies/{shortId}/` | 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | — |
+| `POST /api/client-error/` | クライアント側の失敗報告（識別子だけを受けて `client_error` として構造化ログに残す。応答は 204） | 任意（Cookie があれば `userId` を添える） | `ClientErrorReport` |
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
+
+`/api/client-error/` は無認証なので、受け付けるのは allowlist に載る `stage` / `errorCode` /
+`httpStatus` だけで、未知フィールドと 1 KiB 超の本文は 400 で捨てる。送信頻度の上限は
+クライアント側（同じ段 + コードで最大 5 回、送信間隔 1 秒以上）に置く。Worker 側のレート制限は
+持たないので、必要になったら zone の Rate Limiting Rule で `/api/client-error/` を絞る。
 
 ### 動画入力廃止に伴う互換性
 
