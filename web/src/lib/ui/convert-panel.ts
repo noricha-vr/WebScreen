@@ -255,6 +255,17 @@ export function uploadErrorCode(error: unknown): UploadErrorCode {
   return isUnauthorizedRequestError(error) ? 'sessionExpired' : 'failed';
 }
 
+/**
+ * 「ページが長すぎる」応答に付いてきた推定画面数を取り出す。
+ *
+ * 他の失敗では常に null。文言へ数を差し込むためだけの値なので、値が無ければ
+ * 上限だけを伝える文言にフォールバックする（表示側の責務）。
+ */
+export function uploadErrorEstimatedImages(error: unknown): number | null {
+  if (!(error instanceof JsonRequestError)) return null;
+  return error.errorCode === ERROR_CODES.pageTooLong ? error.estimatedImages : null;
+}
+
 export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptions = {}): void {
   const navigate: Navigate = options.navigate ?? ((url) => window.location.assign(url));
 
@@ -463,7 +474,15 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         console.error('conversion failed', error);
         const errorCode = uploadErrorCode(error);
         reportFailure(error, errorCode);
-        dispatch({ type: 'failed', errorCode, target: 'url' }, current);
+        dispatch(
+          {
+            type: 'failed',
+            errorCode,
+            target: 'url',
+            estimatedImages: uploadErrorEstimatedImages(error),
+          },
+          current
+        );
       });
   });
 

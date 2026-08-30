@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 
 import { readFileSync } from 'node:fs';
 
+import en from '../../src/i18n/en.json';
 import ja from '../../src/i18n/ja.json';
+import { MAX_CAPTURE_IMAGES } from '../../src/lib/contracts/api';
 import { renderConvertPanel } from '../../src/lib/ui/convert-panel-view';
 import {
   INITIAL_UPLOAD_STATE,
@@ -23,31 +25,39 @@ class FakeNode {
   }
 }
 
+type Dictionary = typeof ja;
+
 /** 画面と同じ data 属性（辞書の値）を持つパネルを作る。 */
 class FakePanel {
-  readonly dataset: Record<string, string> = {
-    labelCapturing: ja.convert.stageCapturing,
-    labelPreparing: ja.convert.stagePreparing,
-    labelEncoding: ja.convert.stageEncoding,
-    labelUploading: ja.convert.stageUploading,
-    labelSelectedFile: ja.convert.selectedFile,
-    labelSourceUrl: ja.convert.sourceUrl,
-    msgTooLarge: ja.convert.errorTooLarge,
-    msgUnsupported: ja.convert.errorUnsupported,
-    msgTooManyPages: ja.convert.errorTooManyPages,
-    msgPageTooLong: ja.convert.errorPageTooLong,
-    msgCaptureTimeout: ja.convert.errorCaptureTimeout,
-    msgSessionExpired: ja.actions.sessionExpired,
-    msgFailed: ja.convert.errorFailed,
-    msgPdfUrlNotSupported: ja.convert.errorPdfUrlNotSupported,
-    msgImageUrlNotSupported: ja.convert.errorImageUrlNotSupported,
-    msgVideoUrlNotSupported: ja.convert.errorVideoUrlNotSupported,
-    msgNonWebPageUrl: ja.convert.errorNonWebPageUrl,
-    msgWasmLoadTimeout: ja.convert.errorWasmLoadTimeout,
-    msgImageFetchTimeout: ja.convert.errorImageFetchTimeout,
-    msgUploadTimeout: ja.convert.errorUploadTimeout,
-    msgApiTimeout: ja.convert.errorApiTimeout,
-  };
+  readonly dataset: Record<string, string>;
+
+  constructor(t: Dictionary = ja) {
+    this.dataset = {
+      labelCapturing: t.convert.stageCapturing,
+      labelPreparing: t.convert.stagePreparing,
+      labelEncoding: t.convert.stageEncoding,
+      labelUploading: t.convert.stageUploading,
+      labelSelectedFile: t.convert.selectedFile,
+      labelSourceUrl: t.convert.sourceUrl,
+      msgTooLarge: t.convert.errorTooLarge,
+      msgUnsupported: t.convert.errorUnsupported,
+      msgTooManyPages: t.convert.errorTooManyPages,
+      msgPageTooLong: t.convert.errorPageTooLong,
+      msgPageTooLongEstimated: t.convert.errorPageTooLongEstimated,
+      msgCaptureTimeout: t.convert.errorCaptureTimeout,
+      msgSessionExpired: t.actions.sessionExpired,
+      msgFailed: t.convert.errorFailed,
+      msgPdfUrlNotSupported: t.convert.errorPdfUrlNotSupported,
+      msgImageUrlNotSupported: t.convert.errorImageUrlNotSupported,
+      msgVideoUrlNotSupported: t.convert.errorVideoUrlNotSupported,
+      msgNonWebPageUrl: t.convert.errorNonWebPageUrl,
+      msgWasmLoadTimeout: t.convert.errorWasmLoadTimeout,
+      msgImageFetchTimeout: t.convert.errorImageFetchTimeout,
+      msgUploadTimeout: t.convert.errorUploadTimeout,
+      msgApiTimeout: t.convert.errorApiTimeout,
+    };
+  }
+
   readonly nodes = new Map<string, FakeNode>();
 
   querySelectorAll<T extends Element>(selector: string): T[] {
@@ -65,8 +75,8 @@ class FakePanel {
   }
 }
 
-function render(state: UploadState): FakePanel {
-  const panel = new FakePanel();
+function render(state: UploadState, dictionary: Dictionary = ja): FakePanel {
+  const panel = new FakePanel(dictionary);
   renderConvertPanel(panel as unknown as HTMLElement, state);
   return panel;
 }
@@ -117,6 +127,67 @@ describe('エラー表示', () => {
     expect(panel.text('[data-file-error-message]').length).toBeGreaterThan(0);
     expect(panel.node('[data-file-error]').hidden).toBe(false);
   });
+
+  test('ページが長すぎる時は推定画面数と上限を文言へ入れる', () => {
+    const panel = render({
+      ...INITIAL_UPLOAD_STATE,
+      phase: 'error',
+      errorCode: 'pageTooLong',
+      errorTarget: 'url',
+      errorEstimatedImages: 402,
+    });
+
+    const message = panel.text('[data-url-error-message]');
+    expect(message).toContain('402');
+    expect(message).toContain(String(MAX_CAPTURE_IMAGES));
+    expect(message).not.toContain('{');
+  });
+
+  test('en でも推定画面数と上限を文言へ入れる', () => {
+    const panel = render(
+      {
+        ...INITIAL_UPLOAD_STATE,
+        phase: 'error',
+        errorCode: 'pageTooLong',
+        errorTarget: 'url',
+        errorEstimatedImages: 402,
+      },
+      en
+    );
+
+    const message = panel.text('[data-url-error-message]');
+    expect(message).toContain('402');
+    expect(message).toContain(String(MAX_CAPTURE_IMAGES));
+    expect(message).not.toContain('{');
+  });
+
+  test('上限以下の推定画面数は数を出さない', () => {
+    // 上流が上限内の数を返すのは不整合。「約 150 画面あり上限の 150 画面を超えています」の
+    // ような自己矛盾した文を出さないこと。
+    const panel = render({
+      ...INITIAL_UPLOAD_STATE,
+      phase: 'error',
+      errorCode: 'pageTooLong',
+      errorTarget: 'url',
+      errorEstimatedImages: MAX_CAPTURE_IMAGES,
+    });
+
+    const message = panel.text('[data-url-error-message]');
+    expect(message).toBe(ja.convert.errorPageTooLong.replaceAll('{max}', String(MAX_CAPTURE_IMAGES)));
+  });
+
+  test('推定画面数が無い時は上限だけを伝える', () => {
+    const panel = render({
+      ...INITIAL_UPLOAD_STATE,
+      phase: 'error',
+      errorCode: 'pageTooLong',
+      errorTarget: 'url',
+    });
+
+    const message = panel.text('[data-url-error-message]');
+    expect(message).toContain(String(MAX_CAPTURE_IMAGES));
+    expect(message).not.toContain('{');
+  });
 });
 
 describe('画面テンプレート', () => {
@@ -128,6 +199,23 @@ describe('画面テンプレート', () => {
     const attribute = `data-msg-${code.replace(/[A-Z]/g, (letter: string) => `-${letter.toLowerCase()}`)}=`;
 
     expect(template).toContain(attribute);
+  });
+
+  // エラーコードと 1 対 1 でない文言なので上の総当たりに乗らない。落ちると推定画面数が
+  // 消えて「上限だけ」の文言へ静かに退化する。
+  test('推定画面数入りの文言を渡す data 属性がある', () => {
+    expect(template).toContain('data-msg-page-too-long-estimated=');
+  });
+
+  // 文言側のプレースホルダが消えると、差し込みが黙って効かなくなる（上限も枚数も出ない
+  // 文が出るだけでテストは緑になる）。辞書の側でも固定する。
+  test.each([
+    ['ja', ja],
+    ['en', en],
+  ])('%s の文言に差し込み用のプレースホルダがある', (_language, dictionary) => {
+    expect(dictionary.convert.errorPageTooLong).toContain('{max}');
+    expect(dictionary.convert.errorPageTooLongEstimated).toContain('{max}');
+    expect(dictionary.convert.errorPageTooLongEstimated).toContain('{estimated}');
   });
 
   test('中止ボタンを置いている', () => {

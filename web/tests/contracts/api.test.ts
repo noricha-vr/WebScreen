@@ -3,8 +3,11 @@ import { describe, expect, test } from 'bun:test';
 import {
   ERROR_CODES,
   MAX_CAPTURE_DIMENSION,
+  MAX_CAPTURE_IMAGES,
+  MAX_CAPTURE_REQUESTS,
   MAX_UPLOAD_BYTES,
   MIN_CAPTURE_DIMENSION,
+  parseEstimatedImages,
   validateCaptureRequest,
   validateCommitRequest,
   validatePresignRequest,
@@ -12,6 +15,43 @@ import {
 } from '../../src/lib/contracts/api';
 
 const VALID_SHORT_ID = 'aB3dE5fG7hJ9';
+
+describe('ページ長の上限', () => {
+  // web-capture の app/models.py に同じ値のリテラルがある（相互に import できないため、
+  // 片側だけずれたらどちらかのテストで落とす）。根拠は docs/encode-contract.md の実測表。
+  test('上限は 150 枚', () => {
+    expect(MAX_CAPTURE_IMAGES).toBe(150);
+  });
+
+  test('上限いっぱいのページでも 50 MiB に収まる見込みである', () => {
+    // 実測の最悪ケース（文字主体のページ）の 1 枚あたりバイト数。
+    const worstCaseBytesPerImage = 262_507;
+
+    expect(MAX_CAPTURE_IMAGES * worstCaseBytesPerImage).toBeLessThan(MAX_UPLOAD_BYTES);
+  });
+
+  test('分割取得の回数で上限枚数まで取り切れる', () => {
+    // web-capture が 1 リクエストで撮る上限（app/config.py の max_capture_images）。
+    const imagesPerRequest = 100;
+
+    expect(MAX_CAPTURE_REQUESTS * imagesPerRequest).toBeGreaterThanOrEqual(MAX_CAPTURE_IMAGES);
+  });
+});
+
+describe('parseEstimatedImages', () => {
+  test('正の整数だけを受け取る', () => {
+    expect(parseEstimatedImages({ estimatedImages: 402 })).toBe(402);
+  });
+
+  test('整数でない値・範囲外・欠落は null にする', () => {
+    expect(parseEstimatedImages({ estimatedImages: '402' })).toBeNull();
+    expect(parseEstimatedImages({ estimatedImages: 12.5 })).toBeNull();
+    expect(parseEstimatedImages({ estimatedImages: 0 })).toBeNull();
+    expect(parseEstimatedImages({ estimatedImages: 1_000_000 })).toBeNull();
+    expect(parseEstimatedImages({ errorCode: 'PAGE_TOO_LONG' })).toBeNull();
+    expect(parseEstimatedImages(null)).toBeNull();
+  });
+});
 
 describe('validatePresignRequest', () => {
   test('正常なリクエストを受理する', () => {

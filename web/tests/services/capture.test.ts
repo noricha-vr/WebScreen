@@ -101,6 +101,45 @@ describe('proxyCapture', () => {
     expect(await response.json()).toMatchObject({ errorCode: 'PAGE_TOO_LONG' });
   });
 
+  test('ページが長すぎる時は推定画面数も返す', async () => {
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      fetcher: async () =>
+        Response.json(
+          { errorCode: 'capture_limit_exceeded', message: '下流の文言', estimatedImages: 402 },
+          { status: 400 }
+        ),
+    });
+
+    expect(await response.json()).toMatchObject({
+      errorCode: 'PAGE_TOO_LONG',
+      estimatedImages: 402,
+    });
+  });
+
+  test('推定画面数が数値でなければ落として返す', async () => {
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      fetcher: async () =>
+        Response.json(
+          { errorCode: 'capture_limit_exceeded', estimatedImages: '402 画面<script>' },
+          { status: 400 }
+        ),
+    });
+
+    expect(await response.json()).not.toHaveProperty('estimatedImages');
+  });
+
+  test('ページが長すぎる以外の失敗には推定画面数を付けない', async () => {
+    const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
+      ...authenticatedDependencies(),
+      fetcher: async () =>
+        Response.json({ errorCode: 'capture_timeout', estimatedImages: 402 }, { status: 504 }),
+    });
+
+    expect(await response.json()).not.toHaveProperty('estimatedImages');
+  });
+
   test('下流の capture_timeout を CAPTURE_TIMEOUT の 504 に変換する', async () => {
     const response = await proxyCapture(captureRequest({ url: 'https://example.com/' }), {
       ...authenticatedDependencies(),

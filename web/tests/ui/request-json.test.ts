@@ -45,6 +45,17 @@ describe('requestJson', () => {
     expect((error as JsonRequestError).errorCode).toBe('PAGE_TOO_LONG');
   });
 
+  test('推定画面数が付いていれば一緒に保持する', async () => {
+    const fetchImpl = respondWith('{"errorCode":"PAGE_TOO_LONG","message":"...","estimatedImages":402}', {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const error = await requestJson('/api/capture/', { method: 'POST' }, fetchImpl).catch((thrown) => thrown);
+
+    expect((error as JsonRequestError).estimatedImages).toBe(402);
+  });
+
   test('エラー応答が JSON でなくても status は保持する', async () => {
     const fetchImpl = respondWith('gateway timeout', { status: 504 });
 
