@@ -12,7 +12,8 @@
     "history": "History",
     "logout": "Sign out",
     "bannerAlt": "WebScreen logo",
-    "avatarAlt": "Account avatar"
+    "avatarAlt": "Account avatar",
+    "sessionUnavailable": "Sign-in status unavailable"
   },
   "notice": {
     "heading": "WebScreen has been rebuilt",
@@ -93,6 +94,8 @@
     "renameTooLong": "File name is too long ({count} / max {max} characters)",
     "notFoundHeading": "Video not found",
     "notFoundLead": "The URL may be wrong, or the video may have been removed after its retention period.",
+    "unavailableHeading": "Temporarily unavailable",
+    "unavailableLead": "We could not check your sign-in status, so this page cannot be shown right now. Please try again in a moment.",
     "backHome": "Back to the home page",
     "deletedHeading": "Deleted",
     "deletedLead": "This video has been deleted and the URL no longer plays.",

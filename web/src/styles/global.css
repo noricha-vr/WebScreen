@@ -32,11 +32,13 @@
 
 /*
  * ログイン状態の出し分け。ページは静的生成でセッションを読めないため、
- * 両方の HTML を出しておき src/lib/ui/session-view.ts が data-auth-state を切り替える。
- * 既定は guest（JS が動かなくてもログイン導線は見える）。
+ * 各状態の HTML を出しておき src/lib/ui/session-view.ts が data-auth-state を切り替える。
+ * 既定は guest（JS が動かなくてもログイン導線は見える）。error は認証基盤の異常で、
+ * guest と分けないと障害中のログイン済みユーザーが黙ってログアウト表示になる。
  */
-[data-auth-state='guest'] [data-auth-only='member'],
-[data-auth-state='member'] [data-auth-only='guest'] {
+[data-auth-state='guest'] [data-auth-only]:not([data-auth-only~='guest']),
+[data-auth-state='member'] [data-auth-only]:not([data-auth-only~='member']),
+[data-auth-state='error'] [data-auth-only]:not([data-auth-only~='error']) {
   display: none;
 }
 

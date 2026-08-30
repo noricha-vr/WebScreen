@@ -1,0 +1,31 @@
+---
+import { useTranslations, type Locale } from '../i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+{/* 所有者判定に必要な認証基盤（署名鍵・D1）が壊れている時に 503 と一緒に出す。
+    動画そのものは存在するので 404 とは分けて伝える。 */}
+<section class="mx-auto max-w-3xl px-4 py-20 text-center">
+  <p class="flex items-center justify-center gap-2 text-base font-semibold text-slate-500">
+    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+    <span>503</span>
+  </p>
+  <h1 class="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+    {t.preview.unavailableHeading}
+  </h1>
+  <p class="mt-4 text-base leading-relaxed text-slate-600">{t.preview.unavailableLead}</p>
+
+  <a
+    href={`/${lang}/`}
+    class="mt-8 inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-base font-semibold text-white no-underline hover:bg-brand-700"
+  >
+    <i class="fa-solid fa-house" aria-hidden="true"></i>
+    <span>{t.preview.backHome}</span>
+  </a>
+</section>

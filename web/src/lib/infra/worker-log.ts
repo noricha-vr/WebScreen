@@ -14,6 +14,7 @@ const WORKER_FAILURE_EVENTS = [
   'upload_commit_oversize_claim_missed',
   'upload_commit_oversize_object_delete_failed',
   'movie_delete_row_stranded',
+  'preview_owner_check_failed',
   'capture_request_json_invalid',
   'capture_upstream_response_invalid',
   'capture_worker_timeout',
@@ -31,12 +32,15 @@ export function logWorkerFailure({
   errorCode,
   status,
   upstreamStatus,
+  errorName,
 }: {
   level?: WorkerLogLevel;
   event: WorkerFailureEvent;
   errorCode: ErrorCode;
   status: number;
   upstreamStatus?: number;
+  /** 例外の種別だけ（`error.name`）。message / stack は内容が読めないので入れない。 */
+  errorName?: string;
 }): void {
   // URL・Cookie・上流本文は含めず、Cloudflare observability で安全に絞り込める項目だけを出す。
   const entry = JSON.stringify({
@@ -49,6 +53,7 @@ export function logWorkerFailure({
     errorCode,
     status,
     upstreamStatus,
+    errorName,
     summary: `${event} returned ${status} ${errorCode}.`,
   });
   if (level === 'warn') {

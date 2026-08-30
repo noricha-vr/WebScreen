@@ -36,7 +36,8 @@ test.describe('未ログイン', () => {
     await expect(cta).toHaveAttribute('href', '/api/auth/login/');
 
     // 仕様リストはヒーローと変換パネルの両方にあるので、未ログイン側に絞って見る
-    const hero = page.locator('[data-auth-only="guest"]');
+    // （値は "guest error" のような語リストなので ~= で見る）
+    const hero = page.locator('[data-auth-only~="guest"]');
     await expect(hero.getByText(ja.spec.maxSize)).toBeVisible();
     await expect(hero.getByText(ja.spec.retention)).toBeVisible();
     // ログイン前に変換パネルは出さない

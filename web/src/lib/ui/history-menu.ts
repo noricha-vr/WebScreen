@@ -113,19 +113,32 @@ function render(root: HTMLElement, entries: HistoryEntry[], fetchImpl: typeof fe
   setState(root, 'ready');
 }
 
+function showError(root: HTMLElement, message: string): void {
+  const element = root.querySelector<HTMLElement>('[data-history-error-message]');
+  if (element) element.textContent = message;
+  setState(root, 'error');
+}
+
 async function load(root: HTMLElement, fetchImpl: typeof fetch): Promise<void> {
   setState(root, 'loading');
 
+  let payload: unknown;
   try {
-    const payload = await requestJson(HISTORY_ENDPOINT, { credentials: 'same-origin' }, fetchImpl);
-    render(root, parseHistoryEntries(payload), fetchImpl);
+    payload = await requestJson(HISTORY_ENDPOINT, { credentials: 'same-origin' }, fetchImpl);
   } catch (error) {
-    const message = root.querySelector<HTMLElement>('[data-history-error-message]');
-    if (message) {
-      message.textContent = requestFailureMessage(root, error, root.dataset['msgHistoryFailed'] ?? '');
-    }
-    setState(root, 'error');
+    showError(root, requestFailureMessage(root, error, root.dataset['msgHistoryFailed'] ?? ''));
+    return;
   }
+
+  const { entries, dropped, malformed } = parseHistoryEntries(payload);
+  if (malformed || dropped > 0) {
+    // 読めた行だけ出すと、全件落ちた時に「履歴なし」と見分けが付かない。
+    console.error(malformed ? 'history_payload_malformed' : `history_entries_dropped: ${dropped}`);
+    showError(root, root.dataset['msgHistoryFailed'] ?? '');
+    return;
+  }
+
+  render(root, entries, fetchImpl);
 }
 
 /** `<details data-history-menu>` に配線する。開いた時に一覧を取得する。 */
