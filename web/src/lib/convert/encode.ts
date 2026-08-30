@@ -1,6 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL } from '@ffmpeg/util';
 
+import { abortRejection, WASM_LOAD_TIMEOUT_MS, withStageTimeout } from './timeouts';
 import type { ConversionProgress, ProgressReporter, VideoFrame } from './types';
 
 const CORE_VERSION = '0.12.10';
@@ -73,15 +73,46 @@ export function encodePhaseRatio(phase: EncodePhase, done: number, total: number
   return start + (end - start) * within;
 }
 
-async function loadFfmpeg(): Promise<FFmpeg> {
+/**
+ * core アセットを同一オリジン Blob URL へ写す。
+ *
+ * @ffmpeg/util の toBlobURL を使わないのは AbortSignal を受け取らず、CDN が詰まった時に
+ * 期限も中止も効かないため。進捗コールバックは引き続き使わない（startLoadPseudoProgress 参照）。
+ */
+async function fetchCoreAsset(url: string, mimeType: string, signal: AbortSignal): Promise<string> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`Could not fetch FFmpeg core asset: ${response.status}`);
+  return URL.createObjectURL(new Blob([await response.arrayBuffer()], { type: mimeType }));
+}
+
+/**
+ * Workers Assets に収まらない core/wasm を CDN から取得して Worker を立ち上げる。
+ *
+ * 取得 2 本と load() 全体で 1 本の期限にする（分けると合計の待ちが読めなくなる）。
+ * load() はシグナルを受け取らないので、期限切れ・中止のどちらでも terminate() で worker を畳んで待ちを解く。
+ */
+async function loadFfmpeg(userSignal?: AbortSignal): Promise<FFmpeg> {
   const ffmpeg = new FFmpeg();
-  // Workers Assets に収まらない core/wasm を CDN から取得し、同一オリジン Blob URL として Worker に渡す。
-  const [coreURL, wasmURL] = await Promise.all([
-    toBlobURL(CORE_JS_URL, 'text/javascript'),
-    toBlobURL(CORE_WASM_URL, 'application/wasm'),
-  ]);
-  await ffmpeg.load({ coreURL, wasmURL });
-  return ffmpeg;
+  try {
+    return await withStageTimeout('wasmLoadTimeout', WASM_LOAD_TIMEOUT_MS, userSignal, async (signal) => {
+      const [coreURL, wasmURL] = await Promise.all([
+        fetchCoreAsset(CORE_JS_URL, 'text/javascript', signal),
+        fetchCoreAsset(CORE_WASM_URL, 'application/wasm', signal),
+      ]);
+      // worker 生成の直前に中止されても抱え込まないよう、terminate() だけに頼らず race を添える。
+      const stop = (): void => ffmpeg.terminate();
+      signal.addEventListener('abort', stop, { once: true });
+      try {
+        await Promise.race([ffmpeg.load({ coreURL, wasmURL }), abortRejection(signal)]);
+      } finally {
+        signal.removeEventListener('abort', stop);
+      }
+      return ffmpeg;
+    });
+  } catch (error) {
+    ffmpeg.terminate();
+    throw error;
+  }
 }
 
 /**
@@ -105,10 +136,14 @@ export function startLoadPseudoProgress(total: number, report?: ProgressReporter
   return () => clearInterval(timer);
 }
 
-async function loadFfmpegWithProgress(total: number, report?: ProgressReporter): Promise<FFmpeg> {
+async function loadFfmpegWithProgress(
+  total: number,
+  report?: ProgressReporter,
+  signal?: AbortSignal
+): Promise<FFmpeg> {
   const stopPseudoProgress = startLoadPseudoProgress(total, report);
   try {
-    return await loadFfmpeg();
+    return await loadFfmpeg(signal);
   } finally {
     stopPseudoProgress();
   }
@@ -143,24 +178,32 @@ export function runningProgress(progress: number, total: number): ConversionProg
 }
 
 /** PNG フレーム列を順序を保って VRChat 互換 MP4 にエンコードする。 */
-export async function encodeFramesToMp4(frames: readonly VideoFrame[], report?: ProgressReporter): Promise<Blob> {
+export async function encodeFramesToMp4(
+  frames: readonly VideoFrame[],
+  report?: ProgressReporter,
+  signal?: AbortSignal
+): Promise<Blob> {
   if (frames.length === 0) throw new Error('At least one frame is required');
   const total = frames.length;
   // エンコードは「core 読み込み → フレーム書き出し → FFmpeg 実行」と進む。枚数は実行が
   // 始まるまで動かせない（書き出し枚数を出すと実行の開始で 0 に戻る）ため、枚数は据え置き、
   // バーだけを工程ごとの部分帯域で進める。
   report?.({ stage: 'encoding', current: 0, total, ratio: encodePhaseRatio('loading', 0, 1) });
-  const ffmpeg = await loadFfmpegWithProgress(total, report);
+  const ffmpeg = await loadFfmpegWithProgress(total, report, signal);
+  // 書き出しと実行はシグナルを受け取らないため、中止は worker を畳んで止める。
+  const stop = (): void => ffmpeg.terminate();
+  signal?.addEventListener('abort', stop, { once: true });
   try {
     for (const [index, frame] of frames.entries()) {
       await ffmpeg.writeFile(frameFileName(index), new Uint8Array(frame.data));
       report?.({ stage: 'encoding', current: 0, total, ratio: encodePhaseRatio('writing', index + 1, total) });
     }
     ffmpeg.on('progress', ({ progress }) => report?.(runningProgress(progress, total)));
-    const status = await ffmpeg.exec(buildFrameEncodeArgs());
+    const status = await Promise.race([ffmpeg.exec(buildFrameEncodeArgs()), abortRejection(signal)]);
     if (status !== 0) throw new Error(`FFmpeg exited with ${status}`);
     return await readMp4(ffmpeg, 'output.mp4');
   } finally {
+    signal?.removeEventListener('abort', stop);
     ffmpeg.terminate();
   }
 }

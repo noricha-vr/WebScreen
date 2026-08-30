@@ -9,16 +9,29 @@ import type { ProgressReporter } from './types';
 export async function convertFilesToMp4(
   files: readonly File[],
   kind: Exclude<UploadKind, 'web'>,
-  report?: ProgressReporter
+  report?: ProgressReporter,
+  signal?: AbortSignal
 ): Promise<Blob> {
   if (files.length === 0) throw new Error('At least one file is required');
   const frames = kind === 'pdf' ? await pdfToFrames(files[0]!, report) : await imageFilesToFrames(files, report);
-  return encodeFramesToMp4(frames, report);
+  return encodeFramesToMp4(frames, report, signal);
 }
 
 /** 撮影順で返された URL 画像群を VRChat 互換 MP4 にする。 */
-export async function convertImageUrlsToMp4(urls: readonly string[], report?: ProgressReporter): Promise<Blob> {
-  return encodeFramesToMp4(await imageUrlsToFrames(urls, report), report);
+export async function convertImageUrlsToMp4(
+  urls: readonly string[],
+  report?: ProgressReporter,
+  signal?: AbortSignal
+): Promise<Blob> {
+  return encodeFramesToMp4(await imageUrlsToFrames(urls, report, signal), report, signal);
 }
 
 export { ConversionError, type ConversionProgress, type ConversionStage, type VideoFrame } from './types';
+export {
+  isUserAborted,
+  StageTimeoutError,
+  STAGE_TIMEOUT_CODES,
+  UPLOAD_PUT_TIMEOUT_MS,
+  withStageTimeout,
+  type StageTimeoutCode,
+} from './timeouts';
