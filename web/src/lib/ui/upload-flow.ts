@@ -116,7 +116,7 @@ export type UploadEvent =
   | { type: 'selectFile'; filename: string; sizeBytes: number }
   | { type: 'selectFiles'; files: readonly { filename: string; sizeBytes: number }[] }
   | { type: 'selectUrl'; url: string }
-  | { type: 'stageProgress'; stage: ProgressStage; current: number; total: number }
+  | { type: 'stageProgress'; stage: ProgressStage; current: number; total: number; ratio?: number }
   | { type: 'stageRatio'; stage: ProgressStage; ratio: number }
   | { type: 'converted' }
   | { type: 'uploaded'; publicUrl: string; shortId: string }
@@ -229,7 +229,12 @@ export function reduceUpload(state: UploadState, event: UploadEvent): UploadStat
     case 'stageProgress': {
       if (event.total <= 0 || event.current < 0) return state;
       const current = Math.min(event.current, event.total);
-      return advanceStage(state, event.stage, current / event.total, { current, total: event.total });
+      // 枚数が動かせない下ごしらえ（エンコードの core 読み込み・フレーム書き出し）は
+      // ratio を添えてくる。バーはそれで進め、枚数は実態のまま据え置く。
+      return advanceStage(state, event.stage, event.ratio ?? current / event.total, {
+        current,
+        total: event.total,
+      });
     }
 
     case 'stageRatio':

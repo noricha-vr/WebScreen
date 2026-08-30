@@ -21,6 +21,13 @@ export interface ConversionProgress {
   stage: ConversionStage;
   current: number;
   total: number;
+  /**
+   * 段階の中の進み具合（0〜1）。省略時は current / total を使う。
+   *
+   * 枚数が動かせない下ごしらえ（エンコード前の core 読み込み・フレーム書き出し）でも
+   * バーを進めるため、バーの進み具合を枚数と切り離せるようにしている。
+   */
+  ratio?: number;
 }
 
 /** 変換工程で利用する進捗通知。 */
