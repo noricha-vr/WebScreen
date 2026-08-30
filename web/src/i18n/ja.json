@@ -58,6 +58,11 @@
     "errorImageUrlNotSupported": "画像のURLは変換できません。画像をダウンロードしてアップロードしてください。",
     "errorVideoUrlNotSupported": "動画ファイルには対応していません。Webページ、PDF、または画像をご利用ください。",
     "errorNonWebPageUrl": "このURLはWebページではありません。WebページのURLを入力してください。",
+    "errorWasmLoadTimeout": "変換エンジンの読み込みに時間がかかりすぎました。通信環境を確認して、もう一度お試しください。",
+    "errorImageFetchTimeout": "撮影した画像の取得に時間がかかりすぎました。もう一度お試しください。",
+    "errorUploadTimeout": "動画のアップロードに時間がかかりすぎました。通信環境を確認して、もう一度お試しください。",
+    "errorApiTimeout": "サーバーの応答に時間がかかりすぎました。しばらくおいてからお試しください。",
+    "abort": "変換を中止",
     "batchNameSuffix": "他{count}枚"
   },
   "history": {

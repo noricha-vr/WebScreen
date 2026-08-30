@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { ConversionError } from '../../src/lib/convert';
-import { mountConvertPanel, uploadErrorCode } from '../../src/lib/ui/convert-panel';
+import { ConversionError, StageTimeoutError } from '../../src/lib/convert';
+import { mountConvertPanel, putMp4, uploadErrorCode, uploadMp4 } from '../../src/lib/ui/convert-panel';
 import { JsonRequestError } from '../../src/lib/ui/request-json';
 
 type Listener = (event: Event) => void;
@@ -27,6 +27,7 @@ class FakePanel {
   readonly dataset: DOMStringMap = {};
   readonly sourceName = { textContent: '' };
   readonly urlForm = new FakeEventTarget();
+  readonly abortButton = new FakeEventTarget();
   readonly urlInput: { value: string };
 
   constructor(private readonly fileInput: FakeFileInput, url = '') {
@@ -38,6 +39,7 @@ class FakePanel {
       '[data-file-input]': this.fileInput,
       '[data-url-form]': this.urlForm,
       '[data-url-input]': this.urlInput,
+      '[data-abort-button]': this.abortButton,
     };
     return (elements[selector] ?? null) as T | null;
   }
@@ -67,6 +69,20 @@ function controlledPng(
     }),
   } as unknown as File;
   return { file, release };
+}
+
+/** 選択後に読めなくなったファイル。事前検査そのものが例外で落ちる状態を再現する。 */
+function unreadablePng(): File {
+  return {
+    name: 'vanished.png',
+    type: 'image/png',
+    size: 8,
+    slice: () => ({
+      arrayBuffer: async (): Promise<ArrayBuffer> => {
+        throw new Error('NotReadableError');
+      },
+    }),
+  } as unknown as File;
 }
 
 function installBrowserFakes(): { conversionStarts: () => number; restore: () => void } {
@@ -160,6 +176,133 @@ describe('mountConvertPanel', () => {
   });
 });
 
+describe('中止', () => {
+  test('変換中に中止すると初期表示へ戻り、もう一度変換できる', async () => {
+    const browser = installBrowserFakes();
+
+    try {
+      const panel = new FakePanel(new FakeFileInput(), 'https://example.com/articles/latest');
+      mountConvertPanel(panel as unknown as HTMLElement);
+
+      panel.urlForm.dispatch('submit');
+      await flushPromises();
+      expect(panel.dataset['phase']).toBe('converting');
+
+      panel.abortButton.dispatch('click');
+      await flushPromises();
+      expect(panel.dataset['phase']).toBe('idle');
+
+      panel.urlForm.dispatch('submit');
+      await flushPromises();
+      expect(panel.dataset['phase']).toBe('converting');
+    } finally {
+      browser.restore();
+    }
+  });
+
+  test('変換していないときの中止は何も起こさない', () => {
+    const browser = installBrowserFakes();
+
+    try {
+      const panel = new FakePanel(new FakeFileInput());
+      mountConvertPanel(panel as unknown as HTMLElement);
+
+      panel.abortButton.dispatch('click');
+
+      expect(panel.dataset['phase']).toBe('idle');
+    } finally {
+      browser.restore();
+    }
+  });
+});
+
+describe('入力の事前検査', () => {
+  test('検査そのものが失敗したらエラー表示にする', async () => {
+    const browser = installBrowserFakes();
+
+    try {
+      const input = new FakeFileInput();
+      const panel = new FakePanel(input);
+      mountConvertPanel(panel as unknown as HTMLElement);
+
+      input.files = [unreadablePng()];
+      input.dispatch('change');
+      await flushPromises();
+
+      expect(panel.dataset['phase']).toBe('error');
+    } finally {
+      browser.restore();
+    }
+  });
+});
+
+describe('putMp4', () => {
+  test('返らないアップロードは uploadTimeout になる', async () => {
+    const originalFetch = globalThis.fetch;
+    Object.assign(globalThis, {
+      fetch: (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+        }),
+    });
+
+    try {
+      const failure = await putMp4('https://r2.example/put', new Blob(['mp4']), undefined, 5).catch(
+        (error: unknown) => error
+      );
+
+      expect(failure).toBeInstanceOf(StageTimeoutError);
+      expect((failure as StageTimeoutError).code).toBe('uploadTimeout');
+    } finally {
+      Object.assign(globalThis, { fetch: originalFetch });
+    }
+  });
+});
+
+describe('uploadMp4', () => {
+  test('presign の応答を待つ間に中止されたら、予約した動画を取り消してから抜ける', async () => {
+    const controller = new AbortController();
+    const requests: { url: string; method: string | undefined }[] = [];
+    const originalFetch = globalThis.fetch;
+    Object.assign(globalThis, {
+      fetch: async (url: string, init: RequestInit = {}) => {
+        requests.push({ url, method: init.method });
+        if (url === '/api/uploads/presign/') {
+          // 予約は成立しているが、応答が届くまでの間に利用者が中止した状況。
+          controller.abort();
+          return new Response(
+            JSON.stringify({
+              shortId: 'Ab12Cd34Ef56',
+              uploadUrl: 'https://upload.test/r2-upload',
+              publicUrl: 'https://cdn.test/movies/Ab12Cd34Ef56.mp4',
+            }),
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        return new Response(null, { status: 200 });
+      },
+    });
+
+    try {
+      const failure = await uploadMp4(
+        new Blob(['mp4']),
+        'a.mp4',
+        'image',
+        () => {},
+        0,
+        controller.signal
+      ).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(Error);
+      expect(requests).toContainEqual({ url: '/api/movies/Ab12Cd34Ef56/', method: 'DELETE' });
+      // 中止済みなので R2 へは送らない。
+      expect(requests.some((request) => request.url === 'https://upload.test/r2-upload')).toBe(false);
+    } finally {
+      Object.assign(globalThis, { fetch: originalFetch });
+    }
+  });
+});
+
 describe('uploadErrorCode', () => {
   test.each([
     ['PAGE_TOO_LONG', 400, 'pageTooLong'],
@@ -175,4 +318,13 @@ describe('uploadErrorCode', () => {
   test('ブラウザ内のページ数上限は同じ経路で変換する', () => {
     expect(uploadErrorCode(new ConversionError('tooManyPages', 'too many pages'))).toBe('tooManyPages');
   });
+
+  test.each(['wasmLoadTimeout', 'imageFetchTimeout', 'uploadTimeout'])(
+    '%s の期限切れは詰まった段のコードのまま表示へ渡す',
+    (code) => {
+      expect(uploadErrorCode(new StageTimeoutError(code as 'wasmLoadTimeout'))).toBe(
+        code as ReturnType<typeof uploadErrorCode>
+      );
+    }
+  );
 });

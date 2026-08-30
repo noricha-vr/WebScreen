@@ -305,6 +305,27 @@ test.describe('ログイン済み', () => {
     await expect(page).toHaveURL(/\/Ab12Cd34Ef56\/$/, { timeout: 120_000 });
   });
 
+  test('撮影が返ってこなくても中止ボタンで初期表示へ戻せる', async ({ page }) => {
+    await signIn(page);
+    // 上流が詰まって応答を返さない状態。以前はここで「変換中」のまま操作不能になっていた。
+    await page.route('**/api/capture/', () => {});
+    await page.goto('/ja/');
+
+    const panel = page.locator('[data-convert-panel]');
+    await panel.locator('[data-url-input]').fill('https://example.com/');
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+    await expect(panel).toHaveAttribute('data-phase', 'converting');
+
+    const abort = panel.locator('[data-abort-button]');
+    await expect(abort).toBeVisible();
+    await abort.click();
+
+    await expect(panel).toHaveAttribute('data-phase', 'idle');
+    // 中止したあとはそのまま次の変換を始められる。
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+    await expect(panel).toHaveAttribute('data-phase', 'converting');
+  });
+
   test('アップロードに失敗したら予約した動画を実際に取り消す', async ({ page, context }) => {
     // presign を通った時点で pending の行が予約される。ここで失敗を放置すると
     // 誰も failed へ落とさないまま履歴に「処理中」として残り続けていた。

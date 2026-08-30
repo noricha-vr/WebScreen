@@ -9,6 +9,7 @@
  */
 
 import { MAX_UPLOAD_BYTES, type UploadKind } from '../contracts/api';
+import { STAGE_TIMEOUT_CODES } from '../convert/timeouts';
 import type { ConversionStage } from '../convert/types';
 import { ACCEPT_ATTRIBUTE, detectInputKind } from './input-formats';
 
@@ -63,6 +64,7 @@ export function stageBands(kind: UploadKind | null): Readonly<Record<ProgressSta
   return kind === 'web' ? URL_STAGE_BANDS : FILE_STAGE_BANDS;
 }
 
+// 段ごとの期限切れコードは convert 側が正本。並べ直すと文言と実装がずれるので展開して取り込む。
 export const UPLOAD_ERROR_CODES = [
   'tooLarge',
   'unsupported',
@@ -75,6 +77,7 @@ export const UPLOAD_ERROR_CODES = [
   'imageUrlNotSupported',
   'videoUrlNotSupported',
   'nonWebPageUrl',
+  ...STAGE_TIMEOUT_CODES,
 ] as const;
 export type UploadErrorCode = (typeof UPLOAD_ERROR_CODES)[number];
 export type UploadErrorTarget = 'file' | 'url';

@@ -18,7 +18,15 @@ import {
 import { isShortId } from '../contracts/r2key';
 import { collectCaptures } from './capture-pages';
 import { movieEndpoint } from './history-view';
-import { ConversionError, convertFilesToMp4, convertImageUrlsToMp4 } from '../convert';
+import {
+  API_REQUEST_TIMEOUT_MS,
+  ConversionError,
+  convertFilesToMp4,
+  convertImageUrlsToMp4,
+  StageTimeoutError,
+  UPLOAD_PUT_TIMEOUT_MS,
+  withStageTimeout,
+} from '../convert';
 import {
   INITIAL_UPLOAD_STATE,
   preflightInputFiles,
@@ -121,12 +129,53 @@ function abandonUpload(shortId: string): void {
   }
 }
 
-async function uploadMp4(
+/**
+ * R2 へ本体を送る。期限を切らないと、詰まったときに「アップロード中 95%」のまま返らない。
+ *
+ * timeoutMs を引数に出しているのは短い期限でテストできるようにするため（既定値が正本）。
+ */
+export async function putMp4(
+  uploadUrl: string,
+  mp4: Blob,
+  userSignal?: AbortSignal,
+  timeoutMs: number = UPLOAD_PUT_TIMEOUT_MS
+): Promise<void> {
+  const response = await withStageTimeout('uploadTimeout', timeoutMs, userSignal, (signal) =>
+    fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'video/mp4' },
+      body: mp4,
+      signal,
+    })
+  );
+  if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+}
+
+/**
+ * presign / commit を送る。利用者の中止シグナルは渡さない。
+ *
+ * 予約と確定は「送ったのに結果を知らない」状態を作ってはいけない。中止で打ち切ると
+ * pending の行が誰にも回収されないまま残るため、短い要求として応答を必ず待ち、
+ * 抜ける手段は期限だけにする。
+ */
+function requestUploadApi(path: string, body: unknown): Promise<unknown> {
+  return withStageTimeout('apiTimeout', API_REQUEST_TIMEOUT_MS, undefined, (signal) =>
+    requestJson(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    })
+  );
+}
+
+export async function uploadMp4(
   mp4: Blob,
   filename: string,
   kind: UploadKind,
   dispatch: Dispatch,
-  runGeneration: number
+  runGeneration: number,
+  signal?: AbortSignal
 ): Promise<void> {
   if (mp4.size > MAX_UPLOAD_BYTES) {
     dispatch({ type: 'failed', errorCode: 'tooLarge' }, runGeneration);
@@ -134,24 +183,20 @@ async function uploadMp4(
   }
   dispatch({ type: 'converted' }, runGeneration);
   const presign = asPresignResponse(
-    await requestJson('/api/uploads/presign/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, sizeBytes: mp4.size, kind }),
-    })
+    await requestUploadApi('/api/uploads/presign/', { filename, sizeBytes: mp4.size, kind })
   );
+  // 応答を待っている間に中止された場合。予約だけ残るので、抜ける前に取り消す。
+  if (signal?.aborted) {
+    abandonUpload(presign.shortId);
+    signal.throwIfAborted();
+  }
   dispatch({ type: 'stageRatio', stage: 'uploading', ratio: UPLOAD_PRESIGNED_RATIO }, runGeneration);
 
   // presign を通った時点で pending の行が予約されている。ここから先で失敗すると
   // 誰も failed へ落とさないまま残り、cron が回収するまで容量を占め続ける。
   // ただし取り消してよいのは「まだ ready になっていないと確信できる」失敗だけ。
   try {
-    const upload = await fetch(presign.uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'video/mp4' },
-      body: mp4,
-    });
-    if (!upload.ok) throw new Error(`Upload failed: ${upload.status}`);
+    await putMp4(presign.uploadUrl, mp4, signal);
   } catch (error) {
     // R2 への PUT 段階の失敗。commit を送っていないので確実に pending のまま。
     abandonUpload(presign.shortId);
@@ -161,12 +206,9 @@ async function uploadMp4(
   dispatch({ type: 'stageRatio', stage: 'uploading', ratio: UPLOAD_STORED_RATIO }, runGeneration);
 
   try {
+    // commit は中止でも最後まで送り切る。届いた後の中止は「完了」として扱ってよい。
     const committed = asCommitResponse(
-      await requestJson('/api/uploads/commit/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shortId: presign.shortId }),
-      })
+      await requestUploadApi('/api/uploads/commit/', { shortId: presign.shortId })
     );
     dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
   } catch (error) {
@@ -193,6 +235,8 @@ const API_ERROR_TO_UPLOAD_ERROR: Readonly<Partial<Record<ErrorCode, UploadErrorC
 
 /** API とブラウザ内変換の失敗を、辞書で表示できるエラーコードへ正規化する。 */
 export function uploadErrorCode(error: unknown): UploadErrorCode {
+  // 段ごとの期限切れは、どこで詰まったかがそのまま表示コードになる。
+  if (error instanceof StageTimeoutError) return error.code;
   if (error instanceof ConversionError) {
     return error.code === 'tooManyPages' ? 'tooManyPages' : 'failed';
   }
@@ -225,12 +269,37 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     }
   };
 
-  // BFCache で復元すると完了状態のままになるため、古い非同期処理も無効化して初期表示に戻す。
-  window.addEventListener('pageshow', (event) => {
-    if (!event.persisted) return;
+  let activeRun: AbortController | null = null;
+
+  /** 新しい変換の世代と中止シグナルを起こす。前の変換が残っていれば道連れに止める。 */
+  const startRun = (): { generation: number; signal: AbortSignal } => {
+    activeRun?.abort();
+    activeRun = new AbortController();
+    return { generation: ++generation, signal: activeRun.signal };
+  };
+
+  /** 進行中の変換を捨てて初期表示へ戻す。世代を進めるので遅れて届く報告も無視される。 */
+  const cancelRun = (): void => {
+    if (state.phase !== 'converting' && state.phase !== 'uploading') return;
+    activeRun?.abort();
+    activeRun = null;
     generation += 1;
     state = INITIAL_UPLOAD_STATE;
     renderConvertPanel(panel, state);
+  };
+
+  // BFCache で復元すると完了状態のままになるため、古い非同期処理も無効化して初期表示に戻す。
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    activeRun?.abort();
+    activeRun = null;
+    generation += 1;
+    state = INITIAL_UPLOAD_STATE;
+    renderConvertPanel(panel, state);
+  });
+
+  element(panel, '[data-abort-button]')?.addEventListener('click', () => {
+    cancelRun();
   });
 
   const fileInput = element<HTMLInputElement>(panel, '[data-file-input]');
@@ -238,8 +307,17 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (files.length === 0) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
     // 署名読み取り中に別の入力へ切り替わった場合、古い検証結果で状態を上書きしない。
-    const current = ++generation;
-    const preflight = await preflightInputFiles(files);
+    const { generation: current, signal } = startRun();
+    let preflight;
+    try {
+      preflight = await preflightInputFiles(files);
+    } catch (error) {
+      // 選択後にファイルが読めなくなった等。握り潰すと unhandled rejection のまま
+      // 画面が idle で固まるので、失敗として見せる。
+      console.error('preflight failed', error);
+      dispatch({ type: 'failed', errorCode: 'failed' }, current);
+      return;
+    }
     if (current !== generation) return;
     if (!preflight.ok) {
       dispatch({ type: 'failed', errorCode: 'unsupported' }, current);
@@ -253,9 +331,14 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     dispatch(event, current);
     if (next.phase !== 'converting' || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
     const kind = next.kind;
-    void convertFilesToMp4(files, kind, (progress) => {
-      dispatch({ type: 'stageProgress', ...progress }, current);
-    })
+    void convertFilesToMp4(
+      files,
+      kind,
+      (progress) => {
+        dispatch({ type: 'stageProgress', ...progress }, current);
+      },
+      signal
+    )
       .then((mp4) =>
         uploadMp4(
           mp4,
@@ -265,10 +348,13 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
           ),
           kind,
           dispatch,
-          current
+          current,
+          signal
         )
       )
       .catch((error: unknown) => {
+        // 中止は失敗ではない。cancelRun が既に初期表示へ戻している。
+        if (signal.aborted) return;
         console.error('conversion failed', error);
         dispatch({ type: 'failed', errorCode: uploadErrorCode(error) }, current);
       });
@@ -305,7 +391,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     const url = input?.value.trim();
     if (!url) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
-    const current = ++generation;
+    const { generation: current, signal } = startRun();
     dispatch({ type: 'selectUrl', url }, current);
 
     let pseudoRatio = 0;
@@ -323,6 +409,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url, startIndex }),
+          signal,
         }).then(asCaptureResponse),
       onProgress: (collected, total) => {
         // 実進捗が来たら疑似進捗は用済み。天井へ届く前の tick が後から入ると戻るので止める。
@@ -336,9 +423,11 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       })
       .then((images) => convertImageUrlsToMp4(images, (progress) => {
         dispatch({ type: 'stageProgress', ...progress }, current);
-      }))
-      .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current))
+      }, signal))
+      .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current, signal))
       .catch((error: unknown) => {
+        // 中止は失敗ではない。cancelRun が既に初期表示へ戻している。
+        if (signal.aborted) return;
         console.error('conversion failed', error);
         dispatch({ type: 'failed', errorCode: uploadErrorCode(error), target: 'url' }, current);
       });

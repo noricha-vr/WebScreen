@@ -18,6 +18,10 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
     imageUrlNotSupported: panel.dataset['msgImageUrlNotSupported'],
     videoUrlNotSupported: panel.dataset['msgVideoUrlNotSupported'],
     nonWebPageUrl: panel.dataset['msgNonWebPageUrl'],
+    wasmLoadTimeout: panel.dataset['msgWasmLoadTimeout'],
+    imageFetchTimeout: panel.dataset['msgImageFetchTimeout'],
+    uploadTimeout: panel.dataset['msgUploadTimeout'],
+    apiTimeout: panel.dataset['msgApiTimeout'],
   };
   return messages[code] ?? '';
 }
