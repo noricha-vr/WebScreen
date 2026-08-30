@@ -40,13 +40,17 @@ type ProgressBand = readonly [start: number, end: number];
 /**
  * URL 変換の帯域。撮影が全体の過半を占めるので、長いページでも撮影中にバーが進む。
  *
+ * 準備を 0 幅にしているのは、URL 変換では撮影画像の取得・正規化がエンコード段階の
+ * 書き出し工程の中で 1 枚ずつ流れるため（`convert/imageUrls.ts`）。準備段階を通らないので
+ * 幅を持たせると 55→70% が飛び、最長の工程が残りの狭い区間へ押し込まれる。
+ *
  * 帯域は段階順に昇順で連続させる。これによりバーの単調増加は「段階が戻らないこと」
  * だけで保証でき、進捗値へ下限を後付けする（Math.max）必要がない。
  */
 const URL_STAGE_BANDS: Readonly<Record<ProgressStage, ProgressBand>> = {
   capturing: [0, 55],
-  preparing: [55, 70],
-  encoding: [70, 95],
+  preparing: [55, 55],
+  encoding: [55, 95],
   uploading: [95, 100],
 };
 

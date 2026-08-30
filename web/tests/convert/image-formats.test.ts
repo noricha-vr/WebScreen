@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { FRAME_HEIGHT, FRAME_WIDTH } from '../../src/lib/convert/image';
-import { imageUrlsToFrames } from '../../src/lib/convert/imageUrls';
+import { imageUrlFrameSource } from '../../src/lib/convert/imageUrls';
+import type { VideoFrame } from '../../src/lib/convert/types';
+
+/** 供給元は遅延生成なので、形式の検証に必要な分だけ引き取って並べ直す。 */
+async function collectFrames(urls: readonly string[]): Promise<VideoFrame[]> {
+  const frames: VideoFrame[] = [];
+  for await (const frame of imageUrlFrameSource(urls).frames) frames.push(frame);
+  return frames;
+}
 
 /** JPEG の SOI マーカー。web-capture が png から jpg へ切り替えた時に届くバイト列。 */
 const JPEG_MAGIC = [0xff, 0xd8, 0xff] as const;
@@ -61,7 +69,7 @@ afterEach(() => {
   while (restores.length > 0) restores.pop()?.();
 });
 
-describe('imageUrlsToFrames の入力形式', () => {
+describe('imageUrlFrameSource の入力形式', () => {
   // web-capture は撮影を速くするため JPEG へ切り替える。取り込み側は形式を判定せず
   // createImageBitmap に任せる設計なので、png / jpg のどちらでも同じ結果になること。
   test.each([
@@ -73,7 +81,7 @@ describe('imageUrlsToFrames の入力形式', () => {
     installFetchReturning(magic, mimeType);
     const urls = ['https://cdn.test/0001', 'https://cdn.test/0002', 'https://cdn.test/0003'];
 
-    const frames = await imageUrlsToFrames(urls);
+    const frames = await collectFrames(urls);
 
     expect(frames).toHaveLength(urls.length);
     for (const frame of frames) {
@@ -93,7 +101,7 @@ describe('imageUrlsToFrames の入力形式', () => {
     restores.push(fakes.restore);
     installFetchReturning(JPEG_MAGIC, 'image/jpeg');
 
-    await imageUrlsToFrames(['https://cdn.test/0001']);
+    await collectFrames(['https://cdn.test/0001']);
 
     // convert/encode.ts は frame-%06d.png で ffmpeg に渡すため、正規化後の形式は固定する。
     expect(fakes.canvasCalls).toEqual([{ mime: 'image/png' }]);

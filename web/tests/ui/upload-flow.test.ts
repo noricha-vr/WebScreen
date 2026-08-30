@@ -228,8 +228,8 @@ describe('段階ごとの進捗', () => {
 
     expect(state.stage).toBe('encoding');
     expect([state.current, state.total]).toEqual([88, 100]);
-    // 70〜95% の帯域を 88/100 まで進んだところ。枚数と % が同じ段階を指す。
-    expect(state.progress).toBe(92);
+    // 55〜95% の帯域を 88/100 まで進んだところ。枚数と % が同じ段階を指す。
+    expect(state.progress).toBe(90);
   });
 
   test('段階が進むとバーは後退しない', () => {
@@ -259,7 +259,8 @@ describe('段階ごとの進捗', () => {
 
   test('エンコードの下ごしらえ中もバーが進み、枚数は後退しない', () => {
     // core 読み込みとフレーム書き出しの間は枚数を動かせない（書き出し枚数を出すと実行の
-    // 開始で 0 に戻る）。バーだけを ratio で進め、帯域 70〜95% を 70→73→80→95% と割る。
+    // 開始で 0 に戻る）。バーだけを ratio で進め、URL 変換の帯域 55〜95% を
+    // 55→60→71→95% と割る（工程の内訳 0.12 / 0.4 はファイル変換と共通）。
     const frames = 200;
     const events: UploadEvent[] = [
       { type: 'stageProgress', stage: 'encoding', current: 0, total: frames, ratio: 0 },
@@ -281,7 +282,7 @@ describe('段階ごとの進捗', () => {
       currents.push(state.current);
     }
 
-    expect(progresses).toEqual([70, 73, 75, 80, 88, 95, 95]);
+    expect(progresses).toEqual([55, 60, 63, 71, 83, 95, 95]);
     expect(currents).toEqual([0, 0, 0, 0, 100, 200, 200]);
   });
 
@@ -352,8 +353,9 @@ describe('段階ごとの進捗', () => {
       total: 1,
     });
 
-    // 撮影段階がある URL 変換は準備を 55〜70%、撮影の無いファイル変換は 0〜70% に割り当てる。
-    expect(url.progress).toBe(70);
+    // URL 変換は準備が 0 幅（取得はエンコード段階の書き出し工程で流れる）。
+    // 撮影の無いファイル変換は準備が先頭の 0〜70% を受け持つ。
+    expect(url.progress).toBe(55);
     expect(file.progress).toBe(70);
     expect(reduceUpload(convertingUrl(), { type: 'stageRatio', stage: 'preparing', ratio: 0 }).progress).toBe(55);
     expect(reduceUpload(select('slides.pdf'), { type: 'stageRatio', stage: 'preparing', ratio: 0 }).progress).toBe(0);
