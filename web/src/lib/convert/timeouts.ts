@@ -28,8 +28,18 @@ export const UPLOAD_PUT_TIMEOUT_MS = 120_000;
  */
 export const API_REQUEST_TIMEOUT_MS = 30_000;
 
-/** 期限切れの段。UI の表示コードとしてそのまま辞書を引く。 */
-export const STAGE_TIMEOUT_CODES = ['wasmLoadTimeout', 'imageFetchTimeout', 'uploadTimeout'] as const;
+/**
+ * 期限切れの段。UI の表示コードとしてそのまま辞書を引く。
+ *
+ * apiTimeout（予約・確定の要求）と uploadTimeout（本体の送信）は分ける。前者はまだ 1 バイトも
+ * 送っていないので、利用者に伝えるべきことが違う。
+ */
+export const STAGE_TIMEOUT_CODES = [
+  'wasmLoadTimeout',
+  'imageFetchTimeout',
+  'uploadTimeout',
+  'apiTimeout',
+] as const;
 export type StageTimeoutCode = (typeof STAGE_TIMEOUT_CODES)[number];
 
 /** 段ごとの期限切れ。原因の分かる文言を出すため、段を code として持ち回る。 */
@@ -70,7 +80,7 @@ export function onAbort(signal: AbortSignal | undefined, stop: () => void): () =
 export async function raceAbort<T>(task: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return task;
 
-  let onAbort: (() => void) | undefined;
+  let removeAbortListener: (() => void) | undefined;
   try {
     return await Promise.race([
       task,
@@ -79,12 +89,13 @@ export async function raceAbort<T>(task: Promise<T>, signal?: AbortSignal): Prom
           reject(signal.reason);
           return;
         }
-        onAbort = (): void => reject(signal.reason);
-        signal.addEventListener('abort', onAbort, { once: true });
+        const rejectOnAbort = (): void => reject(signal.reason);
+        removeAbortListener = (): void => signal.removeEventListener('abort', rejectOnAbort);
+        signal.addEventListener('abort', rejectOnAbort, { once: true });
       }),
     ]);
   } finally {
-    if (onAbort) signal.removeEventListener('abort', onAbort);
+    removeAbortListener?.();
   }
 }
 

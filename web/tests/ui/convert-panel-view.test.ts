@@ -46,6 +46,7 @@ class FakePanel {
     msgWasmLoadTimeout: ja.convert.errorWasmLoadTimeout,
     msgImageFetchTimeout: ja.convert.errorImageFetchTimeout,
     msgUploadTimeout: ja.convert.errorUploadTimeout,
+    msgApiTimeout: ja.convert.errorApiTimeout,
   };
   readonly nodes = new Map<string, FakeNode>();
 

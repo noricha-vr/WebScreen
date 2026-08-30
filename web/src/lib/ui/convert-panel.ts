@@ -159,7 +159,7 @@ export async function putMp4(
  * 抜ける手段は期限だけにする。
  */
 function requestUploadApi(path: string, body: unknown): Promise<unknown> {
-  return withStageTimeout('uploadTimeout', API_REQUEST_TIMEOUT_MS, undefined, (signal) =>
+  return withStageTimeout('apiTimeout', API_REQUEST_TIMEOUT_MS, undefined, (signal) =>
     requestJson(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -21,6 +21,7 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
     wasmLoadTimeout: panel.dataset['msgWasmLoadTimeout'],
     imageFetchTimeout: panel.dataset['msgImageFetchTimeout'],
     uploadTimeout: panel.dataset['msgUploadTimeout'],
+    apiTimeout: panel.dataset['msgApiTimeout'],
   };
   return messages[code] ?? '';
 }

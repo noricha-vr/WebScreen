@@ -61,6 +61,7 @@
     "errorWasmLoadTimeout": "Loading the video encoder took too long. Check your connection and try again.",
     "errorImageFetchTimeout": "Downloading the captured images took too long. Please try again.",
     "errorUploadTimeout": "Uploading the video took too long. Check your connection and try again.",
+    "errorApiTimeout": "The server took too long to respond. Please try again in a little while.",
     "abort": "Cancel conversion",
     "batchNameSuffix": "+{count}"
   },
