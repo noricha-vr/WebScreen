@@ -16,7 +16,11 @@ import {
 } from '../contracts/api';
 import { isShortId, movieKey, movieUrl } from '../contracts/r2key';
 import { logWorkerFailure } from '../infra/worker-log';
-import { purgeMovieCache, type CachePurgeSettings } from './cache-purge';
+import {
+  logMovieDeletePurgeFailure,
+  purgeMovieCache,
+  type CachePurgeSettings,
+} from './cache-purge';
 import {
   MAX_PINNED_MOVIES,
   MOVIE_RETENTION_MS,
@@ -295,7 +299,11 @@ export async function deleteMovie(
   // 削除済みの動画が配信され続ける（docs/r2-delivery.md）。D1 の行を消す前に呼ぶのは、
   // 行の削除が失敗して実体だけ消えた場合でもキャッシュを残さないため。purge は例外を
   // 投げない契約なので、失敗しても削除は 204 で完了する（120 分で自然に切れる）。
-  await purgeMovieCache([input.shortId], input.cachePurge);
+  //
+  // バッチは件数を summary に出せるが、対話削除にはその出口が無い。失敗を握り潰すと
+  // 「消したのに見える」が誰にも見えないまま起きるため、この経路だけログに残す。
+  const purge = await purgeMovieCache([input.shortId], input.cachePurge);
+  if (purge.failures > 0) logMovieDeletePurgeFailure(input.cachePurge.source);
 
   try {
     await input.database

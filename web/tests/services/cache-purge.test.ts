@@ -98,6 +98,23 @@ describe('purgeMovieCache', () => {
     expect(JSON.parse(logs[0]!).event).toBe('cache_purge_skipped');
   });
 
+  it('公開 URL を組み立てられない設定では、黙って諦めずログに残す', async () => {
+    const api = new FakePurgeApi();
+    let result = { requests: 0, failures: 0 };
+
+    const logs = await captureWarnLogs(async () => {
+      result = await purgeMovieCache(
+        shortIds(1),
+        // 配信元が URL として解釈できない（vars の設定ミス）。
+        settings({ publicBaseUrl: 'not a url', fetcher: api.fetcher })
+      );
+    });
+
+    expect(result).toEqual({ requests: 1, failures: 1 });
+    expect(api.batches).toEqual([]);
+    expect(JSON.parse(logs[0]!).event).toBe('cache_purge_url_invalid');
+  });
+
   it('消すものが無い実行では設定を見ず、ログも出さない', async () => {
     let result = { requests: 1, failures: 1 };
 

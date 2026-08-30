@@ -47,7 +47,8 @@ export const MAX_EXPIRED_DELETIONS_PER_RUN = 50;
  * 各フェーズの最悪ケースの合計を Workers の上限（1 回の実行で 1000 subrequest）より
  * 下に保つ: 期限の補完 1、期限切れ 1 + 50 × 4 = 201、pending 1 + 150 × 3 = 451、
  * failed 1 + 1 + 10 = 12、captures 10 ページ × 2 = 20、監査 2 + 50 + 50 = 102、
- * キャッシュ purge が 30 URL ごとに 1 回で (50 + 150 + 500) / 30 → 24。合計 811。
+ * キャッシュ purge は経路ごとに 30 URL で 1 回なので ceil(50/30) + ceil(150/30) +
+ * ceil(500/30) = 2 + 5 + 17 = 24。合計 811。
  */
 export const MAX_PENDING_CLAIMS_PER_RUN = 150;
 

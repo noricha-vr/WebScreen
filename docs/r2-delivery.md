@@ -55,12 +55,14 @@ bunx wrangler r2 bucket cors list webscreen-beta   # 確認
 
 mp4 は Cloudflare の[既定キャッシュ対象](https://developers.cloudflare.com/cache/concepts/default-cache-behavior/)で、200 / 206 の Edge TTL は 120 分（参照日 2026-08-27）。R2 から実体を消しただけでは、その間キャッシュから配信され続ける（r2.dev 経由ではキャッシュされないため、Custom Domain 化で生じた挙動）。
 
-そのため**削除経路はすべて、R2 の実体を消した直後に公開 URL の purge を投げる**。
+そのため**動画の削除経路は、R2 の実体を消した直後に公開 URL の purge を投げる**。
 
 | 経路 | 実装 |
 |---|---|
 | 所有者の削除（`DELETE /api/movies/{shortId}/`） | `web/src/lib/services/movies.ts` の `deleteMovie` |
 | 保持期間バッチ（期限切れ・pending 孤児・failed の掃除） | `web/src/lib/services/retention.ts` の各経路 |
+
+`captures/` の掃除（`retention-captures.ts`）は purge しない。中間 PNG は変換が終われば誰も参照せず、キャッシュに残っても動画の削除の意図に反しないため。
 
 purge の実体は `web/src/lib/infra/cloudflare-purge.ts`（Cloudflare の `purge_cache` API）、URL の組み立てと 30 件ずつの分割は `web/src/lib/services/cache-purge.ts`。**公開 URL は `contracts/r2key.ts` の `movieUrl()` で組み立てる**（purge は URL の完全一致でしか効かないため、表示側と別々に組み立てない）。
 

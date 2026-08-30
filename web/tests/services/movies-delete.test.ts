@@ -184,6 +184,10 @@ describe('deleteMovie', () => {
     });
 
     expect(database.deletedRows).toBe(1);
-    expect(JSON.parse(logs[0]!).event).toBe('cache_purge_failed');
+    // infra の失敗に続けて、削除経路として気づける 1 行も残す。
+    expect(logs.map((line) => JSON.parse(line).event)).toEqual([
+      'cache_purge_failed',
+      'movie_delete_cache_purge_failed',
+    ]);
   });
 });

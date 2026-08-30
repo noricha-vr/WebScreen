@@ -51,7 +51,7 @@ export function isPurgeZoneId(zoneId: string): boolean {
  */
 function logFailure(
   source: string,
-  reason: 'request_failed' | 'rejected',
+  reason: 'request_failed' | 'rejected' | 'not_successful',
   count: number,
   status?: number
 ): void {
@@ -61,6 +61,8 @@ function logFailure(
       source,
       severity: 'warn',
       kind: 'event',
+      // infra/worker-log.ts と同じ形にする（ダッシュボードの level 絞り込みから漏れないため）。
+      level: 'warn',
       event: 'cache_purge_failed',
       reason,
       status,
@@ -73,8 +75,10 @@ function logFailure(
 /**
  * URL 単位のキャッシュ purge を 1 回投げる。成功で true、失敗で false（例外は投げない）。
  *
- * 判定は HTTP ステータスだけで行う。Cloudflare は拒否を非 2xx で返すため、本文の
- * `success` を読んでも判断は変わらない（JSON パースという失敗経路が増えるだけ）。
+ * ステータスに加えて本文の `success` も見る。Cloudflare は拒否を非 2xx で返すのが基本
+ * だが、200 + `success: false` を返す経路があるため、ステータスだけだと消えていない
+ * purge を成功と数えてしまう。本文が読めない・JSON でない場合はステータスで判定する
+ * （判定不能を失敗に倒すと、実際は消えているのに失敗として数え続けることになる）。
  */
 export async function purgeCachedUrls(input: PurgeCachedUrlsInput): Promise<boolean> {
   if (input.urls.length === 0) return true;
@@ -105,5 +109,26 @@ export async function purgeCachedUrls(input: PurgeCachedUrlsInput): Promise<bool
     logFailure(input.source, 'rejected', input.urls.length, response.status);
     return false;
   }
+
+  if (await isRejectedBody(response)) {
+    logFailure(input.source, 'not_successful', input.urls.length, response.status);
+    return false;
+  }
   return true;
+}
+
+/**
+ * 2xx だが本文が `success: false` を名乗っているか。
+ *
+ * 本文が読めない・JSON でない・`success` を持たない場合は false（= ステータスの判定を
+ * 採用する）。Cloudflare の応答形式が変わっても、成功している purge を失敗に化けさせない。
+ */
+async function isRejectedBody(response: Response): Promise<boolean> {
+  try {
+    const body: unknown = await response.json();
+    if (typeof body !== 'object' || body === null || !('success' in body)) return false;
+    return body.success === false;
+  } catch {
+    return false;
+  }
 }

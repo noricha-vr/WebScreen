@@ -66,6 +66,39 @@ describe('purgeCachedUrls', () => {
     expect(logs[0]).not.toContain(API_TOKEN);
   });
 
+  it('200 でも本文が success: false なら失敗として扱う', async () => {
+    let purged = true;
+    const logs = await captureWarnLogs(async () => {
+      purged = await purgeCachedUrls({
+        urls: [URL_A],
+        zoneId: ZONE_ID,
+        apiToken: API_TOKEN,
+        source: 'test-worker',
+        fetcher: () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ success: false, errors: [{ code: 1012 }] }), {
+              status: 200,
+            })
+          ),
+      });
+    });
+
+    expect(purged).toBe(false);
+    expect(JSON.parse(logs[0]!).reason).toBe('not_successful');
+  });
+
+  it('本文が JSON でなくてもステータスが 2xx なら成功として扱う', async () => {
+    const purged = await purgeCachedUrls({
+      urls: [URL_A],
+      zoneId: ZONE_ID,
+      apiToken: API_TOKEN,
+      source: 'test-worker',
+      fetcher: () => Promise.resolve(new Response('OK', { status: 200 })),
+    });
+
+    expect(purged).toBe(true);
+  });
+
   it('ネットワーク障害でも false を返し、呼び出し側を落とさない', async () => {
     let purged = true;
     const logs = await captureWarnLogs(async () => {

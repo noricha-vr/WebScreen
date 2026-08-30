@@ -6,7 +6,7 @@ import {
   type PresignRequest,
   type PresignResponse,
 } from '../contracts/api';
-import { generateShortId, movieKey } from '../contracts/r2key';
+import { generateShortId, movieKey, movieUrl } from '../contracts/r2key';
 import { createR2PutPresignedUrl, type R2PresignConfig } from '../infra/r2presign';
 import { logWorkerFailure } from '../infra/worker-log';
 import {
@@ -112,7 +112,7 @@ export async function createPendingUpload(
   return {
     shortId,
     uploadUrl,
-    publicUrl: createPublicUrl(input.publicBaseUrl, key),
+    publicUrl: movieUrl(input.publicBaseUrl, shortId),
   };
 }
 
@@ -236,14 +236,10 @@ async function resolveCommitConflict(input: CommitUploadInput): Promise<CommitRe
   throw new UploadError(400, ERROR_CODES.invalidRequest, 'この動画は commit できません');
 }
 
-function createPublicUrl(publicBaseUrl: string, key: string): string {
-  return new URL(key, `${publicBaseUrl}/`).toString();
-}
-
 function toCommitResponse(movie: MovieRow, publicBaseUrl: string): CommitResponse {
   return {
     shortId: movie.short_id,
-    publicUrl: createPublicUrl(publicBaseUrl, movieKey(movie.short_id)),
+    publicUrl: movieUrl(publicBaseUrl, movie.short_id),
     sizeBytes: movie.size_bytes,
     expiresAt: movie.expires_at,
   };
