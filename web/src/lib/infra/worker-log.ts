@@ -1,4 +1,5 @@
 import type { ErrorCode } from '../contracts/api';
+import type { ClientErrorCode, ClientErrorStage } from '../contracts/client-error';
 
 const SOURCE = 'webscreen-beta-worker';
 
@@ -61,4 +62,40 @@ export function logWorkerFailure({
     return;
   }
   console.error(entry);
+}
+
+/**
+ * ブラウザ内で完結した失敗（撮影・変換・アップロードなど）を 1 行 JSON として記録する。
+ *
+ * 出すのは検証済みの識別子だけ。URL・Cookie・User-Agent・本文は含めない
+ * （報告者は無認証のクライアントなので、通した値はそのままログに焼き付く）。
+ * level を warn にするのは Worker 自身の失敗ではないため。混ぜると Worker の
+ * エラー率が読めなくなる。
+ */
+export function logClientError({
+  stage,
+  errorCode,
+  httpStatus,
+  userId,
+}: {
+  stage: ClientErrorStage;
+  errorCode: ClientErrorCode;
+  httpStatus?: number;
+  userId?: number;
+}): void {
+  console.warn(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      source: SOURCE,
+      severity: 'warn',
+      kind: 'event',
+      level: 'warn',
+      event: 'client_error',
+      stage,
+      errorCode,
+      httpStatus,
+      userId,
+      summary: `client reported ${errorCode} at ${stage}.`,
+    })
+  );
 }
