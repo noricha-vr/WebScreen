@@ -17,6 +17,11 @@ import {
 } from '../contracts/api';
 import { isShortId } from '../contracts/r2key';
 import { collectCaptures } from './capture-pages';
+import {
+  clientErrorHttpStatus,
+  conversionClientStage,
+  reportClientError,
+} from './client-error-report';
 import { movieEndpoint } from './history-view';
 import {
   API_REQUEST_TIMEOUT_MS,
@@ -178,6 +183,7 @@ export async function uploadMp4(
   signal?: AbortSignal
 ): Promise<void> {
   if (mp4.size > MAX_UPLOAD_BYTES) {
+    reportClientError({ stage: 'upload', errorCode: 'tooLarge' });
     dispatch({ type: 'failed', errorCode: 'tooLarge' }, runGeneration);
     return;
   }
@@ -269,6 +275,18 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     }
   };
 
+  /**
+   * 失敗した段を報告する。dispatch より先に呼ぶこと（失敗の状態遷移は stage を
+   * 捨てるので、後から読むとどの段で落ちたか分からなくなる）。
+   */
+  const reportFailure = (error: unknown, errorCode: UploadErrorCode): void => {
+    reportClientError({
+      stage: conversionClientStage(state.stage),
+      errorCode,
+      httpStatus: clientErrorHttpStatus(error),
+    });
+  };
+
   let activeRun: AbortController | null = null;
 
   /** 新しい変換の世代と中止シグナルを起こす。前の変換が残っていれば道連れに止める。 */
@@ -312,14 +330,21 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     try {
       preflight = await preflightInputFiles(files);
     } catch (error) {
+      // 捨てられた世代の失敗は画面にも報告にも出さない（利用者が既に次の入力へ
+      // 進んでおり、その失敗はもうどこにも影響しない）。
+      if (signal.aborted || current !== generation) return;
       // 選択後にファイルが読めなくなった等。握り潰すと unhandled rejection のまま
       // 画面が idle で固まるので、失敗として見せる。
       console.error('preflight failed', error);
+      reportClientError({ stage: 'convert', errorCode: 'failed' });
       dispatch({ type: 'failed', errorCode: 'failed' }, current);
       return;
     }
     if (current !== generation) return;
     if (!preflight.ok) {
+      // 入力そのものが対象外。撮影も変換も始まっていないが、どの入力が弾かれて
+      // いるかは運用側から見えないので報告する（段は変換の入口として convert）。
+      reportClientError({ stage: 'convert', errorCode: 'unsupported' });
       dispatch({ type: 'failed', errorCode: 'unsupported' }, current);
       return;
     }
@@ -329,6 +354,11 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     };
     const next = reduceUpload(state, event);
     dispatch(event, current);
+    // 選択の時点で弾かれた入力（大きすぎる・種類が混ざっている等）も報告する。
+    // 変換が始まらない失敗は console にすら残らず、運用側から完全に見えないため。
+    if (next.phase === 'error' && next.errorCode !== null) {
+      reportClientError({ stage: 'convert', errorCode: next.errorCode });
+    }
     if (next.phase !== 'converting' || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
     const kind = next.kind;
     void convertFilesToMp4(
@@ -356,7 +386,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         // 中止は失敗ではない。cancelRun が既に初期表示へ戻している。
         if (signal.aborted) return;
         console.error('conversion failed', error);
-        dispatch({ type: 'failed', errorCode: uploadErrorCode(error) }, current);
+        const errorCode = uploadErrorCode(error);
+        reportFailure(error, errorCode);
+        dispatch({ type: 'failed', errorCode }, current);
       });
   };
   fileInput?.addEventListener('change', () => {
@@ -429,7 +461,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         // 中止は失敗ではない。cancelRun が既に初期表示へ戻している。
         if (signal.aborted) return;
         console.error('conversion failed', error);
-        dispatch({ type: 'failed', errorCode: uploadErrorCode(error), target: 'url' }, current);
+        const errorCode = uploadErrorCode(error);
+        reportFailure(error, errorCode);
+        dispatch({ type: 'failed', errorCode, target: 'url' }, current);
       });
   });
 

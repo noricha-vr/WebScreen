@@ -7,6 +7,7 @@
  */
 
 import type { HistoryEntry } from '../contracts/api';
+import { reportClientError, reportRequestFailure } from './client-error-report';
 import {
   HISTORY_ENDPOINT,
   formatRelativeTime,
@@ -70,6 +71,7 @@ function wireDelete(row: HTMLElement, root: HTMLElement, fetchImpl: typeof fetch
         }, fetchImpl);
       } catch (requestError) {
         error = requestError;
+        reportRequestFailure('delete', requestError);
       }
 
       if (error !== undefined) {
@@ -126,6 +128,7 @@ async function load(root: HTMLElement, fetchImpl: typeof fetch): Promise<void> {
   try {
     payload = await requestJson(HISTORY_ENDPOINT, { credentials: 'same-origin' }, fetchImpl);
   } catch (error) {
+    reportRequestFailure('history', error);
     showError(root, requestFailureMessage(root, error, root.dataset['msgHistoryFailed'] ?? ''));
     return;
   }
@@ -134,6 +137,9 @@ async function load(root: HTMLElement, fetchImpl: typeof fetch): Promise<void> {
   if (malformed || dropped > 0) {
     // 読めた行だけ出すと、全件落ちた時に「履歴なし」と見分けが付かない。
     console.error(malformed ? 'history_payload_malformed' : `history_entries_dropped: ${dropped}`);
+    // 応答は 200 なので通信の失敗としては見えない。中身が壊れていることは
+    // console だけでなくサーバー側にも残す（送るのは段とコードだけ）。
+    reportClientError({ stage: 'history', errorCode: 'failed' });
     showError(root, root.dataset['msgHistoryFailed'] ?? '');
     return;
   }

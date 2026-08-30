@@ -528,6 +528,37 @@ test.describe('ログイン済み', () => {
     await expect(panel.locator('[data-file-error]')).toBeHidden();
     await expect(panel.getByText(rawMessage)).toHaveCount(0);
   });
+
+  test('変換の失敗は落ちた段と表示コードだけをサーバーへ報告する', async ({ page }) => {
+    await signIn(page);
+    await page.route('**/api/capture/', (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({ errorCode: 'PDF_URL_NOT_SUPPORTED', message: 'internal upstream detail' }),
+      })
+    );
+    // 失敗を起こす前に受け口を用意する（beacon は失敗表示と同時に飛ぶ）。
+    // 全件を溜めて 1 件目だけを見る（何件目が来るかは送信間隔の実装に依存させない）。
+    const reports: string[] = [];
+    await page.route('**/api/client-error/', (route) => {
+      reports.push(route.request().postData() ?? '');
+      return route.fulfill({ status: 204 });
+    });
+    await page.goto('/ja/');
+
+    const panel = page.locator('[data-convert-panel]');
+    await panel.locator('[data-url-input]').fill('https://example.com/report.pdf');
+    await panel.locator('[data-url-form] button[type="submit"]').click();
+
+    await expect.poll(() => reports.length).toBeGreaterThan(0);
+    // URL・ファイル名・下流メッセージが混ざらないことを本文の完全一致で固定する。
+    expect(JSON.parse(reports[0] ?? '')).toEqual({
+      stage: 'capture',
+      errorCode: 'pdfUrlNotSupported',
+      httpStatus: 422,
+    });
+  });
 });
 
 // 320px は想定する最小幅。ここで横スクロールが出ると、狭い画面でヘッダーが
