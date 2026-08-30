@@ -38,6 +38,7 @@ describe('parseHistoryEntries', () => {
         },
       ],
       dropped: 0,
+      malformed: false,
     });
   });
 
@@ -49,6 +50,7 @@ describe('parseHistoryEntries', () => {
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0]?.shortId).toBe('AbCdEf123456');
     expect(result.dropped).toBe(3);
+    expect(result.malformed).toBe(false);
   });
 
   test('pin されていない動画の expiresAt は残す', () => {
@@ -57,8 +59,16 @@ describe('parseHistoryEntries', () => {
     ).toBeNull();
   });
 
-  test.each([[null], [{}], [{ movies: 'x' }], [[]]])('%p は空配列', (payload) => {
-    expect(parseHistoryEntries(payload)).toEqual({ entries: [], dropped: 0 });
+  test.each([[null], [{}], [{ movies: 'x' }], [[]]])('%p は契約違反として印を付ける', (payload) => {
+    expect(parseHistoryEntries(payload)).toEqual({ entries: [], dropped: 0, malformed: true });
+  });
+
+  test('0 件の応答は契約違反ではない', () => {
+    expect(parseHistoryEntries({ movies: [] })).toEqual({
+      entries: [],
+      dropped: 0,
+      malformed: false,
+    });
   });
 });
 

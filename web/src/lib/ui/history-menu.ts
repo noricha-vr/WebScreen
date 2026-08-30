@@ -130,10 +130,10 @@ async function load(root: HTMLElement, fetchImpl: typeof fetch): Promise<void> {
     return;
   }
 
-  const { entries, dropped } = parseHistoryEntries(payload);
-  if (dropped > 0) {
+  const { entries, dropped, malformed } = parseHistoryEntries(payload);
+  if (malformed || dropped > 0) {
     // 読めた行だけ出すと、全件落ちた時に「履歴なし」と見分けが付かない。
-    console.error(`history_entries_dropped: ${dropped}`);
+    console.error(malformed ? 'history_payload_malformed' : `history_entries_dropped: ${dropped}`);
     showError(root, root.dataset['msgHistoryFailed'] ?? '');
     return;
   }

@@ -42,10 +42,14 @@ function readStatus(record: Record<string, unknown>): MovieStatus | null {
   return (MOVIE_STATUSES as readonly string[]).includes(value) ? (value as MovieStatus) : null;
 }
 
-/** 履歴応答の読み取り結果。dropped は形が違って読めなかった行数。 */
+/**
+ * 履歴応答の読み取り結果。dropped は形が違って読めなかった行数、
+ * malformed は応答そのものが `{ movies: [...] }` の契約から外れていたこと。
+ */
 export interface HistoryParseResult {
   entries: HistoryEntry[];
   dropped: number;
+  malformed: boolean;
 }
 
 /**
@@ -53,14 +57,13 @@ export interface HistoryParseResult {
  *
  * 形が違う行は捨てるが、件数を返して呼び出し側に判断させる。黙って間引くと、
  * 全件落ちた時に「履歴なし」と区別できず、履歴があるのに空として表示してしまう。
- *
- * note: movies が配列でないトップレベルの異常は 0 件として返す（呼び出し側は空表示）。
- * 行単位の欠落とは別の契約違反なので、扱いを分けるなら呼び出し側で判定する。
+ * movies が配列でないトップレベルの契約違反も、0 件（履歴なし）に化けないよう
+ * malformed で区別する。
  */
 export function parseHistoryEntries(payload: unknown): HistoryParseResult {
   const record = asRecord(payload);
   const movies = record?.['movies'];
-  if (!Array.isArray(movies)) return { entries: [], dropped: 0 };
+  if (!Array.isArray(movies)) return { entries: [], dropped: 0, malformed: true };
 
   const entries: HistoryEntry[] = [];
   let dropped = 0;
@@ -91,7 +94,7 @@ export function parseHistoryEntries(payload: unknown): HistoryParseResult {
       publicUrl,
     });
   }
-  return { entries, dropped };
+  return { entries, dropped, malformed: false };
 }
 
 /**

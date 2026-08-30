@@ -168,6 +168,9 @@ export type PreviewOwnerResult = { ok: true; isOwner: boolean } | { ok: false };
  *
  * Cookie 不在は鍵にも D1 にも触らずに非所有者で確定させる。所有者は必ず Cookie を持つので
  * 障害の可視性は落ちず、鍵が壊れても匿名の公開閲覧（VRChat からの再生）は巻き込まない。
+ *
+ * 鍵のローテーションで値が入れ替わった場合は import 自体は成功し、旧鍵の Cookie が
+ * 署名不一致になるだけなので 503 ではなく非所有者になる（全員がログアウト相当に見える）。
  */
 export async function resolvePreviewOwner(
   request: Request,
@@ -185,11 +188,12 @@ export async function resolvePreviewOwner(
       nowSeconds: deps.nowSeconds,
     });
     return { ok: true, isOwner: result.ok && result.user.id === deps.ownerId };
-  } catch {
+  } catch (error) {
     logWorkerFailure({
       event: 'preview_owner_check_failed',
       errorCode: ERROR_CODES.internalError,
       status: 503,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
     });
     return { ok: false };
   }

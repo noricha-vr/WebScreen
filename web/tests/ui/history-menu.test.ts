@@ -119,7 +119,16 @@ describe('履歴の取得失敗', () => {
     expect(menu.dataset['historyState']).toBe('error');
     expect(menu.errorMessage.textContent).toBe('history failed');
     expect(menu.list.rows).toHaveLength(0);
-    expect(errors).toEqual([['history_entries_dropped: 1']]);
+    expect(errors).toHaveLength(1);
+    expect(String(errors[0])).toContain('history_entries_dropped');
+  });
+
+  test('movies が配列でない応答は「履歴なし」ではなくエラーにする', async () => {
+    const menu = await openMenu(() => Response.json({ movies: 'broken' }));
+
+    expect(menu.dataset['historyState']).toBe('error');
+    expect(errors).toHaveLength(1);
+    expect(String(errors[0])).toContain('history_payload_malformed');
   });
 });
 

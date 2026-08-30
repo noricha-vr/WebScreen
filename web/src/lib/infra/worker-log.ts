@@ -31,12 +31,15 @@ export function logWorkerFailure({
   errorCode,
   status,
   upstreamStatus,
+  errorName,
 }: {
   level?: WorkerLogLevel;
   event: WorkerFailureEvent;
   errorCode: ErrorCode;
   status: number;
   upstreamStatus?: number;
+  /** 例外の種別だけ（`error.name`）。message / stack は内容が読めないので入れない。 */
+  errorName?: string;
 }): void {
   // URL・Cookie・上流本文は含めず、Cloudflare observability で安全に絞り込める項目だけを出す。
   const entry = JSON.stringify({
@@ -49,6 +52,7 @@ export function logWorkerFailure({
     errorCode,
     status,
     upstreamStatus,
+    errorName,
     summary: `${event} returned ${status} ${errorCode}.`,
   });
   if (level === 'warn') {

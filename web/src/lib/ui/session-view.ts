@@ -32,14 +32,28 @@ export function applyViewer(root: HTMLElement, viewer: Viewer): void {
 }
 
 /**
+ * 失敗の告知。role="alert" は CSS の display 切り替えでは読み上げられないので、
+ * hidden を外して文言を差し込む（辞書の値は data-* で HTML から受け取る）。
+ */
+function announceAuthFailure(root: HTMLElement): void {
+  for (const element of root.querySelectorAll<HTMLElement>('[data-session-error]')) {
+    const target = element.querySelector<HTMLElement>('[data-session-error-message]');
+    if (target) target.textContent = element.dataset['msgSessionUnavailable'] ?? '';
+    element.hidden = false;
+  }
+}
+
+/**
  * 認証基盤の異常。guest と分けて `error` に倒し、画面と console の両方に残す。
  *
  * guest へ倒すと、ログイン済みのユーザーが黙ってログアウトしたように見えるだけで
- * 誰も障害に気づけない（ログイン導線を押しても直らない）。
+ * 誰も障害に気づけない。ログイン導線は残すが、状態が不明なことは必ず知らせる。
  */
-function failAuthState(root: HTMLElement, ...detail: unknown[]): 'error' {
-  console.error('session_state_unresolved:', ...detail);
+function failAuthState(root: HTMLElement, reason: string): 'error' {
+  // 理由は種別だけ（例外の message / stack は個人情報や URL を含みうる）。
+  console.error(`session_state_unresolved: ${reason}`);
   root.dataset['authState'] = 'error';
+  announceAuthFailure(root);
   return 'error';
 }
 
@@ -57,7 +71,7 @@ export async function resolveAuthState(
   try {
     response = await fetchImpl(ME_ENDPOINT, { credentials: 'same-origin' });
   } catch (error) {
-    return failAuthState(root, 'request failed', error);
+    return failAuthState(root, error instanceof Error ? error.name : 'UnknownError');
   }
 
   if (response.status === 401) {

@@ -50,7 +50,7 @@ const LOGOUT_URL = '/api/auth/logout/';
 
     <div class="flex items-center gap-3">
       <a
-        data-auth-only="guest"
+        data-auth-only="guest error"
         href={LOGIN_URL}
         class="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-brand-500 px-3 py-2 text-base font-semibold text-white hover:bg-brand-700"
       >
@@ -58,15 +58,21 @@ const LOGOUT_URL = '/api/auth/logout/';
         <span>{t.nav.login}</span>
       </a>
 
-      {/* 認証基盤の異常。guest（ログイン導線）に倒すと障害が見えなくなるので、
-          ログイン状態を確認できなかったことをそのまま出す。 */}
+      {/* 認証基盤の異常。guest（ログイン導線）は残したうえで、状態を確認できなかったことを
+          そのまま出す。CSS の display 切り替えでは支援技術に通知されないため、
+          session-view.ts が hidden を外して文言を差し込む（文言は data-* 経由）。
+          display ユーティリティを付けないのは hidden 属性を上書きしないため。 */}
       <p
-        data-auth-only="error"
+        data-session-error
+        hidden
         role="alert"
-        class="flex items-center gap-2 text-base font-semibold text-red-700"
+        data-msg-session-unavailable={t.nav.sessionUnavailable}
+        class="m-0 text-base font-semibold text-red-700"
       >
-        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
-        <span>{t.nav.sessionUnavailable}</span>
+        <span class="inline-flex items-center gap-2">
+          <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+          <span data-session-error-message></span>
+        </span>
       </p>
 
       <div data-auth-only="member" class="flex items-center gap-2">

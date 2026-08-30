@@ -94,7 +94,8 @@ describe('resolvePreviewOwner', () => {
     expect(result).toEqual({ ok: true, isOwner: false });
   });
 
-  test('署名が通らない Cookie は非所有者にする（基盤の異常ではない）', async () => {
+  test('署名が通らない Cookie は非所有者にする（基盤の異常ではないのでログも出さない）', async () => {
+    captureWorkerLog();
     const db = new FakeUsersDatabase(null);
 
     const result = await resolvePreviewOwner(requestWithCookie('tampered.value'), {
@@ -105,6 +106,7 @@ describe('resolvePreviewOwner', () => {
     });
 
     expect(result).toEqual({ ok: true, isOwner: false });
+    expect(errors).toHaveLength(0);
   });
 
   test('署名鍵が壊れていれば失敗として返す', async () => {
@@ -121,6 +123,7 @@ describe('resolvePreviewOwner', () => {
     expect(result).toEqual({ ok: false });
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain('preview_owner_check_failed');
+    expect(errors[0]).toContain('DataError');
   });
 
   test('D1 が落ちていれば失敗として返す（他人の動画にしない）', async () => {

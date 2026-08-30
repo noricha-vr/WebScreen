@@ -13,8 +13,9 @@ const { lang } = Astro.props;
 ---
 
 <div class="mx-auto max-w-5xl px-4 py-12">
-  <!-- 未ログイン / ログイン済みの両方を出しておき、data-auth-state で切り替える -->
-  <div data-auth-only="guest">
+  {/* 未ログイン / ログイン済みの両方を出しておき、data-auth-state で切り替える。 */}
+  {/* error（認証基盤の障害）でも guest 側を出すのは、復帰手段まで消さないため。 */}
+  <div data-auth-only="guest error">
     <NoticeBanner lang={lang} />
     <GuestHero lang={lang} />
   </div>
