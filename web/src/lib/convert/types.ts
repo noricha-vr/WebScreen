@@ -9,6 +9,20 @@ export interface VideoFrame {
 }
 
 /**
+ * エンコーダへ渡すフレームの供給元。
+ *
+ * 配列そのものを渡す経路（PDF・ローカル画像）と、1 枚ずつ生成して渡す経路
+ * （撮影画像の取得）を同じ入口で受けるための形。総数は 1 枚も作らないうちに
+ * 分かる必要がある（進捗の帯域計算に使うため）。
+ */
+export interface FrameSource {
+  /** 供給されるフレームの総数。 */
+  readonly total: number;
+  /** 順序を保ったフレーム列。遅延生成なら消費した分しかメモリに載らない。 */
+  readonly frames: AsyncIterable<VideoFrame> | Iterable<VideoFrame>;
+}
+
+/**
  * 変換工程の段階。UI は段階ごとに進捗バーの帯域を割り当てるため、
  * どの工程の進捗かを進捗そのものと一緒に受け取る必要がある。
  * 撮影・アップロードは convert の外側の工程なのでここには含めない。

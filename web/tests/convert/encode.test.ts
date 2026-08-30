@@ -8,7 +8,6 @@ import {
   runningProgress,
   startLoadPseudoProgress,
 } from '../../src/lib/convert/encode';
-import { fetchImagesInOrder } from '../../src/lib/convert/imageUrls';
 import { assertPdfPageCount, MAX_PDF_PAGES } from '../../src/lib/convert/pdf';
 
 describe('VRChat 向け FFmpeg 引数', () => {
@@ -99,17 +98,6 @@ describe('エンコードの進捗', () => {
     expect(encodePhaseRatio('running', Number.NaN, 200)).toBeCloseTo(0.4);
     expect(encodePhaseRatio('running', 400, 200)).toBe(1);
   });
-});
-
-test('キャプチャ画像 URL は非同期応答順でなく配列順に取得する', async () => {
-  const received: string[] = [];
-  const blobs = await fetchImagesInOrder(['first', 'second', 'third'], async (url) => {
-    received.push(url);
-    return new Response(new Blob([url]));
-  });
-
-  expect(received).toEqual(['first', 'second', 'third']);
-  expect(await Promise.all(blobs.map((blob) => blob.text()))).toEqual(['first', 'second', 'third']);
 });
 
 test('PDF は 200 ページを超えると変換前に拒否する', () => {

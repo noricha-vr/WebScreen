@@ -1,7 +1,7 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 
 import { onAbort, raceAbort, WASM_LOAD_TIMEOUT_MS, withStageTimeout } from './timeouts';
-import type { ConversionProgress, ProgressReporter, VideoFrame } from './types';
+import type { ConversionProgress, FrameSource, ProgressReporter, VideoFrame } from './types';
 
 const CORE_VERSION = '0.12.10';
 const CORE_BASE_URL = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
@@ -190,14 +190,25 @@ export function runningProgress(progress: number, total: number): ConversionProg
   };
 }
 
-/** PNG フレーム列を順序を保って VRChat 互換 MP4 にエンコードする。 */
+/** 配列で渡された場合も供給元と同じ扱いにする（入口を 1 つに保つため）。 */
+function toFrameSource(input: readonly VideoFrame[] | FrameSource): FrameSource {
+  return 'total' in input ? input : { total: input.length, frames: input };
+}
+
+/**
+ * PNG フレーム列を順序を保って VRChat 互換 MP4 にエンコードする。
+ *
+ * 供給元を受け取るのは、フレームを 1 枚ずつ引き取って MEMFS へ書き出し、
+ * その場で手放すため。配列を先に作らせると 200 枚規模でメモリが枚数に比例して増える。
+ */
 export async function encodeFramesToMp4(
-  frames: readonly VideoFrame[],
+  input: readonly VideoFrame[] | FrameSource,
   report?: ProgressReporter,
   signal?: AbortSignal
 ): Promise<Blob> {
-  if (frames.length === 0) throw new Error('At least one frame is required');
-  const total = frames.length;
+  const source = toFrameSource(input);
+  const total = source.total;
+  if (total === 0) throw new Error('At least one frame is required');
   // エンコードは「core 読み込み → フレーム書き出し → FFmpeg 実行」と進む。枚数は実行が
   // 始まるまで動かせない（書き出し枚数を出すと実行の開始で 0 に戻る）ため、枚数は据え置き、
   // バーだけを工程ごとの部分帯域で進める。
@@ -206,10 +217,16 @@ export async function encodeFramesToMp4(
   // 書き出しと実行はシグナルを受け取らないため、中止は worker を畳んで止める。
   const releaseStop = onAbort(signal, () => ffmpeg.terminate());
   try {
-    for (const [index, frame] of frames.entries()) {
-      await ffmpeg.writeFile(frameFileName(index), new Uint8Array(frame.data));
-      report?.({ stage: 'encoding', current: 0, total, ratio: encodePhaseRatio('writing', index + 1, total) });
+    let written = 0;
+    for await (const frame of source.frames) {
+      // 書き終えたフレームはここで参照が切れる。供給元が遅延生成なら、
+      // 生存するフレームは常に 1 枚で枚数に比例して積み上がらない。
+      await ffmpeg.writeFile(frameFileName(written), new Uint8Array(frame.data));
+      written += 1;
+      report?.({ stage: 'encoding', current: 0, total, ratio: encodePhaseRatio('writing', written, total) });
     }
+    // 連番が足りないと FFmpeg は途中までを繋いだ短い動画を黙って作る。数が合わなければ止める。
+    if (written !== total) throw new Error(`Expected ${total} frames but received ${written}`);
     ffmpeg.on('progress', ({ progress }) => report?.(runningProgress(progress, total)));
     const status = await raceAbort(ffmpeg.exec(buildFrameEncodeArgs()), signal);
     if (status !== 0) throw new Error(`FFmpeg exited with ${status}`);

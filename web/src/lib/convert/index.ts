@@ -1,7 +1,7 @@
 import type { UploadKind } from '../contracts/api';
 import { encodeFramesToMp4 } from './encode';
 import { imageFilesToFrames } from './image';
-import { imageUrlsToFrames } from './imageUrls';
+import { imageUrlFrameSource } from './imageUrls';
 import { pdfToFrames } from './pdf';
 import type { ProgressReporter } from './types';
 
@@ -20,13 +20,18 @@ export async function convertFilesToMp4(
   return encodeFramesToMp4(frames, report, signal);
 }
 
-/** 撮影順で返された URL 画像群を VRChat 互換 MP4 にする。 */
+/**
+ * 撮影順で返された URL 画像群を VRChat 互換 MP4 にする。
+ *
+ * フレームは配列にせず供給元のまま渡す。エンコーダが 1 枚ずつ引き取るので、
+ * 取得・正規化・書き出しが流れ作業になり、200 枚規模でもメモリが枚数に比例しない。
+ */
 export async function convertImageUrlsToMp4(
   urls: readonly string[],
   report?: ProgressReporter,
   signal?: AbortSignal
 ): Promise<Blob> {
-  return encodeFramesToMp4(await imageUrlsToFrames(urls, report, signal), report, signal);
+  return encodeFramesToMp4(imageUrlFrameSource(urls, signal), report, signal);
 }
 
 export { ConversionError, type ConversionProgress, type ConversionStage, type VideoFrame } from './types';
