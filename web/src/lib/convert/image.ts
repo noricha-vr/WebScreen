@@ -55,9 +55,15 @@ export async function normalizeImageBlob(
 }
 
 /** 画像ファイル群を選択順どおりのフレーム列へ変換する。 */
-export async function imageFilesToFrames(files: readonly File[], report?: ProgressReporter): Promise<VideoFrame[]> {
+export async function imageFilesToFrames(
+  files: readonly File[],
+  report?: ProgressReporter,
+  signal?: AbortSignal
+): Promise<VideoFrame[]> {
   const frames: VideoFrame[] = [];
   for (const [index, file] of files.entries()) {
+    // 1 枚ごとに中止を確認する。枚数が多いほど中止から実際に止まるまでが延びるため。
+    signal?.throwIfAborted();
     frames.push(await normalizeImageBlob(file));
     report?.({ stage: 'preparing', current: index + 1, total: files.length });
   }

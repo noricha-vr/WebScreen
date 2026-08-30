@@ -13,7 +13,10 @@ export async function convertFilesToMp4(
   signal?: AbortSignal
 ): Promise<Blob> {
   if (files.length === 0) throw new Error('At least one file is required');
-  const frames = kind === 'pdf' ? await pdfToFrames(files[0]!, report) : await imageFilesToFrames(files, report);
+  const frames =
+    kind === 'pdf'
+      ? await pdfToFrames(files[0]!, report, signal)
+      : await imageFilesToFrames(files, report, signal);
   return encodeFramesToMp4(frames, report, signal);
 }
 
@@ -28,6 +31,7 @@ export async function convertImageUrlsToMp4(
 
 export { ConversionError, type ConversionProgress, type ConversionStage, type VideoFrame } from './types';
 export {
+  API_REQUEST_TIMEOUT_MS,
   isUserAborted,
   StageTimeoutError,
   STAGE_TIMEOUT_CODES,

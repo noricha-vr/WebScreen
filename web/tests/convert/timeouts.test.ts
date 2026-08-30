@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { fetchImagesInOrder } from '../../src/lib/convert/imageUrls';
-import { StageTimeoutError, withStageTimeout } from '../../src/lib/convert/timeouts';
+import { onAbort, raceAbort, StageTimeoutError, withStageTimeout } from '../../src/lib/convert/timeouts';
 
 /** 中止されるまで返らない通信。CDN や R2 が詰まった状態を再現する。 */
 function neverResolvingFetch(): (url: string, init: RequestInit) => Promise<Response> {
@@ -66,5 +66,45 @@ describe('fetchImagesInOrder', () => {
     const images = await fetchImagesInOrder(['a', 'b', 'c'], fetcher, undefined, 20);
 
     expect(images).toHaveLength(3);
+  });
+});
+
+describe('raceAbort', () => {
+  test('中止されなければ結果をそのまま返す', async () => {
+    expect(await raceAbort(Promise.resolve('done'), new AbortController().signal)).toBe('done');
+  });
+
+  test('シグナルを受け取れない処理でも中止で抜けられる', async () => {
+    const controller = new AbortController();
+    const running = raceAbort(new Promise<string>(() => {}), controller.signal);
+    controller.abort();
+
+    expect(await caught(running)).not.toBeNull();
+  });
+});
+
+describe('onAbort', () => {
+  test('既に中止済みのシグナルでも停止処理を呼ぶ', () => {
+    const controller = new AbortController();
+    controller.abort();
+    let stopped = 0;
+
+    onAbort(controller.signal, () => {
+      stopped += 1;
+    });
+
+    expect(stopped).toBe(1);
+  });
+
+  test('解除したあとの中止では停止処理を呼ばない', () => {
+    const controller = new AbortController();
+    let stopped = 0;
+
+    onAbort(controller.signal, () => {
+      stopped += 1;
+    })();
+    controller.abort();
+
+    expect(stopped).toBe(0);
   });
 });

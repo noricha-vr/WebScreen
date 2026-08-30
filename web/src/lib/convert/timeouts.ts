@@ -21,6 +21,12 @@ export const WASM_LOAD_TIMEOUT_MS = 60_000;
 export const IMAGE_FETCH_TIMEOUT_MS = 30_000;
 /** R2 への PUT の上限。上限 50 MB を細い回線で送り切る余地を残す。 */
 export const UPLOAD_PUT_TIMEOUT_MS = 120_000;
+/**
+ * presign / commit のような短い JSON 要求の上限。
+ * これらは利用者の中止では打ち切らない（予約済みの行を宙に浮かせないため）ので、
+ * 詰まったときに抜ける手段は期限だけになる。
+ */
+export const API_REQUEST_TIMEOUT_MS = 30_000;
 
 /** 期限切れの段。UI の表示コードとしてそのまま辞書を引く。 */
 export const STAGE_TIMEOUT_CODES = ['wasmLoadTimeout', 'imageFetchTimeout', 'uploadTimeout'] as const;
@@ -39,16 +45,47 @@ export function isUserAborted(userSignal?: AbortSignal): boolean {
   return userSignal?.aborted === true;
 }
 
-/** シグナルが落ちた時に、その理由で reject するだけの promise。 */
-export function abortRejection(signal?: AbortSignal): Promise<never> {
-  return new Promise<never>((_resolve, reject) => {
-    if (!signal) return;
-    if (signal.aborted) {
-      reject(signal.reason);
-      return;
-    }
-    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-  });
+/**
+ * 中止時に stop を呼ぶ。戻り値は解除関数。
+ *
+ * 既に落ちているシグナルへ addEventListener しても 'abort' は二度と発火しないため、
+ * その場合はその場で stop を呼ぶ。ここを取り違えると「中止済みなのに止まらない」になる。
+ */
+export function onAbort(signal: AbortSignal | undefined, stop: () => void): () => void {
+  if (!signal) return () => {};
+  if (signal.aborted) {
+    stop();
+    return () => {};
+  }
+  signal.addEventListener('abort', stop, { once: true });
+  return () => signal.removeEventListener('abort', stop);
+}
+
+/**
+ * シグナルを受け取れない処理（ffmpeg の load / exec）を中止と競わせる。
+ *
+ * 決着したら abort リスナーを必ず外す。外さないと、同じシグナルを使い回す
+ * 呼び出しのぶんだけ listener が積み上がる。
+ */
+export async function raceAbort<T>(task: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return task;
+
+  let onAbort: (() => void) | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<never>((_resolve, reject) => {
+        if (signal.aborted) {
+          reject(signal.reason);
+          return;
+        }
+        onAbort = (): void => reject(signal.reason);
+        signal.addEventListener('abort', onAbort, { once: true });
+      }),
+    ]);
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
 }
 
 /**

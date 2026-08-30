@@ -1,6 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 
-import { abortRejection, WASM_LOAD_TIMEOUT_MS, withStageTimeout } from './timeouts';
+import { onAbort, raceAbort, WASM_LOAD_TIMEOUT_MS, withStageTimeout } from './timeouts';
 import type { ConversionProgress, ProgressReporter, VideoFrame } from './types';
 
 const CORE_VERSION = '0.12.10';
@@ -95,19 +95,32 @@ async function loadFfmpeg(userSignal?: AbortSignal): Promise<FFmpeg> {
   const ffmpeg = new FFmpeg();
   try {
     return await withStageTimeout('wasmLoadTimeout', WASM_LOAD_TIMEOUT_MS, userSignal, async (signal) => {
-      const [coreURL, wasmURL] = await Promise.all([
+      // allSettled で待つのは、片方だけ成功したときに作られた Blob URL を取り逃さないため
+      // （Promise.all は先に落ちた方で抜けるので、後から解決した URL が解放されずに残る）。
+      const assets = await Promise.allSettled([
         fetchCoreAsset(CORE_JS_URL, 'text/javascript', signal),
         fetchCoreAsset(CORE_WASM_URL, 'application/wasm', signal),
       ]);
-      // worker 生成の直前に中止されても抱え込まないよう、terminate() だけに頼らず race を添える。
-      const stop = (): void => ffmpeg.terminate();
-      signal.addEventListener('abort', stop, { once: true });
+      const objectUrls = assets.flatMap((asset) => (asset.status === 'fulfilled' ? [asset.value] : []));
       try {
-        await Promise.race([ffmpeg.load({ coreURL, wasmURL }), abortRejection(signal)]);
+        const failed = assets.find((asset) => asset.status === 'rejected');
+        if (failed) throw failed.reason;
+
+        const [coreURL, wasmURL] = objectUrls;
+        if (coreURL === undefined || wasmURL === undefined) throw new Error('FFmpeg core assets are missing');
+
+        // worker 生成の直前に中止されても抱え込まないよう、terminate() だけに頼らず race を添える。
+        const releaseStop = onAbort(signal, () => ffmpeg.terminate());
+        try {
+          await raceAbort(ffmpeg.load({ coreURL, wasmURL }), signal);
+        } finally {
+          releaseStop();
+        }
+        return ffmpeg;
       } finally {
-        signal.removeEventListener('abort', stop);
+        // load が終われば core は worker 側へ読み込み済み。成功・失敗・中止のいずれでも解放する。
+        for (const objectUrl of objectUrls) URL.revokeObjectURL(objectUrl);
       }
-      return ffmpeg;
     });
   } catch (error) {
     ffmpeg.terminate();
@@ -191,19 +204,18 @@ export async function encodeFramesToMp4(
   report?.({ stage: 'encoding', current: 0, total, ratio: encodePhaseRatio('loading', 0, 1) });
   const ffmpeg = await loadFfmpegWithProgress(total, report, signal);
   // 書き出しと実行はシグナルを受け取らないため、中止は worker を畳んで止める。
-  const stop = (): void => ffmpeg.terminate();
-  signal?.addEventListener('abort', stop, { once: true });
+  const releaseStop = onAbort(signal, () => ffmpeg.terminate());
   try {
     for (const [index, frame] of frames.entries()) {
       await ffmpeg.writeFile(frameFileName(index), new Uint8Array(frame.data));
       report?.({ stage: 'encoding', current: 0, total, ratio: encodePhaseRatio('writing', index + 1, total) });
     }
     ffmpeg.on('progress', ({ progress }) => report?.(runningProgress(progress, total)));
-    const status = await Promise.race([ffmpeg.exec(buildFrameEncodeArgs()), abortRejection(signal)]);
+    const status = await raceAbort(ffmpeg.exec(buildFrameEncodeArgs()), signal);
     if (status !== 0) throw new Error(`FFmpeg exited with ${status}`);
     return await readMp4(ffmpeg, 'output.mp4');
   } finally {
-    signal?.removeEventListener('abort', stop);
+    releaseStop();
     ffmpeg.terminate();
   }
 }
