@@ -25,9 +25,15 @@
     // 既存の r2.dev URL は共有済みリンクを壊さないため公開したまま並走させている。
     //
     // 注意: mp4 は Cloudflare の既定キャッシュ対象で、200/206 の Edge TTL は 120 分。
-    // R2 から削除してもキャッシュ済みのオブジェクトはその間配信され続ける（削除時の
-    // purge は未実装。詳細と対処は docs/r2-delivery.md）。
+    // 削除時は公開 URL を purge しているが、purge に失敗した分はその間配信され続ける
+    // （詳細は docs/r2-delivery.md）。cron/wrangler.jsonc の同名 var と同じ値にすること
+    // （バッチ側も同じ URL を組み立てて purge するため、ずれると purge が効かない）。
     "R2_PUBLIC_BASE_URL": "https://cdn.web-screen.net",
+    // 削除時のキャッシュ purge を投げる先のゾーン（web-screen.net）。ゾーン ID は
+    // 公開情報なのでここに置く。対になる API token は secret（CLOUDFLARE_PURGE_TOKEN）:
+    //   bunx wrangler secret put CLOUDFLARE_PURGE_TOKEN
+    // どちらかが欠けると purge せず warn だけ出す（削除自体は成功する）。
+    "CLOUDFLARE_ZONE_ID": "2210192b51f9f0eb6761d70341ca09b0",
     "WEBCAPTURE_URL": "https://web-capture-345811595113.asia-northeast1.run.app"
   },
   "d1_databases": [

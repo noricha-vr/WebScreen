@@ -24,6 +24,16 @@
   "observability": {
     "enabled": true
   },
+  // 掃除で消した動画のキャッシュを落とすために使う。
+  // R2_PUBLIC_BASE_URL と CLOUDFLARE_ZONE_ID は web/wrangler.jsonc の同名 var と
+  // 同じ値であることが前提（本体と同じ公開 URL を組み立てて purge する）。片方だけ
+  // 変えると purge が空振りし、削除済みの動画が最大 120 分配信され続ける。
+  // 対になる API token は cron Worker 側にも要る secret:
+  //   bunx wrangler secret put CLOUDFLARE_PURGE_TOKEN -c cron/wrangler.jsonc
+  "vars": {
+    "R2_PUBLIC_BASE_URL": "https://cdn.web-screen.net",
+    "CLOUDFLARE_ZONE_ID": "2210192b51f9f0eb6761d70341ca09b0"
+  },
   "d1_databases": [
     {
       "binding": "DB",
