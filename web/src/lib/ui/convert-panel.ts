@@ -330,6 +330,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     try {
       preflight = await preflightInputFiles(files);
     } catch (error) {
+      // 捨てられた世代の失敗は画面にも報告にも出さない（利用者が既に次の入力へ
+      // 進んでおり、その失敗はもうどこにも影響しない）。
+      if (signal.aborted || current !== generation) return;
       // 選択後にファイルが読めなくなった等。握り潰すと unhandled rejection のまま
       // 画面が idle で固まるので、失敗として見せる。
       console.error('preflight failed', error);
@@ -339,6 +342,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     }
     if (current !== generation) return;
     if (!preflight.ok) {
+      // 入力そのものが対象外。撮影も変換も始まっていないが、どの入力が弾かれて
+      // いるかは運用側から見えないので報告する（段は変換の入口として convert）。
+      reportClientError({ stage: 'convert', errorCode: 'unsupported' });
       dispatch({ type: 'failed', errorCode: 'unsupported' }, current);
       return;
     }
@@ -348,6 +354,11 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     };
     const next = reduceUpload(state, event);
     dispatch(event, current);
+    // 選択の時点で弾かれた入力（大きすぎる・種類が混ざっている等）も報告する。
+    // 変換が始まらない失敗は console にすら残らず、運用側から完全に見えないため。
+    if (next.phase === 'error' && next.errorCode !== null) {
+      reportClientError({ stage: 'convert', errorCode: next.errorCode });
+    }
     if (next.phase !== 'converting' || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
     const kind = next.kind;
     void convertFilesToMp4(

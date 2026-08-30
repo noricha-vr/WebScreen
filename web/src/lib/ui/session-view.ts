@@ -14,6 +14,19 @@ export const ME_ENDPOINT = '/api/me/';
 
 export type AuthState = 'guest' | 'member' | 'error';
 
+/**
+ * ページから離れる最中かどうか。
+ *
+ * 離脱すると進行中の fetch は reject するが、それは障害ではない。区別せずに
+ * 報告すると、遷移のたびに偽の失敗が積み上がって本物の到達不能が埋もれる。
+ */
+let leavingPage = false;
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    leavingPage = true;
+  });
+}
+
 export function applyViewer(root: HTMLElement, viewer: Viewer): void {
   for (const element of root.querySelectorAll<HTMLElement>('[data-viewer-name]')) {
     if (viewer.name !== null) element.textContent = viewer.name;
@@ -73,7 +86,8 @@ export async function resolveAuthState(
     response = await fetchImpl(ME_ENDPOINT, { credentials: 'same-origin' });
   } catch (error) {
     // 到達できないこと自体（CDN 断・オフライン）は運用側から見えないので報告する。
-    reportClientError({ stage: 'session', errorCode: 'failed' });
+    // 離脱による中断はここに来るが障害ではないので送らない。
+    if (!leavingPage) reportClientError({ stage: 'session', errorCode: 'failed' });
     return failAuthState(root, error instanceof Error ? error.name : 'UnknownError');
   }
 
@@ -83,7 +97,7 @@ export async function resolveAuthState(
   }
 
   if (!response.ok) {
-    // 401 は上で返しているので、ここに来るのは認証基盤の異常だけ。
+    // 401 は上で返しているので、ここに来るのは認証基盤の異常だけ（404 も含む）。
     reportClientError({ stage: 'session', errorCode: 'failed', httpStatus: response.status });
     return failAuthState(root, `status ${response.status}`);
   }
