@@ -10,7 +10,9 @@
  * workerd なしで全分岐をテストできる。
  */
 
+import { ERROR_CODES } from '../contracts/api';
 import { postDiscordWebhook } from '../infra/discord-webhook';
+import { logWorkerFailure } from '../infra/worker-log';
 
 /** D1 の最小操作面。この監視が必要とするのは all / run だけ。 */
 export interface CronRunDatabase {
@@ -143,13 +145,76 @@ export function evaluateFreshness(now: Date, lastSuccessAt: string | null): Cron
   };
 }
 
-/** /api/health/ 用に、保持期間バッチの鮮度を読む。 */
+/** 保持期間バッチの鮮度を読む。D1 が失敗したらそのまま throw する。 */
 export async function readRetentionFreshness(
   database: CronRunDatabase,
   now: Date
 ): Promise<CronFreshness> {
   const row = await readRow(database, RETENTION_RUN_NAME);
   return evaluateFreshness(now, row?.last_success_at ?? null);
+}
+
+/** /api/health/ の cron セクション。鮮度が取れなければ取れなかったことだけを伝える。 */
+export type CronHealthSection = CronFreshness | { error: true };
+
+/**
+ * health の cron セクションを使い回す時間。
+ *
+ * /api/health/ は無認証で誰でも叩けるため、素通しだとリクエストごとに D1 read が発生する。
+ * バッチは毎時なので秒単位の鮮度は要らず、この程度の古さは判定に影響しない。
+ */
+export const CRON_HEALTH_CACHE_MS = 60_000;
+
+/**
+ * /api/health/ 用の読み取りを作る。D1 の失敗と binding の欠落は { error: true } に畳み、
+ * 結果を ttlMs の間だけ使い回す（呼び出し側が module スコープで 1 つ作れば isolate 単位のキャッシュになる）。
+ *
+ * health は 200 のまま返す。この応答はデプロイの疎通確認にも使われるため、監視の付帯情報が
+ * 取れないことを理由に 500 を返すと正常なデプロイをロールバックさせてしまう。握り潰さず、
+ * 失敗そのものは worker-log に残して observability から追えるようにする。
+ *
+ * 失敗もキャッシュする（D1 障害時にリクエストごとの read とログを増やさないため。
+ * 復旧の反映は最大 ttlMs 遅れるが、毎時のバッチの監視では問題にならない）。
+ */
+export function createCronHealthReader(
+  ttlMs: number = CRON_HEALTH_CACHE_MS
+): (database: CronRunDatabase | undefined, now: Date) => Promise<CronHealthSection> {
+  let cached: { atMs: number; section: CronHealthSection } | null = null;
+
+  return async (database, now) => {
+    if (cached !== null && now.getTime() - cached.atMs < ttlMs) return cached.section;
+
+    const section = await readSection(database, now);
+    cached = { atMs: now.getTime(), section };
+    return section;
+  };
+}
+
+async function readSection(
+  database: CronRunDatabase | undefined,
+  now: Date
+): Promise<CronHealthSection> {
+  if (database !== undefined) {
+    try {
+      return await readRetentionFreshness(database, now);
+    } catch {
+      logHealthReadFailure();
+      return { error: true };
+    }
+  }
+
+  // binding が無いのは設定の誤り。静かに「鮮度不明」で流さず記録する。
+  logHealthReadFailure();
+  return { error: true };
+}
+
+function logHealthReadFailure(): void {
+  logWorkerFailure({
+    event: 'health_cron_read_failed',
+    errorCode: ERROR_CODES.internalError,
+    // 応答は 200 のまま返すので status も 200。ログ上で「落ちていないが欠けている」と読める。
+    status: 200,
+  });
 }
 
 /**

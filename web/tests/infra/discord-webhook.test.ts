@@ -71,6 +71,18 @@ describe('postDiscordWebhook', () => {
     expect(logs[0]).not.toContain('connect failed');
   });
 
+  test('応答が無い時に待ち続けないようタイムアウトを渡す', async () => {
+    let signal: AbortSignal | null | undefined;
+
+    await postDiscordWebhook(WEBHOOK_URL, 'x', (_url, init) => {
+      signal = init?.signal;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal!.aborted).toBe(false);
+  });
+
   test('Discord の上限を超える本文は切り詰めて送る', async () => {
     let body = '';
     await postDiscordWebhook(WEBHOOK_URL, 'あ'.repeat(2500), (_url, init) => {

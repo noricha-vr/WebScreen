@@ -13,6 +13,12 @@ const SOURCE = 'webscreen-beta-cron';
 /** Discord のメッセージ本文の上限（超えると 400 で落ちるので手前で切る）。 */
 const MAX_CONTENT_LENGTH = 2000;
 
+/**
+ * 送信を諦めるまでの時間。Discord が応答しない時に cron の実行時間を食い潰さないため
+ * （通知は付帯機能であり、待ち続けて本体の掃除の枠を削る価値はない）。
+ */
+const REQUEST_TIMEOUT_MS = 5000;
+
 /** fetch の注入境界（テストで実ネットワークを使わないため）。 */
 export type WebhookFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -57,8 +63,10 @@ export async function postDiscordWebhook(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: content.slice(0, MAX_CONTENT_LENGTH) }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
+    // タイムアウト（AbortError）もここに来る。理由で分けず、送れなかった事実だけを残す。
     logFailure('request_failed');
     return false;
   }

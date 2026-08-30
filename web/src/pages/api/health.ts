@@ -2,8 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import {
-  readRetentionFreshness,
-  type CronFreshness,
+  createCronHealthReader,
   type CronRunDatabase,
 } from '../../lib/services/cron-health';
 
@@ -21,34 +20,11 @@ interface HealthBindings {
   DB?: CronRunDatabase;
 }
 
-/** cron の鮮度。D1 を読めなかった時は健全性の判断材料が無いことだけを伝える。 */
-type CronSection = CronFreshness | { error: true };
-
 /**
- * 保持期間バッチの鮮度を読む。失敗しても health 全体は落とさない。
- *
- * この応答はデプロイの疎通確認にも使われるため、監視の付帯情報が取れないことを
- * 理由に 500 を返すと、正常なデプロイをロールバックさせてしまう。握り潰さずログには残す。
+ * module スコープで作ることで isolate 単位のキャッシュになる。この経路は無認証なので、
+ * 素通しだとリクエストごとに D1 read が走る（バッチは毎時なので秒単位の鮮度は要らない）。
  */
-async function readCronSection(database: CronRunDatabase | undefined): Promise<CronSection> {
-  if (database === undefined) return { error: true };
-
-  try {
-    return await readRetentionFreshness(database, new Date());
-  } catch {
-    console.error(
-      JSON.stringify({
-        timestamp: new Date().toISOString(),
-        source: 'webscreen-beta-worker',
-        severity: 'error',
-        kind: 'event',
-        event: 'health_cron_read_failed',
-        summary: 'Failed to read cron_runs for the health response.',
-      })
-    );
-    return { error: true };
-  }
-}
+const readCronSection = createCronHealthReader();
 
 /**
  * 応答に自分のバージョンと cron の鮮度を含める。
@@ -64,7 +40,7 @@ async function readCronSection(database: CronRunDatabase | undefined): Promise<C
 export const GET: APIRoute = async () => {
   const bindings = env as unknown as HealthBindings;
   const version = bindings.CF_VERSION_METADATA?.id ?? null;
-  const cron = await readCronSection(bindings.DB);
+  const cron = await readCronSection(bindings.DB, new Date());
 
   return new Response(JSON.stringify({ status: 'ok', version, cron }), {
     status: 200,

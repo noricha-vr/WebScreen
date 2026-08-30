@@ -4,6 +4,7 @@ import {
   CRON_REALERT_INTERVAL_MS,
   CRON_STALE_THRESHOLD_MS,
   buildAlertMessage,
+  createCronHealthReader,
   decideCronAlert,
   evaluateFreshness,
   readRetentionFreshness,
@@ -286,6 +287,81 @@ describe('runRetentionAlert', () => {
     expect(result.decision).toBe('alert');
     expect(result.freshness.stale).toBe(true);
     expect(notifier.messages[0]).toContain('記録なし');
+  });
+});
+
+describe('createCronHealthReader', () => {
+  /** D1 が落ちている状況（prepare の時点で失敗する）。 */
+  const brokenDatabase: CronRunDatabase = {
+    prepare() {
+      throw new Error('D1 unavailable');
+    },
+  };
+
+  /** worker-log が出す 1 行 JSON を捨てつつ件数だけ数える。 */
+  async function countFailureLogs(run: () => Promise<void>): Promise<number> {
+    const original = console.error;
+    let count = 0;
+    console.error = () => {
+      count += 1;
+    };
+    try {
+      await run();
+    } finally {
+      console.error = original;
+    }
+    return count;
+  }
+
+  test('D1 が失敗しても例外にせず error セクションを返し、失敗を記録する', async () => {
+    const read = createCronHealthReader(0);
+    let section: unknown;
+
+    const logs = await countFailureLogs(async () => {
+      section = await read(brokenDatabase, NOW);
+    });
+
+    expect(section).toEqual({ error: true });
+    expect(logs).toBe(1);
+  });
+
+  test('DB binding が無い時も error セクションを返す（設定漏れを静かに流さない）', async () => {
+    const read = createCronHealthReader(0);
+    let section: unknown;
+
+    const logs = await countFailureLogs(async () => {
+      section = await read(undefined, NOW);
+    });
+
+    expect(section).toEqual({ error: true });
+    expect(logs).toBe(1);
+  });
+
+  test('TTL の内側は D1 を読み直さない（無認証の経路で read を増やさない）', async () => {
+    let reads = 0;
+    const database: CronRunDatabase = {
+      prepare: () => ({
+        bind: () => ({
+          all: async <T>(): Promise<{ results: T[] }> => {
+            reads += 1;
+            return {
+              results: [
+                { last_success_at: new Date(NOW.getTime() - 60_000).toISOString(), last_summary: null },
+              ] as T[],
+            };
+          },
+          run: async () => ({ meta: { changes: 0 } }),
+        }),
+      }),
+    };
+    const read = createCronHealthReader(60_000);
+
+    await read(database, NOW);
+    await read(database, new Date(NOW.getTime() + 30_000));
+    expect(reads).toBe(1);
+
+    await read(database, new Date(NOW.getTime() + 61_000));
+    expect(reads).toBe(2);
   });
 });
 
