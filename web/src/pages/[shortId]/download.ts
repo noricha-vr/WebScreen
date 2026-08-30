@@ -3,12 +3,21 @@ import { env } from 'cloudflare:workers';
 
 import { movieKey } from '../../lib/contracts/r2key';
 import { findPublicMovie, type MoviesDatabase } from '../../lib/services/movies';
-import { attachmentDisposition } from '../../lib/services/download';
+import {
+  downloadHeaders,
+  partialContentRange,
+  resolveRangeRequest,
+  unsatisfiedContentRange,
+} from '../../lib/services/download';
 
 export const prerender = false;
 
 interface DownloadBucket {
-  get(key: string): Promise<{ body: ReadableStream | null; size?: number } | null>;
+  head(key: string): Promise<{ size: number } | null>;
+  get(
+    key: string,
+    options?: { range: { offset: number; length: number } }
+  ): Promise<{ body: ReadableStream | null; size: number } | null>;
 }
 
 interface DownloadBindings {
@@ -27,7 +36,7 @@ interface DownloadBindings {
  *
  * 動画そのものが公開なので、この経路も認証しない（所有者以外もダウンロードできる）。
  */
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const bindings = env as unknown as DownloadBindings;
   const shortId = params.shortId ?? '';
 
@@ -38,27 +47,66 @@ export const GET: APIRoute = async ({ params }) => {
   });
   if (!movie) return notFound();
 
-  const object = await bindings.BUCKET.get(movieKey(movie.shortId));
+  const key = movieKey(movie.shortId);
+  const rangeHeader = request.headers.get('Range');
+  if (rangeHeader === null) return await fullResponse(bindings.BUCKET, key, movie.filename);
+
+  // 総量は範囲の確定にも 416 の Content-Range にも要るので、本文を取りに行く前に
+  // メタデータだけ引く（実体を読まないので Range 要求のときしか払わない）。
+  const head = await bindings.BUCKET.head(key);
+  if (!head) return notFound();
+
+  const resolved = resolveRangeRequest(rangeHeader, head.size);
+  if (resolved.kind === 'unsatisfiable') return rangeNotSatisfiable(head.size);
+  if (resolved.kind === 'full') return await fullResponse(bindings.BUCKET, key, movie.filename);
+
+  const object = await bindings.BUCKET.get(key, {
+    range: { offset: resolved.offset, length: resolved.length },
+  });
+  if (!object?.body) return notFound();
+
+  return new Response(object.body, {
+    status: 206,
+    headers: downloadHeaders({
+      filename: movie.filename,
+      contentLength: resolved.length,
+      contentRange: partialContentRange(resolved, head.size),
+    }),
+  });
+};
+
+/** 全体を 200 で返す。Range 無しと、範囲を無視した（未知の単位・複数レンジ）場合の経路。 */
+async function fullResponse(
+  bucket: DownloadBucket,
+  key: string,
+  filename: string
+): Promise<Response> {
+  const object = await bucket.get(key);
   if (!object?.body) return notFound();
 
   return new Response(object.body, {
     status: 200,
-    headers: {
-      'Content-Type': 'video/mp4',
-      'Content-Disposition': attachmentDisposition(movie.filename),
-      // cdn 側の Transform Rule はこの経路に効かないため、ここで明示する。
-      'X-Robots-Tag': 'noindex',
-      // 同じ動画への連続アクセスをエッジで吸収しつつ、削除後に配信され続ける窓は
-      // 短く抑える（cdn 直の既定 TTL 120 分より大幅に短い）。
-      'Cache-Control': 'public, max-age=300',
-    },
+    headers: downloadHeaders({ filename, contentLength: object.size }),
   });
-};
+}
 
 /** 存在しない・未完成の動画。ready へ変わった後も 404 が残らないようキャッシュさせない。 */
 function notFound(): Response {
   return new Response(null, {
     status: 404,
     headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' },
+  });
+}
+
+/** 要求された範囲が実体と重ならない。総量を返して要求し直せるようにする。 */
+function rangeNotSatisfiable(size: number): Response {
+  return new Response(null, {
+    status: 416,
+    headers: {
+      'Content-Range': unsatisfiedContentRange(size),
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex',
+    },
   });
 }
