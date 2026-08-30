@@ -7,3 +7,8 @@ SESSION_SIGNING_KEY=replace_with_a_long_random_value
 
 # web-capture サービスの Bearer token
 WEBCAPTURE_TOKEN=replace_with_webcapture_token
+
+# 保持期間バッチの死活監視が使う Discord Incoming Webhook（cron Worker 専用の secret）。
+# 本体 Worker は使わない。本番は `bunx wrangler secret put DISCORD_ALERT_WEBHOOK_URL -c cron/wrangler.jsonc` で投入し、
+# ローカルは wrangler dev の --var でダミーを渡す（実 Discord に送らないため）。
+DISCORD_ALERT_WEBHOOK_URL=

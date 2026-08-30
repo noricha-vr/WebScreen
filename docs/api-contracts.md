@@ -8,7 +8,7 @@
 | リクエスト / レスポンス型、エラーコード、上限値、バリデータ | `web/src/lib/contracts/api.ts` |
 | セッション Cookie（名前・署名形式・TTL） | `web/src/lib/contracts/session.ts` |
 | R2 オブジェクトキー、shortId 生成 | `web/src/lib/contracts/r2key.ts` |
-| DB スキーマ | `web/migrations/0001_init.sql` |
+| DB スキーマ | `web/migrations/`（連番の全ファイル。適用は `wrangler d1 migrations apply`） |
 | mp4 のエンコード条件 | [encode-contract.md](encode-contract.md) |
 
 URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッシュなしは 404 になる。
@@ -17,7 +17,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 
 | メソッド / パス | 用途 | 認証 | 型 |
 |---|---|---|---|
-| `GET /api/health/` | 疎通確認 | 不要 | — |
+| `GET /api/health/` | 疎通確認 + 保持期間バッチの鮮度（`cron`。読めない時は `{ error: true }`） | 不要 | `CronHealthSection`（`services/cron-health.ts`） |
 | `GET /api/auth/login/` | Discord OAuth 開始（state Cookie を発行してリダイレクト） | 不要 | `session.ts` |
 | `GET /api/auth/callback/` | OAuth コールバック（state 検証 → users upsert → セッション Cookie 発行） | 不要 | `session.ts` |
 | `POST /api/auth/logout/` | セッション Cookie の破棄（form の `lang` のトップへ 303 リダイレクト。不正・欠落は `ja`） | 本人 | — |
