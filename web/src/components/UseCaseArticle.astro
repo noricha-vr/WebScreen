@@ -19,7 +19,7 @@ const { lang, page } = Astro.props;
 const t = useTranslations(lang);
 const content = t.useCases[page];
 
-/** 関連ページは自分以外の 3 つ。USE_CASE_SLUGS の宣言順に出す。 */
+/** 関連ページは自分以外すべて。USE_CASE_SLUGS の宣言順に出す。 */
 const related = (Object.keys(USE_CASE_SLUGS) as UseCasePage[]).filter((key) => key !== page);
 ---
 

@@ -202,6 +202,33 @@
       ],
       "cta": "Convert a web page"
     },
+    "videoPlayer": {
+      "title": "VRChat video player: make a URL that plays — WebScreen",
+      "navLabel": "Use a video player in a world",
+      "heading": "Play a video in a VRChat video player",
+      "lead": "The video players placed in worlds play whatever video URL they are given. You cannot hand one a file from your PC, so you make a URL with WebScreen first and paste that.",
+      "description": "Convert what you want to show into a URL that plays in a VRChat video player. How to spot a player, and what to check when nothing appears.",
+      "sections": [
+        {
+          "heading": "Telling whether a world has a video player",
+          "body": "Most worlds have one. If there is a field or a panel near the screen where a URL can be typed, that is a video player you can feed your own video to. When there is no input field, the world may be built to play only the footage it ships with."
+        },
+        {
+          "heading": "Paste the video URL to start playback",
+          "body": "Select the input field, a keyboard opens, and you paste the URL of the video. Everyone in the same instance sees what starts playing, so one person pasting is enough for the whole group."
+        },
+        {
+          "heading": "What to check when nothing plays",
+          "body": "First make sure the URL is something the world can handle. A URL that points straight at a video file works, and so do services VRChat supports such as YouTube — but an ordinary web page that merely contains a video will not play. Then check that the world accepts URL input at all. The URL WebScreen gives you points straight at a video file, in a form VRChat video players can play."
+        }
+      ],
+      "steps": [
+        "Decide what to show. Web pages, images and PDFs can all be converted.",
+        "Sign in with Discord and convert it on the home page.",
+        "Paste the URL you get into the input field of the video player in the world."
+      ],
+      "cta": "Make a URL to paste"
+    },
     "screenShare": {
       "title": "Screen sharing in VRChat, and what to use instead — WebScreen",
       "navLabel": "Instead of screen sharing",
