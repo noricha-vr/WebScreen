@@ -10,9 +10,12 @@ function frame(seed: number): VideoFrame {
 interface FfmpegRecorder {
   /** MEMFS へ書き出されたファイル名。連番が崩れると動画の並びが壊れる。 */
   written: () => readonly string[];
-  /** writeFile が呼ばれるたびに走る検査。生存フレーム数の観測に使う。 */
-  onWriteFile?: () => void;
+  /** 代役を外して実物へ戻す。mock.module はファイルをまたいで残るため必ず呼ぶ。 */
+  restore: () => void;
 }
+
+/** 代役を外すときの戻し先。差し替え前に掴んでおく必要がある。 */
+const realFfmpegModule = await import('@ffmpeg/ffmpeg');
 
 /** FFmpeg の代役。書き出し順を記録し、実行は常に成功させる。 */
 function installFfmpegFake(hooks: { onWriteFile?: () => void } = {}): FfmpegRecorder {
@@ -30,7 +33,10 @@ function installFfmpegFake(hooks: { onWriteFile?: () => void } = {}): FfmpegReco
       terminate = (): void => {};
     },
   }));
-  return { written: () => written };
+  return {
+    written: () => written,
+    restore: () => mock.module('@ffmpeg/ffmpeg', () => realFfmpegModule),
+  };
 }
 
 /** core/wasm の取得と Blob URL を差し替える（実 CDN を叩かないため）。 */
@@ -70,6 +76,7 @@ describe('encodeFramesToMp4 の供給元入力', () => {
         liveHighWaterMark.push(produced - written);
       },
     });
+    restores.push(recorder.restore);
 
     async function* lazyFrames(): AsyncGenerator<VideoFrame> {
       for (let index = 0; index < total; index += 1) {
@@ -91,6 +98,7 @@ describe('encodeFramesToMp4 の供給元入力', () => {
   test('供給された順にそのまま連番で書き出す', async () => {
     restores.push(installCoreAssetFakes());
     const recorder = installFfmpegFake();
+    restores.push(recorder.restore);
 
     async function* lazyFrames(): AsyncGenerator<VideoFrame> {
       yield frame(0);
@@ -103,9 +111,9 @@ describe('encodeFramesToMp4 の供給元入力', () => {
     expect(recorder.written()).toEqual(['frame-000000.png', 'frame-000001.png', 'frame-000002.png']);
   });
 
-  test('書き出しの進捗は総数に対して単調に進む（帯域は 0.12→0.4 のまま）', async () => {
+  test('書き出しの進捗は総数に対して単調に進み、書き出し帯域の終端まで届く', async () => {
     restores.push(installCoreAssetFakes());
-    installFfmpegFake();
+    restores.push(installFfmpegFake().restore);
     const writingRatios: number[] = [];
     const report = (progress: ConversionProgress): void => {
       // 実行段階の報告と混ざらないよう、書き出し帯域に収まるものだけ拾う。
@@ -122,12 +130,13 @@ describe('encodeFramesToMp4 の供給元入力', () => {
     await encodeFramesToMp4({ total: 4, frames: lazyFrames() }, report);
 
     expect(writingRatios).toEqual([...writingRatios].sort((a, b) => a - b));
-    expect(writingRatios.at(-1)).toBeCloseTo(0.4);
+    // 帯域の値そのものは encode.ts が正本。写し取らず、同じ関数で終端を引き当てて比べる。
+    expect(writingRatios.at(-1)).toBe(encodePhaseRatio('writing', 4, 4));
   });
 
   test('供給されたフレームが総数に届かなければ、短い動画を作らずに失敗する', async () => {
     restores.push(installCoreAssetFakes());
-    installFfmpegFake();
+    restores.push(installFfmpegFake().restore);
 
     async function* tooFewFrames(): AsyncGenerator<VideoFrame> {
       yield frame(0);
@@ -142,6 +151,7 @@ describe('encodeFramesToMp4 の供給元入力', () => {
   test('配列を渡す従来の経路（PDF・ローカル画像）は同じ結果になる', async () => {
     restores.push(installCoreAssetFakes());
     const recorder = installFfmpegFake();
+    restores.push(recorder.restore);
 
     const mp4 = await encodeFramesToMp4([frame(0), frame(1)]);
 
@@ -151,7 +161,7 @@ describe('encodeFramesToMp4 の供給元入力', () => {
 
   test('フレームが 1 枚も無ければエンコードを始めない', async () => {
     restores.push(installCoreAssetFakes());
-    installFfmpegFake();
+    restores.push(installFfmpegFake().restore);
 
     expect(await encodeFramesToMp4([]).catch((e: unknown) => e)).toBeInstanceOf(Error);
   });
