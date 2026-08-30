@@ -42,27 +42,44 @@ function readStatus(record: Record<string, unknown>): MovieStatus | null {
   return (MOVIE_STATUSES as readonly string[]).includes(value) ? (value as MovieStatus) : null;
 }
 
+/** 履歴応答の読み取り結果。dropped は形が違って読めなかった行数。 */
+export interface HistoryParseResult {
+  entries: HistoryEntry[];
+  dropped: number;
+}
+
 /**
  * `GET /api/history/` の応答を読む。
  *
- * 1 件でも形が違えばその行だけ捨てる（一覧全体が消えるより、欠けて表示される方がまし）。
+ * 形が違う行は捨てるが、件数を返して呼び出し側に判断させる。黙って間引くと、
+ * 全件落ちた時に「履歴なし」と区別できず、履歴があるのに空として表示してしまう。
+ *
+ * note: movies が配列でないトップレベルの異常は 0 件として返す（呼び出し側は空表示）。
+ * 行単位の欠落とは別の契約違反なので、扱いを分けるなら呼び出し側で判定する。
  */
-export function parseHistoryEntries(payload: unknown): HistoryEntry[] {
+export function parseHistoryEntries(payload: unknown): HistoryParseResult {
   const record = asRecord(payload);
   const movies = record?.['movies'];
-  if (!Array.isArray(movies)) return [];
+  if (!Array.isArray(movies)) return { entries: [], dropped: 0 };
 
   const entries: HistoryEntry[] = [];
+  let dropped = 0;
   for (const item of movies) {
     const row = asRecord(item);
-    if (!row) continue;
+    if (!row) {
+      dropped += 1;
+      continue;
+    }
 
     const shortId = readString(row, 'shortId');
     const filename = readString(row, 'filename');
     const createdAt = readString(row, 'createdAt');
     const publicUrl = readString(row, 'publicUrl');
     const status = readStatus(row);
-    if (!shortId || !filename || !createdAt || !publicUrl || !status) continue;
+    if (!shortId || !filename || !createdAt || !publicUrl || !status) {
+      dropped += 1;
+      continue;
+    }
 
     entries.push({
       shortId,
@@ -74,7 +91,7 @@ export function parseHistoryEntries(payload: unknown): HistoryEntry[] {
       publicUrl,
     });
   }
-  return entries;
+  return { entries, dropped };
 }
 
 /**

@@ -25,34 +25,40 @@ function entry(overrides: Record<string, unknown> = {}) {
 
 describe('parseHistoryEntries', () => {
   test('正常な応答をそのまま読み取る', () => {
-    expect(parseHistoryEntries({ movies: [entry({ pinned: true })] })).toEqual([
-      {
-        shortId: 'AbCdEf123456',
-        filename: 'slides.pdf',
-        status: 'ready',
-        pinned: true,
-        createdAt: '2026-08-25T11:00:00.000Z',
-        expiresAt: '2026-09-24T11:00:00.000Z',
-        publicUrl: 'https://public.example/movies/AbCdEf123456.mp4',
-      },
-    ]);
+    expect(parseHistoryEntries({ movies: [entry({ pinned: true })] })).toEqual({
+      entries: [
+        {
+          shortId: 'AbCdEf123456',
+          filename: 'slides.pdf',
+          status: 'ready',
+          pinned: true,
+          createdAt: '2026-08-25T11:00:00.000Z',
+          expiresAt: '2026-09-24T11:00:00.000Z',
+          publicUrl: 'https://public.example/movies/AbCdEf123456.mp4',
+        },
+      ],
+      dropped: 0,
+    });
   });
 
-  test('形が違う行だけを捨てて残りを表示する', () => {
-    const entries = parseHistoryEntries({
+  test('読めなかった行数を数える', () => {
+    const result = parseHistoryEntries({
       movies: [entry({ filename: 123 }), entry({ status: 'unknown' }), null, entry()],
     });
 
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.shortId).toBe('AbCdEf123456');
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]?.shortId).toBe('AbCdEf123456');
+    expect(result.dropped).toBe(3);
   });
 
   test('pin されていない動画の expiresAt は残す', () => {
-    expect(parseHistoryEntries({ movies: [entry({ expiresAt: null })] })[0]?.expiresAt).toBeNull();
+    expect(
+      parseHistoryEntries({ movies: [entry({ expiresAt: null })] }).entries[0]?.expiresAt
+    ).toBeNull();
   });
 
   test.each([[null], [{}], [{ movies: 'x' }], [[]]])('%p は空配列', (payload) => {
-    expect(parseHistoryEntries(payload)).toEqual([]);
+    expect(parseHistoryEntries(payload)).toEqual({ entries: [], dropped: 0 });
   });
 });
 
