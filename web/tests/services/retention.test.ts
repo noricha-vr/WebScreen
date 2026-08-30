@@ -4,7 +4,7 @@ import { captureKey, movieKey } from '../../src/lib/contracts/r2key';
 import {
   CAPTURE_KEY_PREFIX,
   MAX_CAPTURE_DELETIONS_PER_RUN,
-  MAX_MOVIE_DELETIONS_PER_RUN,
+  MAX_FAILED_DELETIONS_PER_RUN,
   runRetention,
   type RetentionBucket,
   type RetentionDatabase,
@@ -373,7 +373,7 @@ describe('runRetention: pending 孤児と failed', () => {
   it('上限を超える failed 行は上限分だけ処理し、残りは次回へ持ち越す', async () => {
     const overflow = 2;
     const database = new FakeRetentionDatabase(
-      Array.from({ length: MAX_MOVIE_DELETIONS_PER_RUN + overflow }, (_, index) =>
+      Array.from({ length: MAX_FAILED_DELETIONS_PER_RUN + overflow }, (_, index) =>
         movie({
           shortId: `failed${String(index).padStart(6, '0')}`,
           status: 'failed',
@@ -385,9 +385,9 @@ describe('runRetention: pending 孤児と failed', () => {
 
     const summary = await run(database, bucket);
 
-    expect(summary.deletedFailed).toBe(MAX_MOVIE_DELETIONS_PER_RUN);
+    expect(summary.deletedFailed).toBe(MAX_FAILED_DELETIONS_PER_RUN);
     expect(summary.sweepCapped).toBe(true);
-    expect(bucket.deleted).toHaveLength(MAX_MOVIE_DELETIONS_PER_RUN);
+    expect(bucket.deleted).toHaveLength(MAX_FAILED_DELETIONS_PER_RUN);
     expect(database.movies.size).toBe(overflow);
   });
 });

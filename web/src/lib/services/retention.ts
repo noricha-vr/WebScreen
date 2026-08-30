@@ -39,11 +39,18 @@ export const MAX_CAPTURE_DELETIONS_PER_RUN = 1000;
 export const CAPTURE_KEY_PREFIX = 'captures/';
 
 /**
- * 1 回の実行で処理する movies の行数の上限（pending の回収と failed の掃除で共通）。
- * failed は容量計算の対象外なので行数は利用者側から無制限に増やせる。上限を置かないと
- * D1 のクエリ数と Workers の subrequest を使い切って実行ごと落ちる。残りは次回が拾う。
+ * 1 回の実行で確保する pending の行数の上限。1 行あたり最大 4 subrequest
+ * （確保 UPDATE / head / delete / DELETE）を使うため、4 × 200 = 800 で Workers の
+ * 上限（1000）に収まる値にしている。残りは次回の実行が拾う。
  */
-export const MAX_MOVIE_DELETIONS_PER_RUN = 500;
+export const MAX_PENDING_CLAIMS_PER_RUN = 200;
+
+/**
+ * 1 回の実行で削除する failed の行数の上限。failed は容量計算の対象外なので行数は
+ * 利用者側から無制限に増やせる。実体の削除はキー配列で 1 回、行の削除は 50 件ずつの
+ * まとめ DELETE なので 500 行でも subrequest は十数回に収まる。残りは次回が拾う。
+ */
+export const MAX_FAILED_DELETIONS_PER_RUN = 500;
 
 /** 1 文の DELETE に載せる short_id の数。D1 のバインド変数の上限（100）に収める。 */
 const MAX_IDS_PER_DELETE = 50;
@@ -241,7 +248,7 @@ async function deletePendingOrphans(
     .prepare(
       "SELECT short_id FROM movies WHERE status = 'pending' AND datetime(created_at) < datetime(?) LIMIT ?"
     )
-    .bind(threshold, MAX_MOVIE_DELETIONS_PER_RUN)
+    .bind(threshold, MAX_PENDING_CLAIMS_PER_RUN)
     .all<ShortIdRow>();
 
   let deleted = 0;
@@ -265,7 +272,7 @@ async function deletePendingOrphans(
     deleted += result.meta.changes;
   }
 
-  return { deleted, capped: results.length === MAX_MOVIE_DELETIONS_PER_RUN };
+  return { deleted, capped: results.length === MAX_PENDING_CLAIMS_PER_RUN };
 }
 
 /**
@@ -302,10 +309,10 @@ async function deleteFailedMovies(
     .prepare(
       "SELECT short_id FROM movies WHERE status = 'failed' AND datetime(created_at) < datetime(?) LIMIT ?"
     )
-    .bind(threshold, MAX_MOVIE_DELETIONS_PER_RUN)
+    .bind(threshold, MAX_FAILED_DELETIONS_PER_RUN)
     .all<ShortIdRow>();
 
-  const capped = results.length === MAX_MOVIE_DELETIONS_PER_RUN;
+  const capped = results.length === MAX_FAILED_DELETIONS_PER_RUN;
   if (results.length === 0) return { deleted: 0, deferred: 0, capped };
 
   const shortIds = results.map((row) => row.short_id);
