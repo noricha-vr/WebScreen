@@ -283,10 +283,11 @@ export async function deleteMovie(
 ): Promise<void> {
   await findOwnedMovie(input.database, input.userId, input.shortId);
 
-  // R2 → D1 の順は保持期間バッチと同じ理由（先に行を消すとキーを導出できなくなる）。
-  // 行の削除に失敗すると実体の無い ready 行が残り、プレビューが再生不能になる。
-  // 自動では直せないので、気づける印としてログに残してから呼び出し元へ返す
-  // （残った行は保持期間バッチの監査（services/retention-audit.ts）が数える）。
+  // R2 → D1 の順にするのは、途中で失敗した時に残る side が検出可能な方だから。
+  // D1 を先に消すと、残った実体は行から辿れず誰も気づけない（R2 の孤児になる）。
+  // R2 を先に消せば、残るのは実体の無い ready 行で、保持期間バッチの監査
+  // （services/retention-audit.ts）が拾える。自動では直せないので、その場でも
+  // 気づける印としてログに残してから呼び出し元へ返す。
   await input.bucket.delete(movieKey(input.shortId));
   try {
     await input.database

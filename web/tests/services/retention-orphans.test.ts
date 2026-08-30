@@ -73,7 +73,7 @@ describe('runRetention: pending 孤児と failed', () => {
     expect(database.movies.size).toBe(0);
   });
 
-  it('実体のない pending は R2 を触らずに行だけ削除する', async () => {
+  it('実体のない pending も delete を投げて行を消す（存在しないキーでも成功する）', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'noObjectAAAA', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
     ]);
@@ -81,8 +81,9 @@ describe('runRetention: pending 孤児と failed', () => {
 
     const summary = await run(database, bucket);
 
+    // 存在確認の head を挟まない分、1 行あたりの subrequest が 1 つ減る。
     expect(summary.deletedOrphans).toBe(1);
-    expect(bucket.deleted).toEqual([]);
+    expect(bucket.deleted).toEqual([movieKey('noObjectAAAA')]);
     expect(database.movies.size).toBe(0);
   });
 

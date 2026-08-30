@@ -9,9 +9,11 @@
 import { generateShortId, movieKey } from '../contracts/r2key';
 
 /**
- * 1 回の実行で実体の有無を確かめる ready 行の上限。1 行につき head を 1 回使う。
- * 掃除側は pending の確保だけで最大 800 subrequest を使うため、Workers の上限
- * （1 回あたり 1000）に収まるよう小さく取る。残りは次回以降の実行が拾う。
+ * 1 回の実行で実体の有無を確かめる ready 行の上限。1 行につき head を 1 回、
+ * 実体が無かった行だけ再確認の SELECT を 1 回使う（最悪 2 + 50 + 50 = 102）。
+ * 掃除側の最悪ケース（合計 685。内訳は services/retention.ts の
+ * MAX_PENDING_CLAIMS_PER_RUN のコメント）と足しても Workers の上限
+ * （1 回あたり 1000）に収まる値にしている。残りは次回以降の実行が拾う。
  */
 export const MAX_OBJECT_CHECKS_PER_RUN = 50;
 

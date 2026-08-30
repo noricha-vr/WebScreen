@@ -57,7 +57,9 @@ export default {
         summary.deferredObjectDeletions > 0
           ? ` ${summary.deferredObjectDeletions} object deletions deferred to the next run.`
           : '';
-      const capped = summary.sweepCapped ? ' Movie sweep hit the per-run cap; the rest waits for the next run.' : '';
+      const capped = summary.sweepCapped
+        ? ' A sweep hit a per-run cap; the rest waits for the next run.'
+        : '';
       const skipped =
         summary.skippedRows > 0 ? ` ${summary.skippedRows} rows skipped this run.` : '';
       const auditErrors =

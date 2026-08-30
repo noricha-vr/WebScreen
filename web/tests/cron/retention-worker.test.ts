@@ -13,7 +13,7 @@ const SCHEDULED_TIME = Date.parse('2026-08-25T12:00:00.000Z');
  * 掃除対象は無く、監査のサンプルだけを返す D1 のフェイク。
  *
  * cron の入口が summary へ件数を載せるかだけを見たいので、掃除側の SELECT は
- * すべて空で返し、監査（ORDER BY RANDOM()）だけが行を返す形にする。
+ * すべて空で返し、監査のサンプル抽出だけが行を返す形にする。
  */
 class FakeCronDatabase implements RetentionDatabase {
   constructor(private readonly readyRows: string[] = []) {}

@@ -36,12 +36,12 @@ const FAILED_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const MAX_EXPIRED_DELETIONS_PER_RUN = 50;
 
 /**
- * 1 回の実行で確保する pending の行数の上限。1 行あたり最大 4 subrequest
- * （確保 UPDATE / head / delete / DELETE）を使う。残りは次回の実行が拾う。
+ * 1 回の実行で確保する pending の行数の上限。1 行あたり最大 3 subrequest
+ * （確保 UPDATE / delete / DELETE）を使う。残りは次回の実行が拾う。
  *
  * 各フェーズの最悪ケースの合計を Workers の上限（1 回の実行で 1000 subrequest）より
- * 下に保つ: 期限切れ 50 × 4 = 200、pending 150 × 4 = 600、failed は 1 + 10 = 11、
- * captures は 10 ページ × 2 = 20、監査は 2 + 50 + 50 = 102。合計 933。
+ * 下に保つ: 期限の補完 1、期限切れ 1 + 50 × 4 = 201、pending 1 + 150 × 3 = 451、
+ * failed 1 + 1 + 10 = 12、captures 10 ページ × 2 = 20、監査 2 + 50 + 50 = 102。合計 787。
  */
 export const MAX_PENDING_CLAIMS_PER_RUN = 150;
 
@@ -308,13 +308,13 @@ async function deletePendingOrphans(
 /**
  * 動画の実体を R2 から消す。成功（元から無い場合を含む）で true を返す。
  *
+ * 存在しないキーの delete も成功するため head で確認しない（failed の掃除と同じ扱い）。
  * R2 が落ちている間に D1 の行だけ消すと実体が孤児になるため、呼び出し側は false の時に
  * 行を残し、次回の実行へ持ち越す。
  */
 async function deleteMovieObject(bucket: RetentionBucket, shortId: string): Promise<boolean> {
-  const key = movieKey(shortId);
   try {
-    if (await bucket.head(key)) await bucket.delete(key);
+    await bucket.delete(movieKey(shortId));
     return true;
   } catch {
     return false;
