@@ -219,7 +219,7 @@
         },
         {
           "heading": "What to check when nothing plays",
-          "body": "First make sure the URL points at the video itself. The address of a page that embeds a video will not play. Then check that the world accepts URL input at all. The URL WebScreen gives you points at the video itself, in a form VRChat video players can play."
+          "body": "First make sure the URL is something the world can handle. A URL that points straight at a video file works, and so do services VRChat supports such as YouTube — but an ordinary web page that merely contains a video will not play. Then check that the world accepts URL input at all. The URL WebScreen gives you points straight at a video file, in a form VRChat video players can play."
         }
       ],
       "steps": [
