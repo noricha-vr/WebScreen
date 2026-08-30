@@ -257,6 +257,34 @@ describe('段階ごとの進捗', () => {
     expect(progresses.at(-1)).toBe(99);
   });
 
+  test('エンコードの下ごしらえ中もバーが進み、枚数は後退しない', () => {
+    // core 読み込みとフレーム書き出しの間は枚数を動かせない（書き出し枚数を出すと実行の
+    // 開始で 0 に戻る）。バーだけを ratio で進め、帯域 70〜95% を 70→73→80→95% と割る。
+    const frames = 200;
+    const events: UploadEvent[] = [
+      { type: 'stageProgress', stage: 'encoding', current: 0, total: frames, ratio: 0 },
+      { type: 'stageProgress', stage: 'encoding', current: 0, total: frames, ratio: 0.12 },
+      { type: 'stageProgress', stage: 'encoding', current: 0, total: frames, ratio: 0.2 },
+      { type: 'stageProgress', stage: 'encoding', current: 0, total: frames, ratio: 0.4 },
+      { type: 'stageProgress', stage: 'encoding', current: 100, total: frames, ratio: 0.7 },
+      { type: 'stageProgress', stage: 'encoding', current: frames, total: frames, ratio: 1 },
+      // 読み込みの擬似進捗が遅れて届いても後退させない。
+      { type: 'stageProgress', stage: 'encoding', current: frames, total: frames, ratio: 0.12 },
+    ];
+
+    const progresses: number[] = [];
+    const currents: (number | null)[] = [];
+    let state = convertingUrl();
+    for (const event of events) {
+      state = reduceUpload(state, event);
+      progresses.push(state.progress);
+      currents.push(state.current);
+    }
+
+    expect(progresses).toEqual([70, 73, 75, 80, 88, 95, 95]);
+    expect(currents).toEqual([0, 0, 0, 0, 100, 200, 200]);
+  });
+
   test('撮影中に総枚数が増えてもバーは戻さない', () => {
     // 遅延読み込みで伸びるページでは総枚数が途中で増える（capture-pages.ts が許容している）。
     // 比率だけ見ると 100/150 → 200/500 で後退するため、到達済みの値を下限にする必要がある。
