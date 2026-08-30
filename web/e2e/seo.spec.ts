@@ -78,7 +78,12 @@ test.describe('用途別ページのメタ情報', () => {
       ...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g),
     ].map((matched) => JSON.parse(matched[1]!));
 
-    return blocks.find((block) => block['@type'] === type) ?? null;
+    const matching = blocks.filter((block) => block['@type'] === type);
+    // 同じ型を 2 つ出すと、どちらが正なのか検索エンジン側で決まらない。
+    // find で先頭だけ見ていると、古い内容のブロックが残っていても気づけない。
+    expect(matching.length).toBeLessThanOrEqual(1);
+
+    return matching[0] ?? null;
   }
 
   for (const path of USE_CASE_PATHS) {
@@ -122,7 +127,7 @@ test.describe('用途別ページのメタ情報', () => {
   }
 
   // パンくずを持たないページに出すと、階層の無いところに階層を主張することになる。
-  for (const path of ['/ja/', '/en/', '/ja/privacy/'] as const) {
+  for (const path of ['/ja/', '/en/', '/ja/privacy/', '/en/privacy/'] as const) {
     test(`${path} にはパンくずを出さない`, async ({ request }) => {
       expect(await fetchJsonLd(request, path, 'BreadcrumbList')).toBeNull();
     });
@@ -145,7 +150,7 @@ test.describe('用途別ページのメタ情報', () => {
   }
 
   // 同じアプリケーションを何度も宣言すると、どのページが本体か曖昧になる。
-  for (const path of [...USE_CASE_PATHS, '/ja/privacy/'] as const) {
+  for (const path of [...USE_CASE_PATHS, '/ja/privacy/', '/en/privacy/'] as const) {
     test(`${path} には WebApplication を出さない`, async ({ request }) => {
       expect(await fetchJsonLd(request, path, 'WebApplication')).toBeNull();
     });
