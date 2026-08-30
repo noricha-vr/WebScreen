@@ -19,7 +19,9 @@ const RELEASES_URL = `${REPOSITORY_URL}/releases`;
   >
     <p>{t.footer.note}</p>
 
-    <nav class="flex items-center gap-4">
+    {/* 4 つのリンクは 320px 幅で 1 行に収まらず、折り返さないとページごと横スクロールする。
+        収まる幅では折り返しが起きないので、広い画面の見た目は変わらない。 */}
+    <nav class="flex flex-wrap items-center gap-4">
       <a
         href={REPOSITORY_URL}
         target="_blank"

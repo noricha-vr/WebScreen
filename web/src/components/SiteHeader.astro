@@ -35,12 +35,15 @@ const LOGOUT_URL = '/api/auth/logout/';
         <span class="rounded-full bg-brand-50 px-2 py-0.5 text-sm font-semibold text-brand-700">
           β
         </span>
+        {/* 装飾なので 375px 未満では隠す。ロゴ + β + この画像の固有幅がビューポートを
+            超え、ページ全体に横スクロールが出るため（縮小ではなく非表示にするのは、
+            情報を持たない画像で、狭い画面ほどロゴの可読性を優先したいから）。 */}
         <img
           src={`${BANNER_BASE_URL}logo-characters.png`}
           alt=""
           width="620"
           height="200"
-          class="h-11 w-auto sm:h-14"
+          class="hidden h-11 w-auto min-[375px]:block sm:h-14"
         />
       </a>
     </div>

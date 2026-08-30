@@ -507,3 +507,31 @@ test.describe('ログイン済み', () => {
     await expect(panel.getByText(rawMessage)).toHaveCount(0);
   });
 });
+
+// 320px は想定する最小幅。ここで横スクロールが出ると、狭い画面でヘッダーが
+// 画面外へ流れる（本番の実測 scrollWidth = 388。Refs #60）。
+test.describe('狭い画面のヘッダー', () => {
+  const CHARACTERS_IMAGE = 'header img[src$="logo-characters.png"]';
+
+  test.describe('320px', () => {
+    test.use({ viewport: { width: 320, height: 800 } });
+
+    test('横スクロールが出ない', async ({ page }) => {
+      await page.goto('/ja/');
+
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(320);
+    });
+  });
+
+  test.describe('375px', () => {
+    test.use({ viewport: { width: 375, height: 800 } });
+
+    // 既存の見た目を保つ幅。装飾のキャラクター画像を隠すのは 375px 未満だけにする。
+    test('キャラクター画像は表示したままにする', async ({ page }) => {
+      await page.goto('/ja/');
+
+      await expect(page.locator(CHARACTERS_IMAGE)).toBeVisible();
+    });
+  });
+});
