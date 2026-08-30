@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "WebScreen — Web・画像・PDF を VRChat 用の動画に変換",
-    "description": "PDF・画像をアップロードすると、VRChat のビデオプレイヤーで再生できる MP4 の URL を発行します。",
+    "description": "Web ページ・写真・PDF を、VRChat のビデオプレイヤーで再生できる動画 URL に変換します。ワールドに貼るだけ、パスワードの登録は不要です。",
     "imageAlt": "WebScreen — PDF・画像・Web ページを VRChat 用の動画 URL に変換するサービス",
     "privacyTitle": "Cookie とプライバシー — WebScreen"
   },
@@ -180,6 +180,7 @@
       "navLabel": "Web ページを動画にする",
       "heading": "VRChat で Web ページを見せる",
       "lead": "VRChat のビデオプレイヤーは動画しか再生できません。WebScreen は Web ページを丸ごと撮影して MP4 に変換するので、発行された URL を貼るだけでページの中身をそのまま見せられます。",
+      "description": "見せたい Web ページの URL を貼るだけで、VRChat で再生できる動画に変換します。シークバーでページのスクロールもできます。",
       "sections": [
         {
           "heading": "ビデオプレイヤーに Web ページの URL は貼れない",
@@ -206,6 +207,7 @@
       "navLabel": "画面共有の代わりに使う",
       "heading": "VRChat で画面共有をしたいとき",
       "lead": "VRChat で画面を共有したい理由の多くは、Web ページ・スライド・写真を誰かに見せることです。WebScreen はその中身を動画に変換して、ワールドを選ばずに見せられる URL を発行します。",
+      "description": "VRChat で画面共有したいとき、Web ページやスライドなら動画に変換するのが確実です。ワールドを選ばず、遅延も音ズレもありません。",
       "sections": [
         {
           "heading": "VRChat で画面を見せる方法",
@@ -232,6 +234,7 @@
       "navLabel": "画像・写真を動画にする",
       "heading": "VRChat で画像や写真を見せる",
       "lead": "ワールド巡りやフレンドと撮った写真を、VRChat の中でみんなに見せるための変換サービスです。複数枚をまとめて 1 本の動画にでき、発行された URL を貼るだけで再生できます。",
+      "description": "ワールド巡りやフレンドとの写真を、VRChat でみんなに見せられる動画 URL に変換します。複数枚をまとめて 1 本にできます。",
       "sections": [
         {
           "heading": "撮った写真をその場で見せる",
@@ -258,6 +261,7 @@
       "navLabel": "スライド・PDF を動画にする",
       "heading": "VRChat でスライドや PDF を見せる",
       "lead": "PowerPoint や Google スライドを PDF で書き出して変換すると、VRChat のビデオプレイヤーでそのままプレゼンできます。1 ファイルにつき 200 ページまで対応しています。",
+      "description": "パワーポイントや Google スライドを PDF にして変換すれば、VRChat のビデオプレイヤーでそのままプレゼンできます。",
       "sections": [
         {
           "heading": "スライドは PDF で書き出してから変換する",

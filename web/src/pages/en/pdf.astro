@@ -2,12 +2,18 @@
 import UseCaseArticle from '../../components/UseCaseArticle.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { useTranslations } from '../../i18n';
+import { useCasePath } from '../../lib/use-cases';
 
 const lang = 'en' as const;
 const page = 'pdf' as const;
 const t = useTranslations(lang);
 ---
 
-<BaseLayout lang={lang} title={t.useCases[page].title} description={t.useCases[page].lead}>
+<BaseLayout
+  lang={lang}
+  title={t.useCases[page].title}
+  description={t.useCases[page].description}
+  breadcrumb={[{ name: t.useCases[page].navLabel, path: useCasePath(lang, page) }]}
+>
   <UseCaseArticle lang={lang} page={page} />
 </BaseLayout>

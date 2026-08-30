@@ -25,9 +25,23 @@ interface Props {
    * robots.txt で弾くとクローラが noindex 自体を読めなくなるため。
    */
   noindex?: boolean;
+  /**
+   * 検索結果に出すパンくず。トップから数えた下位階層だけを渡す（トップ自身は自動で先頭に付く）。
+   *
+   * FAQ / HowTo と違い、パンくずのリッチリザルトは現役の機能。
+   * 渡さないページ（トップ・プレビュー）では出力しない。
+   */
+  breadcrumb?: { name: string; path: string }[];
 }
 
-const { lang, title, description, analytics = true, noindex = false } = Astro.props;
+const {
+  lang,
+  title,
+  description,
+  analytics = true,
+  noindex = false,
+  breadcrumb,
+} = Astro.props;
 const t = useTranslations(lang);
 const other = alternateLocale(lang);
 const summary = description ?? t.meta.description;
@@ -40,6 +54,30 @@ const ogImageUrl = new URL('/og.png', Astro.site);
 // 画像の実寸。クローラが先読みで枠を確保できるようにする（差異があると縮小表示になる）。
 const OG_IMAGE_SIZE = { width: '1200', height: '630' };
 const OG_LOCALES: Record<Locale, string> = { ja: 'ja_JP', en: 'en_US' };
+
+/**
+ * パンくずの JSON-LD。先頭に言語トップを置き、渡された階層を続ける。
+ *
+ * `Astro.site` を基準に絶対 URL へ変換する（相対 URL だと Google が解決できない）。
+ */
+const breadcrumbJsonLd =
+  breadcrumb === undefined || breadcrumb.length === 0
+    ? null
+    : JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [{ name: t.nav.home, path: `/${lang}/` }, ...breadcrumb].map(
+          (item, index) => ({
+            '@type': 'ListItem',
+            position: index + 1,
+            name: item.name,
+            item: new URL(item.path, Astro.site).href,
+          })
+        ),
+      })
+        // `</script>` が値に混ざると script タグが途中で閉じてしまう。JSON としては等価な
+        // エスケープに置き換える（現状の値は辞書由来の固定文字列だが、将来の混入に備える）。
+        .replace(/</g, '\\u003c');
 
 // SRI 付きで固定バージョンを読む（CDN 側の差し替えをブラウザが検出できるようにする）。
 const FONT_AWESOME_URL = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.1.0/css/all.min.css';
@@ -69,6 +107,12 @@ const GA_TRACKED_HOST = 'web-screen.net';
       Astro.url.pathname から組み立てるのでクエリは落ちる。
     -->
     <link rel="canonical" href={pageUrl.href} />
+
+    {
+      breadcrumbJsonLd && (
+        <script type="application/ld+json" is:inline set:html={breadcrumbJsonLd} />
+      )
+    }
 
     <!-- SNS・チャットのリンクプレビュー。X は twitter:* が無ければ og:* を読むため card だけ足す。 -->
     <meta property="og:type" content="website" />
