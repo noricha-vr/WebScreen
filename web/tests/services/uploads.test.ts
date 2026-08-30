@@ -384,7 +384,7 @@ describe('commitUpload', () => {
     expect(database.movies.get(SHORT_ID)?.status).toBe('failed');
   });
 
-  it('上限超過の確保に負けたら R2 に触らず、ログを残して 413 を返す', async () => {
+  it('上限超過の確保に負けて行が ready なら、R2 に触らず同じ応答で成功する', async () => {
     const database = new FakeUploadDatabase([movie()]);
     const bucket = new FakeUploadBucket(MAX_UPLOAD_BYTES + 1);
     // head の後に別の commit が ready を確定させた状況。実体を消すと再生できる動画が壊れる。
@@ -392,6 +392,30 @@ describe('commitUpload', () => {
       const target = database.movies.get(SHORT_ID);
       if (target) target.status = 'ready';
     };
+
+    let response: unknown;
+    const events = await captureWarnEvents(async () => {
+      response = await commitUpload({
+        database,
+        bucket,
+        userId: USER_ID,
+        shortId: SHORT_ID,
+        publicBaseUrl: PUBLIC_URL,
+      });
+    });
+
+    // 確定済みの行に上限超過（413）を返さない。理由は最終状態から引き直す。
+    expect(response).toMatchObject({ shortId: SHORT_ID });
+    expect(events).toEqual(['upload_commit_oversize_claim_missed']);
+    expect(bucket.deletedKeys).toEqual([]);
+    expect(database.movies.get(SHORT_ID)?.status).toBe('ready');
+  });
+
+  it('上限超過の確保に負けて行が消えていたら 404 を返す', async () => {
+    const database = new FakeUploadDatabase([movie()]);
+    const bucket = new FakeUploadBucket(MAX_UPLOAD_BYTES + 1);
+    // 保持期間バッチが行ごと回収した状況。
+    bucket.onHead = () => database.movies.delete(SHORT_ID);
 
     const events = await captureWarnEvents(async () => {
       await expect(
@@ -402,11 +426,31 @@ describe('commitUpload', () => {
           shortId: SHORT_ID,
           publicBaseUrl: PUBLIC_URL,
         })
-      ).rejects.toMatchObject({ status: 413 });
+      ).rejects.toMatchObject({ status: 404 });
     });
 
     expect(events).toEqual(['upload_commit_oversize_claim_missed']);
     expect(bucket.deletedKeys).toEqual([]);
-    expect(database.movies.get(SHORT_ID)?.status).toBe('ready');
+  });
+
+  it('上限超過の確保に負けて行が failed なら 400 を返す', async () => {
+    const database = new FakeUploadDatabase([movie()]);
+    const bucket = new FakeUploadBucket(MAX_UPLOAD_BYTES + 1);
+    // 保持期間バッチが pending → failed の確保に成功した状況。
+    bucket.onHead = () => {
+      const target = database.movies.get(SHORT_ID);
+      if (target) target.status = 'failed';
+    };
+
+    await expect(
+      commitUpload({
+        database,
+        bucket,
+        userId: USER_ID,
+        shortId: SHORT_ID,
+        publicBaseUrl: PUBLIC_URL,
+      })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(bucket.deletedKeys).toEqual([]);
   });
 });

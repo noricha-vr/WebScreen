@@ -148,7 +148,9 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
     object.size
   );
   if (exceedsPerFileLimit || exceedsDeclaredSizeLimit || exceedsUserLimit) {
-    await rejectOversizedUpload(input, key);
+    // 確保に負けた行は、この呼び出しが上限超過として扱ってよい対象ではない。
+    // 413 を返し続けると既に ready の行へ誤った理由を返すため、最終状態から引き直す。
+    if (!(await claimOversizedUpload(input, key))) return resolveCommitConflict(input);
     throw new UploadError(
       413,
       ERROR_CODES.payloadTooLarge,
@@ -171,7 +173,7 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
 }
 
 /**
- * 上限を超えた動画の予約を failed へ落とし、実体を消す。
+ * 上限を超えた動画の予約を failed へ確保し、実体を消す。確保できたら true を返す。
  *
  * 保持期間バッチと同じ確保方式（条件付き UPDATE → R2）にする。R2 を先に消すと、
  * 読んでから書くまでの間に別の書き手が同じ行を確定させた時、実体だけが消える。
@@ -179,9 +181,9 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
  *
  * 実体の削除に失敗しても 500 にはしない。呼び出し元へ返すべき理由は上限超過であって
  * R2 の障害ではなく、failed のまま残った行は failed の掃除（services/retention.ts）が
- * 同じ順序（R2 → D1）で回収し直すため。どちらの分岐も件数と理由をログに残す。
+ * 同じ順序（R2 → D1）で回収し直すため。どちらの分岐も理由をログに残す。
  */
-async function rejectOversizedUpload(input: CommitUploadInput, key: string): Promise<void> {
+async function claimOversizedUpload(input: CommitUploadInput, key: string): Promise<boolean> {
   const claim = await input.database
     .prepare(
       "UPDATE movies SET status = 'failed' WHERE short_id = ? AND user_id = ? AND status = 'pending'"
@@ -196,7 +198,7 @@ async function rejectOversizedUpload(input: CommitUploadInput, key: string): Pro
       errorCode: ERROR_CODES.payloadTooLarge,
       status: 413,
     });
-    return;
+    return false;
   }
 
   try {
@@ -209,6 +211,7 @@ async function rejectOversizedUpload(input: CommitUploadInput, key: string): Pro
       status: 413,
     });
   }
+  return true;
 }
 
 /**
