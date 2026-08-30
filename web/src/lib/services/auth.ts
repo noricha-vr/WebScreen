@@ -6,6 +6,7 @@ import {
   base64UrlEncode,
   createSessionPayload,
   generateOAuthState,
+  importSigningKey,
   matchesOAuthState,
   readCookie,
   signSession,
@@ -152,6 +153,40 @@ export async function requireUser(
     status: 401,
     error: { errorCode: ERROR_CODES.unauthorized, message: '認証が必要です' },
   };
+}
+
+/** プレビューページの所有者判定結果。`ok: false` は認証基盤そのものの異常。 */
+export type PreviewOwnerResult = { ok: true; isOwner: boolean } | { ok: false };
+
+/**
+ * 公開プレビューの所有者判定。
+ *
+ * 「Cookie を持たない / 署名が通らない = 他人」と「認証基盤が壊れている（署名鍵の破損・
+ * D1 障害）」を分ける。後者を他人として扱うと、所有者が pin / 削除 UI を失ったまま
+ * ページが正常に見えてしまい、誰も異常に気づけない。
+ *
+ * Cookie 不在は鍵にも D1 にも触らずに非所有者で確定させる。所有者は必ず Cookie を持つので
+ * 障害の可視性は落ちず、鍵が壊れても匿名の公開閲覧（VRChat からの再生）は巻き込まない。
+ */
+export async function resolvePreviewOwner(
+  request: Request,
+  deps: { db: UsersDatabase; signingKeySecret: string; ownerId: number; nowSeconds?: number }
+): Promise<PreviewOwnerResult> {
+  if (!readCookie(request.headers.get('Cookie'), SESSION_COOKIE_NAME)) {
+    return { ok: true, isOwner: false };
+  }
+
+  try {
+    const signingKey = await importSigningKey(deps.signingKeySecret);
+    const result = await requireUser(request, {
+      db: deps.db,
+      signingKey,
+      nowSeconds: deps.nowSeconds,
+    });
+    return { ok: true, isOwner: result.ok && result.user.id === deps.ownerId };
+  } catch {
+    return { ok: false };
+  }
 }
 
 async function verifyOAuthStateToken(

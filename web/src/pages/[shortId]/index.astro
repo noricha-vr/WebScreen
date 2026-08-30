@@ -3,10 +3,12 @@ import { env } from 'cloudflare:workers';
 
 import MovieNotFound from '../../components/MovieNotFound.astro';
 import MoviePreview from '../../components/MoviePreview.astro';
+import PreviewUnavailable from '../../components/PreviewUnavailable.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { resolveLocale, useTranslations } from '../../i18n';
-import { importSigningKey } from '../../lib/contracts/session';
-import { requireUser, type AuthDatabase } from '../../lib/services/auth';
+import { ERROR_CODES } from '../../lib/contracts/api';
+import { logWorkerFailure } from '../../lib/infra/worker-log';
+import { resolvePreviewOwner, type AuthDatabase } from '../../lib/services/auth';
 import { findPublicMovie, type MoviesDatabase } from '../../lib/services/movies';
 
 // 公開ページ（認証不要）だが shortId ごとに内容が変わるので Worker で描画する。
@@ -34,34 +36,44 @@ const movie = await findPublicMovie({
   publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
 });
 
-/**
- * 所有者判定。未ログイン・署名鍵未設定でも公開表示は壊さない（匿名として扱う）。
- */
-async function resolveIsOwner(ownerId: number): Promise<boolean> {
-  try {
-    const signingKey = await importSigningKey(bindings.SESSION_SIGNING_KEY);
-    const result = await requireUser(Astro.request, { db: bindings.DB, signingKey });
-    return result.ok && result.user.id === ownerId;
-  } catch {
-    return false;
-  }
+// 所有者判定は services 層（resolvePreviewOwner）が持つ。ここは結果を
+// HTTP ステータスと描画に変換するだけ。
+const ownership =
+  movie === null
+    ? ({ ok: true, isOwner: false } as const)
+    : await resolvePreviewOwner(Astro.request, {
+        db: bindings.DB,
+        signingKeySecret: bindings.SESSION_SIGNING_KEY,
+        ownerId: movie.ownerId,
+      });
+
+if (!ownership.ok) {
+  // 認証基盤の異常。他人の動画として 200 を返すと、所有者が操作 UI を失ったまま
+  // 誰も異常に気づけないので 503 に倒して記録する。
+  logWorkerFailure({
+    event: 'preview_owner_check_failed',
+    errorCode: ERROR_CODES.internalError,
+    status: 503,
+  });
+  Astro.response.status = 503;
+} else if (movie === null) {
+  Astro.response.status = 404;
 }
 
-const isOwner = movie === null ? false : await resolveIsOwner(movie.ownerId);
-
-if (movie === null) Astro.response.status = 404;
+const pageTitle = !ownership.ok
+  ? t.preview.unavailableHeading
+  : movie === null
+    ? t.preview.notFoundHeading
+    : `${movie.filename} — WebScreen`;
 ---
 
 {/* analytics={false}: title にアップロード済みファイル名、URL に共有 ID そのものである
     shortId が入るため、GA4 の page_title / page_location として Google へ送らせない。 */}
-<BaseLayout
-  lang={lang}
-  title={movie === null ? t.preview.notFoundHeading : `${movie.filename} — WebScreen`}
-  analytics={false}
-  noindex={true}
->
+<BaseLayout lang={lang} title={pageTitle} analytics={false} noindex={true}>
   {
-    movie === null ? (
+    !ownership.ok ? (
+      <PreviewUnavailable lang={lang} />
+    ) : movie === null ? (
       <MovieNotFound lang={lang} />
     ) : (
       <MoviePreview
@@ -71,7 +83,7 @@ if (movie === null) Astro.response.status = 404;
         publicUrl={movie.publicUrl}
         pinned={movie.pinned}
         expiresAt={movie.expiresAt}
-        isOwner={isOwner}
+        isOwner={ownership.isOwner}
       />
     )
   }

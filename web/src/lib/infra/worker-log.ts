@@ -14,6 +14,7 @@ const WORKER_FAILURE_EVENTS = [
   'upload_commit_oversize_claim_missed',
   'upload_commit_oversize_object_delete_failed',
   'movie_delete_row_stranded',
+  'preview_owner_check_failed',
   'capture_request_json_invalid',
   'capture_upstream_response_invalid',
   'capture_worker_timeout',

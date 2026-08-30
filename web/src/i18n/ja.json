@@ -88,6 +88,8 @@
     "renameTooLong": "ファイル名が長すぎます（{count} / 上限 {max} 文字）",
     "notFoundHeading": "動画が見つかりません",
     "notFoundLead": "URL が間違っているか、保管期限が過ぎて削除された可能性があります。",
+    "unavailableHeading": "いま表示できません",
+    "unavailableLead": "ログイン状態を確認できなかったため、このページを表示できませんでした。時間をおいて再度お試しください。",
     "backHome": "トップへ戻る",
     "deletedHeading": "削除しました",
     "deletedLead": "この動画は削除されました。この URL では再生できません。",
