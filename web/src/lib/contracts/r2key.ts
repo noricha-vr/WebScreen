@@ -63,6 +63,17 @@ export function movieKey(shortId: string): string {
   return `movies/${shortId}.mp4`;
 }
 
+/**
+ * 完成した mp4 の公開 URL。配信元（R2_PUBLIC_BASE_URL）とキー規則をここで結ぶ。
+ *
+ * 表示（履歴・プレビュー）と削除時のキャッシュ purge が同じ文字列を組み立てられること
+ * が要件。purge は URL の完全一致でしか効かないため、組み立てが 1 文字でもずれると
+ * 「消したのに配信され続ける」に戻る。
+ */
+export function movieUrl(publicBaseUrl: string, shortId: string): string {
+  return new URL(movieKey(shortId), `${publicBaseUrl}/`).toString();
+}
+
 /** captureKey の index 上限（0 埋め 4 桁で表現できる範囲）。 */
 export const MAX_CAPTURE_INDEX = 9999;
 
