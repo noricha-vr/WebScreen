@@ -20,7 +20,7 @@ export interface UploadDatabase extends QuotaDatabase {
   prepare(query: string): {
     bind(...values: unknown[]): {
       first<T>(): Promise<T | null>;
-      run(): Promise<unknown>;
+      run(): Promise<{ meta: { changes: number } }>;
     };
   };
 }
@@ -154,14 +154,40 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
     );
   }
 
-  await input.database
+  const updated = await input.database
     .prepare(
       "UPDATE movies SET status = 'ready', size_bytes = ? WHERE short_id = ? AND user_id = ? AND status = 'pending'"
     )
     .bind(object.size, input.shortId, input.userId)
     .run();
 
+  // 0 件 = SELECT と R2 確認の間に行が pending でなくなった。成功として返すと、
+  // 保持期間バッチが回収した動画の公開 URL を返してしまう（行も実体も無いのに再生できる想定になる）。
+  if (updated.meta.changes === 0) return resolveCommitConflict(input);
+
   return toCommitResponse({ ...movie, size_bytes: object.size, status: 'ready' }, input.publicBaseUrl);
+}
+
+/**
+ * ready への UPDATE が 0 件だった理由を引き直して返す。
+ *
+ * 行が消えていれば 404（pending の掃除が勝った）、既に ready なら並行 commit が
+ * 先に確定しただけなので同じ応答で成功する（services/movies.ts の pin と同じ形）。
+ * 稀な経路なので、通常時に追加のクエリを増やさないようここでだけ読み直す。
+ */
+async function resolveCommitConflict(input: CommitUploadInput): Promise<CommitResponse> {
+  const current = await input.database
+    .prepare(
+      'SELECT short_id, user_id, size_bytes, status, expires_at FROM movies WHERE short_id = ? AND user_id = ?'
+    )
+    .bind(input.shortId, input.userId)
+    .first<MovieRow>();
+
+  if (!current) {
+    throw new UploadError(404, ERROR_CODES.notFound, '対象の動画が見つかりません');
+  }
+  if (current.status === 'ready') return toCommitResponse(current, input.publicBaseUrl);
+  throw new UploadError(400, ERROR_CODES.invalidRequest, 'この動画は commit できません');
 }
 
 function createPublicUrl(publicBaseUrl: string, key: string): string {

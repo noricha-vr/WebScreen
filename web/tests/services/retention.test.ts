@@ -4,6 +4,7 @@ import { captureKey, movieKey } from '../../src/lib/contracts/r2key';
 import {
   CAPTURE_KEY_PREFIX,
   MAX_CAPTURE_DELETIONS_PER_RUN,
+  MAX_FAILED_DELETIONS_PER_RUN,
   runRetention,
   type RetentionBucket,
   type RetentionDatabase,
@@ -75,18 +76,19 @@ class FakeRetentionDatabase implements RetentionDatabase {
     }
 
     const threshold = parseSqliteTime(values[0] as string);
-    const rows = [...this.movies.values()].filter((movie) =>
-      query.includes("status = 'ready'")
-        ? movie.status === 'ready' && isExpired(movie, threshold)
-        : movie.status === 'pending' && parseSqliteTime(movie.createdAt) < threshold
-    );
+    const matched = [...this.movies.values()].filter((movie) => {
+      if (query.includes("status = 'ready'")) return movie.status === 'ready' && isExpired(movie, threshold);
+      const status = query.includes("status = 'failed'") ? 'failed' : 'pending';
+      return movie.status === status && parseSqliteTime(movie.createdAt) < threshold;
+    });
+    const rows = query.includes('LIMIT ?') ? matched.slice(0, values[1] as number) : matched;
     this.onSelect?.(rows);
     return rows.map((movie) => ({ short_id: movie.shortId }));
   }
 
   private delete(query: string, values: unknown[]): number {
     // backfill の UPDATE も run() を通る。pin 済みで期限を持たない行だけを埋める。
-    if (query.startsWith('UPDATE')) {
+    if (query.startsWith('UPDATE') && query.includes('expires_at = ?')) {
       const targets = [...this.movies.values()].filter(
         (movie) => movie.pinned === 1 && movie.expiresAt === null
       );
@@ -94,12 +96,21 @@ class FakeRetentionDatabase implements RetentionDatabase {
       return targets.length;
     }
 
-    if (query.includes("status = 'failed'")) {
-      const threshold = parseSqliteTime(values[0] as string);
-      const targets = [...this.movies.values()].filter(
-        (movie) => movie.status === 'failed' && parseSqliteTime(movie.createdAt) < threshold
+    // pending の確保（pending → failed）。commit と同じく status を条件に持つ。
+    if (query.startsWith('UPDATE') && query.includes("SET status = 'failed'")) {
+      const target = this.movies.get(values[0] as string);
+      if (!target || target.status !== 'pending') return 0;
+      if (parseSqliteTime(target.createdAt) >= parseSqliteTime(values[1] as string)) return 0;
+      target.status = 'failed';
+      return 1;
+    }
+
+    // failed のまとめ削除（DELETE ... short_id IN (?, ...)）。
+    if (query.includes('short_id IN (')) {
+      const targets = (values as string[]).filter(
+        (shortId) => this.movies.get(shortId)?.status === 'failed'
       );
-      for (const movie of targets) this.movies.delete(movie.shortId);
+      for (const shortId of targets) this.movies.delete(shortId);
       return targets.length;
     }
 
@@ -109,7 +120,7 @@ class FakeRetentionDatabase implements RetentionDatabase {
       return 0;
     }
     if (query.includes("status = 'ready'") && movie.status !== 'ready') return 0;
-    if (query.includes("status = 'pending'") && movie.status !== 'pending') return 0;
+    if (query.includes("status = 'failed'") && movie.status !== 'failed') return 0;
     this.movies.delete(movie.shortId);
     return 1;
   }
@@ -261,7 +272,7 @@ describe('runRetention: 期限切れ動画', () => {
 });
 
 describe('runRetention: pending 孤児と failed', () => {
-  it('24h を過ぎた pending は実体があれば消してから行を削除する', async () => {
+  it('24h を過ぎた pending は行を確保してから実体を消す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'orphanAAAAAA', status: 'pending', createdAt: iso(-DAY_MS - HOUR_MS) }),
     ]);
@@ -271,6 +282,52 @@ describe('runRetention: pending 孤児と failed', () => {
 
     expect(summary.deletedOrphans).toBe(1);
     expect(bucket.deleted).toEqual([movieKey('orphanAAAAAA')]);
+    expect(database.movies.size).toBe(0);
+  });
+
+  it('SELECT 後に commit が確定した pending は R2 を消さず ready のまま残す', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({
+        shortId: 'raceCommitAA',
+        status: 'pending',
+        createdAt: iso(-DAY_MS - HOUR_MS),
+        expiresAt: iso(30 * DAY_MS),
+      }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([movieKey('raceCommitAA')]));
+    // SELECT 直後に所有者の commit が通った状況（pending → ready）。
+    database.onSelect = (rows) => {
+      for (const row of rows) row.status = 'ready';
+    };
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedOrphans).toBe(0);
+    expect(bucket.deleted).toEqual([]);
+    expect(database.movies.get('raceCommitAA')?.status).toBe('ready');
+  });
+
+  it('確保後に R2 の削除が失敗した pending は failed 行として残り、次回の実行で回収される', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'orphanFailAA', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([movieKey('orphanFailAA')]));
+    bucket.failingKeys.add(movieKey('orphanFailAA'));
+
+    const first = await run(database, bucket);
+
+    expect(first.deletedOrphans).toBe(0);
+    expect(first.deferredObjectDeletions).toBe(1);
+    expect(bucket.deleted).toEqual([]);
+    expect(database.movies.get('orphanFailAA')?.status).toBe('failed');
+
+    // R2 が復旧した次の実行で、実体を消してから行を消す。
+    bucket.failingKeys.clear();
+    const second = await run(database, bucket);
+
+    expect(second.deletedFailed).toBe(1);
+    expect(second.deferredObjectDeletions).toBe(0);
+    expect(bucket.deleted).toEqual([movieKey('orphanFailAA')]);
     expect(database.movies.size).toBe(0);
   });
 
@@ -311,6 +368,27 @@ describe('runRetention: pending 孤児と failed', () => {
     expect(summary.deletedFailed).toBe(1);
     expect(database.movies.has('oldFailedAAA')).toBe(false);
     expect(database.movies.has('newFailedAAA')).toBe(true);
+  });
+
+  it('上限を超える failed 行は上限分だけ処理し、残りは次回へ持ち越す', async () => {
+    const overflow = 2;
+    const database = new FakeRetentionDatabase(
+      Array.from({ length: MAX_FAILED_DELETIONS_PER_RUN + overflow }, (_, index) =>
+        movie({
+          shortId: `failed${String(index).padStart(6, '0')}`,
+          status: 'failed',
+          createdAt: iso(-2 * DAY_MS),
+        })
+      )
+    );
+    const bucket = new FakeRetentionBucket();
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedFailed).toBe(MAX_FAILED_DELETIONS_PER_RUN);
+    expect(summary.sweepCapped).toBe(true);
+    expect(bucket.deleted).toHaveLength(MAX_FAILED_DELETIONS_PER_RUN);
+    expect(database.movies.size).toBe(overflow);
   });
 });
 
@@ -385,6 +463,8 @@ describe('runRetention: サマリ', () => {
       strandedMovies: 0,
       deletedOrphans: 1,
       deletedFailed: 1,
+      deferredObjectDeletions: 0,
+      sweepCapped: false,
       deletedCaptures: 1,
     });
     expect(database.movies.size).toBe(0);

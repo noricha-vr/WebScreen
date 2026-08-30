@@ -4,9 +4,14 @@
  * D1 / R2 はインターフェースで注入し、現在時刻も引数で受け取る（Date.now を呼ぶのは
  * cron の entry 層だけ）。これで workerd なしでも全分岐をテストできる。
  *
- * 削除の順序は必ず「R2 → D1」。逆にすると D1 の行を消した時点で R2 のキーを
- * 導出できなくなり、実体だけが残って回収不能になる（R2 の delete は存在しない
- * キーでも成功するため、この順序なら途中失敗しても次回実行でやり直せる）。
+ * 実体を消してから行を消す（R2 → D1）。逆にすると D1 の行を消した時点で R2 のキーを
+ * 導出できなくなり、実体だけが残って回収不能になる（R2 の delete は存在しないキーでも
+ * 成功するため、この順序なら途中失敗しても次回実行でやり直せる）。
+ *
+ * pending には commit という並行の書き手がいるため、R2 に触る前に条件付き UPDATE で
+ * pending → failed の「確保」を挟む。commit の UPDATE も status = 'pending' を条件に
+ * 持つので、勝つのは必ず一方だけになる。確保した行は failed として残るため、R2 の削除に
+ * 失敗しても行は消えず、failed の掃除が同じ順序（R2 → D1）で回収し直せる。
  */
 
 import { movieKey } from '../contracts/r2key';
@@ -32,6 +37,23 @@ export const MAX_CAPTURE_DELETIONS_PER_RUN = 1000;
  * ここは list 用の prefix だけを持つ（一致は retention のテストで検証する）。
  */
 export const CAPTURE_KEY_PREFIX = 'captures/';
+
+/**
+ * 1 回の実行で確保する pending の行数の上限。1 行あたり最大 4 subrequest
+ * （確保 UPDATE / head / delete / DELETE）を使うため、4 × 200 = 800 で Workers の
+ * 上限（1000）に収まる値にしている。残りは次回の実行が拾う。
+ */
+export const MAX_PENDING_CLAIMS_PER_RUN = 200;
+
+/**
+ * 1 回の実行で削除する failed の行数の上限。failed は容量計算の対象外なので行数は
+ * 利用者側から無制限に増やせる。実体の削除はキー配列で 1 回、行の削除は 50 件ずつの
+ * まとめ DELETE なので 500 行でも subrequest は十数回に収まる。残りは次回が拾う。
+ */
+export const MAX_FAILED_DELETIONS_PER_RUN = 500;
+
+/** 1 文の DELETE に載せる short_id の数。D1 のバインド変数の上限（100）に収める。 */
+const MAX_IDS_PER_DELETE = 50;
 
 /** D1 の最小操作面。バッチが必要とするのは all / run だけ。 */
 export interface RetentionDatabase {
@@ -70,6 +92,10 @@ export interface RetentionSummary {
   strandedMovies: number;
   deletedOrphans: number;
   deletedFailed: number;
+  /** R2 の削除に失敗して次回の実行へ持ち越した件数。行は残るので取り残しにはならない。 */
+  deferredObjectDeletions: number;
+  /** movies の掃除が 1 回の上限に達して打ち切ったか。true なら残りは次回の実行が拾う。 */
+  sweepCapped: boolean;
   deletedCaptures: number;
 }
 
@@ -96,13 +122,19 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   // 掃除より先に走らせる。期限を入れた直後の行は 1 年先なので同じ実行では消えない。
   const backfilledPinned = await backfillPinnedExpiry(database, now);
   const expired = await deleteExpiredMovies(database, bucket, now);
+  const orphans = await deletePendingOrphans(database, bucket, now);
+  // 孤児の確保で R2 の削除に失敗した行も failed として残っているため、同じ実行の
+  // ここで拾い直せる（猶予はどちらも 24 時間）。取りこぼしても次回の実行が同じ条件で拾う。
+  const failed = await deleteFailedMovies(database, bucket, now);
 
   return {
     backfilledPinned,
     deletedMovies: expired.deleted,
     strandedMovies: expired.stranded,
-    deletedOrphans: await deletePendingOrphans(database, bucket, now),
-    deletedFailed: await deleteFailedMovies(database, now),
+    deletedOrphans: orphans.deleted,
+    deletedFailed: failed.deleted,
+    deferredObjectDeletions: failed.deferred,
+    sweepCapped: orphans.capped || failed.capped,
     deletedCaptures: await deleteStaleCaptures(bucket, now),
   };
 }
@@ -199,50 +231,110 @@ async function deleteExpiredMovies(
 /**
  * commit されないまま放置された pending を回収する。
  *
- * 実体が上がっていれば消してから行を削除する（presign 後にアップロードだけ
- * 成功して commit に到達しなかったケースが R2 に残り続けるのを防ぐ）。
+ * R2 に触る前に、条件付き UPDATE で pending → failed の確保を行う。同時に走る commit の
+ * UPDATE も status = 'pending' を条件に持つため、勝つのは必ずどちらか一方だけになる。
+ * 負けた側（= 0 件）は実体が ready の行のものなので R2 に触らない。
+ *
+ * 行を消すのは R2 の削除に成功した後だけ。失敗した行は failed のまま残り、
+ * failed の掃除（deleteFailedMovies）が同じ順序で回収し直す。
  */
 async function deletePendingOrphans(
   database: RetentionDatabase,
   bucket: RetentionBucket,
   now: Date
-): Promise<number> {
+): Promise<{ deleted: number; capped: boolean }> {
   const threshold = new Date(now.getTime() - PENDING_ORPHAN_GRACE_MS).toISOString();
   const { results } = await database
     .prepare(
-      "SELECT short_id FROM movies WHERE status = 'pending' AND datetime(created_at) < datetime(?)"
+      "SELECT short_id FROM movies WHERE status = 'pending' AND datetime(created_at) < datetime(?) LIMIT ?"
     )
-    .bind(threshold)
+    .bind(threshold, MAX_PENDING_CLAIMS_PER_RUN)
     .all<ShortIdRow>();
 
   let deleted = 0;
   for (const row of results) {
-    const key = movieKey(row.short_id);
-    try {
-      if (await bucket.head(key)) await bucket.delete(key);
-    } catch {
-      continue;
-    }
+    // SELECT 後に commit が確定した行を巻き込まないよう、確保時にも猶予を再確認する。
+    const claim = await database
+      .prepare(
+        "UPDATE movies SET status = 'failed' WHERE short_id = ? AND status = 'pending' AND datetime(created_at) < datetime(?)"
+      )
+      .bind(row.short_id, threshold)
+      .run();
+    if (claim.meta.changes === 0) continue;
+
+    // 削除に失敗した行は failed のまま残す（件数は failed の掃除が数える）。
+    if (!(await deleteMovieObject(bucket, row.short_id))) continue;
 
     const result = await database
-      .prepare("DELETE FROM movies WHERE short_id = ? AND status = 'pending'")
+      .prepare("DELETE FROM movies WHERE short_id = ? AND status = 'failed'")
       .bind(row.short_id)
       .run();
     deleted += result.meta.changes;
   }
 
-  return deleted;
+  return { deleted, capped: results.length === MAX_PENDING_CLAIMS_PER_RUN };
 }
 
-/** 一定期間を過ぎた failed 行を削除する（実体は commit 時に削除済み）。 */
-async function deleteFailedMovies(database: RetentionDatabase, now: Date): Promise<number> {
-  const threshold = new Date(now.getTime() - FAILED_RETENTION_MS).toISOString();
-  const result = await database
-    .prepare("DELETE FROM movies WHERE status = 'failed' AND datetime(created_at) < datetime(?)")
-    .bind(threshold)
-    .run();
+/**
+ * 動画の実体を R2 から消す。成功（元から無い場合を含む）で true を返す。
+ *
+ * R2 が落ちている間に D1 の行だけ消すと実体が孤児になるため、呼び出し側は false の時に
+ * 行を残し、次回の実行へ持ち越す。
+ */
+async function deleteMovieObject(bucket: RetentionBucket, shortId: string): Promise<boolean> {
+  const key = movieKey(shortId);
+  try {
+    if (await bucket.head(key)) await bucket.delete(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-  return result.meta.changes;
+/**
+ * 一定期間を過ぎた failed 行を削除する。
+ *
+ * 通常の failed（commit の上限超過）は実体が削除済みだが、pending の確保で R2 の削除に
+ * 失敗した行もここへ来る。存在しないキーの delete は成功するので head で確認せず、
+ * まとめて delete してから行を消す（R2 → D1 の順は維持する）。R2 が落ちていれば
+ * 行を残したまま次回へ持ち越す。
+ */
+async function deleteFailedMovies(
+  database: RetentionDatabase,
+  bucket: RetentionBucket,
+  now: Date
+): Promise<{ deleted: number; deferred: number; capped: boolean }> {
+  const threshold = new Date(now.getTime() - FAILED_RETENTION_MS).toISOString();
+  const { results } = await database
+    .prepare(
+      "SELECT short_id FROM movies WHERE status = 'failed' AND datetime(created_at) < datetime(?) LIMIT ?"
+    )
+    .bind(threshold, MAX_FAILED_DELETIONS_PER_RUN)
+    .all<ShortIdRow>();
+
+  const capped = results.length === MAX_FAILED_DELETIONS_PER_RUN;
+  if (results.length === 0) return { deleted: 0, deferred: 0, capped };
+
+  const shortIds = results.map((row) => row.short_id);
+  try {
+    await bucket.delete(shortIds.map(movieKey));
+  } catch {
+    // R2 が落ちている間に行だけ消すと実体が孤児になるため、この実行では行を残す。
+    return { deleted: 0, deferred: shortIds.length, capped };
+  }
+
+  let deleted = 0;
+  for (let index = 0; index < shortIds.length; index += MAX_IDS_PER_DELETE) {
+    const chunk = shortIds.slice(index, index + MAX_IDS_PER_DELETE);
+    const placeholders = chunk.map(() => '?').join(', ');
+    const result = await database
+      .prepare(`DELETE FROM movies WHERE status = 'failed' AND short_id IN (${placeholders})`)
+      .bind(...chunk)
+      .run();
+    deleted += result.meta.changes;
+  }
+
+  return { deleted, deferred: 0, capped };
 }
 
 /**
