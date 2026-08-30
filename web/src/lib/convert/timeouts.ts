@@ -16,9 +16,14 @@
 export const WASM_LOAD_TIMEOUT_MS = 60_000;
 /**
  * 撮影済み画像 1 枚あたりの取得上限。期限は 1 枚ごとに切り直す。
+ *
  * 取得は数本ずつ並行して走る（IMAGE_FETCH_CONCURRENCY）ので、合計の待ちは枚数 ÷ 同時数に近づく。
+ * ただし副作用として、同時に走る数本が帯域を分け合うぶん 1 枚あたりの所要は逐次のときより伸びる。
+ * 細い回線ほど効き、逐次なら間に合っていた 1 枚が期限に触れうるので、逐次時代の 30 秒から広げた。
+ * 同時数と釣り合う 30 × 6 秒まで伸ばすと、本当に詰まったときの見切りが遅くなりすぎるため採らない。
+ * ここに触れる報告が続くなら、期限ではなく IMAGE_FETCH_CONCURRENCY を下げる。
  */
-export const IMAGE_FETCH_TIMEOUT_MS = 30_000;
+export const IMAGE_FETCH_TIMEOUT_MS = 45_000;
 /** R2 への PUT の上限。上限 50 MB を細い回線で送り切る余地を残す。 */
 export const UPLOAD_PUT_TIMEOUT_MS = 120_000;
 /**
