@@ -47,9 +47,9 @@ bunx wrangler r2 bucket cors list webscreen-beta   # 確認
 
 ## captures/ の掃除主体
 
-`captures/{uuid}/{index}.png`（web-capture が置く動画化の中間物）を消すのは **WebScreen の cron だけ**（`web/cron/` の Worker が `web/src/lib/services/retention-captures.ts` を毎時 17 分に実行し、アップロードから 24 時間経過したものを 1 回あたり最大 1000 件・list 10 ページまで削除する。残りは次の実行が拾う）。**R2 の lifecycle rule は使っていない**（作成もしていない）。掃除を別の場所へ移す時は、この節と `retention-captures.ts` の両方を同時に直すこと。
+`captures/{uuid}/{index}.{png|jpg}`（web-capture が置く動画化の中間物。拡張子は web-capture の設定で決まる。撮影を速くするため JPEG へ移行中で、掃除も取り込みも拡張子を見ないので混在しても問題ない）を消すのは **WebScreen の cron だけ**（`web/cron/` の Worker が `web/src/lib/services/retention-captures.ts` を毎時 17 分に実行し、アップロードから 24 時間経過したものを 1 回あたり最大 1000 件・list 10 ページまで削除する。残りは次の実行が拾う）。**R2 の lifecycle rule は使っていない**（作成もしていない）。掃除を別の場所へ移す時は、この節と `retention-captures.ts` の両方を同時に直すこと。
 
-掃除対象バケット名の正本は **`web/cron/wrangler.jsonc` の `r2_buckets`**（現在 `webscreen-beta`）。web-capture 側の書き込み先（Cloud Run の環境変数 `R2_BUCKET`）が**これと一致していることが契約**で、ずれると中間 PNG は誰にも消されず増え続ける（気づけるのは請求だけ）。2026-08-30 に `gcloud run services describe web-capture` で一致を確認済み。どちらかを変える時は両方同時に変える。
+掃除対象バケット名の正本は **`web/cron/wrangler.jsonc` の `r2_buckets`**（現在 `webscreen-beta`）。web-capture 側の書き込み先（Cloud Run の環境変数 `R2_BUCKET`）が**これと一致していることが契約**で、ずれると中間のキャプチャ画像は誰にも消されず増え続ける（気づけるのは請求だけ）。2026-08-30 に `gcloud run services describe web-capture` で一致を確認済み。どちらかを変える時は両方同時に変える。
 
 ## 削除とキャッシュの既知の穴
 

@@ -39,9 +39,12 @@ function captureObject(index: number, uploadedOffsetMs: number): CaptureObject {
 }
 
 describe('deleteStaleCaptures', () => {
-  it('prefix が contracts の captureKey と一致する', () => {
+  // 掃除は拡張子を見ない。web-capture が png から jpg へ切り替わっても取り残しが出ないこと。
+  it.each([['png'], ['jpg']] as const)('%s のキーも prefix で拾える', (extension) => {
     expect(
-      captureKey('11111111-2222-3333-4444-555555555555', 0).startsWith(CAPTURE_KEY_PREFIX)
+      captureKey('11111111-2222-3333-4444-555555555555', 0, extension).startsWith(
+        CAPTURE_KEY_PREFIX
+      )
     ).toBe(true);
   });
 

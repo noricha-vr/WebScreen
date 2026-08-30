@@ -82,7 +82,7 @@ Worker 自身のタイムアウト（上流への 150 秒 abort）も `CAPTURE_T
 | 対象 | 公開範囲 | 補足 |
 |------|---------|------|
 | 動画 URL（`movies/{shortId}.mp4`） | **公開**（認証なしで誰でも取得可） | VRChat のプレイヤーが認証なしで取得する必要があるため。**将来も公開のまま変えない**。保護は 12 文字 base62 のランダム ID による推測困難性のみ |
-| キャプチャ画像（`captures/{uuid}/{index}.png`） | 公開 | 同上。動画生成の中間物 |
+| キャプチャ画像（`captures/{uuid}/{index}.{png\|jpg}`） | 公開 | 同上。動画生成の中間物。拡張子は web-capture の設定で決まる（撮影を速くするため JPEG へ移行中）。WebScreen 側は `CaptureResponse.images` の URL をそのまま取得して復号するため、どちらでも扱いは変わらない |
 | 履歴 `GET /api/history/` | 本人のみ | セッション Cookie の uid で絞る |
 | pin `POST /api/movies/{shortId}/pin/` | 本人のみ | 所有者チェック必須 |
 | 削除 `DELETE /api/movies/{shortId}/` | 本人のみ | 所有者チェック必須。他人の shortId は 404（存在を漏らさない） |
