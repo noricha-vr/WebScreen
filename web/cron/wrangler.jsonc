@@ -1,7 +1,7 @@
 {
   // 保持期間バッチ専用の独立 Worker。Astro のビルドを通さない素の TS で、
   // wrangler が esbuild して単体デプロイする:
-  //   bunx wrangler deploy -c web/cron/wrangler.jsonc
+  //   bunx wrangler deploy -c cron/wrangler.jsonc
   // 本体（webscreen-beta）と分けるのは、cron の失敗・実行時間が
   // リクエスト処理側の可観測性に混ざらないようにするため。
   "$schema": "../node_modules/wrangler/config-schema.json",
@@ -10,9 +10,16 @@
   // 本体（web/wrangler.jsonc）と揃える。片方だけ上げると同じ D1 / R2 を
   // 別挙動の runtime で触ることになるため、上げる時は両方同時に上げる。
   "compatibility_date": "2026-08-18",
-  // 毎時 17 分。0 分ちょうどは Cloudflare 全体のスケジュール集中で遅延しやすい。
+  // 式は cron/src/index.ts の RETENTION_CRON / ALERT_CRON と一致させること
+  // （知らない式は index.ts が error ログにして何もしない）。
+  //   17 分 … 保持期間バッチ本体。0 分ちょうどは Cloudflare 全体のスケジュール集中で
+  //           遅延しやすいので外している。
+  //   47 分 … 本体の死活監視（dead-man's switch）。本体の 30 分後に置き、
+  //           同じ時刻に走らせない（監視が本体の実行中に「まだ止まっている」と誤読しないため）。
+  //           通知先は secret DISCORD_ALERT_WEBHOOK_URL（wrangler.jsonc には書けない）:
+  //             bunx wrangler secret put DISCORD_ALERT_WEBHOOK_URL -c cron/wrangler.jsonc
   "triggers": {
-    "crons": ["17 * * * *"]
+    "crons": ["17 * * * *", "47 * * * *"]
   },
   "observability": {
     "enabled": true

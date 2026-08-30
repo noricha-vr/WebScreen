@@ -40,7 +40,8 @@ const seedCommand = [
   // 毎回まっさらな D1 から作り直す（前回の pin 解除・削除が残っていると結果が変わるため）。
   `rm -rf ${STATE_DIR}`,
   'bun run build',
-  `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=migrations/0001_init.sql`,
+  // migrations/ を全部当てる（ファイル名を列挙すると新しい migration の追従漏れが起きる）。
+  `bunx wrangler d1 migrations apply webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR}`,
   `bunx wrangler d1 execute webscreen-beta-db --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=e2e/fixtures/seed.sql`,
   // ダウンロード経路は R2 の実体を読むため、seed した行に対応するオブジェクトも置く。
   `bunx wrangler r2 object put webscreen-beta/movies/${E2E_FIXTURES.readyShortId}.mp4 --local -c wrangler.jsonc --persist-to ${STATE_DIR} --file=e2e/fixtures/sample.mp4 --content-type=video/mp4`,

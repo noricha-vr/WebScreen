@@ -16,6 +16,9 @@ const SCHEDULED_TIME = Date.parse('2026-08-25T12:00:00.000Z');
  * すべて空で返し、監査のサンプル抽出だけが行を返す形にする。
  */
 class FakeCronDatabase implements RetentionDatabase {
+  /** cron_runs へ書かれた実行記録（name, 時刻, 件数 JSON）。 */
+  readonly cronRuns: { name: string; at: string; summary: string }[] = [];
+
   constructor(private readonly readyRows: string[] = []) {}
 
   prepare(query: string) {
@@ -24,7 +27,16 @@ class FakeCronDatabase implements RetentionDatabase {
         all: async <T>(): Promise<{ results: T[] }> => ({
           results: this.select(query, values) as T[],
         }),
-        run: async (): Promise<{ meta: { changes: number } }> => ({ meta: { changes: 0 } }),
+        run: async (): Promise<{ meta: { changes: number } }> => {
+          if (query.includes('INSERT INTO cron_runs')) {
+            this.cronRuns.push({
+              name: values[0] as string,
+              at: values[1] as string,
+              summary: values[2] as string,
+            });
+          }
+          return { meta: { changes: 0 } };
+        },
       }),
     };
   }
@@ -78,6 +90,7 @@ async function runScheduled(
   database: RetentionDatabase,
   bucket: RetentionBucket = new FakeCronBucket()
 ): Promise<{ level: 'log' | 'warn' | 'error'; entry: CronLogEntry }> {
+  // cron 式は index.ts の RETENTION_CRON と一致させる（違う式は未知の式として弾かれる）。
   const original = { log: console.log, warn: console.warn, error: console.error };
   let captured: { level: 'log' | 'warn' | 'error'; entry: CronLogEntry } | undefined;
   const capture =
@@ -91,7 +104,7 @@ async function runScheduled(
 
   try {
     await worker.scheduled(
-      { scheduledTime: SCHEDULED_TIME, cron: '0 * * * *' },
+      { scheduledTime: SCHEDULED_TIME, cron: '17 * * * *' },
       { DB: database, BUCKET: bucket }
     );
   } finally {
@@ -134,5 +147,17 @@ describe('保持期間バッチの cron ログ', () => {
     expect(entry.summary).toContain('audited 0 ready rows (0 missing objects)');
     expect(entry.summary).not.toContain('rows skipped');
     expect(entry.detail.skippedRows).toBe(0);
+  });
+
+  it('成功したら最終成功時刻と直近の件数を cron_runs に残す', async () => {
+    // ここが残らないと死活監視（47 分の cron）からは止まって見える。
+    const database = new FakeCronDatabase();
+
+    await runScheduled(database);
+
+    expect(database.cronRuns).toHaveLength(1);
+    expect(database.cronRuns[0]!.name).toBe('retention');
+    expect(database.cronRuns[0]!.at).toBe(new Date(SCHEDULED_TIME).toISOString());
+    expect(JSON.parse(database.cronRuns[0]!.summary).checkedReadyRows).toBe(0);
   });
 });
