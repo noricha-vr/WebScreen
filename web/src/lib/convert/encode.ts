@@ -1,7 +1,7 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
 
-import type { ProgressReporter, VideoFrame } from './types';
+import type { ConversionProgress, ProgressReporter, VideoFrame } from './types';
 
 const CORE_VERSION = '0.12.10';
 const CORE_BASE_URL = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
@@ -85,24 +85,32 @@ async function loadFfmpeg(): Promise<FFmpeg> {
 }
 
 /**
- * core を読み込みつつ、読み込み区間のバーを進める。
+ * 読み込み中のバーを擬似進捗で進める。戻り値は停止関数。
  *
  * `toBlobURL` の進捗コールバックは使わない。受信バイト数と Content-Length が食い違うと
  * @ffmpeg/util が本文を読み切った Response へ再度 arrayBuffer() を掛けて失敗するため、
  * キャッシュが冷えている時ほど読み込みそのものを壊しうる。
- * タイマーは読み込みの await だけを包んで必ず止める（遅れて発火した tick が
- * 書き出し・実行の報告に割り込むと、枚数の表示が 0 へ戻る）。
+ *
+ * 上限へ達したら自分でタイマーを止める。読み込みが返らないまま（オフライン・CDN 停止）
+ * でも、同じ値を延々と通知し続けないため。停止関数は読み込みの完了・失敗の両方で呼び、
+ * 遅れて発火した tick が書き出し・実行の報告へ割り込む（枚数が 0 へ戻る）のを防ぐ。
  */
-async function loadFfmpegWithProgress(total: number, report?: ProgressReporter): Promise<FFmpeg> {
+export function startLoadPseudoProgress(total: number, report?: ProgressReporter): () => void {
   let elapsed = 0;
   const timer = setInterval(() => {
     elapsed = Math.min(LOAD_PSEUDO_MAX, elapsed + LOAD_TICK_RATIO);
     report?.({ stage: 'encoding', current: 0, total, ratio: encodePhaseRatio('loading', elapsed, 1) });
+    if (elapsed >= LOAD_PSEUDO_MAX) clearInterval(timer);
   }, LOAD_TICK_MS);
+  return () => clearInterval(timer);
+}
+
+async function loadFfmpegWithProgress(total: number, report?: ProgressReporter): Promise<FFmpeg> {
+  const stopPseudoProgress = startLoadPseudoProgress(total, report);
   try {
     return await loadFfmpeg();
   } finally {
-    clearInterval(timer);
+    stopPseudoProgress();
   }
 }
 
@@ -116,6 +124,22 @@ async function readMp4(ffmpeg: FFmpeg, outputFile: string): Promise<Blob> {
 export function encodedFrameCount(progress: number, total: number): number {
   if (!Number.isFinite(progress)) return 0;
   return Math.min(total, Math.max(0, Math.round(progress * total)));
+}
+
+/**
+ * FFmpeg の実行中の報告を組み立てる。
+ *
+ * バーは生の進み具合から計算する。枚数へ丸めた値を使うと、フレームが少ないほど
+ * 段階が粗くなり（1 枚なら 49% まで区間の先頭で止まり 50% で終端へ飛ぶ）、
+ * 完了前に 95% を表示してしまう。枚数の表示は従来どおり丸めた値を使う。
+ */
+export function runningProgress(progress: number, total: number): ConversionProgress {
+  return {
+    stage: 'encoding',
+    current: encodedFrameCount(progress, total),
+    total,
+    ratio: encodePhaseRatio('running', progress, 1),
+  };
 }
 
 /** PNG フレーム列を順序を保って VRChat 互換 MP4 にエンコードする。 */
@@ -132,10 +156,7 @@ export async function encodeFramesToMp4(frames: readonly VideoFrame[], report?: 
       await ffmpeg.writeFile(frameFileName(index), new Uint8Array(frame.data));
       report?.({ stage: 'encoding', current: 0, total, ratio: encodePhaseRatio('writing', index + 1, total) });
     }
-    ffmpeg.on('progress', ({ progress }) => {
-      const current = encodedFrameCount(progress, total);
-      report?.({ stage: 'encoding', current, total, ratio: encodePhaseRatio('running', current, total) });
-    });
+    ffmpeg.on('progress', ({ progress }) => report?.(runningProgress(progress, total)));
     const status = await ffmpeg.exec(buildFrameEncodeArgs());
     if (status !== 0) throw new Error(`FFmpeg exited with ${status}`);
     return await readMp4(ffmpeg, 'output.mp4');
