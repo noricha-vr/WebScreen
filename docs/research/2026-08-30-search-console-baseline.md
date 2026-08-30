@@ -65,6 +65,8 @@ Cloudflare 版へ移行した後、新サイトが検索からほとんど流入
 3. `/{lang}/screen-share/` を新設し、旧 `/streaming/` `/recording/` の受け皿にする。**リアルタイムの画面共有機能は未実装なので、誇大表示せず「画面共有の代わりに使える場面」を説明する**
 4. sitemap と `tests/contracts/sitemap.test.ts` を新ページに合わせる
 
+この観測から立てた施策の計画は [2026-08-30-internal-seo-plan.md](2026-08-30-internal-seo-plan.md) にある。
+
 ## 再測定の方法
 
 同じ数字を取り直すには:
