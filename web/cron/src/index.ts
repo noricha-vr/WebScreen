@@ -41,9 +41,16 @@ export default {
         now: new Date(event.scheduledTime),
       });
 
-      // 実体だけ消えた行は放置すると壊れた URL が残り続けるので、成功ログに埋もれさせない
-      const severity = summary.strandedMovies > 0 ? 'error' : 'info';
-      const log = severity === 'error' ? console.error : console.log;
+      // error は回収不能な異常だけに使う。実体だけ消えた行（stranded）は壊れた URL が
+      // 残り続けるので error、R2 の削除失敗（deferred）は行が残っていて次回に回収できるので warn。
+      const severity =
+        summary.strandedMovies > 0 ? 'error' : summary.deferredObjectDeletions > 0 ? 'warn' : 'info';
+      const log =
+        severity === 'error' ? console.error : severity === 'warn' ? console.warn : console.log;
+      const deferred =
+        summary.deferredObjectDeletions > 0
+          ? ` ${summary.deferredObjectDeletions} object deletions deferred to the next run.`
+          : '';
 
       log(
         JSON.stringify({
@@ -52,7 +59,7 @@ export default {
           severity,
           kind: 'event',
           cron: event.cron,
-          summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures.`,
+          summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures.${deferred}`,
           detail: summary,
           durationMs: Date.now() - startedAt,
         })

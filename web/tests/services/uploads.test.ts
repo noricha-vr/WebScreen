@@ -234,6 +234,27 @@ describe('commitUpload', () => {
     expect(database.movies.size).toBe(0);
   });
 
+  it('R2 確認中に保持期間バッチが行を failed で確保したら 400 を返す', async () => {
+    const database = new FakeUploadDatabase([movie({ sizeBytes: 200 })]);
+    const bucket = new FakeUploadBucket(321);
+    // 掃除が pending → failed の確保に成功した状況（実体はこの後バッチが消す）。
+    bucket.onHead = () => {
+      const target = database.movies.get(SHORT_ID);
+      if (target) target.status = 'failed';
+    };
+
+    await expect(
+      commitUpload({
+        database,
+        bucket,
+        userId: USER_ID,
+        shortId: SHORT_ID,
+        publicBaseUrl: PUBLIC_URL,
+      })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(database.movies.get(SHORT_ID)?.status).toBe('failed');
+  });
+
   it('R2 確認中に別の commit が確定していたら同じ応答で成功する', async () => {
     const database = new FakeUploadDatabase([movie({ sizeBytes: 200 })]);
     const bucket = new FakeUploadBucket(321);

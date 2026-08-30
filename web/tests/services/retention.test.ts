@@ -75,18 +75,18 @@ class FakeRetentionDatabase implements RetentionDatabase {
     }
 
     const threshold = parseSqliteTime(values[0] as string);
-    const rows = [...this.movies.values()].filter((movie) =>
-      query.includes("status = 'ready'")
-        ? movie.status === 'ready' && isExpired(movie, threshold)
-        : movie.status === 'pending' && parseSqliteTime(movie.createdAt) < threshold
-    );
+    const rows = [...this.movies.values()].filter((movie) => {
+      if (query.includes("status = 'ready'")) return movie.status === 'ready' && isExpired(movie, threshold);
+      const status = query.includes("status = 'failed'") ? 'failed' : 'pending';
+      return movie.status === status && parseSqliteTime(movie.createdAt) < threshold;
+    });
     this.onSelect?.(rows);
     return rows.map((movie) => ({ short_id: movie.shortId }));
   }
 
   private delete(query: string, values: unknown[]): number {
     // backfill の UPDATE も run() を通る。pin 済みで期限を持たない行だけを埋める。
-    if (query.startsWith('UPDATE')) {
+    if (query.startsWith('UPDATE') && query.includes('expires_at = ?')) {
       const targets = [...this.movies.values()].filter(
         (movie) => movie.pinned === 1 && movie.expiresAt === null
       );
@@ -94,13 +94,13 @@ class FakeRetentionDatabase implements RetentionDatabase {
       return targets.length;
     }
 
-    if (query.includes("status = 'failed'")) {
-      const threshold = parseSqliteTime(values[0] as string);
-      const targets = [...this.movies.values()].filter(
-        (movie) => movie.status === 'failed' && parseSqliteTime(movie.createdAt) < threshold
-      );
-      for (const movie of targets) this.movies.delete(movie.shortId);
-      return targets.length;
+    // pending の確保（pending → failed）。commit と同じく status を条件に持つ。
+    if (query.startsWith('UPDATE') && query.includes("SET status = 'failed'")) {
+      const target = this.movies.get(values[0] as string);
+      if (!target || target.status !== 'pending') return 0;
+      if (parseSqliteTime(target.createdAt) >= parseSqliteTime(values[1] as string)) return 0;
+      target.status = 'failed';
+      return 1;
     }
 
     const movie = this.movies.get(values[0] as string);
@@ -108,15 +108,8 @@ class FakeRetentionDatabase implements RetentionDatabase {
     if (query.includes('expires_at') && !isExpired(movie, parseSqliteTime(values[1] as string))) {
       return 0;
     }
-    // pending の claim（DELETE ... AND datetime(created_at) < datetime(?)）の再現。
-    if (
-      query.includes('created_at') &&
-      parseSqliteTime(movie.createdAt) >= parseSqliteTime(values[1] as string)
-    ) {
-      return 0;
-    }
     if (query.includes("status = 'ready'") && movie.status !== 'ready') return 0;
-    if (query.includes("status = 'pending'") && movie.status !== 'pending') return 0;
+    if (query.includes("status = 'failed'") && movie.status !== 'failed') return 0;
     this.movies.delete(movie.shortId);
     return 1;
   }
@@ -303,17 +296,27 @@ describe('runRetention: pending 孤児と failed', () => {
     expect(database.movies.get('raceCommitAA')?.status).toBe('ready');
   });
 
-  it('行を確保した後の R2 削除失敗は stranded として数える', async () => {
+  it('確保後に R2 の削除が失敗した pending は failed 行として残り、次回の実行で回収される', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'orphanFailAA', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
     ]);
     const bucket = new FakeRetentionBucket(new Set([movieKey('orphanFailAA')]));
     bucket.failingKeys.add(movieKey('orphanFailAA'));
 
-    const summary = await run(database, bucket);
+    const first = await run(database, bucket);
 
-    expect(summary.deletedOrphans).toBe(1);
-    expect(summary.strandedOrphanObjects).toBe(1);
+    expect(first.deletedOrphans).toBe(0);
+    expect(first.deferredObjectDeletions).toBe(1);
+    expect(bucket.deleted).toEqual([]);
+    expect(database.movies.get('orphanFailAA')?.status).toBe('failed');
+
+    // R2 が復旧した次の実行で、実体を消してから行を消す。
+    bucket.failingKeys.clear();
+    const second = await run(database, bucket);
+
+    expect(second.deletedFailed).toBe(1);
+    expect(second.deferredObjectDeletions).toBe(0);
+    expect(bucket.deleted).toEqual([movieKey('orphanFailAA')]);
     expect(database.movies.size).toBe(0);
   });
 
@@ -427,8 +430,8 @@ describe('runRetention: サマリ', () => {
       deletedMovies: 1,
       strandedMovies: 0,
       deletedOrphans: 1,
-      strandedOrphanObjects: 0,
       deletedFailed: 1,
+      deferredObjectDeletions: 0,
       deletedCaptures: 1,
     });
     expect(database.movies.size).toBe(0);
