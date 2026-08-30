@@ -193,6 +193,38 @@ export function captureObject(index: number, uploadedOffsetMs: number): CaptureO
   };
 }
 
-export async function run(database: FakeRetentionDatabase, bucket: FakeRetentionBucket) {
-  return runRetention({ database, bucket, now: NOW });
+/** 配信元。purge の URL 組み立てが実際の公開 URL と同じ規則か見るために使う。 */
+export const PUBLIC_BASE_URL = 'https://cdn.example';
+
+/**
+ * キャッシュ purge API のフェイク。1 リクエスト分の files 配列をそのまま記録する。
+ */
+export class FakeCachePurgeApi {
+  readonly batches: string[][] = [];
+
+  constructor(private readonly status = 200) {}
+
+  readonly fetcher = (_url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    this.batches.push((JSON.parse(String(init?.body)) as { files: string[] }).files);
+    return Promise.resolve(new Response(null, { status: this.status }));
+  };
+}
+
+export async function run(
+  database: FakeRetentionDatabase,
+  bucket: FakeRetentionBucket,
+  purgeApi: FakeCachePurgeApi = new FakeCachePurgeApi()
+) {
+  return runRetention({
+    database,
+    bucket,
+    now: NOW,
+    cachePurge: {
+      publicBaseUrl: PUBLIC_BASE_URL,
+      zoneId: '2210192b51f9f0eb6761d70341ca09b0',
+      apiToken: 'test-token',
+      source: 'test-cron',
+      fetcher: purgeApi.fetcher,
+    },
+  });
 }

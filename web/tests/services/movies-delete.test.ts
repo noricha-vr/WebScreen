@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
+import type { PurgeFetcher } from '../../src/lib/infra/cloudflare-purge';
+import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
 import {
   deleteMovie,
   type MovieBucket,
@@ -9,6 +11,18 @@ import {
 const USER_ID = 10;
 const SHORT_ID = 'AbCdEf123456';
 const MOVIE_KEY = `movies/${SHORT_ID}.mp4`;
+const PUBLIC_BASE_URL = 'https://cdn.example';
+
+/** purge の設定。fetcher を差し替えて実ネットワークを使わない。 */
+function cachePurge(fetcher?: PurgeFetcher): CachePurgeSettings {
+  return {
+    publicBaseUrl: PUBLIC_BASE_URL,
+    zoneId: '2210192b51f9f0eb6761d70341ca09b0',
+    apiToken: 'test-token',
+    source: 'test-worker',
+    fetcher: fetcher ?? (() => Promise.resolve(new Response(null, { status: 200 }))),
+  };
+}
 
 /** deleteMovie が使う 2 文（所有者の SELECT と DELETE）だけを持つ最小のフェイク。 */
 class FakeMoviesDatabase implements MoviesDatabase {
@@ -49,6 +63,21 @@ class FakeMovieBucket implements MovieBucket {
   }
 }
 
+/** purge の失敗ログ（console.warn の 1 行 JSON）を集める。 */
+async function captureWarnLogs(run: () => Promise<void>): Promise<string[]> {
+  const original = console.warn;
+  const entries: string[] = [];
+  console.warn = (entry: unknown) => {
+    entries.push(String(entry));
+  };
+  try {
+    await run();
+  } finally {
+    console.warn = original;
+  }
+  return entries;
+}
+
 /** logWorkerFailure が error で出した event 名だけを集める。 */
 async function captureErrorEvents(run: () => Promise<void>): Promise<string[]> {
   const original = console.error;
@@ -69,7 +98,13 @@ describe('deleteMovie', () => {
 
     const events = await captureErrorEvents(async () => {
       await expect(
-        deleteMovie({ database, bucket, userId: USER_ID, shortId: SHORT_ID })
+        deleteMovie({
+          database,
+          bucket,
+          cachePurge: cachePurge(),
+          userId: USER_ID,
+          shortId: SHORT_ID,
+        })
       ).rejects.toThrow('D1 unavailable');
     });
 
@@ -83,11 +118,72 @@ describe('deleteMovie', () => {
     const bucket = new FakeMovieBucket();
 
     const events = await captureErrorEvents(async () => {
-      await deleteMovie({ database, bucket, userId: USER_ID, shortId: SHORT_ID });
+      await deleteMovie({
+        database,
+        bucket,
+        cachePurge: cachePurge(),
+        userId: USER_ID,
+        shortId: SHORT_ID,
+      });
     });
 
     expect(events).toEqual([]);
     expect(database.deletedRows).toBe(1);
     expect(bucket.deletedKeys).toEqual([MOVIE_KEY]);
+  });
+
+  it('公開 URL のキャッシュ purge を 1 回投げる', async () => {
+    const database = new FakeMoviesDatabase();
+    const bucket = new FakeMovieBucket();
+    const batches: string[][] = [];
+
+    await deleteMovie({
+      database,
+      bucket,
+      cachePurge: cachePurge((_url, init) => {
+        batches.push((JSON.parse(String(init?.body)) as { files: string[] }).files);
+        return Promise.resolve(new Response(null, { status: 200 }));
+      }),
+      userId: USER_ID,
+      shortId: SHORT_ID,
+    });
+
+    expect(batches).toEqual([[`${PUBLIC_BASE_URL}/${MOVIE_KEY}`]]);
+  });
+
+  it('purge が例外を投げても削除は成功する（DELETE は 204 を返す）', async () => {
+    const database = new FakeMoviesDatabase();
+    const bucket = new FakeMovieBucket();
+
+    await captureWarnLogs(async () => {
+      await deleteMovie({
+        database,
+        bucket,
+        cachePurge: cachePurge(() => Promise.reject(new Error('purge unreachable'))),
+        userId: USER_ID,
+        shortId: SHORT_ID,
+      });
+    });
+
+    expect(bucket.deletedKeys).toEqual([MOVIE_KEY]);
+    expect(database.deletedRows).toBe(1);
+  });
+
+  it('purge が非 2xx を返しても削除は成功する', async () => {
+    const database = new FakeMoviesDatabase();
+    const bucket = new FakeMovieBucket();
+
+    const logs = await captureWarnLogs(async () => {
+      await deleteMovie({
+        database,
+        bucket,
+        cachePurge: cachePurge(() => Promise.resolve(new Response('nope', { status: 403 }))),
+        userId: USER_ID,
+        shortId: SHORT_ID,
+      });
+    });
+
+    expect(database.deletedRows).toBe(1);
+    expect(JSON.parse(logs[0]!).event).toBe('cache_purge_failed');
   });
 });

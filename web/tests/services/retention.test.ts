@@ -145,6 +145,9 @@ describe('runRetention: サマリ', () => {
       deferredObjectDeletions: 0,
       skippedRows: 0,
       sweepCapped: false,
+      // 期限切れ・孤児・failed の 3 経路がそれぞれ 1 回ずつ purge を投げる。
+      cachePurgeRequests: 3,
+      cachePurgeFailures: 0,
       deletedCaptures: 1,
       checkedReadyRows: 0,
       missingObjectRows: 0,

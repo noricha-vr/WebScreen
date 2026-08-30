@@ -14,8 +14,9 @@ import {
   type PinResponse,
   type RenameMovieResponse,
 } from '../contracts/api';
-import { isShortId, movieKey } from '../contracts/r2key';
+import { isShortId, movieKey, movieUrl } from '../contracts/r2key';
 import { logWorkerFailure } from '../infra/worker-log';
+import { purgeMovieCache, type CachePurgeSettings } from './cache-purge';
 import {
   MAX_PINNED_MOVIES,
   MOVIE_RETENTION_MS,
@@ -279,7 +280,7 @@ export async function renameMovie(
  * （所有者が二度と消せない残骸になる）。
  */
 export async function deleteMovie(
-  input: MovieActionInput & { bucket: MovieBucket }
+  input: MovieActionInput & { bucket: MovieBucket; cachePurge: CachePurgeSettings }
 ): Promise<void> {
   await findOwnedMovie(input.database, input.userId, input.shortId);
 
@@ -289,6 +290,13 @@ export async function deleteMovie(
   // （services/retention-audit.ts）が拾える。自動では直せないので、その場でも
   // 気づける印としてログに残してから呼び出し元へ返す。
   await input.bucket.delete(movieKey(input.shortId));
+
+  // 実体を消した直後に Edge のキャッシュも落とす。ここを飛ばすと最大 120 分は
+  // 削除済みの動画が配信され続ける（docs/r2-delivery.md）。D1 の行を消す前に呼ぶのは、
+  // 行の削除が失敗して実体だけ消えた場合でもキャッシュを残さないため。purge は例外を
+  // 投げない契約なので、失敗しても削除は 204 で完了する（120 分で自然に切れる）。
+  await purgeMovieCache([input.shortId], input.cachePurge);
+
   try {
     await input.database
       .prepare('DELETE FROM movies WHERE short_id = ? AND user_id = ?')
@@ -329,7 +337,7 @@ export async function findPublicMovie(input: {
   return {
     shortId: row.short_id,
     filename: row.filename,
-    publicUrl: publicUrl(input.publicBaseUrl, row.short_id),
+    publicUrl: movieUrl(input.publicBaseUrl, row.short_id),
     pinned: row.pinned !== 0,
     createdAt: toIsoString(row.created_at),
     expiresAt: row.expires_at === null ? null : toIsoString(row.expires_at),
@@ -396,12 +404,8 @@ function toHistoryEntry(row: MovieRow, publicBaseUrl: string): HistoryEntry {
     pinned: row.pinned !== 0,
     createdAt: toIsoString(row.created_at),
     expiresAt: row.expires_at === null ? null : toIsoString(row.expires_at),
-    publicUrl: publicUrl(publicBaseUrl, row.short_id),
+    publicUrl: movieUrl(publicBaseUrl, row.short_id),
   };
-}
-
-function publicUrl(publicBaseUrl: string, shortId: string): string {
-  return new URL(movieKey(shortId), `${publicBaseUrl}/`).toString();
 }
 
 const SQLITE_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;

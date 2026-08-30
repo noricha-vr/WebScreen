@@ -105,7 +105,8 @@ async function runScheduled(
   try {
     await worker.scheduled(
       { scheduledTime: SCHEDULED_TIME, cron: '17 * * * *' },
-      { DB: database, BUCKET: bucket }
+      // purge の設定は渡さない（secret 未投入の環境と同じ。掃除は続く）。
+      { DB: database, BUCKET: bucket, R2_PUBLIC_BASE_URL: 'https://cdn.example' }
     );
   } finally {
     console.log = original.log;
@@ -124,6 +125,7 @@ describe('保持期間バッチの cron ログ', () => {
     expect(level).toBe('error');
     expect(entry.severity).toBe('error');
     expect(entry.summary).toContain('audited 1 ready rows (1 missing objects)');
+    expect(entry.summary).toContain('0 cache purge requests (0 failed)');
     expect(entry.detail.missingObjectRows).toBe(1);
   });
 
