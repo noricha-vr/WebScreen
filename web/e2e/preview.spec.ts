@@ -139,6 +139,34 @@ test.describe('公開プレビュー', () => {
     expect(response.headers()['content-range']).toMatch(/^bytes \*\/\d+$/);
   });
 
+  test('HEAD は Range を無視して 200 と総量だけを返す', async ({ request }) => {
+    const size = (await (await request.get(`/${E2E_FIXTURES.readyShortId}/download/`)).body())
+      .byteLength;
+
+    const response = await request.head(`/${E2E_FIXTURES.readyShortId}/download/`, {
+      headers: { Range: 'bytes=0-99' },
+    });
+
+    // RFC 9110 14.2 は GET 以外の Range を無視させる
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-range']).toBeUndefined();
+    expect(response.headers()['content-length']).toBe(String(size));
+    expect(response.headers()['accept-ranges']).toBe('bytes');
+    expect(response.headers()['content-disposition']).toContain('filename="slides.mp4"');
+    expect((await response.body()).byteLength).toBe(0);
+  });
+
+  test('If-Range が実体と一致しなければ全体を返す', async ({ request }) => {
+    const response = await request.get(`/${E2E_FIXTURES.readyShortId}/download/`, {
+      headers: { Range: 'bytes=0-99', 'If-Range': '"not-the-current-etag"' },
+    });
+
+    // 差し替わった実体の一部を継ぎ足すと、壊れたファイルが出来上がる
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-range']).toBeUndefined();
+    expect((await response.body()).byteLength).toBeGreaterThan(100);
+  });
+
   test('存在しない動画のダウンロードは 404', async ({ request }) => {
     expect((await request.get('/E2EMissing001/download/')).status()).toBe(404);
   });

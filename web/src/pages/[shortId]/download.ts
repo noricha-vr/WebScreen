@@ -6,18 +6,29 @@ import { findPublicMovie, type MoviesDatabase } from '../../lib/services/movies'
 import {
   downloadHeaders,
   partialContentRange,
+  rangeApplies,
   resolveRangeRequest,
   unsatisfiedContentRange,
 } from '../../lib/services/download';
 
 export const prerender = false;
 
+interface DownloadObject {
+  body: ReadableStream | null;
+  size: number;
+  httpEtag: string;
+}
+
 interface DownloadBucket {
-  head(key: string): Promise<{ size: number } | null>;
+  /** `etag` は引用符なし、`httpEtag` は引用符付き。用途が違うので両方使う。 */
+  head(key: string): Promise<{ size: number; etag: string; httpEtag: string } | null>;
   get(
     key: string,
-    options?: { range: { offset: number; length: number } }
-  ): Promise<{ body: ReadableStream | null; size: number } | null>;
+    options?: {
+      range: { offset: number; length: number };
+      onlyIf: { etagMatches: string };
+    }
+  ): Promise<DownloadObject | null>;
 }
 
 interface DownloadBindings {
@@ -38,13 +49,8 @@ interface DownloadBindings {
  */
 export const GET: APIRoute = async ({ params, request }) => {
   const bindings = env as unknown as DownloadBindings;
-  const shortId = params.shortId ?? '';
 
-  const movie = await findPublicMovie({
-    database: bindings.DB,
-    shortId,
-    publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
-  });
+  const movie = await findMovie(bindings, params.shortId ?? '');
   if (!movie) return notFound();
 
   const key = movieKey(movie.shortId);
@@ -56,26 +62,71 @@ export const GET: APIRoute = async ({ params, request }) => {
   const head = await bindings.BUCKET.head(key);
   if (!head) return notFound();
 
+  // 中断前と実体が変わっていたら、続きを継ぎ足しても壊れたファイルにしかならない
+  if (!rangeApplies(request.headers.get('If-Range'), head.httpEtag)) {
+    return await fullResponse(bindings.BUCKET, key, movie.filename);
+  }
+
   const resolved = resolveRangeRequest(rangeHeader, head.size);
   if (resolved.kind === 'unsatisfiable') return rangeNotSatisfiable(head.size);
   if (resolved.kind === 'full') return await fullResponse(bindings.BUCKET, key, movie.filename);
 
   const object = await bindings.BUCKET.get(key, {
     range: { offset: resolved.offset, length: resolved.length },
+    // head と get の間で差し替わると、別の実体の断片を返してしまう。
+    // 条件に渡す etag は引用符なし（httpEtag を渡すと R2 が TypeError を投げる）
+    onlyIf: { etagMatches: head.etag },
   });
-  if (!object?.body) return notFound();
+  if (!object) return notFound();
+  // 条件が外れた時は本文が付かない。総量も変わっているので全体を取り直す
+  if (!object.body) return await fullResponse(bindings.BUCKET, key, movie.filename);
 
   return new Response(object.body, {
     status: 206,
     headers: downloadHeaders({
       filename: movie.filename,
       contentLength: resolved.length,
+      etag: object.httpEtag,
       contentRange: partialContentRange(resolved, head.size),
     }),
   });
 };
 
-/** 全体を 200 で返す。Range 無しと、範囲を無視した（未知の単位・複数レンジ）場合の経路。 */
+/**
+ * 本文を伴わないメタデータの問い合わせ。
+ *
+ * 明示しないと Astro が GET を呼んで本文だけ捨てるため、Range 付きの HEAD に
+ * 206 と Content-Range を返してしまう（RFC 9110 14.2 は GET 以外の Range を無視させる）。
+ */
+export const HEAD: APIRoute = async ({ params }) => {
+  const bindings = env as unknown as DownloadBindings;
+
+  const movie = await findMovie(bindings, params.shortId ?? '');
+  if (!movie) return notFound();
+
+  const head = await bindings.BUCKET.head(movieKey(movie.shortId));
+  if (!head) return notFound();
+
+  return new Response(null, {
+    status: 200,
+    headers: downloadHeaders({
+      filename: movie.filename,
+      contentLength: head.size,
+      etag: head.httpEtag,
+    }),
+  });
+};
+
+/** 公開中の動画を引く。GET と HEAD で 404 の条件を揃える。 */
+async function findMovie(bindings: DownloadBindings, shortId: string) {
+  return await findPublicMovie({
+    database: bindings.DB,
+    shortId,
+    publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
+  });
+}
+
+/** 全体を 200 で返す。Range 無しと、範囲を無視した（未知の単位・複数レンジ・If-Range 不一致）場合の経路。 */
 async function fullResponse(
   bucket: DownloadBucket,
   key: string,
@@ -86,7 +137,11 @@ async function fullResponse(
 
   return new Response(object.body, {
     status: 200,
-    headers: downloadHeaders({ filename, contentLength: object.size }),
+    headers: downloadHeaders({
+      filename,
+      contentLength: object.size,
+      etag: object.httpEtag,
+    }),
   });
 }
 

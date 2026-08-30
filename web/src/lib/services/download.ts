@@ -64,6 +64,7 @@ export function attachmentDisposition(filename: string): string {
 export function downloadHeaders(input: {
   filename: string;
   contentLength: number;
+  etag: string;
   contentRange?: string;
 }): Record<string, string> {
   const headers: Record<string, string> = {
@@ -72,14 +73,33 @@ export function downloadHeaders(input: {
     'Content-Length': String(input.contentLength),
     // 部分取得に対応していることは、要求される前に伝える必要がある
     'Accept-Ranges': 'bytes',
+    // 中断した続きを要求する側が、実体が同じかを判断するための validator
+    ETag: input.etag,
     // cdn 側の Transform Rule はこの経路に効かないため、ここで明示する。
     'X-Robots-Tag': 'noindex',
+    // 表示名は利用者が変えられる。宣言した video/mp4 以外として解釈させない
+    'X-Content-Type-Options': 'nosniff',
     'Cache-Control': CACHE_CONTROL,
   };
 
   if (input.contentRange !== undefined) headers['Content-Range'] = input.contentRange;
 
   return headers;
+}
+
+/**
+ * If-Range 付きの部分取得を、その実体に対して認めてよいか判定する。
+ *
+ * 中断前と実体が変わっていたら、続きを継ぎ足した結果は壊れたファイルになる。
+ * 一致しない時は範囲を無視して全体を返すのが RFC 9110 13.1.5 の求める挙動。
+ * 比較は strong comparison なので、`W/` 付きの弱い validator は常に一致しない。
+ */
+export function rangeApplies(ifRange: string | null, etag: string): boolean {
+  if (ifRange === null) return true;
+
+  // 日付形式の If-Range も一致扱いにしない（Last-Modified を返していないため
+  // クライアントは日付を持っておらず、送られてきても比較の根拠がない）
+  return ifRange.trim() === etag;
 }
 
 /**

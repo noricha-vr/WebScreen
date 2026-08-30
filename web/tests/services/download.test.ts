@@ -5,6 +5,7 @@ import {
   downloadFilename,
   downloadHeaders,
   partialContentRange,
+  rangeApplies,
   resolveRangeRequest,
   unsatisfiedContentRange,
 } from '../../src/lib/services/download';
@@ -168,27 +169,62 @@ describe('unsatisfiedContentRange', () => {
   });
 });
 
+describe('rangeApplies', () => {
+  const ETAG = '"abc123"';
+
+  it('If-Range が無ければ範囲をそのまま使う', () => {
+    expect(rangeApplies(null, ETAG)).toBe(true);
+  });
+
+  it('実体の validator と一致すれば範囲を使う', () => {
+    expect(rangeApplies(ETAG, ETAG)).toBe(true);
+  });
+
+  it('一致しなければ範囲を使わない', () => {
+    // 続きのつもりで別の実体を継ぎ足すと、壊れたファイルが出来上がる
+    expect(rangeApplies('"stale"', ETAG)).toBe(false);
+  });
+
+  it('弱い validator は一致扱いにしない', () => {
+    // strong comparison が要る（RFC 9110 13.1.5）
+    expect(rangeApplies(`W/${ETAG}`, ETAG)).toBe(false);
+  });
+
+  it('日付形式の If-Range も一致扱いにしない', () => {
+    // Last-Modified を返していないので、日付は比較の根拠にならない
+    expect(rangeApplies('Wed, 21 Oct 2026 07:28:00 GMT', ETAG)).toBe(false);
+  });
+});
+
 describe('downloadHeaders', () => {
   it('部分取得でも保存名と noindex を落とさない', () => {
     // 再開したダウンロードだけ別扱いになると、保存名やインデックス制御が抜ける
     const headers = downloadHeaders({
       filename: 'slides.pdf',
       contentLength: 100,
+      etag: '"abc123"',
       contentRange: 'bytes 0-99/1000',
     });
 
     expect(headers['Content-Range']).toBe('bytes 0-99/1000');
     expect(headers['Content-Length']).toBe('100');
     expect(headers['Accept-Ranges']).toBe('bytes');
+    expect(headers['ETag']).toBe('"abc123"');
     expect(headers['Content-Disposition']).toContain('filename="slides.mp4"');
     expect(headers['X-Robots-Tag']).toBe('noindex');
+    expect(headers['X-Content-Type-Options']).toBe('nosniff');
   });
 
   it('全体を返すときは Content-Range を付けない', () => {
-    const headers = downloadHeaders({ filename: 'slides.pdf', contentLength: 1000 });
+    const headers = downloadHeaders({
+      filename: 'slides.pdf',
+      contentLength: 1000,
+      etag: '"abc123"',
+    });
 
     expect(headers['Content-Range']).toBeUndefined();
     expect(headers['Content-Length']).toBe('1000');
     expect(headers['Accept-Ranges']).toBe('bytes');
+    expect(headers['ETag']).toBe('"abc123"');
   });
 });
