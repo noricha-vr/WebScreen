@@ -107,6 +107,8 @@ class FakeUploadDatabase implements UploadDatabase {
 
 class FakeUploadBucket implements UploadBucket {
   deletedKeys: string[] = [];
+  /** delete を失敗させる（R2 障害の再現）。 */
+  failDelete = false;
   /** head の直後に走らせるフック（保持期間バッチの割り込みを再現する）。 */
   onHead: (() => void) | undefined;
 
@@ -118,8 +120,22 @@ class FakeUploadBucket implements UploadBucket {
   }
 
   async delete(key: string): Promise<void> {
+    if (this.failDelete) throw new Error('R2 unavailable');
     this.deletedKeys.push(key);
   }
+}
+
+/** logWorkerFailure が warn で出した event 名だけを集める。 */
+async function captureWarnEvents(run: () => Promise<void>): Promise<string[]> {
+  const original = console.warn;
+  const events: string[] = [];
+  console.warn = ((entry: string) => events.push(JSON.parse(entry).event)) as typeof console.warn;
+  try {
+    await run();
+  } finally {
+    console.warn = original;
+  }
+  return events;
 }
 
 const USER_ID = 10;
@@ -344,5 +360,53 @@ describe('commitUpload', () => {
     ).rejects.toMatchObject({ status: 413 });
     expect(bucket.deletedKeys).toEqual([`movies/${SHORT_ID}.mp4`]);
     expect(database.movies.get(SHORT_ID)?.status).toBe('failed');
+  });
+
+  it('上限超過で R2 の削除に失敗しても 413 を返し、failed の行とログを残す', async () => {
+    const database = new FakeUploadDatabase([movie()]);
+    const bucket = new FakeUploadBucket(MAX_UPLOAD_BYTES + 1);
+    bucket.failDelete = true;
+
+    const events = await captureWarnEvents(async () => {
+      await expect(
+        commitUpload({
+          database,
+          bucket,
+          userId: USER_ID,
+          shortId: SHORT_ID,
+          publicBaseUrl: PUBLIC_URL,
+        })
+      ).rejects.toMatchObject({ status: 413 });
+    });
+
+    // R2 の障害を 500 に化けさせない。行は failed で残るので、実体は failed の掃除が回収する。
+    expect(events).toEqual(['upload_commit_oversize_object_delete_failed']);
+    expect(database.movies.get(SHORT_ID)?.status).toBe('failed');
+  });
+
+  it('上限超過の確保に負けたら R2 に触らず、ログを残して 413 を返す', async () => {
+    const database = new FakeUploadDatabase([movie()]);
+    const bucket = new FakeUploadBucket(MAX_UPLOAD_BYTES + 1);
+    // head の後に別の commit が ready を確定させた状況。実体を消すと再生できる動画が壊れる。
+    bucket.onHead = () => {
+      const target = database.movies.get(SHORT_ID);
+      if (target) target.status = 'ready';
+    };
+
+    const events = await captureWarnEvents(async () => {
+      await expect(
+        commitUpload({
+          database,
+          bucket,
+          userId: USER_ID,
+          shortId: SHORT_ID,
+          publicBaseUrl: PUBLIC_URL,
+        })
+      ).rejects.toMatchObject({ status: 413 });
+    });
+
+    expect(events).toEqual(['upload_commit_oversize_claim_missed']);
+    expect(bucket.deletedKeys).toEqual([]);
+    expect(database.movies.get(SHORT_ID)?.status).toBe('ready');
   });
 });

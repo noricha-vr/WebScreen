@@ -8,6 +8,7 @@ import {
 } from '../contracts/api';
 import { generateShortId, movieKey } from '../contracts/r2key';
 import { createR2PutPresignedUrl, type R2PresignConfig } from '../infra/r2presign';
+import { logWorkerFailure } from '../infra/worker-log';
 import {
   exceedsStorageQuota,
   getUserStorageUsage,
@@ -147,13 +148,7 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
     object.size
   );
   if (exceedsPerFileLimit || exceedsDeclaredSizeLimit || exceedsUserLimit) {
-    await input.bucket.delete(key);
-    await input.database
-      .prepare(
-        "UPDATE movies SET status = 'failed' WHERE short_id = ? AND user_id = ? AND status = 'pending'"
-      )
-      .bind(input.shortId, input.userId)
-      .run();
+    await rejectOversizedUpload(input, key);
     throw new UploadError(
       413,
       ERROR_CODES.payloadTooLarge,
@@ -173,6 +168,47 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
   if (updated.meta.changes === 0) return resolveCommitConflict(input);
 
   return toCommitResponse({ ...movie, size_bytes: object.size, status: 'ready' }, input.publicBaseUrl);
+}
+
+/**
+ * 上限を超えた動画の予約を failed へ落とし、実体を消す。
+ *
+ * 保持期間バッチと同じ確保方式（条件付き UPDATE → R2）にする。R2 を先に消すと、
+ * 読んでから書くまでの間に別の書き手が同じ行を確定させた時、実体だけが消える。
+ * 確保に負けた（0 件）行はこの呼び出しの持ち物ではないので R2 に触らない。
+ *
+ * 実体の削除に失敗しても 500 にはしない。呼び出し元へ返すべき理由は上限超過であって
+ * R2 の障害ではなく、failed のまま残った行は failed の掃除（services/retention.ts）が
+ * 同じ順序（R2 → D1）で回収し直すため。どちらの分岐も件数と理由をログに残す。
+ */
+async function rejectOversizedUpload(input: CommitUploadInput, key: string): Promise<void> {
+  const claim = await input.database
+    .prepare(
+      "UPDATE movies SET status = 'failed' WHERE short_id = ? AND user_id = ? AND status = 'pending'"
+    )
+    .bind(input.shortId, input.userId)
+    .run();
+
+  if (claim.meta.changes === 0) {
+    logWorkerFailure({
+      level: 'warn',
+      event: 'upload_commit_oversize_claim_missed',
+      errorCode: ERROR_CODES.payloadTooLarge,
+      status: 413,
+    });
+    return;
+  }
+
+  try {
+    await input.bucket.delete(key);
+  } catch {
+    logWorkerFailure({
+      level: 'warn',
+      event: 'upload_commit_oversize_object_delete_failed',
+      errorCode: ERROR_CODES.payloadTooLarge,
+      status: 413,
+    });
+  }
 }
 
 /**
