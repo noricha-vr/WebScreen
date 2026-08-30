@@ -4,9 +4,15 @@
  * D1 / R2 はインターフェースで注入し、現在時刻も引数で受け取る（Date.now を呼ぶのは
  * cron の entry 層だけ）。これで workerd なしでも全分岐をテストできる。
  *
- * 削除の順序は必ず「R2 → D1」。逆にすると D1 の行を消した時点で R2 のキーを
+ * 削除の順序は原則「R2 → D1」。逆にすると D1 の行を消した時点で R2 のキーを
  * 導出できなくなり、実体だけが残って回収不能になる（R2 の delete は存在しない
  * キーでも成功するため、この順序なら途中失敗しても次回実行でやり直せる）。
+ *
+ * 例外は pending の回収だけ。pending には commit という並行の書き手がいて、R2 を
+ * 先に消すと commit が ready を確定させた動画の実体だけが消える（公開 URL が残るのに
+ * 再生できない）。そのため pending では条件付き DELETE で先に行を確保し、勝った時だけ
+ * R2 を消す。代償は R2 削除に失敗した時のオブジェクトの取り残しで、これは
+ * strandedOrphanObjects として数え、cron のログに出す（Fail Loud）。
  */
 
 import { movieKey } from '../contracts/r2key';
@@ -69,6 +75,8 @@ export interface RetentionSummary {
   /** R2 の実体を消したのに行が残った件数。0 以外は不変条件が破れた印。 */
   strandedMovies: number;
   deletedOrphans: number;
+  /** 行を確保した後に R2 の削除が失敗した件数。0 以外は実体が取り残された印。 */
+  strandedOrphanObjects: number;
   deletedFailed: number;
   deletedCaptures: number;
 }
@@ -96,12 +104,14 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   // 掃除より先に走らせる。期限を入れた直後の行は 1 年先なので同じ実行では消えない。
   const backfilledPinned = await backfillPinnedExpiry(database, now);
   const expired = await deleteExpiredMovies(database, bucket, now);
+  const orphans = await deletePendingOrphans(database, bucket, now);
 
   return {
     backfilledPinned,
     deletedMovies: expired.deleted,
     strandedMovies: expired.stranded,
-    deletedOrphans: await deletePendingOrphans(database, bucket, now),
+    deletedOrphans: orphans.deleted,
+    strandedOrphanObjects: orphans.stranded,
     deletedFailed: await deleteFailedMovies(database, now),
     deletedCaptures: await deleteStaleCaptures(bucket, now),
   };
@@ -199,14 +209,18 @@ async function deleteExpiredMovies(
 /**
  * commit されないまま放置された pending を回収する。
  *
- * 実体が上がっていれば消してから行を削除する（presign 後にアップロードだけ
- * 成功して commit に到達しなかったケースが R2 に残り続けるのを防ぐ）。
+ * 実体が上がっていれば消す（presign 後にアップロードだけ成功して commit に
+ * 到達しなかったケースが R2 に残り続けるのを防ぐ）。
+ *
+ * R2 に触る前に、条件付き DELETE で行を確保する。同時に走る commit の UPDATE も
+ * `status = 'pending'` を条件に持つため、勝つのは必ずどちらか一方だけになる。
+ * 負けた側（= 0 件）は実体が ready の行のものなので R2 に触らない。
  */
 async function deletePendingOrphans(
   database: RetentionDatabase,
   bucket: RetentionBucket,
   now: Date
-): Promise<number> {
+): Promise<{ deleted: number; stranded: number }> {
   const threshold = new Date(now.getTime() - PENDING_ORPHAN_GRACE_MS).toISOString();
   const { results } = await database
     .prepare(
@@ -216,22 +230,28 @@ async function deletePendingOrphans(
     .all<ShortIdRow>();
 
   let deleted = 0;
+  let stranded = 0;
   for (const row of results) {
+    // SELECT 後に commit が確定した行を巻き込まないよう、確保時にも猶予を再確認する。
+    const claim = await database
+      .prepare(
+        "DELETE FROM movies WHERE short_id = ? AND status = 'pending' AND datetime(created_at) < datetime(?)"
+      )
+      .bind(row.short_id, threshold)
+      .run();
+    if (claim.meta.changes === 0) continue;
+
+    deleted += claim.meta.changes;
     const key = movieKey(row.short_id);
     try {
       if (await bucket.head(key)) await bucket.delete(key);
     } catch {
-      continue;
+      // 行は確保済みなので次回の実行では拾えない。実体だけが残るため数えて表に出す。
+      stranded += 1;
     }
-
-    const result = await database
-      .prepare("DELETE FROM movies WHERE short_id = ? AND status = 'pending'")
-      .bind(row.short_id)
-      .run();
-    deleted += result.meta.changes;
   }
 
-  return deleted;
+  return { deleted, stranded };
 }
 
 /** 一定期間を過ぎた failed 行を削除する（実体は commit 時に削除済み）。 */

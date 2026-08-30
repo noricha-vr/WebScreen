@@ -38,7 +38,7 @@ class FakeUploadDatabase implements UploadDatabase {
     return {
       bind: (...values: unknown[]) => ({
         first: async <T>(): Promise<T | null> => this.first<T>(query, values),
-        run: async (): Promise<unknown> => this.run(query, values),
+        run: async () => ({ meta: { changes: this.run(query, values) } }),
       }),
     };
   }
@@ -64,7 +64,7 @@ class FakeUploadDatabase implements UploadDatabase {
     } as T;
   }
 
-  private run(query: string, values: unknown[]): void {
+  private run(query: string, values: unknown[]): number {
     if (query.startsWith('INSERT INTO movies')) {
       const [shortId, userId, filename, sizeBytes, expiresAt] = values as [
         string,
@@ -81,33 +81,39 @@ class FakeUploadDatabase implements UploadDatabase {
         status: 'pending',
         expiresAt,
       });
-      return;
+      return 1;
     }
 
     if (query.includes("status = 'ready'")) {
       const [sizeBytes, shortId, userId] = values as [number, string, number];
       const movie = this.movies.get(shortId);
-      if (movie && movie.userId === userId && movie.status === 'pending') {
-        movie.status = 'ready';
-        movie.sizeBytes = sizeBytes;
-      }
-      return;
+      if (!movie || movie.userId !== userId || movie.status !== 'pending') return 0;
+      movie.status = 'ready';
+      movie.sizeBytes = sizeBytes;
+      return 1;
     }
 
     if (query.includes("status = 'failed'")) {
       const [shortId, userId] = values as [string, number];
       const movie = this.movies.get(shortId);
-      if (movie && movie.userId === userId && movie.status === 'pending') movie.status = 'failed';
+      if (!movie || movie.userId !== userId || movie.status !== 'pending') return 0;
+      movie.status = 'failed';
+      return 1;
     }
+
+    return 0;
   }
 }
 
 class FakeUploadBucket implements UploadBucket {
   deletedKeys: string[] = [];
+  /** head の直後に走らせるフック（保持期間バッチの割り込みを再現する）。 */
+  onHead: (() => void) | undefined;
 
   constructor(private readonly objectSize: number | null) {}
 
   async head(): Promise<{ size: number } | null> {
+    this.onHead?.();
     return this.objectSize === null ? null : { size: this.objectSize };
   }
 
@@ -208,6 +214,47 @@ describe('commitUpload', () => {
         publicBaseUrl: PUBLIC_URL,
       })
     ).resolves.toMatchObject({ shortId: SHORT_ID, sizeBytes: 321 });
+  });
+
+  it('R2 確認中に保持期間バッチが行を回収したら 404 を返す', async () => {
+    const database = new FakeUploadDatabase([movie({ sizeBytes: 200 })]);
+    const bucket = new FakeUploadBucket(321);
+    // pending の掃除が先に行を確保した状況（実体はこの後バッチが消す）。
+    bucket.onHead = () => database.movies.delete(SHORT_ID);
+
+    await expect(
+      commitUpload({
+        database,
+        bucket,
+        userId: USER_ID,
+        shortId: SHORT_ID,
+        publicBaseUrl: PUBLIC_URL,
+      })
+    ).rejects.toMatchObject({ status: 404 });
+    expect(database.movies.size).toBe(0);
+  });
+
+  it('R2 確認中に別の commit が確定していたら同じ応答で成功する', async () => {
+    const database = new FakeUploadDatabase([movie({ sizeBytes: 200 })]);
+    const bucket = new FakeUploadBucket(321);
+    bucket.onHead = () => {
+      const target = database.movies.get(SHORT_ID);
+      if (target) {
+        target.status = 'ready';
+        target.sizeBytes = 321;
+      }
+    };
+
+    await expect(
+      commitUpload({
+        database,
+        bucket,
+        userId: USER_ID,
+        shortId: SHORT_ID,
+        publicBaseUrl: PUBLIC_URL,
+      })
+    ).resolves.toMatchObject({ shortId: SHORT_ID, sizeBytes: 321 });
+    expect(database.movies.get(SHORT_ID)?.status).toBe('ready');
   });
 
   it('他人の shortId は 404 を返す', async () => {

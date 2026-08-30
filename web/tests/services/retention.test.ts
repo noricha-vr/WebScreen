@@ -108,6 +108,13 @@ class FakeRetentionDatabase implements RetentionDatabase {
     if (query.includes('expires_at') && !isExpired(movie, parseSqliteTime(values[1] as string))) {
       return 0;
     }
+    // pending の claim（DELETE ... AND datetime(created_at) < datetime(?)）の再現。
+    if (
+      query.includes('created_at') &&
+      parseSqliteTime(movie.createdAt) >= parseSqliteTime(values[1] as string)
+    ) {
+      return 0;
+    }
     if (query.includes("status = 'ready'") && movie.status !== 'ready') return 0;
     if (query.includes("status = 'pending'") && movie.status !== 'pending') return 0;
     this.movies.delete(movie.shortId);
@@ -261,7 +268,7 @@ describe('runRetention: 期限切れ動画', () => {
 });
 
 describe('runRetention: pending 孤児と failed', () => {
-  it('24h を過ぎた pending は実体があれば消してから行を削除する', async () => {
+  it('24h を過ぎた pending は行を確保してから実体を消す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'orphanAAAAAA', status: 'pending', createdAt: iso(-DAY_MS - HOUR_MS) }),
     ]);
@@ -271,6 +278,42 @@ describe('runRetention: pending 孤児と failed', () => {
 
     expect(summary.deletedOrphans).toBe(1);
     expect(bucket.deleted).toEqual([movieKey('orphanAAAAAA')]);
+    expect(database.movies.size).toBe(0);
+  });
+
+  it('SELECT 後に commit が確定した pending は R2 を消さず ready のまま残す', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({
+        shortId: 'raceCommitAA',
+        status: 'pending',
+        createdAt: iso(-DAY_MS - HOUR_MS),
+        expiresAt: iso(30 * DAY_MS),
+      }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([movieKey('raceCommitAA')]));
+    // SELECT 直後に所有者の commit が通った状況（pending → ready）。
+    database.onSelect = (rows) => {
+      for (const row of rows) row.status = 'ready';
+    };
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedOrphans).toBe(0);
+    expect(bucket.deleted).toEqual([]);
+    expect(database.movies.get('raceCommitAA')?.status).toBe('ready');
+  });
+
+  it('行を確保した後の R2 削除失敗は stranded として数える', async () => {
+    const database = new FakeRetentionDatabase([
+      movie({ shortId: 'orphanFailAA', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([movieKey('orphanFailAA')]));
+    bucket.failingKeys.add(movieKey('orphanFailAA'));
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedOrphans).toBe(1);
+    expect(summary.strandedOrphanObjects).toBe(1);
     expect(database.movies.size).toBe(0);
   });
 
@@ -384,6 +427,7 @@ describe('runRetention: サマリ', () => {
       deletedMovies: 1,
       strandedMovies: 0,
       deletedOrphans: 1,
+      strandedOrphanObjects: 0,
       deletedFailed: 1,
       deletedCaptures: 1,
     });
