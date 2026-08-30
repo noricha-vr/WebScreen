@@ -106,6 +106,65 @@ test.describe('公開プレビュー', () => {
     const body = await response.body();
     expect(body.byteLength).toBeGreaterThan(0);
     expect(body.subarray(4, 8).toString('ascii')).toBe('ftyp');
+
+    // 総量が分かって初めて進捗表示と再開の判断ができる
+    expect(response.headers()['content-length']).toBe(String(body.byteLength));
+    expect(response.headers()['accept-ranges']).toBe('bytes');
+  });
+
+  test('Range 要求には 206 で要求された範囲だけを返す', async ({ request }) => {
+    const response = await request.get(`/${E2E_FIXTURES.readyShortId}/download/`, {
+      headers: { Range: 'bytes=0-99' },
+    });
+
+    expect(response.status()).toBe(206);
+    expect(response.headers()['content-range']).toMatch(/^bytes 0-99\/\d+$/);
+    expect(response.headers()['content-length']).toBe('100');
+    expect(response.headers()['accept-ranges']).toBe('bytes');
+    // 再開したダウンロードでも保存名が変わらないこと
+    expect(response.headers()['content-disposition']).toContain('filename="slides.mp4"');
+
+    const body = await response.body();
+    expect(body.byteLength).toBe(100);
+    expect(body.subarray(4, 8).toString('ascii')).toBe('ftyp');
+  });
+
+  test('実体と重ならない Range は 416 と総量を返す', async ({ request }) => {
+    const response = await request.get(`/${E2E_FIXTURES.readyShortId}/download/`, {
+      headers: { Range: 'bytes=99999999-' },
+    });
+
+    expect(response.status()).toBe(416);
+    // 総量を返さないと、クライアントは範囲を直して要求し直せない
+    expect(response.headers()['content-range']).toMatch(/^bytes \*\/\d+$/);
+  });
+
+  test('HEAD は Range を無視して 200 と総量だけを返す', async ({ request }) => {
+    const size = (await (await request.get(`/${E2E_FIXTURES.readyShortId}/download/`)).body())
+      .byteLength;
+
+    const response = await request.head(`/${E2E_FIXTURES.readyShortId}/download/`, {
+      headers: { Range: 'bytes=0-99' },
+    });
+
+    // RFC 9110 14.2 は GET 以外の Range を無視させる
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-range']).toBeUndefined();
+    expect(response.headers()['content-length']).toBe(String(size));
+    expect(response.headers()['accept-ranges']).toBe('bytes');
+    expect(response.headers()['content-disposition']).toContain('filename="slides.mp4"');
+    expect((await response.body()).byteLength).toBe(0);
+  });
+
+  test('If-Range が実体と一致しなければ全体を返す', async ({ request }) => {
+    const response = await request.get(`/${E2E_FIXTURES.readyShortId}/download/`, {
+      headers: { Range: 'bytes=0-99', 'If-Range': '"not-the-current-etag"' },
+    });
+
+    // 差し替わった実体の一部を継ぎ足すと、壊れたファイルが出来上がる
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-range']).toBeUndefined();
+    expect((await response.body()).byteLength).toBeGreaterThan(100);
   });
 
   test('存在しない動画のダウンロードは 404', async ({ request }) => {
