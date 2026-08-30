@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { ConversionError, StageTimeoutError } from '../../src/lib/convert';
-import { mountConvertPanel, putMp4, uploadErrorCode } from '../../src/lib/ui/convert-panel';
+import { mountConvertPanel, putMp4, uploadErrorCode, uploadMp4 } from '../../src/lib/ui/convert-panel';
 import { JsonRequestError } from '../../src/lib/ui/request-json';
 
 type Listener = (event: Event) => void;
@@ -253,6 +253,50 @@ describe('putMp4', () => {
 
       expect(failure).toBeInstanceOf(StageTimeoutError);
       expect((failure as StageTimeoutError).code).toBe('uploadTimeout');
+    } finally {
+      Object.assign(globalThis, { fetch: originalFetch });
+    }
+  });
+});
+
+describe('uploadMp4', () => {
+  test('presign の応答を待つ間に中止されたら、予約した動画を取り消してから抜ける', async () => {
+    const controller = new AbortController();
+    const requests: { url: string; method: string | undefined }[] = [];
+    const originalFetch = globalThis.fetch;
+    Object.assign(globalThis, {
+      fetch: async (url: string, init: RequestInit = {}) => {
+        requests.push({ url, method: init.method });
+        if (url === '/api/uploads/presign/') {
+          // 予約は成立しているが、応答が届くまでの間に利用者が中止した状況。
+          controller.abort();
+          return new Response(
+            JSON.stringify({
+              shortId: 'Ab12Cd34Ef56',
+              uploadUrl: 'https://upload.test/r2-upload',
+              publicUrl: 'https://cdn.test/movies/Ab12Cd34Ef56.mp4',
+            }),
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        return new Response(null, { status: 200 });
+      },
+    });
+
+    try {
+      const failure = await uploadMp4(
+        new Blob(['mp4']),
+        'a.mp4',
+        'image',
+        () => {},
+        0,
+        controller.signal
+      ).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(Error);
+      expect(requests).toContainEqual({ url: '/api/movies/Ab12Cd34Ef56/', method: 'DELETE' });
+      // 中止済みなので R2 へは送らない。
+      expect(requests.some((request) => request.url === 'https://upload.test/r2-upload')).toBe(false);
     } finally {
       Object.assign(globalThis, { fetch: originalFetch });
     }

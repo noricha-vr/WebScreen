@@ -19,6 +19,7 @@ import { isShortId } from '../contracts/r2key';
 import { collectCaptures } from './capture-pages';
 import { movieEndpoint } from './history-view';
 import {
+  API_REQUEST_TIMEOUT_MS,
   ConversionError,
   convertFilesToMp4,
   convertImageUrlsToMp4,
@@ -150,7 +151,25 @@ export async function putMp4(
   if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
 }
 
-async function uploadMp4(
+/**
+ * presign / commit を送る。利用者の中止シグナルは渡さない。
+ *
+ * 予約と確定は「送ったのに結果を知らない」状態を作ってはいけない。中止で打ち切ると
+ * pending の行が誰にも回収されないまま残るため、短い要求として応答を必ず待ち、
+ * 抜ける手段は期限だけにする。
+ */
+function requestUploadApi(path: string, body: unknown): Promise<unknown> {
+  return withStageTimeout('uploadTimeout', API_REQUEST_TIMEOUT_MS, undefined, (signal) =>
+    requestJson(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    })
+  );
+}
+
+export async function uploadMp4(
   mp4: Blob,
   filename: string,
   kind: UploadKind,
@@ -164,13 +183,13 @@ async function uploadMp4(
   }
   dispatch({ type: 'converted' }, runGeneration);
   const presign = asPresignResponse(
-    await requestJson('/api/uploads/presign/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, sizeBytes: mp4.size, kind }),
-      signal,
-    })
+    await requestUploadApi('/api/uploads/presign/', { filename, sizeBytes: mp4.size, kind })
   );
+  // 応答を待っている間に中止された場合。予約だけ残るので、抜ける前に取り消す。
+  if (signal?.aborted) {
+    abandonUpload(presign.shortId);
+    signal.throwIfAborted();
+  }
   dispatch({ type: 'stageRatio', stage: 'uploading', ratio: UPLOAD_PRESIGNED_RATIO }, runGeneration);
 
   // presign を通った時点で pending の行が予約されている。ここから先で失敗すると
@@ -187,13 +206,9 @@ async function uploadMp4(
   dispatch({ type: 'stageRatio', stage: 'uploading', ratio: UPLOAD_STORED_RATIO }, runGeneration);
 
   try {
+    // commit は中止でも最後まで送り切る。届いた後の中止は「完了」として扱ってよい。
     const committed = asCommitResponse(
-      await requestJson('/api/uploads/commit/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shortId: presign.shortId }),
-        signal,
-      })
+      await requestUploadApi('/api/uploads/commit/', { shortId: presign.shortId })
     );
     dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
   } catch (error) {
