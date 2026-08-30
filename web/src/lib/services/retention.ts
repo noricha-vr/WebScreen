@@ -1,5 +1,9 @@
 /**
- * 保持期間バッチ（期限切れ動画・孤児・失敗行・キャプチャの掃除）。
+ * 保持期間バッチ（期限切れ動画・孤児・失敗行の掃除）。
+ *
+ * captures の掃除（retention-captures.ts）と、実体の無い ready 行の検出
+ * （retention-audit.ts）は別モジュールに置き、ここは D1 と R2 をまたぐ movies の
+ * 削除だけを持つ。この 3 つをまとめて呼ぶのは runRetention だけ。
  *
  * D1 / R2 はインターフェースで注入し、現在時刻も引数で受け取る（Date.now を呼ぶのは
  * cron の entry 層だけ）。これで workerd なしでも全分岐をテストできる。
@@ -16,27 +20,14 @@
 
 import { movieKey } from '../contracts/r2key';
 import { PINNED_RETENTION_MS } from './quota';
+import { auditReadyObjects } from './retention-audit';
+import { deleteStaleCaptures, type CaptureBucket } from './retention-captures';
 
 /** pending のまま放置された予約を孤児とみなすまでの猶予。 */
 const PENDING_ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
 
 /** failed 行を残す期間（原因調査のための猶予）。 */
 const FAILED_RETENTION_MS = 24 * 60 * 60 * 1000;
-
-/** captures/ の中間生成物を残す期間。動画化が終われば不要になる。 */
-const CAPTURE_RETENTION_MS = 24 * 60 * 60 * 1000;
-
-/**
- * 1 回の実行で削除するキャプチャの上限。R2 の list / delete は subrequest を
- * 消費するため、1 回で消し切ろうとせず毎時の実行で分割して処理する。
- */
-export const MAX_CAPTURE_DELETIONS_PER_RUN = 1000;
-
-/**
- * キャプチャの R2 prefix。キー規則の正本は contracts/r2key.ts の captureKey で、
- * ここは list 用の prefix だけを持つ（一致は retention のテストで検証する）。
- */
-export const CAPTURE_KEY_PREFIX = 'captures/';
 
 /**
  * 1 回の実行で確保する pending の行数の上限。1 行あたり最大 4 subrequest
@@ -65,23 +56,9 @@ export interface RetentionDatabase {
   };
 }
 
-/** R2 の list が返すオブジェクト（バッチが見るのはキーとアップロード時刻だけ）。 */
-export interface RetentionObject {
-  key: string;
-  uploaded: Date;
-}
-
-export interface RetentionListResult {
-  objects: RetentionObject[];
-  truncated: boolean;
-  cursor?: string;
-}
-
-/** R2 の最小操作面。delete は R2Bucket と同じく複数キーをまとめて受ける。 */
-export interface RetentionBucket {
+/** R2 の最小操作面。captures の掃除も同じ bucket を使うのでその操作面を含む。 */
+export interface RetentionBucket extends CaptureBucket {
   head(key: string): Promise<{ size: number } | null>;
-  delete(keys: string | string[]): Promise<void>;
-  list(options: { prefix: string; cursor?: string }): Promise<RetentionListResult>;
 }
 
 /** 1 回の実行で処理した件数。cron の構造化ログにそのまま載せる。 */
@@ -94,9 +71,18 @@ export interface RetentionSummary {
   deletedFailed: number;
   /** R2 の削除に失敗して次回の実行へ持ち越した件数。行は残るので取り残しにはならない。 */
   deferredObjectDeletions: number;
+  /**
+   * 別の書き手が先に更新した等で、この実行では何もしなかった行の件数。
+   * 恒久的に失敗するキーを黙って毎時 retry し続けないよう、件数だけは必ず出す。
+   */
+  skippedRows: number;
   /** movies の掃除が 1 回の上限に達して打ち切ったか。true なら残りは次回の実行が拾う。 */
   sweepCapped: boolean;
   deletedCaptures: number;
+  /** 実体の有無を確かめた ready 行のサンプル数（services/retention-audit.ts）。 */
+  checkedReadyRows: number;
+  /** R2 に実体が無い ready 行の検出数。検出のみで、削除は行わない。 */
+  missingObjectRows: number;
 }
 
 export interface RetentionInput {
@@ -126,6 +112,9 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   // 孤児の確保で R2 の削除に失敗した行も failed として残っているため、同じ実行の
   // ここで拾い直せる（猶予はどちらも 24 時間）。取りこぼしても次回の実行が同じ条件で拾う。
   const failed = await deleteFailedMovies(database, bucket, now);
+  const deletedCaptures = await deleteStaleCaptures(bucket, now);
+  // 掃除の後に見る（この実行で消した行を実体なしと数えないため）。何も削除しない。
+  const audit = await auditReadyObjects(database, bucket);
 
   return {
     backfilledPinned,
@@ -133,9 +122,14 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
     strandedMovies: expired.stranded,
     deletedOrphans: orphans.deleted,
     deletedFailed: failed.deleted,
-    deferredObjectDeletions: failed.deferred,
+    // 孤児の確保で R2 の削除に失敗した行は failed として残り、同じ実行の failed の
+    // 掃除が数え直す。ここで足すと 1 行を 2 回数えることになるので足さない。
+    deferredObjectDeletions: expired.deferred + failed.deferred,
+    skippedRows: expired.skipped + orphans.skipped + audit.skippedRows,
     sweepCapped: orphans.capped || failed.capped,
-    deletedCaptures: await deleteStaleCaptures(bucket, now),
+    deletedCaptures,
+    checkedReadyRows: audit.checkedReadyRows,
+    missingObjectRows: audit.missingObjectRows,
   };
 }
 
@@ -175,7 +169,7 @@ async function deleteExpiredMovies(
   database: RetentionDatabase,
   bucket: RetentionBucket,
   now: Date
-): Promise<{ deleted: number; stranded: number }> {
+): Promise<{ deleted: number; stranded: number; skipped: number; deferred: number }> {
   const threshold = now.toISOString();
   const { results } = await database
     .prepare(
@@ -186,6 +180,8 @@ async function deleteExpiredMovies(
 
   let deleted = 0;
   let stranded = 0;
+  let skipped = 0;
+  let deferred = 0;
   for (const row of results) {
     // 初回 SELECT の後に pin（= 期限の延長）が入った場合、R2 を先に消すと生きた
     // 行だけが残る。R2 削除の直前にも期限を読み直し、実体と行の不整合を防ぐ。
@@ -195,13 +191,18 @@ async function deleteExpiredMovies(
       )
       .bind(row.short_id, threshold)
       .all<ShortIdRow>();
-    if (current.results.length === 0) continue;
+    if (current.results.length === 0) {
+      // 期限が延びた・既に消えた（正常な競合）。件数だけ残して次へ。
+      skipped += 1;
+      continue;
+    }
 
     try {
       await bucket.delete(movieKey(row.short_id));
     } catch {
       // R2 が落ちている間に D1 の行だけ消すと実体が孤児になるため、この行は
       // 飛ばして次回の実行に委ねる（削除は冪等なのでやり直しで問題ない）。
+      deferred += 1;
       continue;
     }
 
@@ -225,7 +226,7 @@ async function deleteExpiredMovies(
     }
   }
 
-  return { deleted, stranded };
+  return { deleted, stranded, skipped, deferred };
 }
 
 /**
@@ -242,7 +243,7 @@ async function deletePendingOrphans(
   database: RetentionDatabase,
   bucket: RetentionBucket,
   now: Date
-): Promise<{ deleted: number; capped: boolean }> {
+): Promise<{ deleted: number; skipped: number; capped: boolean }> {
   const threshold = new Date(now.getTime() - PENDING_ORPHAN_GRACE_MS).toISOString();
   const { results } = await database
     .prepare(
@@ -252,6 +253,7 @@ async function deletePendingOrphans(
     .all<ShortIdRow>();
 
   let deleted = 0;
+  let skipped = 0;
   for (const row of results) {
     // SELECT 後に commit が確定した行を巻き込まないよう、確保時にも猶予を再確認する。
     const claim = await database
@@ -260,7 +262,11 @@ async function deletePendingOrphans(
       )
       .bind(row.short_id, threshold)
       .run();
-    if (claim.meta.changes === 0) continue;
+    // 確保に負けた = commit が勝った行。件数だけ残して次へ。
+    if (claim.meta.changes === 0) {
+      skipped += 1;
+      continue;
+    }
 
     // 削除に失敗した行は failed のまま残す（件数は failed の掃除が数える）。
     if (!(await deleteMovieObject(bucket, row.short_id))) continue;
@@ -272,7 +278,7 @@ async function deletePendingOrphans(
     deleted += result.meta.changes;
   }
 
-  return { deleted, capped: results.length === MAX_PENDING_CLAIMS_PER_RUN };
+  return { deleted, skipped, capped: results.length === MAX_PENDING_CLAIMS_PER_RUN };
 }
 
 /**
@@ -335,39 +341,4 @@ async function deleteFailedMovies(
   }
 
   return { deleted, deferred: 0, capped };
-}
-
-/**
- * captures/ 配下の古い中間生成物を削除する。
- *
- * list は 1 ページずつ辿り、削除は上限に達した時点で打ち切る。残りは次回の
- * 実行が同じ条件で拾うため、取りこぼしにはならない。
- */
-async function deleteStaleCaptures(bucket: RetentionBucket, now: Date): Promise<number> {
-  const threshold = now.getTime() - CAPTURE_RETENTION_MS;
-  let cursor: string | undefined;
-  let deleted = 0;
-
-  while (deleted < MAX_CAPTURE_DELETIONS_PER_RUN) {
-    const page: RetentionListResult = await bucket.list(
-      cursor === undefined
-        ? { prefix: CAPTURE_KEY_PREFIX }
-        : { prefix: CAPTURE_KEY_PREFIX, cursor }
-    );
-
-    const stale = page.objects
-      .filter((object) => object.uploaded.getTime() < threshold)
-      .map((object) => object.key)
-      .slice(0, MAX_CAPTURE_DELETIONS_PER_RUN - deleted);
-
-    if (stale.length > 0) {
-      await bucket.delete(stale);
-      deleted += stale.length;
-    }
-
-    if (!page.truncated || page.cursor === undefined) break;
-    cursor = page.cursor;
-  }
-
-  return deleted;
 }

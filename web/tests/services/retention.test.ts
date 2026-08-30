@@ -2,15 +2,17 @@ import { describe, expect, it } from 'bun:test';
 
 import { captureKey, movieKey } from '../../src/lib/contracts/r2key';
 import {
-  CAPTURE_KEY_PREFIX,
-  MAX_CAPTURE_DELETIONS_PER_RUN,
   MAX_FAILED_DELETIONS_PER_RUN,
   runRetention,
   type RetentionBucket,
   type RetentionDatabase,
-  type RetentionListResult,
-  type RetentionObject,
 } from '../../src/lib/services/retention';
+import {
+  CAPTURE_KEY_PREFIX,
+  MAX_CAPTURE_DELETIONS_PER_RUN,
+  type CaptureListResult,
+  type CaptureObject,
+} from '../../src/lib/services/retention-captures';
 
 const NOW = new Date('2026-08-25T12:00:00.000Z');
 const HOUR_MS = 60 * 60 * 1000;
@@ -64,12 +66,23 @@ class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private select(query: string, values: unknown[]): { short_id: string }[] {
+    // 監査のサンプル抽出（ready 行から N 件。順序はフェイクでは固定でよい）。
+    if (query.includes('ORDER BY RANDOM()')) {
+      return [...this.movies.values()]
+        .filter((movie) => movie.status === 'ready')
+        .slice(0, values[0] as number)
+        .map((movie) => ({ short_id: movie.shortId }));
+    }
+
     // 削除直前の再確認（short_id と閾値の 2 引数）。pin ではなく status と期限で判定する。
     if (query.includes('WHERE short_id = ?')) {
       const movie = this.movies.get(values[0] as string);
       if (!movie) return [];
-      // 引数が short_id だけなら行の存在確認（stranded の判定に使う）
-      if (values.length === 1) return [{ short_id: movie.shortId }];
+      // 引数が short_id だけなら行の存在確認（stranded と監査の判定に使う）
+      if (values.length === 1) {
+        if (query.includes("status = 'ready'") && movie.status !== 'ready') return [];
+        return [{ short_id: movie.shortId }];
+      }
       if (!isExpired(movie, parseSqliteTime(values[1] as string))) return [];
       if (query.includes("status = 'ready'") && movie.status !== 'ready') return [];
       return [{ short_id: movie.shortId }];
@@ -134,7 +147,7 @@ class FakeRetentionBucket implements RetentionBucket {
 
   constructor(
     readonly objects = new Set<string>(),
-    private readonly pages: RetentionListResult[] = [{ objects: [], truncated: false }]
+    private readonly pages: CaptureListResult[] = [{ objects: [], truncated: false }]
   ) {}
 
   async head(key: string): Promise<{ size: number } | null> {
@@ -149,7 +162,7 @@ class FakeRetentionBucket implements RetentionBucket {
     this.deleted.push(...list);
   }
 
-  async list(options: { prefix: string; cursor?: string }): Promise<RetentionListResult> {
+  async list(options: { prefix: string; cursor?: string }): Promise<CaptureListResult> {
     this.listCalls.push(options.cursor);
     const index = options.cursor === undefined ? 0 : Number(options.cursor);
     return this.pages[index] ?? { objects: [], truncated: false };
@@ -170,7 +183,7 @@ function iso(offsetMs: number): string {
   return new Date(NOW.getTime() + offsetMs).toISOString();
 }
 
-function captureObject(index: number, uploadedOffsetMs: number): RetentionObject {
+function captureObject(index: number, uploadedOffsetMs: number): CaptureObject {
   return {
     key: captureKey('11111111-2222-3333-4444-555555555555', index),
     uploaded: new Date(NOW.getTime() + uploadedOffsetMs),
@@ -237,6 +250,8 @@ describe('runRetention: 期限切れ動画', () => {
     const summary = await run(database, bucket);
 
     expect(summary.deletedMovies).toBe(0);
+    // 黙って飛ばさず、件数として cron のログに出す。
+    expect(summary.skippedRows).toBe(1);
     expect(bucket.deleted).toEqual([]);
     expect(database.movies.has('racePinAAAAA')).toBe(true);
   });
@@ -266,6 +281,7 @@ describe('runRetention: 期限切れ動画', () => {
     const summary = await run(database, bucket);
 
     expect(summary.deletedMovies).toBe(1);
+    expect(summary.deferredObjectDeletions).toBe(1);
     expect(database.movies.has('r2FailureAAA')).toBe(true);
     expect(database.movies.has('r2OkayAAAAAA')).toBe(false);
   });
@@ -303,6 +319,7 @@ describe('runRetention: pending 孤児と failed', () => {
     const summary = await run(database, bucket);
 
     expect(summary.deletedOrphans).toBe(0);
+    expect(summary.skippedRows).toBe(1);
     expect(bucket.deleted).toEqual([]);
     expect(database.movies.get('raceCommitAA')?.status).toBe('ready');
   });
@@ -429,7 +446,7 @@ describe('runRetention: captures', () => {
 
   it('1 回の実行で上限件数まで消し、残りは次回に回す', async () => {
     const pageSize = 600;
-    const page = (cursor: string | undefined): RetentionListResult => ({
+    const page = (cursor: string | undefined): CaptureListResult => ({
       objects: Array.from({ length: pageSize }, (_, index) => captureObject(index, -2 * DAY_MS)),
       truncated: true,
       ...(cursor === undefined ? {} : { cursor }),
@@ -464,8 +481,11 @@ describe('runRetention: サマリ', () => {
       deletedOrphans: 1,
       deletedFailed: 1,
       deferredObjectDeletions: 0,
+      skippedRows: 0,
       sweepCapped: false,
       deletedCaptures: 1,
+      checkedReadyRows: 0,
+      missingObjectRows: 0,
     });
     expect(database.movies.size).toBe(0);
   });
