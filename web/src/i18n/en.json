@@ -58,6 +58,10 @@
     "errorImageUrlNotSupported": "Image URLs can't be converted. Download the image, then upload the file.",
     "errorVideoUrlNotSupported": "Video files aren't supported. Use a web page, PDF, or image instead.",
     "errorNonWebPageUrl": "This URL isn't a web page. Enter a web page URL.",
+    "errorWasmLoadTimeout": "Loading the video encoder took too long. Check your connection and try again.",
+    "errorImageFetchTimeout": "Downloading the captured images took too long. Please try again.",
+    "errorUploadTimeout": "Uploading the video took too long. Check your connection and try again.",
+    "abort": "Cancel conversion",
     "batchNameSuffix": "+{count}"
   },
   "history": {

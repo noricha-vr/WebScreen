@@ -26,6 +26,9 @@ const t = useTranslations(lang);
   data-msg-image-url-not-supported={t.convert.errorImageUrlNotSupported}
   data-msg-video-url-not-supported={t.convert.errorVideoUrlNotSupported}
   data-msg-non-web-page-url={t.convert.errorNonWebPageUrl}
+  data-msg-wasm-load-timeout={t.convert.errorWasmLoadTimeout}
+  data-msg-image-fetch-timeout={t.convert.errorImageFetchTimeout}
+  data-msg-upload-timeout={t.convert.errorUploadTimeout}
   data-label-capturing={t.convert.stageCapturing}
   data-label-preparing={t.convert.stagePreparing}
   data-label-encoding={t.convert.stageEncoding}
@@ -109,6 +112,14 @@ const t = useTranslations(lang);
       >
       </div>
     </div>
+    <button
+      type="button"
+      data-abort-button
+      class="mt-4 inline-flex items-center gap-2 rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+    >
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      <span>{t.convert.abort}</span>
+    </button>
   </div>
 
   <div class="mt-8 border-t border-slate-200 pt-6">
