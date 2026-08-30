@@ -58,6 +58,17 @@ const LOGOUT_URL = '/api/auth/logout/';
         <span>{t.nav.login}</span>
       </a>
 
+      {/* 認証基盤の異常。guest（ログイン導線）に倒すと障害が見えなくなるので、
+          ログイン状態を確認できなかったことをそのまま出す。 */}
+      <p
+        data-auth-only="error"
+        role="alert"
+        class="flex items-center gap-2 text-base font-semibold text-red-700"
+      >
+        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+        <span>{t.nav.sessionUnavailable}</span>
+      </p>
+
       <div data-auth-only="member" class="flex items-center gap-2">
         <HistoryDropdown lang={lang} />
 

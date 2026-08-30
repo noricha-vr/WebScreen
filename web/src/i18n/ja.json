@@ -12,7 +12,8 @@
     "history": "履歴",
     "logout": "ログアウト",
     "bannerAlt": "WebScreen のロゴ",
-    "avatarAlt": "アカウントのアバター"
+    "avatarAlt": "アカウントのアバター",
+    "sessionUnavailable": "ログイン状態を確認できません"
   },
   "notice": {
     "heading": "WebScreen は新しくなりました",

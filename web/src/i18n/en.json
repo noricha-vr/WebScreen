@@ -12,7 +12,8 @@
     "history": "History",
     "logout": "Sign out",
     "bannerAlt": "WebScreen logo",
-    "avatarAlt": "Account avatar"
+    "avatarAlt": "Account avatar",
+    "sessionUnavailable": "Sign-in status unavailable"
   },
   "notice": {
     "heading": "WebScreen has been rebuilt",
