@@ -43,7 +43,7 @@ export async function imageUrlsToFrames(
   for (const [index, image] of images.entries()) {
     // 正規化は 1 枚ずつ CPU を使うだけなので、中止はここで打ち切る。
     signal?.throwIfAborted();
-    frames.push(await normalizeImageBlob(image));
+    frames.push(await normalizeImageBlob(image, signal));
     report?.({ stage: 'preparing', current: index + 1, total: images.length });
   }
   return frames;

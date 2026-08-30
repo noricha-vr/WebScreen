@@ -3,6 +3,31 @@ import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { imageFilesToFrames } from '../../src/lib/convert/image';
 import { pdfToFrames } from '../../src/lib/convert/pdf';
 
+/** worker は自前生成なので、terminate の回数を数えられる代役に差し替える。 */
+function installWorkerFake(onTerminate: () => void): () => void {
+  const original = { Worker: globalThis.Worker };
+  Object.assign(globalThis, {
+    Worker: class {
+      terminate(): void {
+        onTerminate();
+      }
+    },
+  });
+  return () => Object.assign(globalThis, original);
+}
+
+/** 解決しない promise。解析や復号が返ってこない状態を再現する。 */
+function neverSettles<T>(): Promise<T> {
+  return new Promise<T>(() => {});
+}
+
+/** run が settle するまでの実測ミリ秒。中止が「効いた」ことを時間で見るために使う。 */
+async function millisUntilSettled(run: Promise<unknown>): Promise<number> {
+  const startedAt = performance.now();
+  await run.catch(() => undefined);
+  return performance.now() - startedAt;
+}
+
 /** canvas を使う変換のために、描画まわりの最小限の代役を置く。 */
 function installCanvasFakes(): () => void {
   const original = { document: globalThis.document, createImageBitmap: globalThis.createImageBitmap };
@@ -80,13 +105,9 @@ describe('pdfToFrames', () => {
         }),
       }),
     }));
-    Object.assign(globalThis, {
-      Worker: class {
-        terminate(): void {
-          terminated += 1;
-        }
-      },
-    });
+    restores.push(installWorkerFake(() => {
+      terminated += 1;
+    }));
 
     const failure = await pdfToFrames(new File(['pdf'], 'a.pdf'), undefined, controller.signal).catch(
       (error: unknown) => error
@@ -98,5 +119,59 @@ describe('pdfToFrames', () => {
     // 自前の worker は pdfjs が畳んでくれないので、中止でも必ず終了させる。
     expect(terminated).toBe(1);
     expect(workerPortHolder.workerPort).toBeNull();
+  });
+});
+
+describe('返ってこない前処理', () => {
+  const SETTLE_BUDGET_MS = 50;
+
+  test('PDF の解析が返らなくても、中止したら worker を畳んで抜ける', async () => {
+    restores.push(installCanvasFakes());
+    const controller = new AbortController();
+    let terminated = 0;
+    const workerPortHolder = { workerPort: null as unknown };
+    mock.module('pdfjs-dist', () => ({
+      GlobalWorkerOptions: workerPortHolder,
+      // 解析が始まったきり返ってこない上流。
+      getDocument: () => ({ promise: neverSettles() }),
+    }));
+    restores.push(installWorkerFake(() => {
+      terminated += 1;
+    }));
+
+    const running = pdfToFrames(new File(['pdf'], 'a.pdf'), undefined, controller.signal);
+    controller.abort();
+
+    expect(await millisUntilSettled(running)).toBeLessThan(SETTLE_BUDGET_MS);
+    expect(terminated).toBe(1);
+    expect(workerPortHolder.workerPort).toBeNull();
+  });
+
+  test('画像の復号が返らなくても、中止したら抜けて後から解決した bitmap を閉じる', async () => {
+    restores.push(installCanvasFakes());
+    const controller = new AbortController();
+    let closed = 0;
+    let release: ((bitmap: { close: () => void }) => void) | undefined;
+    Object.assign(globalThis, {
+      // 復号が始まったきり返ってこない状態。あとから解決させて後始末を確かめる。
+      createImageBitmap: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+
+    const running = imageFilesToFrames([new File(['a'], 'a.png')], undefined, controller.signal);
+    controller.abort();
+
+    expect(await millisUntilSettled(running)).toBeLessThan(SETTLE_BUDGET_MS);
+
+    release?.({
+      close: () => {
+        closed += 1;
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(closed).toBe(1);
   });
 });
