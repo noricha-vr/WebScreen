@@ -62,22 +62,33 @@ test.describe('用途別ページのメタ情報', () => {
     '/en/pdf/',
   ] as const;
 
-  /** ページの JSON-LD を 1 つ取り出す（無ければ null）。 */
-  async function fetchJsonLd(request: import('@playwright/test').APIRequestContext, path: string) {
+  /**
+   * ページの JSON-LD から、指定した種類のものを 1 つ取り出す（無ければ null）。
+   *
+   * 1 ページに複数の構造化データが載る（トップは WebApplication、用途別ページはパンくず）ので、
+   * 先頭だけを見ると「別の種類が増えた」ことに気づけない。種類で選ぶ。
+   */
+  async function fetchJsonLd(
+    request: import('@playwright/test').APIRequestContext,
+    path: string,
+    type: string
+  ) {
     const html = await (await request.get(path)).text();
-    const matched = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html);
-    return matched === null ? null : JSON.parse(matched[1]!);
+    const blocks = [
+      ...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g),
+    ].map((matched) => JSON.parse(matched[1]!));
+
+    return blocks.find((block) => block['@type'] === type) ?? null;
   }
 
   for (const path of USE_CASE_PATHS) {
     test(`${path} のパンくずが言語トップから自分自身までを絶対 URL で並べる`, async ({
       request,
     }) => {
-      const jsonLd = await fetchJsonLd(request, path);
+      const jsonLd = await fetchJsonLd(request, path, 'BreadcrumbList');
       const lang = path.startsWith('/en/') ? 'en' : 'ja';
 
       expect(jsonLd).not.toBeNull();
-      expect(jsonLd['@type']).toBe('BreadcrumbList');
 
       const items = jsonLd.itemListElement;
       expect(items).toHaveLength(2);
@@ -113,7 +124,30 @@ test.describe('用途別ページのメタ情報', () => {
   // パンくずを持たないページに出すと、階層の無いところに階層を主張することになる。
   for (const path of ['/ja/', '/en/', '/ja/privacy/'] as const) {
     test(`${path} にはパンくずを出さない`, async ({ request }) => {
-      expect(await fetchJsonLd(request, path)).toBeNull();
+      expect(await fetchJsonLd(request, path, 'BreadcrumbList')).toBeNull();
+    });
+  }
+
+  for (const path of ['/ja/', '/en/'] as const) {
+    test(`${path} がサービス自身を WebApplication として宣言する`, async ({ request }) => {
+      const jsonLd = await fetchJsonLd(request, path, 'WebApplication');
+      const lang = path.startsWith('/en/') ? 'en' : 'ja';
+
+      expect(jsonLd).not.toBeNull();
+      expect(jsonLd.name).toBe('WebScreen');
+      // 相対 URL では解決できないので、必ず本番オリジンの絶対 URL にする。
+      expect(jsonLd.url).toBe(`https://web-screen.net${path}`);
+      expect(jsonLd.inLanguage).toBe(lang);
+      expect(jsonLd.description.length).toBeGreaterThan(0);
+      // 価格は宣言しない（今は無料だが、構造化データで将来の課金方針を固定しない）。
+      expect(jsonLd.offers).toBeUndefined();
+    });
+  }
+
+  // 同じアプリケーションを何度も宣言すると、どのページが本体か曖昧になる。
+  for (const path of [...USE_CASE_PATHS, '/ja/privacy/'] as const) {
+    test(`${path} には WebApplication を出さない`, async ({ request }) => {
+      expect(await fetchJsonLd(request, path, 'WebApplication')).toBeNull();
     });
   }
 });

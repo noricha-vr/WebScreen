@@ -32,6 +32,13 @@ interface Props {
    * 渡さないページ（トップ・プレビュー）では出力しない。
    */
   breadcrumb?: { name: string; path: string }[];
+  /**
+   * サービスそのものを説明する WebApplication の構造化データを出すか。
+   *
+   * トップ（/ja/ と /en/）だけ true にする。用途別ページやプレビューでも出すと、
+   * 同じアプリケーションを何度も宣言することになり、どれが本体か曖昧になる。
+   */
+  webApplication?: boolean;
 }
 
 const {
@@ -41,6 +48,7 @@ const {
   analytics = true,
   noindex = false,
   breadcrumb,
+  webApplication = false,
 } = Astro.props;
 const t = useTranslations(lang);
 const other = alternateLocale(lang);
@@ -56,6 +64,17 @@ const OG_IMAGE_SIZE = { width: '1200', height: '630' };
 const OG_LOCALES: Record<Locale, string> = { ja: 'ja_JP', en: 'en_US' };
 
 /**
+ * JSON-LD を `<script>` に埋められる文字列にする。
+ *
+ * `</script>` が値に混ざると script タグが途中で閉じてしまうので、JSON としては等価な
+ * エスケープに置き換える（現状の値は辞書由来の固定文字列だが、将来の混入に備える）。
+ * 埋め込む構造化データが増えても同じ処理を通すため、1 か所にまとめている。
+ */
+function toJsonLd(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, '\\u003c');
+}
+
+/**
  * パンくずの JSON-LD。先頭に言語トップを置き、渡された階層を続ける。
  *
  * `Astro.site` を基準に絶対 URL へ変換する（相対 URL だと Google が解決できない）。
@@ -63,7 +82,7 @@ const OG_LOCALES: Record<Locale, string> = { ja: 'ja_JP', en: 'en_US' };
 const breadcrumbJsonLd =
   breadcrumb === undefined || breadcrumb.length === 0
     ? null
-    : JSON.stringify({
+    : toJsonLd({
         '@context': 'https://schema.org',
         '@type': 'BreadcrumbList',
         itemListElement: [{ name: t.nav.home, path: `/${lang}/` }, ...breadcrumb].map(
@@ -74,10 +93,28 @@ const breadcrumbJsonLd =
             item: new URL(item.path, Astro.site).href,
           })
         ),
-      })
-        // `</script>` が値に混ざると script タグが途中で閉じてしまう。JSON としては等価な
-        // エスケープに置き換える（現状の値は辞書由来の固定文字列だが、将来の混入に備える）。
-        .replace(/</g, '\\u003c');
+      });
+
+/**
+ * サービス自身の JSON-LD。リッチリザルトには直結しないが、Google が WebScreen を
+ * 1 つのアプリケーションとして認識するための手がかりになる。
+ *
+ * 価格（offers）は書かない。今は無料だが、構造化データで将来の課金方針を固定したくない。
+ */
+const webApplicationJsonLd = !webApplication
+  ? null
+  : toJsonLd({
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: 'WebScreen',
+      url: pageUrl.href,
+      // ページ個別の description ではなくサービスの説明を出す（アプリの説明であって
+      // ページの説明ではない）。トップ以外に付ける時も揺れないよう辞書から直接引く。
+      description: t.meta.description,
+      applicationCategory: 'MultimediaApplication',
+      operatingSystem: 'Web',
+      inLanguage: lang,
+    });
 
 // SRI 付きで固定バージョンを読む（CDN 側の差し替えをブラウザが検出できるようにする）。
 const FONT_AWESOME_URL = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.1.0/css/all.min.css';
@@ -111,6 +148,11 @@ const GA_TRACKED_HOST = 'web-screen.net';
     {
       breadcrumbJsonLd && (
         <script type="application/ld+json" is:inline set:html={breadcrumbJsonLd} />
+      )
+    }
+    {
+      webApplicationJsonLd && (
+        <script type="application/ld+json" is:inline set:html={webApplicationJsonLd} />
       )
     }
 
