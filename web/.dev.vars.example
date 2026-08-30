@@ -12,3 +12,12 @@ WEBCAPTURE_TOKEN=replace_with_webcapture_token
 # 本体 Worker は使わない。本番は `bunx wrangler secret put DISCORD_ALERT_WEBHOOK_URL -c cron/wrangler.jsonc` で投入し、
 # ローカルは wrangler dev の --var でダミーを渡す（実 Discord に送らないため）。
 DISCORD_ALERT_WEBHOOK_URL=
+
+# 削除した動画のキャッシュ purge に使う Cloudflare API token（本体・cron の両方に要る secret）。
+# 本番は `bunx wrangler secret put CLOUDFLARE_PURGE_TOKEN`（cron は -c cron/wrangler.jsonc）で投入する。
+# ローカルは空のままでよい（purge せず warn を 1 行出すだけで、削除自体は成功する）。
+CLOUDFLARE_PURGE_TOKEN=
+
+# purge 先のゾーン（web-screen.net）。公開情報なので wrangler.jsonc の vars にも入っている。
+# ローカルで実際に purge を試す時だけ設定する。
+CLOUDFLARE_ZONE_ID=2210192b51f9f0eb6761d70341ca09b0

@@ -8,6 +8,7 @@ import {
   PINNED_RETENTION_MS,
   UNPIN_GRACE_MS,
 } from '../../src/lib/services/quota';
+import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
 import {
   deleteMovie,
   findPublicMovie,
@@ -519,12 +520,21 @@ describe('renameMovie', () => {
   });
 });
 
+/** キャッシュ purge の設定。ここでは purge の挙動を見ないので送信だけ止める。 */
+const CACHE_PURGE: CachePurgeSettings = {
+  publicBaseUrl: 'https://cdn.example',
+  zoneId: '2210192b51f9f0eb6761d70341ca09b0',
+  apiToken: 'test-token',
+  source: 'test-worker',
+  fetcher: () => Promise.resolve(new Response(null, { status: 200 })),
+};
+
 describe('deleteMovie', () => {
   it('R2 の実体を消してから D1 の行を消す', async () => {
     const database = new FakeMoviesDatabase([movie()]);
     const bucket = new FakeMovieBucket();
 
-    await deleteMovie({ database, bucket, userId: USER_ID, shortId: SHORT_ID });
+    await deleteMovie({ database, bucket, cachePurge: CACHE_PURGE, userId: USER_ID, shortId: SHORT_ID });
 
     expect(bucket.deletedKeys).toEqual([`movies/${SHORT_ID}.mp4`]);
     expect(database.movies.has(SHORT_ID)).toBe(false);
@@ -535,7 +545,7 @@ describe('deleteMovie', () => {
     const bucket = new FakeMovieBucket();
 
     await expect(
-      deleteMovie({ database, bucket, userId: USER_ID, shortId: SHORT_ID })
+      deleteMovie({ database, bucket, cachePurge: CACHE_PURGE, userId: USER_ID, shortId: SHORT_ID })
     ).rejects.toMatchObject({ status: 404 });
     expect(bucket.deletedKeys).toEqual([]);
     expect(database.movies.has(SHORT_ID)).toBe(true);
@@ -546,7 +556,7 @@ describe('deleteMovie', () => {
     const bucket = new FakeMovieBucket();
 
     await expect(
-      deleteMovie({ database, bucket, userId: USER_ID, shortId: '../../etc/passwd' })
+      deleteMovie({ database, bucket, cachePurge: CACHE_PURGE, userId: USER_ID, shortId: '../../etc/passwd' })
     ).rejects.toMatchObject({ status: 404 });
     expect(bucket.deletedKeys).toEqual([]);
   });

@@ -5,6 +5,7 @@ import { ERROR_CODES, validateRenameMovieRequest } from '../../../../lib/contrac
 import { logWorkerFailure } from '../../../../lib/infra/worker-log';
 import { importSigningKey } from '../../../../lib/contracts/session';
 import { requireUser, type AuthDatabase } from '../../../../lib/services/auth';
+import type { CachePurgeSettings } from '../../../../lib/services/cache-purge';
 import {
   deleteMovie,
   MovieActionError,
@@ -19,6 +20,21 @@ interface DeleteBindings {
   DB: AuthDatabase & MoviesDatabase;
   BUCKET: MovieBucket;
   SESSION_SIGNING_KEY: string;
+  R2_PUBLIC_BASE_URL: string;
+  /** wrangler.jsonc の vars（公開情報）。 */
+  CLOUDFLARE_ZONE_ID?: string;
+  /** secret。未投入の環境（ローカル開発）では purge を諦めて warn だけ出す。 */
+  CLOUDFLARE_PURGE_TOKEN?: string;
+}
+
+/** 削除した動画のキャッシュを落とすための設定を bindings から組む。 */
+function cachePurgeSettings(bindings: DeleteBindings): CachePurgeSettings {
+  return {
+    publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
+    zoneId: bindings.CLOUDFLARE_ZONE_ID ?? '',
+    apiToken: bindings.CLOUDFLARE_PURGE_TOKEN ?? '',
+    source: 'webscreen-beta-worker',
+  };
 }
 
 function invalidRequest(message: string): Response {
@@ -80,6 +96,7 @@ export const DELETE: APIRoute = async ({ request, params }) => {
     await deleteMovie({
       database: bindings.DB,
       bucket: bindings.BUCKET,
+      cachePurge: cachePurgeSettings(bindings),
       userId: result.user.id,
       shortId: params.shortId ?? '',
     });

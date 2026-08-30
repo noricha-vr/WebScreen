@@ -1,6 +1,6 @@
 # 動画配信（R2）の構成
 
-動画の実体は R2 バケット `webscreen-beta` にあり、**2 つの経路で公開されている**。コード側の入力は `web/wrangler.jsonc` の `vars.R2_PUBLIC_BASE_URL` 1 箇所だけで、URL は保存値ではなく毎回そこから組み立てる（`web/src/lib/services/movies.ts` の `publicUrl()`）。
+動画の実体は R2 バケット `webscreen-beta` にあり、**2 つの経路で公開されている**。URL は保存値ではなく毎回 `vars.R2_PUBLIC_BASE_URL` から組み立てる（`web/src/lib/contracts/r2key.ts` の `movieUrl()`）。入力は `web/wrangler.jsonc` の同 var で、保持期間バッチが同じ URL を purge するため `web/cron/wrangler.jsonc` にも同じ値を置いている（下の「削除とキャッシュ」節）。
 
 | 経路 | URL | 用途 | 無効化してよいか |
 |---|---|---|---|
@@ -51,12 +51,31 @@ bunx wrangler r2 bucket cors list webscreen-beta   # 確認
 
 掃除対象バケット名の正本は **`web/cron/wrangler.jsonc` の `r2_buckets`**（現在 `webscreen-beta`）。web-capture 側の書き込み先（Cloud Run の環境変数 `R2_BUCKET`）が**これと一致していることが契約**で、ずれると中間のキャプチャ画像は誰にも消されず増え続ける（気づけるのは請求だけ）。2026-08-30 に `gcloud run services describe web-capture` で一致を確認済み。どちらかを変える時は両方同時に変える。
 
-## 削除とキャッシュの既知の穴
+## 削除とキャッシュ
 
-**動画を削除しても、最大 120 分はキャッシュから配信され続ける。**
+mp4 は Cloudflare の[既定キャッシュ対象](https://developers.cloudflare.com/cache/concepts/default-cache-behavior/)で、200 / 206 の Edge TTL は 120 分（参照日 2026-08-27）。R2 から実体を消しただけでは、その間キャッシュから配信され続ける（r2.dev 経由ではキャッシュされないため、Custom Domain 化で生じた挙動）。
 
-- mp4 は Cloudflare の[既定キャッシュ対象](https://developers.cloudflare.com/cache/concepts/default-cache-behavior/)に含まれ、200 / 206 の Edge TTL は 120 分（参照日 2026-08-27）
-- 削除経路（`services/movies.ts` の `deleteMovie` と `services/retention.ts` の期限切れ削除）はどちらも R2 の `delete` を呼ぶだけで、**キャッシュの purge をしていない**
-- r2.dev 経由ではキャッシュされないため、この挙動は Custom Domain 化で新たに生じたもの
+そのため**動画の削除経路は、R2 の実体を消した直後に公開 URL の purge を投げる**。
 
-URL を知っている人にしか影響しない（そもそも公開 URL である旨はプライバシーポリシーに明記）が、「削除したのに見られる」はユーザーの期待を裏切る。対処は Issue で追跡している。
+| 経路 | 実装 |
+|---|---|
+| 所有者の削除（`DELETE /api/movies/{shortId}/`） | `web/src/lib/services/movies.ts` の `deleteMovie` |
+| 保持期間バッチ（期限切れ・pending 孤児・failed の掃除） | `web/src/lib/services/retention.ts` の各経路 |
+
+`captures/` の掃除（`retention-captures.ts`）は purge しない。中間 PNG は変換が終われば誰も参照せず、キャッシュに残っても動画の削除の意図に反しないため。
+
+purge の実体は `web/src/lib/infra/cloudflare-purge.ts`（Cloudflare の `purge_cache` API）、URL の組み立てと 30 件ずつの分割は `web/src/lib/services/cache-purge.ts`。**公開 URL は `contracts/r2key.ts` の `movieUrl()` で組み立てる**（purge は URL の完全一致でしか効かないため、表示側と別々に組み立てない）。
+
+設定は 2 つ。**どちらかが欠けると purge せず `cache_purge_skipped` を warn するだけで、削除自体は成功する**（ローカル開発はこの状態が正常）。
+
+| 名前 | 置き場所 | 備考 |
+|---|---|---|
+| `CLOUDFLARE_ZONE_ID` | `web/wrangler.jsonc` と `web/cron/wrangler.jsonc` の `vars` | 公開情報。両方に同じ値を置く |
+| `CLOUDFLARE_PURGE_TOKEN` | secret（本体 Worker と cron Worker の両方） | `bunx wrangler secret put CLOUDFLARE_PURGE_TOKEN`（cron は `-c cron/wrangler.jsonc`） |
+
+`R2_PUBLIC_BASE_URL` も cron 側の `vars` に同じ値で置いている（バッチが同じ公開 URL を組み立てるため）。**片方だけ変えると purge が空振りする。**
+
+残る穴と観測方法:
+
+- **purge に失敗した分は最大 120 分残る**。削除自体は完了しているのでリトライせず、自然に切れるのを待つ（`cache_purge_failed` を warn で記録。cron は `cachePurgeRequests` / `cachePurgeFailures` を毎回のログに出し、失敗があれば severity が warn になる）
+- R2 の削除に失敗した動画は purge しない（実体が残っており、purge しても次の取得でキャッシュに戻るため）。次回のバッチが同じ順序でやり直す

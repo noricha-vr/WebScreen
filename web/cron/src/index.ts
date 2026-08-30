@@ -20,6 +20,7 @@ import {
   RETENTION_RUN_NAME,
   type CronRunDatabase,
 } from '../../src/lib/services/cron-health';
+import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
 import { runAlertCron, type AlertEnv } from './alert';
 
 /**
@@ -29,6 +30,11 @@ import { runAlertCron, type AlertEnv } from './alert';
 interface Env extends AlertEnv {
   DB: RetentionDatabase & CronRunDatabase;
   BUCKET: RetentionBucket;
+  /** 動画の配信元。web/wrangler.jsonc の同名 var と同じ値であること（purge の URL に使う）。 */
+  R2_PUBLIC_BASE_URL: string;
+  CLOUDFLARE_ZONE_ID?: string;
+  /** secret。未投入なら purge を諦めて warn だけ出す（掃除は続く）。 */
+  CLOUDFLARE_PURGE_TOKEN?: string;
 }
 
 /** workerd が scheduled ハンドラへ渡すイベント（使うフィールドのみ）。 */
@@ -84,6 +90,16 @@ export default {
   },
 };
 
+/** 削除した動画のキャッシュを落とすための設定を bindings から組む。 */
+function cachePurgeSettings(env: Env): CachePurgeSettings {
+  return {
+    publicBaseUrl: env.R2_PUBLIC_BASE_URL,
+    zoneId: env.CLOUDFLARE_ZONE_ID ?? '',
+    apiToken: env.CLOUDFLARE_PURGE_TOKEN ?? '',
+    source: SOURCE,
+  };
+}
+
 /** 保持期間バッチ本体。成功したら実行記録を残し、件数を 1 行 JSON で出す。 */
 async function runRetentionCron(env: Env, event: ScheduledEvent, cron: string): Promise<void> {
   // Date.now を呼んでよいのはこの層だけ。サービスへは値として渡す。
@@ -94,6 +110,7 @@ async function runRetentionCron(env: Env, event: ScheduledEvent, cron: string): 
       database: env.DB,
       bucket: env.BUCKET,
       now: new Date(event.scheduledTime),
+      cachePurge: cachePurgeSettings(env),
     });
 
     // 死活監視の根拠になる記録。ここが失敗したら成功として扱わない（rethrow に任せる）。
@@ -108,11 +125,15 @@ async function runRetentionCron(env: Env, event: ScheduledEvent, cron: string): 
     // error は回収不能な異常だけに使う。実体だけ消えた行（stranded / missing）は
     // 壊れた URL が残り続けるので error、R2 の削除失敗（deferred）・打ち切り（capped）・
     // 監査の失敗（auditErrors = 検出が働いていない）は次回に回せるので warn。
+    // キャッシュ purge の失敗も warn（削除自体は済んでおり、残っても 120 分で切れる）。
     // 競合で何もしなかった行（skipped）は正常なので info。
     const severity =
       summary.strandedMovies > 0 || summary.missingObjectRows > 0
         ? 'error'
-        : summary.deferredObjectDeletions > 0 || summary.sweepCapped || summary.auditErrors > 0
+        : summary.deferredObjectDeletions > 0 ||
+            summary.sweepCapped ||
+            summary.auditErrors > 0 ||
+            summary.cachePurgeFailures > 0
           ? 'warn'
           : 'info';
     const log =
@@ -128,6 +149,7 @@ async function runRetentionCron(env: Env, event: ScheduledEvent, cron: string): 
       summary.skippedRows > 0 ? ` ${summary.skippedRows} rows skipped this run.` : '';
     const auditErrors =
       summary.auditErrors > 0 ? ` ${summary.auditErrors} audit checks failed.` : '';
+    const purge = ` ${summary.cachePurgeRequests} cache purge requests (${summary.cachePurgeFailures} failed).`;
 
     log(
       JSON.stringify({
@@ -136,7 +158,7 @@ async function runRetentionCron(env: Env, event: ScheduledEvent, cron: string): 
         severity,
         kind: 'event',
         cron,
-        summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures; audited ${summary.checkedReadyRows} ready rows (${summary.missingObjectRows} missing objects).${deferred}${capped}${skipped}${auditErrors}`,
+        summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures; audited ${summary.checkedReadyRows} ready rows (${summary.missingObjectRows} missing objects).${purge}${deferred}${capped}${skipped}${auditErrors}`,
         detail: summary,
         durationMs: Date.now() - startedAt,
       })
