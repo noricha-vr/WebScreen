@@ -107,6 +107,12 @@ class FakeMoviesDatabase implements MoviesDatabase {
       if (!movie || movie.userId !== userId || isPastExpiry(movie.expiresAt, threshold)) {
         return { meta: { changes: 0 } };
       }
+      // 件数の上限も WHERE で評価する。実装が読み取り側だけで判定していれば SQL に
+      // 件数条件が現れないので、この分岐は素通りする（古い実装をそのまま再現する）。
+      if (query.includes('SELECT COUNT(*)')) {
+        const [countUserId, limit] = values.slice(4) as [number, number];
+        if (pinnedCountOf(this, countUserId) >= limit) return { meta: { changes: 0 } };
+      }
       movie.pinned = pinned;
       movie.expiresAt = expiresAt;
       return { meta: { changes: 1 } };
@@ -176,6 +182,13 @@ function pinnedMovies(count: number): TestMovie[] {
   return Array.from({ length: count }, (_unused, index) =>
     movie({ shortId: `pinned${String(index).padStart(6, '0')}`, pinned: 1, expiresAt: null })
   );
+}
+
+/** そのユーザーが現在 pin している件数。上限を超えていないかの検証に使う。 */
+function pinnedCountOf(database: FakeMoviesDatabase, userId: number): number {
+  return [...database.movies.values()].filter(
+    (candidate) => candidate.userId === userId && candidate.pinned === 1
+  ).length;
 }
 
 describe('listHistory', () => {
@@ -353,6 +366,46 @@ describe('togglePin', () => {
     await expect(
       togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date(expiresAt) })
     ).rejects.toMatchObject({ status: 410 });
+  });
+
+  it('判定の後・書き込みの前に他の pin が確定したら上限を超えさせない', async () => {
+    // 件数を読んでから書き込むまでの間に、別のリクエストが最後の枠を埋める順序。
+    // 事前判定だけだと 11 件目が通り、1 ユーザーが上限を超えて 1 年間占有できる（Issue #85）
+    const now = new Date('2026-08-10T00:00:00.000Z');
+    const database = new FakeMoviesDatabase([
+      ...pinnedMovies(MAX_PINNED_MOVIES - 1),
+      movie({ shortId: 'other0000001' }),
+      movie(),
+    ]);
+    database.onBeforePinUpdate = () => {
+      const concurrent = database.movies.get('other0000001');
+      if (concurrent) concurrent.pinned = 1;
+    };
+
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
+    ).rejects.toMatchObject({ status: 409, errorCode: ERROR_CODES.invalidRequest });
+    expect(database.movies.get(SHORT_ID)?.pinned).toBe(0);
+    expect(pinnedCountOf(database, USER_ID)).toBe(MAX_PINNED_MOVIES);
+  });
+
+  it('残り 2 枠へ 3 本を並行させても 2 本しか通らない', async () => {
+    const now = new Date('2026-08-10T00:00:00.000Z');
+    const shortIds = ['race00000001', 'race00000002', 'race00000003'];
+    const database = new FakeMoviesDatabase([
+      ...pinnedMovies(MAX_PINNED_MOVIES - 2),
+      ...shortIds.map((shortId) => movie({ shortId })),
+    ]);
+
+    const results = await Promise.allSettled(
+      shortIds.map((shortId) => togglePin({ database, userId: USER_ID, shortId, now }))
+    );
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2);
+    const rejected = results.filter((result) => result.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ status: 409 });
+    expect(pinnedCountOf(database, USER_ID)).toBe(MAX_PINNED_MOVIES);
   });
 
   it('9 件なら 10 件目を pin できる', async () => {
