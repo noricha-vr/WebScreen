@@ -20,9 +20,9 @@
     "link": "See what changed"
   },
   "hero": {
-    "title": "Drag and drop a file, get a video URL for VRChat.",
-    "lead": "Upload a PDF or image and WebScreen returns an MP4 URL that plays in VRChat video players.",
-    "cta": "Sign in with Discord to upload",
+    "title": "Turn what you want to show into a video URL for VRChat",
+    "lead": "Convert web pages, photos and slides (PDF) into an MP4 URL that plays in VRChat video players. Drag and drop your files.",
+    "cta": "Sign in with Discord to convert",
     "ctaNote": "A Discord account is all you need. There is no password to create."
   },
   "spec": {
