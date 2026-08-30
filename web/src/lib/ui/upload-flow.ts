@@ -103,6 +103,8 @@ export interface UploadState {
   shortId: string | null;
   errorCode: UploadErrorCode | null;
   errorTarget: UploadErrorTarget | null;
+  /** `pageTooLong` のときだけ入る推定画面数。文言へ差し込むためだけに持つ。 */
+  errorEstimatedImages: number | null;
 }
 
 export const INITIAL_UPLOAD_STATE: UploadState = {
@@ -117,6 +119,7 @@ export const INITIAL_UPLOAD_STATE: UploadState = {
   shortId: null,
   errorCode: null,
   errorTarget: null,
+  errorEstimatedImages: null,
 };
 
 export type UploadEvent =
@@ -127,7 +130,12 @@ export type UploadEvent =
   | { type: 'stageRatio'; stage: ProgressStage; ratio: number }
   | { type: 'converted' }
   | { type: 'uploaded'; publicUrl: string; shortId: string }
-  | { type: 'failed'; errorCode: UploadErrorCode; target?: UploadErrorTarget }
+  | {
+      type: 'failed';
+      errorCode: UploadErrorCode;
+      target?: UploadErrorTarget;
+      estimatedImages?: number | null;
+    }
   | { type: 'reset' };
 
 export function detectUploadKind(filename: string): UploadKind | null {
@@ -178,7 +186,8 @@ function advanceStage(
 function failure(
   state: UploadState,
   errorCode: UploadErrorCode,
-  errorTarget: UploadErrorTarget = 'file'
+  errorTarget: UploadErrorTarget = 'file',
+  errorEstimatedImages: number | null = null
 ): UploadState {
   return {
     ...state,
@@ -191,6 +200,7 @@ function failure(
     shortId: null,
     errorCode,
     errorTarget,
+    errorEstimatedImages,
   };
 }
 
@@ -260,7 +270,7 @@ export function reduceUpload(state: UploadState, event: UploadEvent): UploadStat
     }
 
     case 'failed':
-      return failure(state, event.errorCode, event.target);
+      return failure(state, event.errorCode, event.target, event.estimatedImages ?? null);
 
     case 'reset':
       return INITIAL_UPLOAD_STATE;

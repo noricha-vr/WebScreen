@@ -1,3 +1,4 @@
+import { MAX_CAPTURE_IMAGES } from '../contracts/api';
 import type { ProgressStage, UploadErrorCode, UploadState } from './upload-flow';
 
 /** 同じ表示項目が状態別ブロックに複数あるため、書き換えは全件に適用する。 */
@@ -5,7 +6,9 @@ function elements<T extends HTMLElement>(root: HTMLElement, selector: string): T
   return [...root.querySelectorAll<T>(selector)];
 }
 
-function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
+function errorMessage(panel: HTMLElement, code: UploadErrorCode, estimatedImages: number | null): string {
+  if (code === 'pageTooLong') return pageTooLongMessage(panel, estimatedImages);
+
   const messages: Record<UploadErrorCode, string | undefined> = {
     tooLarge: panel.dataset['msgTooLarge'],
     unsupported: panel.dataset['msgUnsupported'],
@@ -24,6 +27,23 @@ function errorMessage(panel: HTMLElement, code: UploadErrorCode): string {
     apiTimeout: panel.dataset['msgApiTimeout'],
   };
   return messages[code] ?? '';
+}
+
+/**
+ * 「ページが長すぎる」文言を組み立てる。
+ *
+ * 上限（`{max}`）は契約定数から差し込むので辞書に数値を書かない。推定画面数が分かった時だけ
+ * 「約 N 画面」を含む別の文言へ差し替える（1 つの文言を条件付きで削るより、辞書を読めば
+ * 出る文が分かる方が翻訳しやすい）。
+ */
+function pageTooLongMessage(panel: HTMLElement, estimatedImages: number | null): string {
+  const template =
+    (estimatedImages === null ? undefined : panel.dataset['msgPageTooLongEstimated']) ??
+    panel.dataset['msgPageTooLong'] ??
+    '';
+  return template
+    .replaceAll('{estimated}', String(estimatedImages ?? ''))
+    .replaceAll('{max}', String(MAX_CAPTURE_IMAGES));
 }
 
 /** 段階名は辞書から data 属性で渡ってくる（文言をコードに直書きしないため）。 */
@@ -62,7 +82,9 @@ export function renderConvertPanel(panel: HTMLElement, state: UploadState): void
   const count = state.current !== null && state.total !== null ? `${state.current}/${state.total}` : '';
   for (const node of elements(panel, '[data-progress-count]')) node.textContent = count;
 
-  const message = state.errorCode ? errorMessage(panel, state.errorCode) : '';
+  const message = state.errorCode
+    ? errorMessage(panel, state.errorCode, state.errorEstimatedImages)
+    : '';
   for (const node of elements(panel, '[data-file-error-message]')) node.textContent = message;
   for (const node of elements(panel, '[data-url-error-message]')) node.textContent = message;
   for (const node of elements(panel, '[data-file-error]')) {

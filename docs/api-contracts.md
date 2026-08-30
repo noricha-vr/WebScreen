@@ -72,6 +72,16 @@ Worker とは別サービス（ヘッドレスブラウザを持つ実行環境�
 | `capture_limit_exceeded` | `PAGE_TOO_LONG` | 400 |
 | `capture_timeout` | `CAPTURE_TIMEOUT` | 504 |
 
+`capture_limit_exceeded` だけは、下流の応答に `estimatedImages`（ページ全体に必要と推定した画面数）が
+付いていれば、検証済みの数値 1 つだけを `PAGE_TOO_LONG` の応答へ転送する（`message` は転送しない。
+検証は `contracts/api.ts` の `parseEstimatedImages` が正本で、整数でない・範囲外の値は落とす）。
+上限そのものは payload に載せない。両側が `MAX_CAPTURE_IMAGES` を持っているので、表示側が組み合わせる。
+
+1 ページの上限枚数（`MAX_CAPTURE_IMAGES` = 150）は WebScreen と web-capture の共有契約。
+web-capture は撮影を始める前にページ全体の高さを 1 回測り、`ceil(ページ高 / ビューポート高)` が
+上限を超えていれば 1 枚も撮らずに `capture_limit_exceeded` を返す（値の根拠は
+[encode-contract.md](encode-contract.md)「1 ページの上限枚数」）。
+
 Worker 自身のタイムアウト（上流への 150 秒 abort）も `CAPTURE_TIMEOUT` / 504 で返す。
 上の表の組み合わせに一致しないもの（未知コード、JSON でない応答、401 / 429 / その他の 5xx）は
 すべて `CAPTURE_FAILED` として扱う。

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 import ja from '../../src/i18n/ja.json';
+import { MAX_CAPTURE_IMAGES } from '../../src/lib/contracts/api';
 import { renderConvertPanel } from '../../src/lib/ui/convert-panel-view';
 import {
   INITIAL_UPLOAD_STATE,
@@ -36,6 +37,7 @@ class FakePanel {
     msgUnsupported: ja.convert.errorUnsupported,
     msgTooManyPages: ja.convert.errorTooManyPages,
     msgPageTooLong: ja.convert.errorPageTooLong,
+    msgPageTooLongEstimated: ja.convert.errorPageTooLongEstimated,
     msgCaptureTimeout: ja.convert.errorCaptureTimeout,
     msgSessionExpired: ja.actions.sessionExpired,
     msgFailed: ja.convert.errorFailed,
@@ -117,6 +119,34 @@ describe('エラー表示', () => {
     expect(panel.text('[data-file-error-message]').length).toBeGreaterThan(0);
     expect(panel.node('[data-file-error]').hidden).toBe(false);
   });
+
+  test('ページが長すぎる時は推定画面数と上限を文言へ入れる', () => {
+    const panel = render({
+      ...INITIAL_UPLOAD_STATE,
+      phase: 'error',
+      errorCode: 'pageTooLong',
+      errorTarget: 'url',
+      errorEstimatedImages: 402,
+    });
+
+    const message = panel.text('[data-url-error-message]');
+    expect(message).toContain('402');
+    expect(message).toContain(String(MAX_CAPTURE_IMAGES));
+    expect(message).not.toContain('{');
+  });
+
+  test('推定画面数が無い時は上限だけを伝える', () => {
+    const panel = render({
+      ...INITIAL_UPLOAD_STATE,
+      phase: 'error',
+      errorCode: 'pageTooLong',
+      errorTarget: 'url',
+    });
+
+    const message = panel.text('[data-url-error-message]');
+    expect(message).toContain(String(MAX_CAPTURE_IMAGES));
+    expect(message).not.toContain('{');
+  });
 });
 
 describe('画面テンプレート', () => {
@@ -128,6 +158,12 @@ describe('画面テンプレート', () => {
     const attribute = `data-msg-${code.replace(/[A-Z]/g, (letter: string) => `-${letter.toLowerCase()}`)}=`;
 
     expect(template).toContain(attribute);
+  });
+
+  // エラーコードと 1 対 1 でない文言なので上の総当たりに乗らない。落ちると推定画面数が
+  // 消えて「上限だけ」の文言へ静かに退化する。
+  test('推定画面数入りの文言を渡す data 属性がある', () => {
+    expect(template).toContain('data-msg-page-too-long-estimated=');
   });
 
   test('中止ボタンを置いている', () => {

@@ -25,6 +25,20 @@ export type MovieStatus = (typeof MOVIE_STATUSES)[number];
 /** ファイル名の上限。R2 のメタデータと D1 の行を無闇に太らせないための実務値。 */
 export const MAX_FILENAME_LENGTH = 255;
 
+/**
+ * 1 ページを変換するときに撮ってよいスクリーンショットの総枚数。
+ *
+ * 上限の理由はアップロードのバイト数。`FRAME_RATE = 1` と全キーフレーム（`-g 1 -bf 0`）の
+ * 組み合わせで動画は全フレームが I フレームになり、サイズは枚数にほぼ正比例する
+ * （実測は docs/encode-contract.md「1 ページの上限枚数」）。実測の最悪ケース（文字主体の
+ * ページ）が 262 KB/枚で、`MAX_UPLOAD_BYTES` を割ると 199 枚でちょうど上限に張り付く。
+ * 実測より 1.3 倍重いページでも収まるよう 150 枚を採用する（150 枚 = 約 37.6 MiB）。
+ *
+ * この値は web-capture と共有する契約。web-capture 側は app/models.py に同じ値を持ち、
+ * 撮影を始める前にページの推定枚数と突き合わせて `capture_limit_exceeded` を返す。
+ */
+export const MAX_CAPTURE_IMAGES = 150;
+
 /** web-capture のキャプチャ解像度の許容範囲。VRChat のビデオプレイヤー想定。 */
 export const MIN_CAPTURE_DIMENSION = 320;
 export const MAX_CAPTURE_DIMENSION = 3840;
@@ -61,6 +75,30 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 export interface ErrorResponse {
   errorCode: ErrorCode;
   message: string;
+  /**
+   * `PAGE_TOO_LONG` のときだけ付く、ページ全体に必要と推定した画面数。
+   *
+   * 上限そのものは送らない（`MAX_CAPTURE_IMAGES` が両側の正本なので、payload へ
+   * 載せると値が二重管理になる）。文言への差し込みは表示側が辞書と組み合わせて行う。
+   */
+  estimatedImages?: number;
+}
+
+/** 推定画面数の受理上限。桁数を抑えて表示崩れとログ汚染を防ぐだけの値。 */
+const MAX_ESTIMATED_IMAGES = 100_000;
+
+/**
+ * 上流・API 応答から推定画面数だけを安全に取り出す。
+ *
+ * 表示にしか使わない値なので、整数でない・0 以下・非現実的に大きい値は
+ * 落として無いものとして扱う（本文をそのまま画面へ流さないため）。
+ */
+export function parseEstimatedImages(value: unknown): number | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const estimated = (value as { estimatedImages?: unknown }).estimatedImages;
+  if (typeof estimated !== 'number' || !Number.isSafeInteger(estimated)) return null;
+  if (estimated <= 0 || estimated > MAX_ESTIMATED_IMAGES) return null;
+  return estimated;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +168,13 @@ export interface CaptureResponse {
   totalImages: number;
 }
 
-/** 1 ページあたりに許容する分割取得の回数。無限ループと過大なページの歯止め。 */
+/**
+ * 1 ページあたりに許容する分割取得の回数。無限ループと過大なページの歯止め。
+ *
+ * web-capture は 1 リクエストにつき 100 枚までしか撮らないので、この回数 × 100 が
+ * クライアントの取得可能枚数になる。`MAX_CAPTURE_IMAGES` 以上でなければ、上限内の
+ * ページなのに取り切れずに失敗する。
+ */
 export const MAX_CAPTURE_REQUESTS = 6;
 
 // ---------------------------------------------------------------------------

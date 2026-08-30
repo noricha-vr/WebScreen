@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import { ConversionError, StageTimeoutError } from '../../src/lib/convert';
-import { mountConvertPanel, putMp4, uploadErrorCode, uploadMp4 } from '../../src/lib/ui/convert-panel';
+import {
+  mountConvertPanel,
+  putMp4,
+  uploadErrorCode,
+  uploadErrorEstimatedImages,
+  uploadMp4,
+} from '../../src/lib/ui/convert-panel';
 import { JsonRequestError } from '../../src/lib/ui/request-json';
 
 type Listener = (event: Event) => void;
@@ -313,6 +319,15 @@ describe('uploadErrorCode', () => {
     expect(uploadErrorCode(new JsonRequestError(status as number, errorCode as string))).toBe(
       expected as ReturnType<typeof uploadErrorCode>
     );
+  });
+
+  test('ページが長すぎる時だけ推定画面数を取り出す', () => {
+    const tooLong = new JsonRequestError(400, 'PAGE_TOO_LONG', 402);
+    const timedOut = new JsonRequestError(504, 'CAPTURE_TIMEOUT', 402);
+
+    expect(uploadErrorEstimatedImages(tooLong)).toBe(402);
+    expect(uploadErrorEstimatedImages(timedOut)).toBeNull();
+    expect(uploadErrorEstimatedImages(new Error('boom'))).toBeNull();
   });
 
   test('ブラウザ内のページ数上限は同じ経路で変換する', () => {

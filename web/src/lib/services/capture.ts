@@ -1,5 +1,6 @@
 import {
   ERROR_CODES,
+  parseEstimatedImages,
   type CaptureResponse,
   type ErrorResponse,
   validateCaptureRequest,
@@ -233,7 +234,11 @@ function captureErrorResponse(status: number, body: unknown): Response {
       errorCode: error.errorCode,
       status,
     });
-    return errorResponse(status, error.errorCode, error.message);
+    // 下流の message は返さないが、ページが長すぎる時だけは「何画面あったか」を
+    // 表示したいので、検証済みの数値 1 つだけを転送する。
+    const estimatedImages =
+      error.errorCode === ERROR_CODES.pageTooLong ? parseEstimatedImages(body) : null;
+    return errorResponse(status, error.errorCode, error.message, estimatedImages);
   }
 
   logWorkerFailure({
@@ -263,8 +268,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function errorResponse(status: number, errorCode: ErrorResponse['errorCode'], message: string): Response {
+function errorResponse(
+  status: number,
+  errorCode: ErrorResponse['errorCode'],
+  message: string,
+  estimatedImages: number | null = null
+): Response {
   const body: ErrorResponse = { errorCode, message };
+  if (estimatedImages !== null) body.estimatedImages = estimatedImages;
   return json(body, status);
 }
 
