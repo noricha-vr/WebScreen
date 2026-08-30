@@ -8,6 +8,7 @@ import {
 } from '../contracts/api';
 import { generateShortId, movieKey } from '../contracts/r2key';
 import { createR2PutPresignedUrl, type R2PresignConfig } from '../infra/r2presign';
+import { logWorkerFailure } from '../infra/worker-log';
 import {
   exceedsStorageQuota,
   getUserStorageUsage,
@@ -90,6 +91,14 @@ export async function createPendingUpload(
   }
 
   const shortId = (input.generateId ?? generateShortId)();
+  const key = movieKey(shortId);
+
+  // URL の発行を INSERT より先に行う。逆順だと発行に失敗した時に pending 行だけが残り、
+  // 24 時間の孤児掃除が拾うまで保存容量を食い続ける（利用者からは理由が見えない）。
+  // 先に発行して失敗すれば行を作らずに終わる。行の無い署名 URL は呼び出し元へ返らない
+  // ので PUT されず、R2 にも D1 にも何も残らない。
+  const uploadUrl = await input.createUploadUrl(key);
+
   const expiresAt = new Date(
     (input.now ?? new Date()).getTime() + MOVIE_RETENTION_MS
   ).toISOString();
@@ -100,10 +109,9 @@ export async function createPendingUpload(
     .bind(shortId, input.userId, input.request.filename, input.request.sizeBytes, expiresAt)
     .run();
 
-  const key = movieKey(shortId);
   return {
     shortId,
-    uploadUrl: await input.createUploadUrl(key),
+    uploadUrl,
     publicUrl: createPublicUrl(input.publicBaseUrl, key),
   };
 }
@@ -140,13 +148,9 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
     object.size
   );
   if (exceedsPerFileLimit || exceedsDeclaredSizeLimit || exceedsUserLimit) {
-    await input.bucket.delete(key);
-    await input.database
-      .prepare(
-        "UPDATE movies SET status = 'failed' WHERE short_id = ? AND user_id = ? AND status = 'pending'"
-      )
-      .bind(input.shortId, input.userId)
-      .run();
+    // 確保に負けた行は、この呼び出しが上限超過として扱ってよい対象ではない。
+    // 413 を返し続けると既に ready の行へ誤った理由を返すため、最終状態から引き直す。
+    if (!(await claimOversizedUpload(input, key))) return resolveCommitConflict(input);
     throw new UploadError(
       413,
       ERROR_CODES.payloadTooLarge,
@@ -166,6 +170,48 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
   if (updated.meta.changes === 0) return resolveCommitConflict(input);
 
   return toCommitResponse({ ...movie, size_bytes: object.size, status: 'ready' }, input.publicBaseUrl);
+}
+
+/**
+ * 上限を超えた動画の予約を failed へ確保し、実体を消す。確保できたら true を返す。
+ *
+ * 保持期間バッチと同じ確保方式（条件付き UPDATE → R2）にする。R2 を先に消すと、
+ * 読んでから書くまでの間に別の書き手が同じ行を確定させた時、実体だけが消える。
+ * 確保に負けた（0 件）行はこの呼び出しの持ち物ではないので R2 に触らない。
+ *
+ * 実体の削除に失敗しても 500 にはしない。呼び出し元へ返すべき理由は上限超過であって
+ * R2 の障害ではなく、failed のまま残った行は failed の掃除（services/retention.ts）が
+ * 同じ順序（R2 → D1）で回収し直すため。どちらの分岐も理由をログに残す。
+ */
+async function claimOversizedUpload(input: CommitUploadInput, key: string): Promise<boolean> {
+  const claim = await input.database
+    .prepare(
+      "UPDATE movies SET status = 'failed' WHERE short_id = ? AND user_id = ? AND status = 'pending'"
+    )
+    .bind(input.shortId, input.userId)
+    .run();
+
+  if (claim.meta.changes === 0) {
+    logWorkerFailure({
+      level: 'warn',
+      event: 'upload_commit_oversize_claim_missed',
+      errorCode: ERROR_CODES.payloadTooLarge,
+      status: 413,
+    });
+    return false;
+  }
+
+  try {
+    await input.bucket.delete(key);
+  } catch {
+    logWorkerFailure({
+      level: 'warn',
+      event: 'upload_commit_oversize_object_delete_failed',
+      errorCode: ERROR_CODES.payloadTooLarge,
+      status: 413,
+    });
+  }
+  return true;
 }
 
 /**

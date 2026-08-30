@@ -58,8 +58,10 @@ paths = ["web/cron/src"]
 may_depend_on = ["services", "contracts"]
 max_file_loc = 200
 
+# テストは検査対象を直接 import する層。cron を含めるのは、保持期間バッチの
+# 構造化ログ（件数の出し方）を workerd 無しで検証するため。
 [modules.tests]
 paths = ["web/tests", "web/e2e"]
-may_depend_on = ["contracts", "infra", "services", "entrypoints"]
+may_depend_on = ["contracts", "infra", "services", "entrypoints", "cron"]
 max_file_loc = 500
 max_public_symbols = 0

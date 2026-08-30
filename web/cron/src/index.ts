@@ -41,12 +41,14 @@ export default {
         now: new Date(event.scheduledTime),
       });
 
-      // error は回収不能な異常だけに使う。実体だけ消えた行（stranded）は壊れた URL が
-      // 残り続けるので error、R2 の削除失敗（deferred）は行が残っていて次回に回収できるので warn。
+      // error は回収不能な異常だけに使う。実体だけ消えた行（stranded / missing）は
+      // 壊れた URL が残り続けるので error、R2 の削除失敗（deferred）・打ち切り（capped）・
+      // 監査の失敗（auditErrors = 検出が働いていない）は次回に回せるので warn。
+      // 競合で何もしなかった行（skipped）は正常なので info。
       const severity =
-        summary.strandedMovies > 0
+        summary.strandedMovies > 0 || summary.missingObjectRows > 0
           ? 'error'
-          : summary.deferredObjectDeletions > 0 || summary.sweepCapped
+          : summary.deferredObjectDeletions > 0 || summary.sweepCapped || summary.auditErrors > 0
             ? 'warn'
             : 'info';
       const log =
@@ -55,7 +57,13 @@ export default {
         summary.deferredObjectDeletions > 0
           ? ` ${summary.deferredObjectDeletions} object deletions deferred to the next run.`
           : '';
-      const capped = summary.sweepCapped ? ' Movie sweep hit the per-run cap; the rest waits for the next run.' : '';
+      const capped = summary.sweepCapped
+        ? ' A sweep hit a per-run cap; the rest waits for the next run.'
+        : '';
+      const skipped =
+        summary.skippedRows > 0 ? ` ${summary.skippedRows} rows skipped this run.` : '';
+      const auditErrors =
+        summary.auditErrors > 0 ? ` ${summary.auditErrors} audit checks failed.` : '';
 
       log(
         JSON.stringify({
@@ -64,7 +72,7 @@ export default {
           severity,
           kind: 'event',
           cron: event.cron,
-          summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures.${deferred}${capped}`,
+          summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows, ${summary.deletedCaptures} captures; audited ${summary.checkedReadyRows} ready rows (${summary.missingObjectRows} missing objects).${deferred}${capped}${skipped}${auditErrors}`,
           detail: summary,
           durationMs: Date.now() - startedAt,
         })

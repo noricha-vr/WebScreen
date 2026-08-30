@@ -15,6 +15,7 @@ import {
   type RenameMovieResponse,
 } from '../contracts/api';
 import { isShortId, movieKey } from '../contracts/r2key';
+import { logWorkerFailure } from '../infra/worker-log';
 import {
   MAX_PINNED_MOVIES,
   MOVIE_RETENTION_MS,
@@ -282,11 +283,25 @@ export async function deleteMovie(
 ): Promise<void> {
   await findOwnedMovie(input.database, input.userId, input.shortId);
 
+  // R2 → D1 の順にするのは、途中で失敗した時に残る side が検出可能な方だから。
+  // D1 を先に消すと、残った実体は行から辿れず誰も気づけない（R2 の孤児になる）。
+  // R2 を先に消せば、残るのは実体の無い ready 行で、保持期間バッチの監査
+  // （services/retention-audit.ts）が拾える。自動では直せないので、その場でも
+  // 気づける印としてログに残してから呼び出し元へ返す。
   await input.bucket.delete(movieKey(input.shortId));
-  await input.database
-    .prepare('DELETE FROM movies WHERE short_id = ? AND user_id = ?')
-    .bind(input.shortId, input.userId)
-    .run();
+  try {
+    await input.database
+      .prepare('DELETE FROM movies WHERE short_id = ? AND user_id = ?')
+      .bind(input.shortId, input.userId)
+      .run();
+  } catch (error) {
+    logWorkerFailure({
+      event: 'movie_delete_row_stranded',
+      errorCode: ERROR_CODES.internalError,
+      status: 500,
+    });
+    throw error;
+  }
 }
 
 /**
