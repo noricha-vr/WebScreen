@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import {
   createSessionPayload,
@@ -28,8 +28,24 @@ async function sessionCookieFor(userId: number): Promise<string> {
   return signSession(createSessionPayload(userId, NOW), signingKey);
 }
 
+const originalConsoleError = console.error;
+const errors: string[] = [];
+
+/** logWorkerFailure は console.error の 1 行 JSON なので、そこから event を読む。 */
+function captureWorkerLog(): void {
+  errors.length = 0;
+  console.error = (entry: unknown) => {
+    errors.push(String(entry));
+  };
+}
+
+afterEach(() => {
+  console.error = originalConsoleError;
+});
+
 describe('resolvePreviewOwner', () => {
   test('Cookie が無ければ D1 にも鍵にも触らず非所有者にする', async () => {
+    captureWorkerLog();
     const db = new ThrowingUsersDatabase();
 
     const result = await resolvePreviewOwner(new Request('https://example.test/AbCdEf123456/'), {
@@ -41,6 +57,7 @@ describe('resolvePreviewOwner', () => {
 
     expect(result).toEqual({ ok: true, isOwner: false });
     expect(db.prepareCount).toBe(0);
+    expect(errors).toHaveLength(0);
   });
 
   test('所有者のセッションなら所有者と判定する', async () => {
@@ -91,6 +108,7 @@ describe('resolvePreviewOwner', () => {
   });
 
   test('署名鍵が壊れていれば失敗として返す', async () => {
+    captureWorkerLog();
     const db = new FakeUsersDatabase(null);
 
     const result = await resolvePreviewOwner(requestWithCookie(await sessionCookieFor(OWNER_ID)), {
@@ -101,9 +119,12 @@ describe('resolvePreviewOwner', () => {
     });
 
     expect(result).toEqual({ ok: false });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('preview_owner_check_failed');
   });
 
   test('D1 が落ちていれば失敗として返す（他人の動画にしない）', async () => {
+    captureWorkerLog();
     const db = new ThrowingUsersDatabase();
 
     const result = await resolvePreviewOwner(requestWithCookie(await sessionCookieFor(OWNER_ID)), {
@@ -114,6 +135,8 @@ describe('resolvePreviewOwner', () => {
     });
 
     expect(result).toEqual({ ok: false });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('preview_owner_check_failed');
   });
 });
 

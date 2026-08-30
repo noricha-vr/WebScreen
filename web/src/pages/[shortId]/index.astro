@@ -6,8 +6,6 @@ import MoviePreview from '../../components/MoviePreview.astro';
 import PreviewUnavailable from '../../components/PreviewUnavailable.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { resolveLocale, useTranslations } from '../../i18n';
-import { ERROR_CODES } from '../../lib/contracts/api';
-import { logWorkerFailure } from '../../lib/infra/worker-log';
 import { resolvePreviewOwner, type AuthDatabase } from '../../lib/services/auth';
 import { findPublicMovie, type MoviesDatabase } from '../../lib/services/movies';
 
@@ -49,12 +47,7 @@ const ownership =
 
 if (!ownership.ok) {
   // 認証基盤の異常。他人の動画として 200 を返すと、所有者が操作 UI を失ったまま
-  // 誰も異常に気づけないので 503 に倒して記録する。
-  logWorkerFailure({
-    event: 'preview_owner_check_failed',
-    errorCode: ERROR_CODES.internalError,
-    status: 503,
-  });
+  // 誰も異常に気づけない（記録は resolvePreviewOwner が出す）。
   Astro.response.status = 503;
 } else if (movie === null) {
   Astro.response.status = 404;

@@ -12,6 +12,7 @@ import {
   signSession,
   verifySession,
 } from '../contracts/session';
+import { logWorkerFailure } from '../infra/worker-log';
 import {
   DiscordApiError,
   createDiscordAuthorizeUrl,
@@ -185,6 +186,11 @@ export async function resolvePreviewOwner(
     });
     return { ok: true, isOwner: result.ok && result.user.id === deps.ownerId };
   } catch {
+    logWorkerFailure({
+      event: 'preview_owner_check_failed',
+      errorCode: ERROR_CODES.internalError,
+      status: 503,
+    });
     return { ok: false };
   }
 }
