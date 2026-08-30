@@ -4,6 +4,10 @@
  * 動画化が終われば不要になる R2 だけの掃除で、D1 の行とは対応しない
  * （retention.ts の movies の掃除と違い、片落ちの不整合が起きない）。
  * 必要な操作面もこの層で完結するため、独立したモジュールに置く。
+ *
+ * captures/ を消すのはこの cron だけで、R2 の lifecycle rule は使っていない
+ * （書き込むのは別リポの web-capture）。対象バケット名の正本は web/cron/wrangler.jsonc の
+ * r2_buckets で、web-capture の書き込み先と一致させる契約（docs/r2-delivery.md）。
  */
 
 /** 掃除が見るオブジェクト（キーとアップロード時刻だけ）。 */
