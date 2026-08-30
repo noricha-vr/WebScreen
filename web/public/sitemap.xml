@@ -38,6 +38,20 @@
         <priority>0.8</priority>
     </url>
     <url>
+        <loc>https://web-screen.net/ja/video-player/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/video-player/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/video-player/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/en/video-player/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/video-player/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/video-player/"/>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
         <loc>https://web-screen.net/ja/screen-share/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/screen-share/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/screen-share/"/>

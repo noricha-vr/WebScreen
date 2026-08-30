@@ -48,13 +48,15 @@ test('og.png が宣言どおりの実寸で配信される', async ({ request })
 });
 
 test.describe('用途別ページのメタ情報', () => {
-  /** sitemap に載せた用途別ページ（ja / en）。パンくずと description を持つのはこの 8 本だけ。 */
+  /** sitemap に載せた用途別ページ（ja / en）。パンくずと description を持つのはこの 10 本だけ。 */
   const USE_CASE_PATHS = [
     '/ja/web/',
+    '/ja/video-player/',
     '/ja/screen-share/',
     '/ja/image/',
     '/ja/pdf/',
     '/en/web/',
+    '/en/video-player/',
     '/en/screen-share/',
     '/en/image/',
     '/en/pdf/',
