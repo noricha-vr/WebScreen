@@ -38,6 +38,8 @@ class FakeMoviesDatabase implements MoviesDatabase {
   now = new Date('2026-08-30T00:00:00.000Z');
   /** pin の UPDATE 直前に走るフック。期限をまたぐ競合の再現に使う。 */
   onBeforePinUpdate: (() => void) | undefined;
+  /** pin の UPDATE 直後に走るフック。0 件の理由を引き直す間の競合の再現に使う。 */
+  onAfterPinUpdate: (() => void) | undefined;
 
   constructor(movies: TestMovie[] = []) {
     for (const movie of movies) this.movies.set(movie.shortId, { ...movie });
@@ -54,6 +56,13 @@ class FakeMoviesDatabase implements MoviesDatabase {
   }
 
   private first<T>(query: string, values: unknown[]): T | null {
+    if (query.includes('AS expired')) {
+      const [shortId, userId] = values as [string, number];
+      const movie = this.movies.get(shortId);
+      if (!movie || movie.userId !== userId) return null;
+      return { expired: isPastExpiry(movie.expiresAt, this.now.toISOString()) ? 1 : 0 } as T;
+    }
+
     if (query.includes('COUNT(*)')) {
       const userId = values[0] as number;
       const total = [...this.movies.values()].filter(
@@ -105,16 +114,21 @@ class FakeMoviesDatabase implements MoviesDatabase {
         ? this.now.toISOString()
         : ((values[4] as string | undefined) ?? this.now.toISOString());
       if (!movie || movie.userId !== userId || isPastExpiry(movie.expiresAt, threshold)) {
+        this.onAfterPinUpdate?.();
         return { meta: { changes: 0 } };
       }
       // 件数の上限も WHERE で評価する。実装が読み取り側だけで判定していれば SQL に
       // 件数条件が現れないので、この分岐は素通りする（古い実装をそのまま再現する）。
       if (query.includes('SELECT COUNT(*)')) {
         const [countUserId, limit] = values.slice(4) as [number, number];
-        if (pinnedCountOf(this, countUserId) >= limit) return { meta: { changes: 0 } };
+        if (pinnedCountOf(this, countUserId) >= limit) {
+          this.onAfterPinUpdate?.();
+          return { meta: { changes: 0 } };
+        }
       }
       movie.pinned = pinned;
       movie.expiresAt = expiresAt;
+      this.onAfterPinUpdate?.();
       return { meta: { changes: 1 } };
     }
 
@@ -406,6 +420,50 @@ describe('togglePin', () => {
     expect(rejected).toHaveLength(1);
     expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ status: 409 });
     expect(pinnedCountOf(database, USER_ID)).toBe(MAX_PINNED_MOVIES);
+  });
+
+  it('上限で弾いた直後に枠が空いても 409 のまま返す', async () => {
+    // 0 件の理由を件数の再集計で決めると、弾かれた直後の解除で 9 件に見えて 410 に化ける。
+    // 呼び出し側（ui/preview-actions.ts）は 409 と 410 で別の文言を出すので誤案内になる。
+    const now = new Date('2026-08-10T00:00:00.000Z');
+    const database = new FakeMoviesDatabase([
+      ...pinnedMovies(MAX_PINNED_MOVIES - 1),
+      movie({ shortId: 'other0000001' }),
+      movie(),
+    ]);
+    database.onBeforePinUpdate = () => {
+      const concurrent = database.movies.get('other0000001');
+      if (concurrent) concurrent.pinned = 1;
+    };
+    database.onAfterPinUpdate = () => {
+      const released = database.movies.get('pinned000000');
+      if (released) released.pinned = 0;
+    };
+
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
+    ).rejects.toMatchObject({ status: 409, errorCode: ERROR_CODES.invalidRequest });
+  });
+
+  it('期限切れと上限到達が重なったら期限切れ（410）を優先する', async () => {
+    // 理由の判定にリクエスト開始時の now を使うと、書き込みの直前に過ぎた期限を見落として
+    // 409 を返す。期限切れは終端の状態なので、D1 の時刻で判定して 410 を優先する。
+    const now = new Date('2026-09-01T00:00:00.000Z');
+    const database = new FakeMoviesDatabase([
+      ...pinnedMovies(MAX_PINNED_MOVIES - 1),
+      movie({ shortId: 'other0000001', expiresAt: null }),
+      movie({ expiresAt: '2026-09-01T00:00:10.000Z' }),
+    ]);
+    database.now = now;
+    database.onBeforePinUpdate = () => {
+      const concurrent = database.movies.get('other0000001');
+      if (concurrent) concurrent.pinned = 1;
+      database.now = new Date('2026-09-01T00:00:20.000Z');
+    };
+
+    await expect(
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now })
+    ).rejects.toMatchObject({ status: 410, errorCode: ERROR_CODES.expired });
   });
 
   it('9 件なら 10 件目を pin できる', async () => {
