@@ -79,6 +79,11 @@ interface CountRow {
   total: number | null;
 }
 
+interface ExpiryRow {
+  /** SQLite の真偽値。1 = 保管期限を過ぎている。 */
+  expired: number;
+}
+
 export interface ListHistoryInput {
   database: MoviesDatabase;
   userId: number;
@@ -127,9 +132,10 @@ export async function listHistory(input: ListHistoryInput): Promise<HistoryRespo
  * 実体だけが消えた行が残る（services/retention.ts の deleteExpiredMovies）。
  * 期限切れの動画は毎時のバッチでどのみち消えるので、延命の余地を残さない。
  *
- * 判定は 2 段構え。読んだ値での事前判定は理由（410）を上限超過（409）より先に返すためで、
- * 競合を防ぐのは UPDATE の WHERE に入れた期限条件の方（D1 の実行時刻で評価する）。
- * 事前判定だけでは、判定から書き込みまでの間に期限をまたぐ経路が残る。
+ * 判定は 2 段構え。読んだ値での事前判定は理由（期限切れの 410）を上限超過（409）より先に
+ * 返すためで、競合を防ぐのは UPDATE の WHERE に入れた期限と件数の条件の方（どちらも D1 が
+ * 実行時に評価する）。事前判定だけでは、判定から書き込みまでの間に期限をまたぐ経路と、
+ * 別のリクエストが最後の pin 枠を埋める経路が残る。
  */
 export async function togglePin(
   input: MovieActionInput & { now?: Date }
@@ -149,13 +155,7 @@ export async function togglePin(
 
   if (nextPinned) {
     const pinnedCount = await countPinnedMovies(input.database, input.userId);
-    if (pinnedCount >= MAX_PINNED_MOVIES) {
-      throw new MovieActionError(
-        409,
-        ERROR_CODES.invalidRequest,
-        `ピン留めできるのは ${MAX_PINNED_MOVIES} 件までです`
-      );
-    }
+    if (pinnedCount >= MAX_PINNED_MOVIES) throw pinLimitExceeded();
   }
 
   const expiresAt = nextPinned
@@ -166,17 +166,28 @@ export async function togglePin(
   // now を渡すと、件数の問い合わせなどを挟む間に期限をまたいでも更新が通ってしまう。
   // 比較を datetime() で行うのは保持期間バッチと同じ理由（ISO8601 と SQLite の表記が
   // 混在し、素の文字列比較では大小が逆転するため）。
+  //
+  // pin する時は件数の上限も同じ文で数える。事前に読んだ件数で判定すると、数えてから
+  // 書き込むまでの間に別のリクエストが枠を埋めても通り、上限を超えて 1 年間保管できる。
+  // 解除する側は枠を空ける操作なので条件を足さない（上限に達していても解除はできる）。
+  const pinLimitClause = nextPinned
+    ? ' AND (SELECT COUNT(*) FROM movies AS pinned_movies' +
+      ' WHERE pinned_movies.user_id = ? AND pinned_movies.pinned = 1) < ?'
+    : '';
+  const pinLimitBindings = nextPinned ? [input.userId, MAX_PINNED_MOVIES] : [];
+
   const result = await input.database
     .prepare(
       'UPDATE movies SET pinned = ?, expires_at = ? WHERE short_id = ? AND user_id = ?' +
-        " AND (expires_at IS NULL OR datetime(expires_at) >= datetime('now'))"
+        " AND (expires_at IS NULL OR datetime(expires_at) >= datetime('now'))" +
+        pinLimitClause
     )
-    .bind(nextPinned ? 1 : 0, expiresAt, input.shortId, input.userId)
+    .bind(nextPinned ? 1 : 0, expiresAt, input.shortId, input.userId, ...pinLimitBindings)
     .run();
 
-  // 0 件 = 読んだ後に期限が過ぎたか、行そのものが消えた。成功として返すと
-  // 画面には pin 済みと出るのに実体は消える。
-  if (result.meta.changes === 0) await throwPinConflict(input);
+  // 0 件 = 読んだ後に期限が過ぎた・pin の枠が埋まった・行そのものが消えた、のいずれか。
+  // 成功として返すと、画面には pin 済みと出るのに実体は消える（または上限を超える）。
+  if (result.meta.changes === 0) await throwPinConflict({ ...input, nextPinned });
 
   return { shortId: input.shortId, pinned: nextPinned, expiresAt };
 }
@@ -184,13 +195,62 @@ export async function togglePin(
 /**
  * pin の UPDATE が 0 件だった理由を引き直して投げる。
  *
- * 行が消えていれば 404（他の経路の削除・保持期間バッチと競合）、残っていれば 410（期限切れ）。
- * 稀な経路なので、通常時に追加のクエリを増やさないようここでだけ読み直す。
+ * 行が消えていれば 404（他の経路の削除・保持期間バッチと競合）、期限切れなら 410、
+ * 期限内で pin しようとしていたなら 409（WHERE に残る条件は件数しかない）。
+ *
+ * 期限は D1 の時刻で判定し、件数は数え直さない。リクエスト開始時の now で判定すると、
+ * 書き込みの直前に期限が過ぎた行を「期限内」と読んで 409 を返す。件数を数え直すと、
+ * 弾かれた直後に別のリクエストが pin を解除しただけで 410 に化ける。どちらも呼び出し側
+ * （ui/preview-actions.ts）が 409 と 410 で別の文言を出すため、そのまま誤案内になる。
  */
-async function throwPinConflict(input: MovieActionInput): Promise<never> {
-  // 行が消えていればここで 404 になる。残っているなら、WHERE で外れた条件は期限しかない。
-  await findOwnedMovie(input.database, input.userId, input.shortId);
+async function throwPinConflict(
+  input: MovieActionInput & { nextPinned: boolean }
+): Promise<never> {
+  const expiry = await findExpiryState(input.database, input.userId, input.shortId);
+
+  // 行が消えていた（他の経路の削除・保持期間バッチと競合）。
+  if (expiry === null) {
+    throw new MovieActionError(404, ERROR_CODES.notFound, '対象の動画が見つかりません');
+  }
+
+  // 期限切れは終端の状態なので、上限超過より先に理由として返す（事前判定と同じ順序）。
+  if (expiry.expired !== 0) {
+    throw new MovieActionError(410, ERROR_CODES.expired, '保管期限を過ぎた動画は変更できません');
+  }
+
+  if (input.nextPinned) throw pinLimitExceeded();
+
+  // 解除側の WHERE は期限と所有者だけなので、ここへは到達しない想定。
   throw new MovieActionError(410, ERROR_CODES.expired, '保管期限を過ぎた動画は変更できません');
+}
+
+/**
+ * 行の有無と、D1 の時刻での期限切れ判定だけを引く。
+ *
+ * 比較の向きは UPDATE の WHERE（datetime(expires_at) >= datetime('now')）の裏返し。
+ * 同じ式で判定しないと、0 件の理由が期限だったのかどうかを取り違える。
+ */
+async function findExpiryState(
+  database: MoviesDatabase,
+  userId: number,
+  shortId: string
+): Promise<ExpiryRow | null> {
+  return database
+    .prepare(
+      "SELECT (expires_at IS NOT NULL AND datetime(expires_at) < datetime('now')) AS expired" +
+        ' FROM movies WHERE short_id = ? AND user_id = ?'
+    )
+    .bind(shortId, userId)
+    .first<ExpiryRow>();
+}
+
+/** pin の上限に達したことを伝える 409。事前判定と UPDATE の 0 件判定の両方から投げる。 */
+function pinLimitExceeded(): MovieActionError {
+  return new MovieActionError(
+    409,
+    ERROR_CODES.invalidRequest,
+    `ピン留めできるのは ${MAX_PINNED_MOVIES} 件までです`
+  );
 }
 
 /**
