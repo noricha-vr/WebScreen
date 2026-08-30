@@ -48,6 +48,18 @@
   "version_metadata": {
     "binding": "CF_VERSION_METADATA"
   },
+  // クライアント失敗報告（POST /api/client-error/）の受け口を IP 単位で絞る。
+  // この口は無認証なので、壊れたクライアントや悪意ある送信で Worker のログが
+  // 埋まると、本来見たい失敗が読めなくなる（観測のための口が観測を潰す）。
+  // namespace_id は Cloudflare のアカウント内で一意な番号を自分で決める識別子で、
+  // 変えると別のカウンタになる（既存の計測をリセットしたい時以外は動かさない）。
+  "ratelimits": [
+    {
+      "name": "CLIENT_ERROR_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ],
   // Astro のセッション機能が既定で要求する KV。初回 deploy で wrangler が
   // 自動プロビジョニングしたものを、再デプロイ時の取り違えを防ぐため明示している。
   "kv_namespaces": [

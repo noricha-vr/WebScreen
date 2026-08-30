@@ -2,12 +2,16 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { importSigningKey } from '../../lib/contracts/session';
-import { handleClientErrorReport } from '../../lib/services/client-error';
+import {
+  handleClientErrorReport,
+  type ClientErrorRateLimiter,
+} from '../../lib/services/client-error';
 
 export const prerender = false;
 
 interface ClientErrorBindings {
   SESSION_SIGNING_KEY?: string;
+  CLIENT_ERROR_LIMITER?: ClientErrorRateLimiter;
 }
 
 /**
@@ -17,9 +21,14 @@ interface ClientErrorBindings {
  */
 export const POST: APIRoute = async ({ request }) => {
   const bindings = env as unknown as ClientErrorBindings;
+  // 鍵の欠落は設定不備であって報告者の問題ではないので、ここでは userId 無しに
+  // 降格して受ける（欠落自体は me.ts 側のログインが先に壊れて露見する）。
   const signingKey = bindings.SESSION_SIGNING_KEY
     ? await importSigningKey(bindings.SESSION_SIGNING_KEY)
     : undefined;
 
-  return handleClientErrorReport(request, { signingKey });
+  return handleClientErrorReport(request, {
+    signingKey,
+    limiter: bindings.CLIENT_ERROR_LIMITER,
+  });
 };

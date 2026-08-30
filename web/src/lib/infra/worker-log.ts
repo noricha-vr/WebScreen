@@ -99,3 +99,23 @@ export function logClientError({
     })
   );
 }
+
+/**
+ * 失敗報告のレート制限 binding が無いまま動いていることを知らせる。
+ *
+ * 制限なしで通す判断（テレメトリのために報告者を 500 にしない）とセットで、
+ * 本番で binding が外れていても気づけるようにするための 1 行。
+ */
+export function logClientErrorLimiterMissing(): void {
+  console.warn(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      source: SOURCE,
+      severity: 'warn',
+      kind: 'event',
+      level: 'warn',
+      event: 'client_error_limiter_missing',
+      summary: 'CLIENT_ERROR_LIMITER binding is missing; accepting reports without a limit.',
+    })
+  );
+}

@@ -23,15 +23,104 @@ function captureLogs(): { entries: Record<string, unknown>[] } {
 }
 
 function reportRequest(body: string, headers: Record<string, string> = {}): Request {
-  return new Request('http://localhost/api/client-error/', { method: 'POST', body, headers });
+  return new Request('http://localhost/api/client-error/', {
+    method: 'POST',
+    body,
+    headers: { 'content-type': 'application/json', ...headers },
+  });
 }
 
+/** 常に通す / 常に断る Rate Limiting binding の代役。 */
+function limiterStub(success: boolean, keys: string[] = []): { limit: (o: { key: string }) => Promise<{ success: boolean }> } {
+  return {
+    limit: async ({ key }) => {
+      keys.push(key);
+      return { success };
+    },
+  };
+}
+
+const allowAll = { limiter: limiterStub(true) };
+
+describe('POST /api/client-error/ のレート制限', () => {
+  // このファイルで唯一 limiter を渡さないテスト。binding 不在の警告は isolate ごとに
+  // 1 回だけなので、他のテストへ警告が漏れないよう先頭に置く。
+  test('binding が無い環境では警告を 1 回だけ出して受け付ける', async () => {
+    const logs = captureLogs();
+
+    const first = await handleClientErrorReport(
+      reportRequest(JSON.stringify({ stage: 'convert', errorCode: 'failed' }))
+    );
+    const second = await handleClientErrorReport(
+      reportRequest(JSON.stringify({ stage: 'convert', errorCode: 'failed' }))
+    );
+
+    expect([first.status, second.status]).toEqual([204, 204]);
+    const events = logs.entries.map((entry) => entry['event']);
+    expect(events).toEqual(['client_error_limiter_missing', 'client_error', 'client_error']);
+  });
+
+  test('上限を超えたら 429 を返し、本文もログも出さない', async () => {
+    const logs = captureLogs();
+
+    const response = await handleClientErrorReport(
+      reportRequest(JSON.stringify({ stage: 'convert', errorCode: 'failed' })),
+      { limiter: limiterStub(false) }
+    );
+
+    expect(response.status).toBe(429);
+    expect(await response.text()).toBe('');
+    expect(logs.entries).toHaveLength(0);
+  });
+
+  test('接続元 IP を鍵にする（無い経路は 1 つに束ねる）', async () => {
+    const keys: string[] = [];
+    captureLogs();
+
+    await handleClientErrorReport(
+      reportRequest(JSON.stringify({ stage: 'convert', errorCode: 'failed' }), {
+        'cf-connecting-ip': '203.0.113.9',
+      }),
+      { limiter: limiterStub(true, keys) }
+    );
+    await handleClientErrorReport(
+      reportRequest(JSON.stringify({ stage: 'convert', errorCode: 'failed' })),
+      { limiter: limiterStub(true, keys) }
+    );
+
+    expect(keys).toEqual(['203.0.113.9', 'unknown']);
+  });
+});
+
 describe('POST /api/client-error/', () => {
+  test('application/json 以外の Content-Type は 400 で拒否する', async () => {
+    const logs = captureLogs();
+    const body = JSON.stringify({ stage: 'convert', errorCode: 'failed' });
+
+    const plain = await handleClientErrorReport(
+      new Request('http://localhost/api/client-error/', {
+        method: 'POST',
+        body,
+        headers: { 'content-type': 'text/plain;charset=UTF-8' },
+      }),
+      allowAll
+    );
+    const withCharset = await handleClientErrorReport(
+      reportRequest(body, { 'content-type': 'application/json; charset=utf-8' }),
+      allowAll
+    );
+
+    expect(plain.status).toBe(400);
+    expect(withCharset.status).toBe(204);
+    expect(logs.entries).toHaveLength(1);
+  });
+
   test('正しい報告は 204 を返し、client_error として 1 行だけ記録する', async () => {
     const logs = captureLogs();
 
     const response = await handleClientErrorReport(
-      reportRequest(JSON.stringify({ stage: 'capture', errorCode: 'captureTimeout', httpStatus: 504 }))
+      reportRequest(JSON.stringify({ stage: 'capture', errorCode: 'captureTimeout', httpStatus: 504 })),
+      allowAll
     );
 
     expect(response.status).toBe(204);
@@ -51,11 +140,13 @@ describe('POST /api/client-error/', () => {
         method: 'POST',
         body: JSON.stringify({ stage: 'convert', errorCode: 'failed' }),
         headers: {
+          'content-type': 'application/json',
           cookie: 'ws_session=deadbeef',
           'user-agent': 'Mozilla/5.0 (Secret Browser)',
           referer: 'https://example.com/private/page',
         },
-      })
+      }),
+      allowAll
     );
 
     const entry = logs.entries[0] as Record<string, unknown>;
@@ -84,9 +175,9 @@ describe('POST /api/client-error/', () => {
       new Request('http://localhost/api/client-error/', {
         method: 'POST',
         body: JSON.stringify({ stage: 'pin', errorCode: 'failed' }),
-        headers: { cookie },
+        headers: { 'content-type': 'application/json', cookie },
       }),
-      { signingKey: key }
+      { signingKey: key, ...allowAll }
     );
 
     expect(response.status).toBe(204);
@@ -99,7 +190,7 @@ describe('POST /api/client-error/', () => {
 
     const response = await handleClientErrorReport(
       reportRequest(JSON.stringify({ stage: 'history', errorCode: 'failed' })),
-      { signingKey: key }
+      { signingKey: key, ...allowAll }
     );
 
     expect(response.status).toBe(204);
@@ -114,9 +205,9 @@ describe('POST /api/client-error/', () => {
       new Request('http://localhost/api/client-error/', {
         method: 'POST',
         body: JSON.stringify({ stage: 'pin', errorCode: 'failed' }),
-        headers: { cookie: 'ws_session=eyJ1aWQiOjF9.forged' },
+        headers: { 'content-type': 'application/json', cookie: 'ws_session=eyJ1aWQiOjF9.forged' },
       }),
-      { signingKey: key }
+      { signingKey: key, ...allowAll }
     );
 
     expect(logs.entries[0]).not.toHaveProperty('userId');
@@ -128,7 +219,8 @@ describe('POST /api/client-error/', () => {
     const response = await handleClientErrorReport(
       reportRequest(
         JSON.stringify({ stage: 'convert', errorCode: 'failed', stack: 'at /Users/me/secret.pdf' })
-      )
+      ),
+      allowAll
     );
 
     expect(response.status).toBe(400);
@@ -139,7 +231,8 @@ describe('POST /api/client-error/', () => {
     const logs = captureLogs();
 
     const response = await handleClientErrorReport(
-      reportRequest(JSON.stringify({ stage: 'convert', errorCode: 'https://example.com/leak' }))
+      reportRequest(JSON.stringify({ stage: 'convert', errorCode: 'https://example.com/leak' })),
+      allowAll
     );
 
     expect(response.status).toBe(400);
@@ -158,7 +251,7 @@ describe('POST /api/client-error/', () => {
       pad: 'x'.repeat(2000),
     });
 
-    const response = await handleClientErrorReport(reportRequest(oversized));
+    const response = await handleClientErrorReport(reportRequest(oversized), allowAll);
 
     expect(response.status).toBe(400);
     expect(logs.entries).toHaveLength(0);
@@ -172,8 +265,9 @@ describe('POST /api/client-error/', () => {
       new Request('http://localhost/api/client-error/', {
         method: 'POST',
         body: oversized,
-        headers: { 'content-length': '10' },
-      })
+        headers: { 'content-type': 'application/json', 'content-length': '10' },
+      }),
+      allowAll
     );
 
     expect(response.status).toBe(400);
@@ -183,7 +277,7 @@ describe('POST /api/client-error/', () => {
   test('JSON として読めない本文は 400 で拒否する', async () => {
     const logs = captureLogs();
 
-    const response = await handleClientErrorReport(reportRequest('not json'));
+    const response = await handleClientErrorReport(reportRequest('not json'), allowAll);
 
     expect(response.status).toBe(400);
     expect(logs.entries).toHaveLength(0);

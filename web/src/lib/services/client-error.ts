@@ -12,11 +12,18 @@ import {
   validateClientErrorReport,
 } from '../contracts/client-error';
 import { SESSION_COOKIE_NAME, readCookie, verifySession } from '../contracts/session';
-import { logClientError } from '../infra/worker-log';
+import { logClientError, logClientErrorLimiterMissing } from '../infra/worker-log';
+
+/** Workers の Rate Limiting binding のうち、ここで使う分だけを型にする。 */
+export interface ClientErrorRateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
 
 export interface ClientErrorDeps {
   /** あればセッションを検証して userId をログに添える。無ければ guest として記録する。 */
   signingKey?: CryptoKey;
+  /** IP 単位の受け入れ上限。binding が無い環境では制限なしで通す。 */
+  limiter?: ClientErrorRateLimiter;
   nowSeconds?: number;
 }
 
@@ -32,6 +39,19 @@ export async function handleClientErrorReport(
   request: Request,
   deps: ClientErrorDeps = {}
 ): Promise<Response> {
+  // 本文を読む前に絞る。壊れたクライアントの連投でログが埋まると、本来見たい
+  // 失敗が読めなくなる（観測のための口が観測を潰す）。
+  if (!(await withinRateLimit(request, deps.limiter))) {
+    return new Response(null, { status: 429, headers: { 'Cache-Control': 'no-store' } });
+  }
+
+  // 正規の送信は sendBeacon の Blob type / fetch のヘッダーとも application/json。
+  // CORS-safelisted な型（text/plain 等）を弾くことで、preflight の要らない
+  // クロスオリジンの単純 POST でログを注ぎ込まれる経路を塞ぐ。
+  if (!isJsonContentType(request.headers.get('content-type'))) {
+    return rejected('Content-Type は application/json である必要があります');
+  }
+
   const text = await readLimitedText(request, MAX_CLIENT_ERROR_BODY_BYTES);
   if (text === null) return rejected('リクエストボディが大きすぎます');
 
@@ -51,6 +71,41 @@ export async function handleClientErrorReport(
   logClientError({ ...result.value, userId });
 
   return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+}
+
+/** binding 不在を知らせたか。isolate ごとに 1 回だけ出す（毎回出すとログが埋まる）。 */
+let limiterMissingLogged = false;
+
+/**
+ * IP 単位の上限に収まっているか。
+ *
+ * binding が無い環境（古い wrangler dev・ローカル）では通す。テレメトリの都合で
+ * 500 を返すと、失敗を報告しに来たクライアントを二重に失敗させることになるため。
+ * ただし本番で外れていたら気づけないと困るので、warn を 1 回だけ残す。
+ */
+async function withinRateLimit(
+  request: Request,
+  limiter?: ClientErrorRateLimiter
+): Promise<boolean> {
+  if (!limiter) {
+    if (!limiterMissingLogged) {
+      limiterMissingLogged = true;
+      logClientErrorLimiterMissing();
+    }
+    return true;
+  }
+
+  // cf-connecting-ip は Cloudflare が付ける接続元。無い経路（ローカル等）は
+  // 1 つの鍵に束ねる（区別できない相手を個別に許すより、まとめて絞る方が安全）。
+  const { success } = await limiter.limit({
+    key: request.headers.get('cf-connecting-ip') ?? 'unknown',
+  });
+  return success;
+}
+
+/** charset 付き・大文字混じりでも判定できるように、型の先頭だけを見る。 */
+function isJsonContentType(value: string | null): boolean {
+  return value !== null && value.trimStart().toLowerCase().startsWith('application/json');
 }
 
 /**

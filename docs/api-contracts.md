@@ -34,9 +34,14 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
 
 `/api/client-error/` は無認証なので、受け付けるのは allowlist に載る `stage` / `errorCode` /
-`httpStatus` だけで、未知フィールドと 1 KiB 超の本文は 400 で捨てる。送信頻度の上限は
-クライアント側（同じ段 + コードで最大 5 回、送信間隔 1 秒以上）に置く。Worker 側のレート制限は
-持たないので、必要になったら zone の Rate Limiting Rule で `/api/client-error/` を絞る。
+`httpStatus` だけで、未知フィールド・1 KiB 超の本文・`application/json` 以外の Content-Type は
+400 で捨てる。上限は 2 段構え:
+
+- Worker 側: Rate Limiting binding `CLIENT_ERROR_LIMITER` で 30 回 / 分 / IP。超過は 429（本文なし）。
+  binding が無い環境（古い `wrangler dev` 等）は警告を 1 回出して通す（テレメトリのために報告者を 500 にしない）
+- クライアント側: 同じ段 + コードで最大 5 回、送信間隔 1 秒以上
+
+それでも足りなければ zone の Rate Limiting Rule（WAF）で `/api/client-error/` をさらに絞る。
 
 ### 動画入力廃止に伴う互換性
 
