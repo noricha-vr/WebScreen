@@ -1,6 +1,7 @@
 # 検証結果（2026-08-29 実測）
 
-数字の根拠。**ローカルループバックでの検証であり、VRChat 実機と実ネットワークは含まない**（実機は [acceptance-test.md](acceptance-test.md)）。
+数字の根拠。**V1〜V10 はローカルループバックでの検証であり、VRChat 実機と実ネットワークは含まない**（実機は [acceptance-test.md](acceptance-test.md)）。
+実サーバー（Indigo）での実測は「[Indigo 実機検証](#indigo-実機検証2026-08-31-実測issue-91)」節（2026-08-31 追記）。
 
 - 環境: macOS (M3 Ultra) / MediaMTX **v1.15.5** と **v1.20.1** の両方 / Chrome・Safari 26.5.2・Playwright 同梱 Chromium / ffmpeg 8.0.1
 - 構成: ブラウザの canvas（1920x1080・30fps・テキスト中心）→ WHIP → MediaMTX → RTSP(TCP) / HLS
@@ -114,15 +115,39 @@ profile が `42e01f`（Constrained Baseline）か `42001f`（Baseline）かの�
 QP は後者の方が低い（19.6 vs 35）にもかかわらず読めない。
 **「圧縮を緩める」ではなく「解像度を守る」が正しい操作**という結論を、ライブ経路でも裏づけた。
 
+## Indigo 実機検証（2026-08-31 実測。Issue #91）
+
+WebARENA Indigo の実インスタンス（6 vCPU / 8GB / 1Gbps・Ubuntu 24.04・グローバル IP を NIC 直付け = NAT なし）に
+MediaMTX **v1.20.1** を本番既定ポートで立てて実測した。経路は自宅回線（フレッツ系）↔ Indigo。
+
+| # | 検証項目 | 受け入れ基準 | 実測 | 判定 |
+|---|---|---|---|---|
+| I1 | **UDP 8189 インバウンド** | 外部から到達する | ポータル FW 開放後、実 WHIP の ICE が **UDP で成立**（`local: host/udp/161.34.34.128/8189, remote: prflx/udp/{自宅IP}`。tcpdump でも双方向の UDP を確認） | **合格** |
+| I2 | A1: 実サーバー経由のコーデック契約 | h264 / Baseline / yuv420p / B フレームなし | `codec_name=h264` `profile=Baseline` `pix_fmt=yuv420p` `has_b_frames=0` `1920x1080`（Mac の Chrome → WHIP → Indigo → RTSP/TCP を ffprobe） | **合格** |
+| I3 | 持続スループット（上り: 配信者→サーバー） | 数分の持続値を得る | **112 Mbps**（180 秒平均。30 秒区間で 82〜175 Mbps に変動） | 測定完了 |
+| I4 | 持続スループット（下り: サーバー→視聴者） | 数分の持続値を得る | **192 Mbps**（単一 TCP・180 秒平均、区間変動ほぼなし）/ **349 Mbps**（並列 4 本・60 秒） | 測定完了 |
+
+### 読み方の注意
+
+- **I3 / I4 は min(自宅回線, 経路, Indigo) の下限値**。単一測定点からの実測であり、Indigo の出口単独の上限ではない。
+  それでも「公称 1Gbps がベストエフォートでどこまで出るか」の持続の証拠として、
+  下り 349 Mbps ≒ 標準画質（352 kbps）**約 990 視聴者ぶん**の同時送出が経路込みで通ることを確認できた
+- ポータルのファイアウォールは**既定で全ポート遮断（SSH のみ許可）**。tcpdump で NIC 到達 0 パケットを確認してから
+  ポータルでルールを追加した。**UDP のルールもポータル UI で作成でき、実際に通る**（公式仕様に記載がなかった点の実測回答）
+- 検証環境は無認証の公開 relay のため、path を推測困難なランダム名（`live/s-{hex12}`）にして運用した。
+  本実装では WHIP 側に認証（`publishUser`/`publishPass` か送信元制限)を入れること
+- v1.20.1 の初回 publish 直後に HLS muxer が一度 `unable to extract DTS: SPS not received yet` でクラッシュし、
+  10 秒後の再生成で自動回復した（起動直後のレース。継続的な失敗ではない）
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |
 |---|---|---|
 | 1 | **VRChat 実機での再生** | **最重要**。[acceptance-test.md](acceptance-test.md) で潰す |
 | 2 | VRChat クライアントでの 60 秒切断の有無 | V9 は ffmpeg での結果 |
-| 3 | 実ネットワーク越しの帯域・遅延 | ループバックでは NIC が律速にならない |
-| 4 | VPS 実機での reader あたり CPU | M3 Ultra の 125 本/コアは楽観的な上限 |
+| 3 | ~~実ネットワーク越しの帯域・遅延~~ | **2026-08-31 解消**（I3 / I4。ただし単一測定点の下限値） |
+| 4 | VPS 実機での reader あたり CPU | M3 Ultra の 125 本/コアは楽観的な上限。多読者テスト時に Indigo で測り直す |
 | 5 | 同一ウィンドウ内での別タブ切替時の挙動 | フォーカス喪失では劣化しないことは実測済み |
 | 6 | Firefox の対応可否 | 本機で起動できず。切る判断が出せない |
 | 7 | `getDisplayMedia` の解像度決定則 | 1920x1080 要求に対し実送出 1602x1032 になる理由 |
-| 8 | WHIP の UDP を NAT 越しに到達させる実構成 | |
+| 8 | ~~WHIP の UDP を NAT 越しに到達させる実構成~~ | **2026-08-31 解消**（I1。Indigo は NAT なしのグローバル IP 直付けで、`webrtcAdditionalHosts` 不要） |
