@@ -238,7 +238,14 @@
         "heading": "10. Governing law and jurisdiction",
         "body": [
           "These terms are governed by the laws of Japan.",
-          "Any dispute relating to the Service shall be submitted to the exclusive jurisdiction of the court that has jurisdiction over the location of the operator as the court of first instance."
+          "Any dispute relating to the Service shall be subject to the jurisdiction of the Japanese courts."
+        ],
+        "items": []
+      },
+      {
+        "heading": "11. Contact",
+        "body": [
+          "For enquiries about the Service, please open an issue on the GitHub repository (https://github.com/noricha-vr/WebScreen)."
         ],
         "items": []
       }
