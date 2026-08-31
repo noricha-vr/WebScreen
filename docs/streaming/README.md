@@ -35,5 +35,8 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 ## 現在地
 
 - 机上調査と**ローカル実測は完了**（[verification.md](verification.md)）
-- **VRChat 実機での確認は未実施**。これが最大の未検証事項で、[acceptance-test.md](acceptance-test.md) の手順で潰す
-- 実装に入る前に受け入れテストを先に行うこと。ここが落ちると設計ごと変わる
+- **Indigo 実機と VRChat PC 実機の確認も完了**（2026-08-31。verification.md の I1〜I6）:
+  UDP 疎通・持続帯域・A1 契約・A2（映る）・A5（5 分以上切断なし）・A6（途中参加 2 秒以内）に合格し、
+  **MediaMTX v1.20.1 を採用で確定**（A8）
+- 残る実機項目は **A3 / A4（遅延の実測 = Issue #95）と A7（Quest = Issue #96）**。
+  あわせて動画素材向けのビットレート段の設計判断が要る（I5）
