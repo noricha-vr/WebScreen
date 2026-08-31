@@ -19,6 +19,24 @@
 | **R11** | 送出解像度は `getSettings()` ではなく **`outbound-rtp` の `frameWidth/frameHeight`** で確認する | `ideal: 1920x1080` 要求で `getSettings()` が 1920x1080 を返しても、実送出は 1602x1032 だった |
 | **R12** | 帯域の見積もりは **Safari 基準**で行う | 同一素材で Safari は Chrome の**約 1.9 倍**（940 kbps vs 500 kbps） |
 
+## 配信ホスト名と path 規則（2026-08-31 凍結。以後変更しない）
+
+VRChat の **Video Player Allowed Domains** はワールド作者が上限 10 枠・ワイルドカード非対応で登録するため、
+**ここを後から変えると登録済みワールドすべてで再生できなくなり、こちらからは直せない**（[vrchat-constraints.md](vrchat-constraints.md)）。
+Issue #93 で決定・凍結した。
+
+| 経路 | URL 形式 |
+|---|---|
+| PC（RTSP） | `rtspt://stream.web-screen.net:8554/live/{id}` |
+| Quest（HLS） | `https://cdn.web-screen.net/live/{id}/index.m3u8` |
+
+- `{id}` は**推測困難な 12 文字のランダム ID**（既存の動画 shortId と同じ文字種・長さ）
+- Quest 向け HLS は新ホストを作らず **既存の `cdn.web-screen.net` に相乗り**する（HLS セグメントを R2 経由で配る設計と一致し、
+  ワールド作者の allowlist 消費が新規 1 枠 = `stream.web-screen.net` だけで済む）
+- **サブドメインを今後増やさない**（ワイルドカード非対応のため、増やすたびに全ワールドの再登録が要る）
+- 複数台へスケールする時は L4 ロードバランサか DNS の複数 A レコードで**同一ホスト名のまま**振り分ける
+  （[server-plan.md](server-plan.md) Phase 3）。ホスト名は凍結だが、**A レコードの向き先（IP）は自由に変えてよい**
+
 ## MediaMTX の設定
 
 動作確認済みの雛形は [poc/mediamtx-poc.yml](poc/mediamtx-poc.yml)（検証用にポートをずらしてある。本番は既定ポートでよい）。
