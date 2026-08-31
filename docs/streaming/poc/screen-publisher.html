@@ -30,6 +30,11 @@
 const $ = (id) => document.getElementById(id);
 const log = (m) => { $('log').textContent += m + "\n"; console.log('[whip] ' + m); };
 
+// 実験用の調整ノブ（?kbps=2500&hint=detail のようにクエリで上書き）
+const q = new URLSearchParams(location.search);
+const KBPS = parseInt(q.get('kbps') || '600', 10);
+const HINT = q.get('hint') || 'text';   // text | detail | motion
+
 let pc = null, whipResource = null, statsTimer = null;
 
 // 推測されにくい配信 ID（本番の shortId と同じ 12 文字・英小文字+数字）
@@ -57,7 +62,8 @@ async function start() {
 
   const track = stream.getVideoTracks()[0];
   // R10: 既定のままだと解像度が落ちて文字が読めなくなる
-  track.contentHint = 'text';
+  track.contentHint = HINT;
+  log(`設定: maxBitrate=${KBPS}kbps contentHint=${HINT}`);
   $('preview').srcObject = stream;
 
   const id = makeId();
@@ -78,7 +84,7 @@ async function start() {
 
   const p = tr.sender.getParameters();
   p.encodings = p.encodings && p.encodings.length ? p.encodings : [{}];
-  p.encodings[0].maxBitrate = 600 * 1000;
+  p.encodings[0].maxBitrate = KBPS * 1000;
   p.degradationPreference = 'maintain-resolution';  // R10
   await tr.sender.setParameters(p);
 
