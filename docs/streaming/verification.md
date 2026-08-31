@@ -172,6 +172,26 @@ VRChat PC 実機（ProTV の Stream モード）+ Indigo 上の MediaMTX **v1.20
   体感遅延の問題でもある
 - A4（`Use Low Latency` OFF のワールド）は未測定
 
+### I8: Indigo 実機の reader あたり CPU は約 0.15%/reader — 律速は CPU ではなく帯域（2026-08-31）
+
+586 kbps のストリーム 1 本を Indigo 実機（6 vCPU・Ubuntu 24.04・MediaMTX v1.20.1）に publish し、
+Mac から `ffmpeg -c copy`（デコードなし）の読者を実ネットワーク越しに段階投入。
+CPU は mediamtx プロセスの CPU 時間差分（60 秒窓）で測定した。
+
+| readers | CPU（1 コア=100%） | RSS |
+|---|---|---|
+| 0 | 6.7 % | 74.8 MB |
+| 20 | 11.7 % | 76.4 MB |
+| 40 | 11.7 % | 78.8 MB |
+| 60 | 16.7 % | 79.6 MB |
+| 80 | 18.3 % | 82.3 MB |
+
+- 傾き **約 0.15%/reader（1 コアあたり約 690 本）**。`ps -o time` の分解能（1 秒 = 60 秒窓で 1.7%）による
+  量子化ノイズを含むため ±2 割は見るべきだが、**M3 Ultra ローカルの 0.7〜0.9%/reader（V7）より 5 倍前後軽い**
+- 帰結: **Indigo 実機では CPU 律速にならない**（6 vCPU × 690 ≒ 4,000 reader 相当 ≫ 帯域上限）。
+  収容人数は `min(帯域, 転送量)` で決まり、[capacity.md](capacity.md) の CPU 上限行は実機値で差し替える
+- V7（macOS）との差は OS のソケット実装差と見られる。**ローカル macOS の CPU 実測を VPS の見積もりに使わない**
+
 ### I5: 動画素材の画面共有は 600 kbps では成立しない（VRChat 実機・2026-08-31）
 
 VRChat PC 実機（ProTV）で `getDisplayMedia` の実画面（YouTube 再生中のタブ・1916x1060）を配信して観測した。
