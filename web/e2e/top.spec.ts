@@ -59,6 +59,21 @@ test.describe('未ログイン', () => {
     await expect(page).toHaveURL(/\/en\/privacy\/$/);
     await expect(page.getByRole('heading', { level: 1, name: en.privacy.heading })).toBeVisible();
   });
+
+  test('フッターの利用規約リンクから規約ページへ入り、言語切替もできる', async ({ page }) => {
+    // 規約はフッターからしか辿れないため、リンクと遷移先をまとめて見る
+    // （リンクだけ消えても規約ページ自体は生きているので、ページ単体の確認では気づけない）。
+    await page.goto('/ja/');
+    await page.locator('footer').getByRole('link', { name: ja.footer.terms }).click();
+
+    await expect(page).toHaveURL(/\/ja\/terms\/$/);
+    await expect(page.getByRole('heading', { level: 1, name: ja.terms.heading })).toBeVisible();
+
+    await page.locator('footer').getByRole('link', { name: ja.footer.langSwitch }).click();
+
+    await expect(page).toHaveURL(/\/en\/terms\/$/);
+    await expect(page.getByRole('heading', { level: 1, name: en.terms.heading })).toBeVisible();
+  });
 });
 
 test.describe('リンクプレビュー', () => {

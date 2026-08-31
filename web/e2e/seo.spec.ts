@@ -127,7 +127,7 @@ test.describe('用途別ページのメタ情報', () => {
   }
 
   // パンくずを持たないページに出すと、階層の無いところに階層を主張することになる。
-  for (const path of ['/ja/', '/en/', '/ja/privacy/', '/en/privacy/'] as const) {
+  for (const path of ['/ja/', '/en/', '/ja/privacy/', '/en/privacy/', '/ja/terms/', '/en/terms/'] as const) {
     test(`${path} にはパンくずを出さない`, async ({ request }) => {
       expect(await fetchJsonLd(request, path, 'BreadcrumbList')).toBeNull();
     });
@@ -150,7 +150,7 @@ test.describe('用途別ページのメタ情報', () => {
   }
 
   // 同じアプリケーションを何度も宣言すると、どのページが本体か曖昧になる。
-  for (const path of [...USE_CASE_PATHS, '/ja/privacy/', '/en/privacy/'] as const) {
+  for (const path of [...USE_CASE_PATHS, '/ja/privacy/', '/en/privacy/', '/ja/terms/', '/en/terms/'] as const) {
     test(`${path} には WebApplication を出さない`, async ({ request }) => {
       expect(await fetchJsonLd(request, path, 'WebApplication')).toBeNull();
     });
@@ -180,9 +180,16 @@ test.describe('noindex', () => {
     expect(html).toContain('name="robots" content="noindex"');
   });
 
-  // 全ページに付けてしまうと検索流入が消える。sitemap に載せた 4 ページすべてで確認する
+  // 全ページに付けてしまうと検索流入が消える。sitemap に載せた固定ページすべてで確認する
   // （/ja/ だけ見ていると、privacy や英語版だけ誤って除外された事故に気づけない）。
-  const INDEXABLE_PATHS = ['/ja/', '/en/', '/ja/privacy/', '/en/privacy/'] as const;
+  const INDEXABLE_PATHS = [
+    '/ja/',
+    '/en/',
+    '/ja/privacy/',
+    '/en/privacy/',
+    '/ja/terms/',
+    '/en/terms/',
+  ] as const;
 
   for (const path of INDEXABLE_PATHS) {
     test(`${path} には noindex を付けない`, async ({ request }) => {
