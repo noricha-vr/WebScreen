@@ -29,7 +29,6 @@ export interface UploadDatabase extends QuotaDatabase {
 /** R2 の commit 確認に必要な最小操作面。 */
 export interface UploadBucket {
   head(key: string): Promise<{ size: number } | null>;
-  delete(key: string): Promise<void>;
 }
 
 /** R2 URL 発行をテストから差し替えるための境界。 */
@@ -70,6 +69,13 @@ export interface CommitUploadInput {
   userId: number;
   shortId: string;
   publicBaseUrl: string;
+}
+
+/** 未確定アップロードを所有者条件付きで failed にする入力。 */
+export interface AbandonUploadInput {
+  database: UploadDatabase;
+  userId: number;
+  shortId: string;
 }
 
 /** R2 署名設定から、サービスへ注入する PUT URL 発行器を作る。 */
@@ -150,7 +156,7 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
   if (exceedsPerFileLimit || exceedsDeclaredSizeLimit || exceedsUserLimit) {
     // 確保に負けた行は、この呼び出しが上限超過として扱ってよい対象ではない。
     // 413 を返し続けると既に ready の行へ誤った理由を返すため、最終状態から引き直す。
-    if (!(await claimOversizedUpload(input, key))) return resolveCommitConflict(input);
+    if (!(await claimOversizedUpload(input, object.size))) return resolveCommitConflict(input);
     throw new UploadError(
       413,
       ERROR_CODES.payloadTooLarge,
@@ -173,22 +179,18 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
 }
 
 /**
- * 上限を超えた動画の予約を failed へ確保し、実体を消す。確保できたら true を返す。
+ * 上限を超えた動画の予約を failed へ確保する。確保できたら true を返す。
  *
- * 保持期間バッチと同じ確保方式（条件付き UPDATE → R2）にする。R2 を先に消すと、
- * 読んでから書くまでの間に別の書き手が同じ行を確定させた時、実体だけが消える。
- * 確保に負けた（0 件）行はこの呼び出しの持ち物ではないので R2 に触らない。
- *
- * 実体の削除に失敗しても 500 にはしない。呼び出し元へ返すべき理由は上限超過であって
- * R2 の障害ではなく、failed のまま残った行は failed の掃除（services/retention.ts）が
- * 同じ順序（R2 → D1）で回収し直すため。どちらの分岐も理由をログに残す。
+ * 署名 URL は発行から 5 分間有効なので、413 の直後に R2 を消すと遅延した PUT が
+ * 孤児になる。実測サイズと failed 行を残し、署名失効後の保持期間バッチが R2 → D1 の
+ * 順に回収する。確保に負けた（0 件）行には一切触れない。
  */
-async function claimOversizedUpload(input: CommitUploadInput, key: string): Promise<boolean> {
+async function claimOversizedUpload(input: CommitUploadInput, actualSize: number): Promise<boolean> {
   const claim = await input.database
     .prepare(
-      "UPDATE movies SET status = 'failed' WHERE short_id = ? AND user_id = ? AND status = 'pending'"
+      "UPDATE movies SET status = 'failed', size_bytes = ? WHERE short_id = ? AND user_id = ? AND status = 'pending'"
     )
-    .bind(input.shortId, input.userId)
+    .bind(actualSize, input.shortId, input.userId)
     .run();
 
   if (claim.meta.changes === 0) {
@@ -201,17 +203,27 @@ async function claimOversizedUpload(input: CommitUploadInput, key: string): Prom
     return false;
   }
 
-  try {
-    await input.bucket.delete(key);
-  } catch {
-    logWorkerFailure({
-      level: 'warn',
-      event: 'upload_commit_oversize_object_delete_failed',
-      errorCode: ERROR_CODES.payloadTooLarge,
-      status: 413,
-    });
-  }
   return true;
+}
+
+/** 所有者の未確定アップロードを failed にし、保持期間バッチへ回収を委ねる。 */
+export async function abandonUpload(input: AbandonUploadInput): Promise<void> {
+  try {
+    await input.database
+      .prepare(
+        "UPDATE movies SET status = 'failed' WHERE short_id = ? AND user_id = ? AND status = 'pending'"
+      )
+      .bind(input.shortId, input.userId)
+      .run();
+  } catch (error) {
+    logWorkerFailure({
+      event: 'upload_abandon_failed',
+      errorCode: ERROR_CODES.internalError,
+      status: 500,
+      errorName: error instanceof Error ? error.name : undefined,
+    });
+    throw error;
+  }
 }
 
 /**

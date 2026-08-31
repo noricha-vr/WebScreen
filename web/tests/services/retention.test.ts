@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 
 import { movieKey } from '../../src/lib/contracts/r2key';
-import { MAX_EXPIRED_DELETIONS_PER_RUN } from '../../src/lib/services/retention';
+import { PRESIGN_TTL_MS } from '../../src/lib/infra/r2presign';
+import {
+  MAX_EXPIRED_DELETIONS_PER_RUN,
+  MAX_FAILED_DELETIONS_PER_RUN,
+} from '../../src/lib/services/retention';
 import {
   captureObject,
   DAY_MS,
@@ -10,6 +14,7 @@ import {
   HOUR_MS,
   iso,
   movie,
+  NOW,
   run,
 } from './helpers/retention-fakes';
 
@@ -106,6 +111,174 @@ describe('runRetention: 期限切れ動画', () => {
   });
 });
 
+describe('runRetention: failed アップロード', () => {
+  const earlyCleanupGraceMs = PRESIGN_TTL_MS + 60_000;
+
+  it('TTL + 60秒より新しい行と境界上の行は R2 実体を掃除しない', async () => {
+    const freshShortId = 'freshFail001';
+    const boundaryShortId = 'boundFail001';
+    const freshKey = movieKey(freshShortId);
+    const boundaryKey = movieKey(boundaryShortId);
+    const database = new FakeRetentionDatabase([
+      movie({
+        shortId: freshShortId,
+        status: 'failed',
+        createdAt: iso(-(earlyCleanupGraceMs - 1_000)),
+        expiresAt: iso(30 * DAY_MS),
+      }),
+      movie({
+        shortId: boundaryShortId,
+        status: 'failed',
+        createdAt: iso(-earlyCleanupGraceMs),
+        expiresAt: iso(30 * DAY_MS),
+      }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([freshKey, boundaryKey]));
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedFailed).toBe(0);
+    expect(summary.sweptFailedObjects).toBe(0);
+    expect(database.movies.size).toBe(2);
+    expect(bucket.objects).toEqual(new Set([freshKey, boundaryKey]));
+  });
+
+  it('TTL + 60秒を過ぎた failed 行は R2 実体だけを早期回収する', async () => {
+    const shortId = 'delayedPut01';
+    const key = movieKey(shortId);
+    const createdAt = iso(-(earlyCleanupGraceMs + 1_000));
+    const database = new FakeRetentionDatabase([
+      movie({ shortId, status: 'failed', createdAt, expiresAt: null }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([key]));
+
+    const summary = await run(database, bucket);
+
+    expect(summary.deletedFailed).toBe(0);
+    expect(summary.sweptFailedObjects).toBe(1);
+    expect(bucket.objects.has(key)).toBe(false);
+    expect(database.movies.has(shortId)).toBe(true);
+    expect(database.movies.get(shortId)?.expiresAt).toBe(NOW.toISOString());
+  });
+
+  it('上限超過時も最終 sweep の古い行から巡回し、次の run で残りへ進む', async () => {
+    const count = MAX_FAILED_DELETIONS_PER_RUN + 1;
+    const failed = Array.from({ length: count }, (_unused, index) =>
+      movie({
+        shortId: `early${String(index).padStart(7, '0')}`,
+        status: 'failed',
+        createdAt: iso(-(earlyCleanupGraceMs + 1_000)),
+        expiresAt: iso(30 * DAY_MS),
+      })
+    );
+    const overflow = failed.at(-1)!;
+    const overflowKey = movieKey(overflow.shortId);
+    const database = new FakeRetentionDatabase(failed);
+    const bucket = new FakeRetentionBucket(new Set(failed.map((row) => movieKey(row.shortId))));
+
+    const first = await run(database, bucket);
+    expect(first.sweptFailedObjects).toBe(MAX_FAILED_DELETIONS_PER_RUN);
+    expect(first.sweepCapped).toBe(true);
+    expect(bucket.objects.has(overflowKey)).toBe(true);
+
+    const secondNow = new Date(NOW.getTime() + HOUR_MS);
+    const second = await run(database, bucket, undefined, secondNow);
+
+    expect(second.sweptFailedObjects).toBe(MAX_FAILED_DELETIONS_PER_RUN);
+    expect(bucket.objects.has(overflowKey)).toBe(false);
+    expect(database.movies.size).toBe(count);
+    expect(database.movies.get(overflow.shortId)?.expiresAt).toBe(secondNow.toISOString());
+  });
+
+  it('初回削除後に遅延 PUT が完了しても、次の run で再回収する', async () => {
+    const shortId = 'lateFinish01';
+    const key = movieKey(shortId);
+    const expiresAt = iso(30 * DAY_MS);
+    const database = new FakeRetentionDatabase([
+      movie({
+        shortId,
+        status: 'failed',
+        createdAt: iso(-(earlyCleanupGraceMs + 1_000)),
+        expiresAt,
+      }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([key]));
+
+    const first = await run(database, bucket);
+    expect(first.sweptFailedObjects).toBe(1);
+    expect(bucket.objects.has(key)).toBe(false);
+
+    // 署名失効直前に始まった PUT が、初回 delete の後に完了する。
+    bucket.objects.add(key);
+    const secondNow = new Date(NOW.getTime() + HOUR_MS);
+    const second = await run(database, bucket, undefined, secondNow);
+
+    expect(second.sweptFailedObjects).toBe(1);
+    expect(bucket.objects.has(key)).toBe(false);
+    expect(database.movies.get(shortId)).toMatchObject({
+      status: 'failed',
+      expiresAt: secondNow.toISOString(),
+    });
+  });
+
+  it('早期回収の R2 削除失敗は次の run で再試行する', async () => {
+    const shortId = 'retryFail001';
+    const key = movieKey(shortId);
+    const expiresAt = iso(30 * DAY_MS);
+    const database = new FakeRetentionDatabase([
+      movie({
+        shortId,
+        status: 'failed',
+        createdAt: iso(-(earlyCleanupGraceMs + 1_000)),
+        expiresAt,
+      }),
+    ]);
+    const bucket = new FakeRetentionBucket(new Set([key]));
+    bucket.failingKeys.add(key);
+
+    const first = await run(database, bucket);
+    expect(first.sweptFailedObjects).toBe(0);
+    expect(first.deferredObjectDeletions).toBe(1);
+    expect(database.movies.get(shortId)?.expiresAt).toBe(expiresAt);
+
+    bucket.failingKeys.clear();
+    const second = await run(database, bucket);
+    expect(second.sweptFailedObjects).toBe(1);
+    expect(second.deferredObjectDeletions).toBe(0);
+    expect(database.movies.get(shortId)?.expiresAt).toBe(NOW.toISOString());
+    expect(bucket.objects.has(key)).toBe(false);
+  });
+
+  it('R2 回収後の最終 sweep 時刻更新失敗は run を失敗させる', async () => {
+    const shortId = 'sweepFail001';
+    const key = movieKey(shortId);
+    const expiresAt = iso(30 * DAY_MS);
+    const database = new FakeRetentionDatabase([
+      movie({
+        shortId,
+        status: 'failed',
+        createdAt: iso(-(earlyCleanupGraceMs + 1_000)),
+        expiresAt,
+      }),
+    ]);
+    database.failSweepUpdate = true;
+    const bucket = new FakeRetentionBucket(new Set([key]));
+
+    await expect(run(database, bucket)).rejects.toThrow('D1 sweep timestamp update failed');
+
+    expect(bucket.objects.has(key)).toBe(false);
+    expect(database.movies.get(shortId)?.expiresAt).toBe(expiresAt);
+
+    database.failSweepUpdate = false;
+    const retryNow = new Date(NOW.getTime() + HOUR_MS);
+    const retry = await run(database, bucket, undefined, retryNow);
+
+    expect(retry.sweptFailedObjects).toBe(1);
+    expect(bucket.deleted.filter((deletedKey) => deletedKey === key)).toHaveLength(2);
+    expect(database.movies.get(shortId)?.expiresAt).toBe(retryNow.toISOString());
+  });
+});
+
 describe('runRetention: 1 回の実行の上限', () => {
   it('期限切れ動画は上限件数までで打ち切り、残りは次回に回す', async () => {
     const expired = Array.from({ length: MAX_EXPIRED_DELETIONS_PER_RUN + 5 }, (_, index) =>
@@ -142,6 +315,7 @@ describe('runRetention: サマリ', () => {
       strandedMovies: 0,
       deletedOrphans: 1,
       deletedFailed: 1,
+      sweptFailedObjects: 0,
       deferredObjectDeletions: 0,
       skippedRows: 0,
       sweepCapped: false,
@@ -247,9 +421,8 @@ describe('runRetention: 不変条件が破れた時の可視化', () => {
 describe('runRetention: 削除直前の再確認', () => {
   it('SELECT 後に ready でなくなった行は R2 ごと消さない', async () => {
     const database = new FakeRetentionDatabase([
-      // created_at を新しくしておく（failed 行の掃除は 24 時間の猶予後なので、
-      // ここで消えると再確認の効果か猶予切れかを区別できない）
-      movie({ shortId: 'statusFlipAA', createdAt: iso(-HOUR_MS), expiresAt: iso(-HOUR_MS) }),
+      // created_at を TTL + 60秒以内にして、後段の failed 実体回収とは分離する。
+      movie({ shortId: 'statusFlipAA', createdAt: iso(-60_000), expiresAt: iso(-HOUR_MS) }),
     ]);
     // 期限切れとして拾った後に失敗扱いへ変わる（別経路の書き込みとの競合を再現）
     database.onSelect = (rows) => {

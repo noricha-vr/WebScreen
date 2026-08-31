@@ -8,7 +8,9 @@ export interface R2PresignConfig {
   secretAccessKey: string;
 }
 
-const PRESIGN_TTL_SECONDS = 5 * 60;
+/** PUT 署名 URL の有効期間。保持期間バッチの最小掃除猶予とも共有する。 */
+export const PRESIGN_TTL_MS = 5 * 60 * 1000;
+const PRESIGN_TTL_SECONDS = PRESIGN_TTL_MS / 1000;
 
 /** R2 への video/mp4 専用、5分間有効な単発 PUT 署名 URL を発行する。 */
 export async function createR2PutPresignedUrl(

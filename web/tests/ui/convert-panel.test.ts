@@ -300,7 +300,7 @@ describe('uploadMp4', () => {
       ).catch((error: unknown) => error);
 
       expect(failure).toBeInstanceOf(Error);
-      expect(requests).toContainEqual({ url: '/api/movies/Ab12Cd34Ef56/', method: 'DELETE' });
+      expect(requests).toContainEqual({ url: '/api/uploads/abandon/', method: 'POST' });
       // 中止済みなので R2 へは送らない。
       expect(requests.some((request) => request.url === 'https://upload.test/r2-upload')).toBe(false);
     } finally {

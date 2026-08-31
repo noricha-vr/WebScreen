@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import { movieUrl } from '../../src/lib/contracts/r2key';
 import { MAX_URLS_PER_PURGE } from '../../src/lib/infra/cloudflare-purge';
+import { PRESIGN_TTL_MS } from '../../src/lib/infra/r2presign';
 import { MAX_FAILED_DELETIONS_PER_RUN } from '../../src/lib/services/retention';
 import {
   DAY_MS,
@@ -51,6 +52,26 @@ describe('runRetention: キャッシュ purge', () => {
         movieUrl(PUBLIC_BASE_URL, 'failedAAAAAA'),
       ].sort()
     );
+  });
+
+  it('failed 実体の早期回収でも公開 URL を purge し、D1 行は残す', async () => {
+    const shortId = 'earlyFailAAA';
+    const database = new FakeRetentionDatabase([
+      movie({
+        shortId,
+        status: 'failed',
+        createdAt: iso(-(PRESIGN_TTL_MS + 61_000)),
+        expiresAt: iso(30 * DAY_MS),
+      }),
+    ]);
+    const api = new FakeCachePurgeApi();
+
+    const summary = await run(database, new FakeRetentionBucket(), api);
+
+    expect(summary.sweptFailedObjects).toBe(1);
+    expect(summary.deletedFailed).toBe(0);
+    expect(database.movies.has(shortId)).toBe(true);
+    expect(purgedUrls(api)).toEqual([movieUrl(PUBLIC_BASE_URL, shortId)]);
   });
 
   it('30 件を超える掃除は 30 件ずつに分けて purge する', async () => {

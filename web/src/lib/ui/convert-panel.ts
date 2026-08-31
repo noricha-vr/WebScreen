@@ -22,7 +22,6 @@ import {
   conversionClientStage,
   reportClientError,
 } from './client-error-report';
-import { movieEndpoint } from './history-view';
 import {
   API_REQUEST_TIMEOUT_MS,
   ConversionError,
@@ -124,10 +123,12 @@ function asCaptureResponse(value: unknown): CaptureResponse {
  */
 function abandonUpload(shortId: string): void {
   try {
-    void fetch(movieEndpoint(shortId), {
-      method: 'DELETE',
+    void fetch('/api/uploads/abandon/', {
+      method: 'POST',
       credentials: 'same-origin',
       keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shortId }),
     }).catch(() => undefined);
   } catch {
     // 送信自体が組み立てられない場合も、変換失敗の表示を優先して無視する

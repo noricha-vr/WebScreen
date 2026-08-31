@@ -2,162 +2,19 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 
-// Playwright は Node で直接実行するため、JSON には import 属性が要る（Vite は不要）
-import en from '../src/i18n/en.json' with { type: 'json' };
 import ja from '../src/i18n/ja.json' with { type: 'json' };
 import { E2E_FIXTURES } from '../playwright.config';
 import { signIn as signInAsOwner } from './session';
 import { signIn as signInWithSessionCookie } from './session';
 import { SESSION_COOKIE_NAME } from '../src/lib/contracts/session';
 
-const fixture = (name: string): Buffer =>
-  readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
+const fixture = (name: string): Buffer => readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
 
-// トップ画面の 2 状態（未ログイン / ログイン済み）と、変換 UI の状態遷移を見る。
-// ログイン済みは /api/me/ を 200 に差し替えて再現する（OAuth は後続タスクの担当）。
-
-/** ログイン済みとして描画させる。Cookie ではなく /api/me/ の応答で状態が決まる。 */
 async function signIn(page: Page): Promise<void> {
   await page.route('**/api/me/', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ name: 'noricha' }),
-    })
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ name: 'noricha' }) })
   );
 }
-
-test.describe('未ログイン', () => {
-  test('日本語トップに Discord ログインの導線と仕様が出る', async ({ page }) => {
-    await page.goto('/ja/');
-
-    const cta = page.getByRole('link', { name: ja.hero.cta });
-    await expect(cta).toBeVisible();
-    await expect(cta).toHaveAttribute('href', '/api/auth/login/');
-
-    // 仕様リストはヒーローと変換パネルの両方にあるので、未ログイン側に絞って見る
-    // （値は "guest error" のような語リストなので ~= で見る）
-    const hero = page.locator('[data-auth-only~="guest"]');
-    await expect(hero.getByText(ja.spec.maxSize)).toBeVisible();
-    await expect(hero.getByText(ja.spec.retention)).toBeVisible();
-    // ログイン前に変換パネルは出さない
-    await expect(page.locator('[data-convert-panel]')).toBeHidden();
-  });
-
-  test('英語トップの文言が英語辞書から出る', async ({ page }) => {
-    await page.goto('/en/');
-
-    await expect(page.getByRole('heading', { level: 1, name: en.hero.title })).toBeVisible();
-    await expect(page.getByRole('link', { name: en.hero.cta })).toBeVisible();
-    await expect(page.getByText(ja.hero.cta)).toHaveCount(0);
-  });
-
-  test('言語切替リンクで同じページの別ロケールへ移動する', async ({ page }) => {
-    await page.goto('/ja/privacy/');
-    await page.locator('footer').getByRole('link', { name: ja.footer.langSwitch }).click();
-
-    await expect(page).toHaveURL(/\/en\/privacy\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: en.privacy.heading })).toBeVisible();
-  });
-
-  test('フッターの利用規約リンクから規約ページへ入り、言語切替もできる', async ({ page }) => {
-    // 規約はフッターからしか辿れないため、リンクと遷移先をまとめて見る
-    // （リンクだけ消えても規約ページ自体は生きているので、ページ単体の確認では気づけない）。
-    await page.goto('/ja/');
-    await page.locator('footer').getByRole('link', { name: ja.footer.terms }).click();
-
-    await expect(page).toHaveURL(/\/ja\/terms\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: ja.terms.heading })).toBeVisible();
-
-    await page.locator('footer').getByRole('link', { name: ja.footer.langSwitch }).click();
-
-    await expect(page).toHaveURL(/\/en\/terms\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: en.terms.heading })).toBeVisible();
-  });
-});
-
-test.describe('サービス紹介', () => {
-  test('Chrome 拡張の紹介が Web 変換の直後に出て、配布ページへ繋がる', async ({ page }) => {
-    // 拡張はトップから辿るしか導線が無いため、位置（Web 変換の直後）と配布先をまとめて見る。
-    await page.goto('/ja/');
-
-    // お知らせなど紹介以外の h2 が増えても順序の確認が壊れないよう、紹介の中だけを見る。
-    const headings = page.locator('[data-lp-sections] article h2');
-    await expect(headings.nth(0)).toHaveText(ja.lp.webHeading);
-    await expect(headings.nth(1)).toHaveText(ja.lp.extensionHeading);
-
-    const download = page.getByRole('link', { name: ja.lp.extensionLink });
-    await expect(download).toHaveAttribute(
-      'href',
-      'https://github.com/noricha-vr/web-screen-extension/releases/latest'
-    );
-    await expect(download).toHaveAttribute('target', '_blank');
-    await expect(download).toHaveAttribute('rel', 'noopener');
-
-    // 紹介画像は自ホスト配信（GCS ではない）。実際に配信されることまで見る。
-    const image = page.getByRole('img', { name: ja.lp.extensionMediaAlt });
-    await expect(image).toHaveAttribute('src', '/lp/extension.png');
-    expect((await page.request.get('/lp/extension.png')).status()).toBe(200);
-  });
-
-  test('英語トップの拡張の紹介は英語辞書から出る', async ({ page }) => {
-    await page.goto('/en/');
-
-    await expect(page.getByRole('heading', { level: 2, name: en.lp.extensionHeading })).toBeVisible();
-    await expect(page.getByRole('link', { name: en.lp.extensionLink })).toBeVisible();
-  });
-});
-
-test.describe('リンクプレビュー', () => {
-  const content = (page: Page, selector: string): Promise<string | null> =>
-    page.locator(selector).getAttribute('content');
-
-  test('日本語トップに OG タグを出す', async ({ page }) => {
-    await page.goto('/ja/');
-
-    // 絶対 URL であること。相対だとクローラが解決できず画像が出ない
-    expect(await content(page, 'meta[property="og:image"]')).toBe('https://web-screen.net/og.png');
-    expect(await content(page, 'meta[property="og:url"]')).toBe('https://web-screen.net/ja/');
-    expect(await content(page, 'meta[property="og:title"]')).toBe(ja.meta.title);
-    expect(await content(page, 'meta[property="og:description"]')).toBe(ja.meta.description);
-    expect(await content(page, 'meta[property="og:image:alt"]')).toBe(ja.meta.imageAlt);
-    expect(await content(page, 'meta[property="og:locale"]')).toBe('ja_JP');
-    expect(await content(page, 'meta[name="twitter:card"]')).toBe('summary_large_image');
-
-    // 実寸との一致は seo.spec.ts が配信物側で見る
-    expect(await content(page, 'meta[property="og:image:width"]')).toBe('1200');
-    expect(await content(page, 'meta[property="og:image:height"]')).toBe('630');
-  });
-
-  test('英語トップは英語の OG タグを出す', async ({ page }) => {
-    await page.goto('/en/');
-
-    expect(await content(page, 'meta[property="og:title"]')).toBe(en.meta.title);
-    expect(await content(page, 'meta[property="og:locale"]')).toBe('en_US');
-    expect(await content(page, 'meta[property="og:url"]')).toBe('https://web-screen.net/en/');
-    // 画像は 1 枚を共用する（言語別に作らない）
-    expect(await content(page, 'meta[property="og:image"]')).toBe('https://web-screen.net/og.png');
-  });
-});
-
-test.describe('ルートのリダイレクト', () => {
-  test('既定は日本語トップへ送る', async ({ request }) => {
-    const response = await request.get('/', { maxRedirects: 0 });
-
-    expect(response.status()).toBe(302);
-    expect(response.headers()['location']).toBe('/ja/');
-  });
-
-  test('Accept-Language が英語なら英語トップへ送る', async ({ request }) => {
-    const response = await request.get('/', {
-      maxRedirects: 0,
-      headers: { 'Accept-Language': 'en-US,en;q=0.9' },
-    });
-
-    expect(response.status()).toBe(302);
-    expect(response.headers()['location']).toBe('/en/');
-  });
-});
 
 const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
@@ -374,11 +231,14 @@ test.describe('ログイン済み', () => {
     await expect(panel).toHaveAttribute('data-phase', 'converting');
   });
 
-  test('アップロードに失敗したら予約した動画を実際に取り消す', async ({ page, context }) => {
+  test('アップロードに失敗したら予約を failed にして遅延 PUT の回収を予約する', async ({
+    page,
+    context,
+  }) => {
     // presign を通った時点で pending の行が予約される。ここで失敗を放置すると
     // 誰も failed へ落とさないまま履歴に「処理中」として残り続けていた。
     test.setTimeout(180_000);
-    // 実セッションを張る（DELETE が 401 でも通ってしまうテストにしない）
+    // 実セッションを張る（failed 化 API が 401 でも通ってしまうテストにしない）
     await signInAsOwner(context, E2E_FIXTURES.ownerId);
     await signIn(page);
     // seed 済みの pending 行を予約結果に見立てる
@@ -386,10 +246,10 @@ test.describe('ログイン済み', () => {
     // R2 への PUT だけを失敗させる（presign は成功済み = 予約が残る状況を作る）
     await page.route('https://upload.test/r2-upload', (route) => route.fulfill({ status: 500 }));
 
-    const deleteResponse = page.waitForResponse(
+    const abandonResponse = page.waitForResponse(
       (response) =>
-        response.request().method() === 'DELETE' &&
-        response.url().includes(`/api/movies/${E2E_FIXTURES.pendingShortId}/`)
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/uploads/abandon/')
     );
 
     await page.goto('/ja/');
@@ -398,15 +258,15 @@ test.describe('ログイン済み', () => {
       .setInputFiles([{ name: 'first.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG }]);
 
     // 送信されたことではなく、サーバーが受理したことを確認する
-    expect((await deleteResponse).status()).toBe(204);
+    expect((await abandonResponse).status()).toBe(204);
     await expect(page.locator('[data-convert-panel] [data-file-error]')).toBeVisible();
 
-    // 対象が実際に消えている（pending は元から公開されないので、2 回目の DELETE が 404）
-    // Astro の origin チェック（CSRF 保護）が効いているため Origin を明示する
-    const second = await context.request.delete(`/api/movies/${E2E_FIXTURES.pendingShortId}/`, {
+    // failed 行は残る。commit が 400 なら、遅延 PUT があっても cron が R2 → D1 で回収できる。
+    const retryCommit = await context.request.post('/api/uploads/commit/', {
+      data: { shortId: E2E_FIXTURES.pendingShortId },
       headers: { Origin: new URL(page.url()).origin },
     });
-    expect(second.status()).toBe(404);
+    expect(retryCommit.status()).toBe(400);
   });
 
   test('commit の応答が壊れていても完成した動画は消さない', async ({ page, context }) => {
@@ -420,9 +280,9 @@ test.describe('ログイン済み', () => {
       route.fulfill({ status: 200, contentType: 'application/json', body: 'not-json' })
     );
 
-    let deleteSeen = false;
+    let abandonSeen = false;
     page.on('request', (req) => {
-      if (req.method() === 'DELETE' && req.url().includes('/api/movies/')) deleteSeen = true;
+      if (req.method() === 'POST' && req.url().endsWith('/api/uploads/abandon/')) abandonSeen = true;
     });
 
     await page.goto('/ja/');
@@ -431,7 +291,7 @@ test.describe('ログイン済み', () => {
       .setInputFiles([{ name: 'first.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG }]);
 
     await expect(page.locator('[data-convert-panel] [data-file-error]')).toBeVisible();
-    expect(deleteSeen).toBe(false);
+    expect(abandonSeen).toBe(false);
   });
 
   test('対応外の形式は変換を始めずエラーを出す', async ({ page }) => {

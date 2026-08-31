@@ -32,14 +32,19 @@ interface UsageRow {
   total: number | null;
 }
 
-/** pending と ready の movies を合計し、ユーザーの予約済み使用量を返す。 */
+/**
+ * pending・ready・failed の movies を合計し、ユーザーの予約済み使用量を返す。
+ *
+ * TTL 5 分 + retention 間隔で最大約 66 分の R2 残置を許容する。
+ * 500 MiB 計上だと中止で 24 時間ロックアウトするため、failed も size_bytes を使う。
+ */
 export async function getUserStorageUsage(
   database: QuotaDatabase,
   userId: number
 ): Promise<number> {
   const row = await database
     .prepare(
-      "SELECT COALESCE(SUM(size_bytes), 0) AS total FROM movies WHERE user_id = ? AND status IN ('pending', 'ready')"
+      "SELECT COALESCE(SUM(size_bytes), 0) AS total FROM movies WHERE user_id = ? AND status IN ('pending', 'ready', 'failed')"
     )
     .bind(userId)
     .first<UsageRow>();
