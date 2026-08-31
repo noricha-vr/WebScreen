@@ -309,7 +309,7 @@ describe('togglePin', () => {
     const database = new FakeMoviesDatabase([...pinnedMovies(MAX_PINNED_MOVIES), movie()]);
 
     await expect(
-      togglePin({ database, userId: USER_ID, shortId: SHORT_ID })
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date('2026-08-30T00:00:00.000Z') })
     ).rejects.toMatchObject({ status: 409 });
     expect(database.movies.get(SHORT_ID)?.pinned).toBe(0);
   });
@@ -473,7 +473,7 @@ describe('togglePin', () => {
     const database = new FakeMoviesDatabase([...pinnedMovies(MAX_PINNED_MOVIES - 1), movie()]);
 
     await expect(
-      togglePin({ database, userId: USER_ID, shortId: SHORT_ID })
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date('2026-08-30T00:00:00.000Z') })
     ).resolves.toMatchObject({ pinned: true });
   });
 
@@ -489,7 +489,7 @@ describe('togglePin', () => {
     const database = new FakeMoviesDatabase([movie({ userId: USER_ID + 1 })]);
 
     await expect(
-      togglePin({ database, userId: USER_ID, shortId: SHORT_ID })
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date('2026-08-30T00:00:00.000Z') })
     ).rejects.toMatchObject({ status: 404 });
     expect(database.movies.get(SHORT_ID)?.pinned).toBe(0);
   });
