@@ -1,0 +1,31 @@
+# WebScreen ストリーミング PoC（Indigo 実機検証用）。ポートは本番既定
+logLevel: info
+readTimeout: 20s
+writeTimeout: 20s
+
+# API はローカルのみ（公開しない）
+api: yes
+apiAddress: 127.0.0.1:9997
+
+rtsp: yes
+rtspTransports: [tcp, udp]
+rtspAddress: :8554
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcICEServers2: []
+
+hls: yes
+hlsAddress: :8888
+hlsVariant: mpegts
+hlsAlwaysRemux: yes
+hlsSegmentDuration: 1s
+hlsSegmentCount: 7
+
+rtmp: no
+srt: no
+
+paths:
+  all_others:
+    overridePublisher: no

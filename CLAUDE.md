@@ -69,6 +69,7 @@ main への push で GitHub Actions が本番へ反映する（`.github/workflow
 | 動画のエンコード条件（VRChat 互換） | [docs/encode-contract.md](docs/encode-contract.md) |
 | R2 の配信とキャッシュ | [docs/r2-delivery.md](docs/r2-delivery.md) |
 | 表示文言 | `web/src/i18n/ja.json` / `en.json` |
+| ライブ配信の設計・検証（**未実装**） | [docs/streaming/](docs/streaming/) |
 
 ## 気をつけること
 

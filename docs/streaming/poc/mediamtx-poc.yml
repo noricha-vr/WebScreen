@@ -1,0 +1,36 @@
+# WebScreen ストリーミング PoC 用 MediaMTX 設定
+# 検証用にポートを 18xxx 系へずらしている（本番は既定ポートでよい）
+logLevel: info
+readTimeout: 20s
+writeTimeout: 20s
+
+api: yes
+apiAddress: :29997
+
+# --- RTSP（PC 向け rtspt:// の出口） ---
+rtsp: yes
+rtspTransports: [tcp, udp]
+rtspAddress: :28554
+
+# --- WebRTC / WHIP（ブラウザからの入口） ---
+webrtc: yes
+webrtcAddress: :28889
+webrtcLocalUDPAddress: :28190
+# ローカル検証なので STUN/TURN なし
+webrtcICEServers2: []
+
+# --- HLS（Quest 向けのおまけ出口） ---
+hls: yes
+hlsAddress: :28888
+hlsVariant: mpegts        # H.264 + AAC のみ。VRChat 互換優先で LL-HLS は使わない
+hlsAlwaysRemux: yes       # 視聴者ゼロでも生成し続ける（初回視聴の生成待ちを消す）
+hlsSegmentDuration: 1s
+hlsSegmentCount: 7
+
+rtmp: no
+srt: no
+
+paths:
+  all_others:
+    # 後発の publisher が先発を蹴らないようにする（既定は true）
+    overridePublisher: no

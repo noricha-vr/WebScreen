@@ -1,0 +1,139 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebScreen 画面配信 (PoC)</title>
+<body style="margin:0;background:#111;color:#eee;font-family:sans-serif;padding:24px;max-width:900px">
+<h1 style="font-size:22px">WebScreen 画面配信 PoC</h1>
+<p style="color:#aaa">自分の画面を選んで WHIP で配信する。VRChat 実機テスト（acceptance-test A2/A5/A6）用。</p>
+
+<div style="margin:16px 0">
+  <label>WHIP サーバー:
+    <input id="host" value="http://stream.web-screen.net:8889" size="36" style="font-size:16px;padding:4px">
+  </label>
+</div>
+<div style="margin:16px 0">
+  <button id="start" style="font-size:20px;padding:12px 28px;cursor:pointer">配信を開始（画面を選ぶ）</button>
+  <button id="stop" style="font-size:20px;padding:12px 28px;cursor:pointer" disabled>停止</button>
+</div>
+
+<div id="urls" style="display:none;background:#222;padding:16px;border-radius:8px;margin:16px 0">
+  <div style="margin-bottom:8px">VRChat（PC / ProTV 等の Stream モード）に貼る URL:</div>
+  <div><code id="rtsp" style="font-size:18px;color:#8f8;user-select:all"></code>
+    <button id="copy" style="margin-left:12px;padding:4px 12px;cursor:pointer">コピー</button></div>
+  <div style="margin-top:12px;color:#aaa">HLS（Quest 検証用。HTTPS 化するまで PC ブラウザ確認のみ）:</div>
+  <div><code id="hls" style="font-size:14px;color:#aaa;user-select:all"></code></div>
+</div>
+
+<pre id="log" style="font-size:15px;background:#000;padding:12px;min-height:120px;white-space:pre-wrap"></pre>
+<video id="preview" muted autoplay playsinline style="width:100%;max-width:640px;border:1px solid #444"></video>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const log = (m) => { $('log').textContent += m + "\n"; console.log('[whip] ' + m); };
+
+// 実験用の調整ノブ（?kbps=2500&hint=detail のようにクエリで上書き）
+const q = new URLSearchParams(location.search);
+const KBPS = parseInt(q.get('kbps') || '600', 10);
+const HINT = q.get('hint') || 'text';   // text | detail | motion
+
+let pc = null, whipResource = null, statsTimer = null;
+
+// 推測されにくい配信 ID（本番の shortId と同じ 12 文字・英小文字+数字）
+function makeId() {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const buf = new Uint8Array(12);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, b => chars[b % chars.length]).join('');
+}
+
+async function start() {
+  // R2: H.264 が使えない環境では配信を開始しない
+  const caps = RTCRtpSender.getCapabilities('video');
+  const h264 = caps.codecs.filter(x => /H264/i.test(x.mimeType));
+  if (!h264.length) { log('エラー: このブラウザは H.264 の送出に対応していないため配信できません'); return; }
+
+  // R9: 必ずユーザーのクリック起点で getDisplayMedia を呼ぶ
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+      audio: false,
+    });
+  } catch (e) { log('画面の選択がキャンセルされた: ' + e.name); return; }
+
+  const track = stream.getVideoTracks()[0];
+  // R10: 既定のままだと解像度が落ちて文字が読めなくなる
+  track.contentHint = HINT;
+  log(`設定: maxBitrate=${KBPS}kbps contentHint=${HINT}`);
+  $('preview').srcObject = stream;
+
+  const id = makeId();
+  const host = $('host').value.replace(/\/+$/, '');
+  const path = 'live/' + id;
+  const whip = `${host}/${path}/whip`;
+  const rtspHost = new URL(host).hostname;
+  $('rtsp').textContent = `rtspt://${rtspHost}:8554/${path}`;
+  $('hls').textContent = `http://${rtspHost}:8888/${path}/index.m3u8`;
+  $('urls').style.display = 'block';
+
+  pc = new RTCPeerConnection({ iceServers: [] });
+  const tr = pc.addTransceiver(track, { direction: 'sendonly' });
+
+  // R1: H.264 を最優先に固定（既定では VP8 が選ばれ、VRChat 側で静かに映らなくなる）
+  const rest = caps.codecs.filter(x => !/H264/i.test(x.mimeType));
+  tr.setCodecPreferences([...h264, ...rest]);
+
+  const p = tr.sender.getParameters();
+  p.encodings = p.encodings && p.encodings.length ? p.encodings : [{}];
+  p.encodings[0].maxBitrate = KBPS * 1000;
+  p.degradationPreference = 'maintain-resolution';  // R10
+  await tr.sender.setParameters(p);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await new Promise(r => {
+    if (pc.iceGatheringState === 'complete') return r();
+    pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && r());
+    setTimeout(r, 3000);
+  });
+
+  const res = await fetch(whip, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: pc.localDescription.sdp });
+  if (!res.ok) { log('WHIP 失敗: ' + res.status + ' ' + await res.text()); teardown(); return; }
+  whipResource = new URL(res.headers.get('Location') || '', whip).href;
+  await pc.setRemoteDescription({ type: 'answer', sdp: await res.text() });
+  log('WHIP 接続 OK -> ' + whip);
+  pc.addEventListener('connectionstatechange', () => log('pc: ' + pc.connectionState));
+
+  // 共有 UI 側の「共有を停止」で終わった場合。R9 により自動再開はしない（ボタンを押し直してもらう）
+  track.addEventListener('ended', () => { log('画面共有がブラウザ側で停止された。再開するには「配信を開始」を押し直す'); teardown(); });
+
+  // R11: 実送出は getSettings() ではなく outbound-rtp で確認する
+  let lastBytes = 0, lastTs = 0;
+  statsTimer = setInterval(async () => {
+    if (!pc) return;
+    const stats = await pc.getStats();
+    stats.forEach(s => {
+      if (s.type === 'outbound-rtp' && s.kind === 'video') {
+        const kbps = lastTs ? Math.round((s.bytesSent - lastBytes) * 8 / (s.timestamp - lastTs)) : 0;
+        lastBytes = s.bytesSent; lastTs = s.timestamp;
+        const codec = stats.get(s.codecId);
+        log(`送出: ${codec ? codec.mimeType : '?'} ${s.frameWidth}x${s.frameHeight} ${s.framesPerSecond || 0}fps ${kbps}kbps`);
+      }
+    });
+  }, 5000);
+
+  $('start').disabled = true; $('stop').disabled = false;
+}
+
+function teardown() {
+  if (statsTimer) { clearInterval(statsTimer); statsTimer = null; }
+  if (whipResource) { fetch(whipResource, { method: 'DELETE' }).catch(() => {}); whipResource = null; }
+  if (pc) { pc.close(); pc = null; }
+  const s = $('preview').srcObject;
+  if (s) { s.getTracks().forEach(t => t.stop()); $('preview').srcObject = null; }
+  $('start').disabled = false; $('stop').disabled = true;
+  log('配信を停止した');
+}
+
+$('start').addEventListener('click', start);
+$('stop').addEventListener('click', teardown);
+</script>
