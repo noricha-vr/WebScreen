@@ -92,6 +92,7 @@ test.describe('サービス紹介', () => {
       'https://github.com/noricha-vr/web-screen-extension/releases/latest'
     );
     await expect(download).toHaveAttribute('target', '_blank');
+    await expect(download).toHaveAttribute('rel', 'noopener');
 
     // 紹介画像は自ホスト配信（GCS ではない）。実際に配信されることまで見る。
     const image = page.getByRole('img', { name: ja.lp.extensionMediaAlt });
