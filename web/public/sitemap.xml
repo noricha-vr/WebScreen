@@ -107,4 +107,18 @@
         <changefreq>yearly</changefreq>
         <priority>0.3</priority>
     </url>
+    <url>
+        <loc>https://web-screen.net/ja/terms/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/terms/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/terms/"/>
+        <changefreq>yearly</changefreq>
+        <priority>0.3</priority>
+    </url>
+    <url>
+        <loc>https://web-screen.net/en/terms/</loc>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/terms/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/terms/"/>
+        <changefreq>yearly</changefreq>
+        <priority>0.3</priority>
+    </url>
 </urlset>

@@ -1,0 +1,12 @@
+---
+import TermsArticle from '../../components/TermsArticle.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { useTranslations } from '../../i18n';
+
+const lang = 'en' as const;
+const t = useTranslations(lang);
+---
+
+<BaseLayout lang={lang} title={t.meta.termsTitle} description={t.terms.lead}>
+  <TermsArticle lang={lang} />
+</BaseLayout>

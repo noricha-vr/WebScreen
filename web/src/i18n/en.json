@@ -3,7 +3,8 @@
     "title": "WebScreen — Turn web pages, images and PDFs into VRChat videos",
     "description": "Turn web pages, photos and PDFs into a video URL that plays in VRChat video players. Paste it into a world — no password to create.",
     "imageAlt": "WebScreen — turn PDFs, images and web pages into video URLs for VRChat",
-    "privacyTitle": "Cookies and privacy — WebScreen"
+    "privacyTitle": "Cookies and privacy — WebScreen",
+    "termsTitle": "Terms of Service — WebScreen"
   },
   "nav": {
     "home": "Home",
@@ -115,6 +116,7 @@
     "github": "GitHub",
     "releases": "Release notes",
     "privacy": "Cookies and privacy",
+    "terms": "Terms",
     "langSwitch": "日本語",
     "note": "WebScreen β"
   },
@@ -152,6 +154,101 @@
       "We use Google Analytics to improve the site. The page URL, referrer, approximate region and browser type are sent to Google. The names and contents of the files you upload are never sent (analytics is not loaded on video preview pages).",
       "To opt out, install the Google Analytics Opt-out Browser Add-on that Google distributes, or block cookies in your browser settings.",
       "You can delete or block cookies in your browser settings. Features that require signing in will not work if you do."
+    ]
+  },
+  "terms": {
+    "heading": "Terms of Service",
+    "lead": "These terms set out the conditions for using WebScreen (web-screen.net).",
+    "updated": "Effective date: 2026-08-31",
+    "sections": [
+      {
+        "heading": "1. About these terms",
+        "body": [
+          "These terms set out the conditions for using WebScreen (web-screen.net, \"the Service\").",
+          "By starting to use the Service you are deemed to have agreed to these terms."
+        ],
+        "items": []
+      },
+      {
+        "heading": "2. What the Service does",
+        "body": [
+          "The Service converts web pages, images and PDFs into a video (MP4) that plays in VRChat video players and similar, and delivers it at a public URL."
+        ],
+        "items": []
+      },
+      {
+        "heading": "3. Accounts",
+        "body": [
+          "You sign in to the Service with a Discord account.",
+          "You are responsible for managing your own account."
+        ],
+        "items": []
+      },
+      {
+        "heading": "4. Prohibited conduct",
+        "body": [
+          "The following are prohibited when using the Service."
+        ],
+        "items": [
+          "Anything that violates the law",
+          "Converting or sharing content that infringes copyright, likeness rights or any other rights of a third party",
+          "Interfering with the operation of the Service",
+          "Gaining or attempting to gain unauthorised access to the Service"
+        ]
+      },
+      {
+        "heading": "5. Your content is public",
+        "body": [
+          "Converted videos and images can be viewed by anyone who knows the URL.",
+          "Please do not convert content that contains confidential or private information."
+        ],
+        "items": []
+      },
+      {
+        "heading": "6. Retention",
+        "body": [
+          "Converted videos are deleted automatically after a set period. Pinned videos are kept for one year.",
+          "The retention period may change without notice."
+        ],
+        "items": []
+      },
+      {
+        "heading": "7. Disclaimer",
+        "body": [
+          "The Service is provided as is, without any warranty of any kind, express or implied.",
+          "The operator is not liable for any damage arising from your use of the Service, except in cases of wilful misconduct or gross negligence."
+        ],
+        "items": []
+      },
+      {
+        "heading": "8. Changes to and suspension of the Service",
+        "body": [
+          "The operator may change the contents of the Service, or suspend it, without notice."
+        ],
+        "items": []
+      },
+      {
+        "heading": "9. Changes to these terms",
+        "body": [
+          "These terms may be revised as needed. A revised version takes effect once it is published on this page."
+        ],
+        "items": []
+      },
+      {
+        "heading": "10. Governing law and jurisdiction",
+        "body": [
+          "These terms are governed by the laws of Japan.",
+          "Any dispute relating to the Service shall be subject to the jurisdiction of the Japanese courts."
+        ],
+        "items": []
+      },
+      {
+        "heading": "11. Contact",
+        "body": [
+          "For enquiries about the Service, please open an issue on the GitHub repository (https://github.com/noricha-vr/WebScreen)."
+        ],
+        "items": []
+      }
     ]
   },
   "lp": {
