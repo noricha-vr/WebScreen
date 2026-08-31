@@ -188,7 +188,9 @@ function movie(overrides: Partial<TestMovie> = {}): TestMovie {
     status: 'ready',
     pinned: 0,
     createdAt: CREATED_AT,
-    expiresAt: '2026-08-31T00:00:00.000Z',
+    // 実時刻がこの日付を跨ぐとテストが突然落ちる（実例: 2026-08-31 に now 省略の 2 件が期限切れ 410 化）。
+    // 既定は「期限に関係しないテスト」用なので遠い未来に固定し、期限を試すテストは自分で上書きする。
+    expiresAt: '2099-01-01T00:00:00.000Z',
     ...overrides,
   };
 }
@@ -307,7 +309,7 @@ describe('togglePin', () => {
     const database = new FakeMoviesDatabase([...pinnedMovies(MAX_PINNED_MOVIES), movie()]);
 
     await expect(
-      togglePin({ database, userId: USER_ID, shortId: SHORT_ID })
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date('2026-08-30T00:00:00.000Z') })
     ).rejects.toMatchObject({ status: 409 });
     expect(database.movies.get(SHORT_ID)?.pinned).toBe(0);
   });
@@ -471,7 +473,7 @@ describe('togglePin', () => {
     const database = new FakeMoviesDatabase([...pinnedMovies(MAX_PINNED_MOVIES - 1), movie()]);
 
     await expect(
-      togglePin({ database, userId: USER_ID, shortId: SHORT_ID })
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date('2026-08-30T00:00:00.000Z') })
     ).resolves.toMatchObject({ pinned: true });
   });
 
@@ -487,7 +489,7 @@ describe('togglePin', () => {
     const database = new FakeMoviesDatabase([movie({ userId: USER_ID + 1 })]);
 
     await expect(
-      togglePin({ database, userId: USER_ID, shortId: SHORT_ID })
+      togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date('2026-08-30T00:00:00.000Z') })
     ).rejects.toMatchObject({ status: 404 });
     expect(database.movies.get(SHORT_ID)?.pinned).toBe(0);
   });
