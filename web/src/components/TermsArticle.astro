@@ -1,0 +1,50 @@
+---
+import { useTranslations, type Locale } from '../i18n';
+
+/**
+ * 利用規約の本文。
+ *
+ * 文言は i18n の terms 配下が正本で、ここには構造だけを持たせる。
+ * 条項は sections の順に並べる（条番号も文言側に含める。番号だけをコード側で振ると、
+ * 条項の増減で辞書と表示がずれる）。
+ * items は箇条書きにしたい条項（禁止事項）だけが使い、それ以外は空配列にしてある。
+ */
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<article class="mx-auto max-w-3xl px-4 py-12">
+  <h1 class="text-3xl font-bold tracking-tight text-slate-900">{t.terms.heading}</h1>
+  <p class="mt-3 text-lg text-slate-700">{t.terms.lead}</p>
+
+  <div class="mt-10 grid gap-10">
+    {
+      t.terms.sections.map((section) => (
+        <section>
+          <h2 class="text-2xl font-bold leading-snug tracking-tight text-slate-900">
+            {section.heading}
+          </h2>
+          <div class="mt-3 grid gap-3 text-base leading-relaxed text-slate-700">
+            {section.body.map((paragraph) => (
+              <p>{paragraph}</p>
+            ))}
+          </div>
+          {section.items.length > 0 && (
+            <ul class="mt-3 grid list-disc gap-2 pl-5 text-base leading-relaxed text-slate-700">
+              {section.items.map((item) => (
+                <li>{item}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))
+    }
+  </div>
+
+  <p class="mt-12 border-t border-slate-200 pt-6 text-base text-slate-600">{t.terms.updated}</p>
+</article>

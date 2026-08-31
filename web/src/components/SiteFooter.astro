@@ -19,7 +19,7 @@ const RELEASES_URL = `${REPOSITORY_URL}/releases`;
   >
     <p>{t.footer.note}</p>
 
-    {/* 4 つのリンクは 320px 幅で 1 行に収まらず、折り返さないとページごと横スクロールする。
+    {/* 5 つのリンクは 320px 幅で 1 行に収まらず、折り返さないとページごと横スクロールする。
         収まる幅では折り返しが起きないので、広い画面の見た目は変わらない。 */}
     <nav class="flex flex-wrap items-center gap-4">
       <a
@@ -46,6 +46,13 @@ const RELEASES_URL = `${REPOSITORY_URL}/releases`;
       >
         <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
         <span>{t.footer.privacy}</span>
+      </a>
+      <a
+        href={`/${lang}/terms/`}
+        class="inline-flex items-center gap-2 text-slate-700 underline hover:text-brand-700"
+      >
+        <i class="fa-solid fa-file-contract" aria-hidden="true"></i>
+        <span>{t.footer.terms}</span>
       </a>
       <a
         href={switchLocalePath(Astro.url.pathname, other)}
