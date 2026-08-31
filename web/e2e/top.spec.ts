@@ -76,6 +76,38 @@ test.describe('未ログイン', () => {
   });
 });
 
+test.describe('サービス紹介', () => {
+  test('Chrome 拡張の紹介が Web 変換の直後に出て、配布ページへ繋がる', async ({ page }) => {
+    // 拡張はトップから辿るしか導線が無いため、位置（Web 変換の直後）と配布先をまとめて見る。
+    await page.goto('/ja/');
+
+    // お知らせなど紹介以外の h2 が増えても順序の確認が壊れないよう、紹介の中だけを見る。
+    const headings = page.locator('[data-lp-sections] article h2');
+    await expect(headings.nth(0)).toHaveText(ja.lp.webHeading);
+    await expect(headings.nth(1)).toHaveText(ja.lp.extensionHeading);
+
+    const download = page.getByRole('link', { name: ja.lp.extensionLink });
+    await expect(download).toHaveAttribute(
+      'href',
+      'https://github.com/noricha-vr/web-screen-extension/releases/latest'
+    );
+    await expect(download).toHaveAttribute('target', '_blank');
+    await expect(download).toHaveAttribute('rel', 'noopener');
+
+    // 紹介画像は自ホスト配信（GCS ではない）。実際に配信されることまで見る。
+    const image = page.getByRole('img', { name: ja.lp.extensionMediaAlt });
+    await expect(image).toHaveAttribute('src', '/lp/extension.png');
+    expect((await page.request.get('/lp/extension.png')).status()).toBe(200);
+  });
+
+  test('英語トップの拡張の紹介は英語辞書から出る', async ({ page }) => {
+    await page.goto('/en/');
+
+    await expect(page.getByRole('heading', { level: 2, name: en.lp.extensionHeading })).toBeVisible();
+    await expect(page.getByRole('link', { name: en.lp.extensionLink })).toBeVisible();
+  });
+});
+
 test.describe('リンクプレビュー', () => {
   const content = (page: Page, selector: string): Promise<string | null> =>
     page.locator(selector).getAttribute('content');

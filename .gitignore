@@ -21,6 +21,9 @@ web/.astro/
 
 # OG 画像は配信物なので、先頭の *.png 除外から戻す
 !web/public/og.png
+
+# LP の紹介画像も配信物（自ホスト）なので同じく戻す
+!web/public/lp/extension.png
 web/.dev.vars
 
 # wrangler のローカルキャッシュ（Cloudflare アカウント情報を含む）
