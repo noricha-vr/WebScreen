@@ -23,8 +23,8 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `GET /api/auth/callback/` | OAuth コールバック（state 検証 → users upsert → セッション Cookie 発行） | 不要 | `session.ts` |
 | `POST /api/auth/logout/` | セッション Cookie の破棄（form の `lang` のトップへ 303 リダイレクト。不正・欠落は `ja`） | 本人 | — |
 | `GET /api/me/` | ログイン中のユーザー情報 | 本人 | 未ログインは 401。応答の `name` は表示用。**Chrome 拡張（web-screen-extension）が host_permissions 経由の Cookie 付き fetch でログイン判定と表示名に使う**ため、401 の意味と `name` の形を変える時は拡張側も追随が要る |
-| `POST /api/uploads/presign/` | R2 へのアップロード先を払い出し、movies に `pending` 行を原子的に容量予約して作る | 本人 | `PresignRequest` / `PresignResponse`。予約後の合計が容量上限を超える場合は 413 `PAYLOAD_TOO_LARGE`、同時 pending が 10 件なら 429 `TOO_MANY_PENDING_UPLOADS` |
-| `POST /api/uploads/commit/` | R2 の実測サイズで容量を原子的に再判定し、アップロード完了を `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse`。実測サイズで容量上限を超える場合は 413 `PAYLOAD_TOO_LARGE` |
+| `POST /api/uploads/presign/` | R2 の一時キー `tmp/{shortId}` へのアップロード先を払い出し、movies に `pending` 行を原子的に容量予約して作る | 本人 | `PresignRequest` / `PresignResponse`。`publicUrl` は commit 後の `movies/{shortId}.mp4` を指す。予約後の合計が容量上限を超える場合は 413 `PAYLOAD_TOO_LARGE`、同時 pending が 10 件なら 429 `TOO_MANY_PENDING_UPLOADS`。1 ユーザー 10 回 / 60 秒を超える署名発行は 429 `TOO_MANY_PRESIGN_REQUESTS`（`Retry-After: 60`） |
+| `POST /api/uploads/commit/` | 一時実体の実測サイズで容量を原子的に再判定し、R2 内で公開キーが未作成の場合だけ stream コピーして `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse`。並行 commit は最初の公開 object の実測サイズを採用する。実測サイズで容量上限を超える場合は 413 `PAYLOAD_TOO_LARGE`。ready 化後は一時キーを削除する |
 | `POST /api/uploads/abandon/` | 所有する `pending` アップロードを `failed` にし、署名 URL 失効後の保持期間バッチへ回収を委ねる | 本人（当該 movie の所有者） | `AbandonUploadRequest`。JSON 本文は 4 KiB 上限（超過は 413 `PAYLOAD_TOO_LARGE`）。対象が `pending` 以外・不存在・他人所有でも状態を漏らさず 204 |
 | `GET /api/history/` | 自分の動画一覧 | 本人 | `HistoryResponse` |
 | `POST /api/movies/{shortId}/pin/` | pin の切り替え（保管期限を 1 年後まで延ばす。期限切れは 410 `EXPIRED`） | 本人（所有者） | `PinResponse` |
