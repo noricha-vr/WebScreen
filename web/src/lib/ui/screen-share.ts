@@ -1,7 +1,12 @@
 import { ERROR_CODES, type CreateStreamResponse, type ExtendStreamResponse } from '../contracts/api';
 import { copyToClipboard } from './clipboard';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
-import { startWhipPublisher, WhipPublishError, type WhipPublisher } from './whip-publisher';
+import {
+  SCREEN_SHARE_VIDEO_SETTINGS,
+  startWhipPublisher,
+  WhipPublishError,
+  type WhipPublisher,
+} from './whip-publisher';
 
 export const HEARTBEAT_INTERVAL_MS = 25_000;
 export const EXPIRY_WARNING_SECONDS = 5 * 60;
@@ -101,11 +106,12 @@ export class ScreenShareController {
       if (!stream) return;
       if (!this.isActiveStart(generation)) {
         releaseScreenShare(stream, () => this.clearTimers());
-        this.notifyRemoteStop(stream);
+        void this.notifyRemoteStop(stream);
         return;
       }
       this.live = stream;
       this.setUrl(stream.streamUrl);
+      this.setAudioStatus(stream.media);
       this.preview(stream.media);
       this.startTimers();
       stream.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
@@ -140,7 +146,7 @@ export class ScreenShareController {
       const stream = { ...created, publisher, media };
       if (!this.isActiveStart(generation)) {
         releaseScreenShare(stream, () => this.clearTimers());
-        this.notifyRemoteStop(stream);
+        void this.notifyRemoteStop(stream);
         return null;
       }
       return stream;
@@ -178,9 +184,9 @@ export class ScreenShareController {
     }
   }
 
-  private stop(): void {
+  private async stop(): Promise<void> {
     const live = this.finishLocally('idle');
-    if (live) this.notifyRemoteStop(live);
+    if (live) await this.notifyRemoteStop(live);
   }
 
   private startTimers(): void {
@@ -217,7 +223,7 @@ export class ScreenShareController {
 
   private handleRuntimeError(error: unknown): void {
     const live = this.finishLocally('error', error);
-    if (live) this.notifyRemoteStop(live);
+    if (live) void this.notifyRemoteStop(live);
   }
 
   private finishLocally(phase: 'idle' | 'error', error?: unknown): LiveStream | null {
@@ -244,12 +250,11 @@ export class ScreenShareController {
       console.warn('Failed to queue stream stop beacon', error);
       void this.notifyServerStop(live.id);
     }
-    this.notifyWhipDeletion(live);
+    void this.notifyWhipDeletion(live);
   }
 
-  private notifyRemoteStop(live: LiveStream): void {
-    void this.notifyServerStop(live.id);
-    this.notifyWhipDeletion(live);
+  private async notifyRemoteStop(live: LiveStream): Promise<void> {
+    await Promise.all([this.notifyServerStop(live.id), this.notifyWhipDeletion(live)]);
   }
 
   private async notifyServerStop(id: string): Promise<void> {
@@ -260,8 +265,8 @@ export class ScreenShareController {
     }
   }
 
-  private notifyWhipDeletion(live: LiveStream): void {
-    void live.publisher.deleteResource().catch((error) => {
+  private async notifyWhipDeletion(live: LiveStream): Promise<void> {
+    await live.publisher.deleteResource().catch((error) => {
       console.warn('Failed to delete WHIP resource', error);
     });
   }
@@ -321,6 +326,11 @@ export class ScreenShareController {
     if (input) input.value = url;
   }
 
+  private setAudioStatus(media: MediaStream): void {
+    const key = media.getAudioTracks().length > 0 ? 'msgAudioIncluded' : 'msgVideoOnly';
+    this.text('[data-screen-audio-status]', this.message(key));
+  }
+
   private setBusy(selector: string, busy: boolean, label: string): void {
     const button = this.button(selector);
     if (!button) return;
@@ -353,8 +363,12 @@ function displayMediaConstraints(): MediaStreamConstraints {
     // ピッカーは既定のまま（画面全体・ウィンドウ・タブから選ばせる）。PoC の
     // preferCurrentTab は macOS 権限回避用で、自タブ共有は製品では意味がない。
     // macOS の画面収録が未許可だと NotAllowedError になる（displayDenied 文言で案内）
-    video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
-    audio: false,
+    video: {
+      width: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.width },
+      height: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.height },
+      frameRate: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.frameRate, max: SCREEN_SHARE_VIDEO_SETTINGS.frameRate },
+    },
+    audio: true,
   };
 }
 

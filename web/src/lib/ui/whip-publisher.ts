@@ -3,6 +3,16 @@ import { STREAM_WHIP_BASE_URL } from '../contracts/streams';
 /** WHIP publish 時にユーザーへ意味のある対処を示すための失敗種別。 */
 export type WhipPublishErrorCode = 'H264_UNAVAILABLE' | 'WHIP_REQUEST_FAILED' | 'WHIP_RESPONSE_INVALID';
 
+/** ブラウザ配信で映像取得と WebRTC 送出に共通して使う暫定設定。 */
+export const SCREEN_SHARE_VIDEO_SETTINGS = {
+  width: 1920,
+  height: 1080,
+  frameRate: 30,
+  maxBitrate: 2_000_000,
+  contentHint: 'motion',
+  degradationPreference: 'maintain-framerate',
+} as const;
+
 /** WHIP publish が開始できなかった理由を保持する。 */
 export class WhipPublishError extends Error {
   constructor(readonly code: WhipPublishErrorCode) {
@@ -37,8 +47,13 @@ export function prioritizeH264(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] | 
 export interface WhipPublisher {
   /** ローカルの RTCPeerConnection を同期的に閉じる。 */
   close(): void;
-  /** WHIP resource を best-effort で削除する。 */
+  /** WHIP resource の削除完了を待つ。 */
   deleteResource(): Promise<void>;
+  /** ローカル接続を閉じ、WHIP resource の削除完了を待つ。 */
+  stop(): Promise<void>;
+  /** 同じ映像・配信 ID・最新 token で一度だけ publish し直す。 */
+  republish(): Promise<WhipPublisher>;
+  /** 延長で更新された publish token を以後の操作へ反映する。 */
   setPublishToken(publishToken: string): void;
 }
 
@@ -49,7 +64,6 @@ interface StartWhipPublisherInput {
   fetchImpl?: typeof fetch;
 }
 
-const MAX_BITRATE = 1_500_000;
 const ICE_GATHERING_TIMEOUT_MS = 15_000;
 
 /** 選択済みの画面を H.264 固定で WHIP endpoint へ publish する。 */
@@ -66,15 +80,15 @@ export async function startWhipPublisher(input: StartWhipPublisherInput): Promis
     const transceiver = peerConnection.addTransceiver(track, { direction: 'sendonly' });
     transceiver.setCodecPreferences(preferredCodecs);
     await configureVideoSender(transceiver.sender);
-    // AVPro は Opus を再生できない。AAC 変換を持たない今回は音声を送出しない。
-    track.contentHint = 'text';
+    track.contentHint = SCREEN_SHARE_VIDEO_SETTINGS.contentHint;
+    for (const audioTrack of input.stream.getAudioTracks()) peerConnection.addTrack(audioTrack, input.stream);
 
     await peerConnection.setLocalDescription(await peerConnection.createOffer());
     await waitForIceGathering(peerConnection);
     const response = await publishOffer(peerConnection, input, input.fetchImpl ?? fetch);
     resourceUrl = response.resourceUrl;
     await peerConnection.setRemoteDescription({ type: 'answer', sdp: response.answerSdp });
-    return publisherFor(peerConnection, resourceUrl, input.publishToken, input.fetchImpl ?? fetch);
+    return publisherFor(peerConnection, resourceUrl, input.publishToken, input.fetchImpl ?? fetch, input);
   } catch (error) {
     peerConnection.close();
     if (resourceUrl) {
@@ -91,8 +105,8 @@ function videoCodecPreferences(): RTCRtpCodec[] | null {
 async function configureVideoSender(sender: RTCRtpSender): Promise<void> {
   const parameters = sender.getParameters();
   parameters.encodings = parameters.encodings?.length ? parameters.encodings : [{}];
-  parameters.encodings[0]!.maxBitrate = MAX_BITRATE;
-  parameters.degradationPreference = 'maintain-resolution';
+  parameters.encodings[0]!.maxBitrate = SCREEN_SHARE_VIDEO_SETTINGS.maxBitrate;
+  parameters.degradationPreference = SCREEN_SHARE_VIDEO_SETTINGS.degradationPreference;
   await sender.setParameters(parameters);
 }
 
@@ -151,27 +165,44 @@ function publisherFor(
   peerConnection: RTCPeerConnection,
   resourceUrl: string,
   publishToken: string,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  input: StartWhipPublisherInput
 ): WhipPublisher {
   let currentPublishToken = publishToken;
   let closed = false;
   let deletePromise: Promise<void> | null = null;
+  let republishPromise: Promise<WhipPublisher> | null = null;
+  const close = (): void => {
+    if (closed) return;
+    closed = true;
+    peerConnection.close();
+  };
+  const deleteResource = (): Promise<void> => {
+    if (!deletePromise) {
+      deletePromise = fetchImpl(resourceUrl, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${currentPublishToken}` },
+      }).then((response) => {
+        if (!response.ok) throw new WhipPublishError('WHIP_REQUEST_FAILED');
+      });
+    }
+    return deletePromise;
+  };
   return {
-    close(): void {
-      if (closed) return;
-      closed = true;
-      peerConnection.close();
+    close,
+    deleteResource,
+    stop(): Promise<void> {
+      close();
+      return deleteResource();
     },
-    deleteResource(): Promise<void> {
-      if (!deletePromise) {
-        deletePromise = fetchImpl(resourceUrl, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${currentPublishToken}` },
-        }).then((response) => {
-          if (!response.ok) throw new WhipPublishError('WHIP_REQUEST_FAILED');
-        });
+    republish(): Promise<WhipPublisher> {
+      if (!republishPromise) {
+        close();
+        republishPromise = deleteResource().then(() =>
+          startWhipPublisher({ ...input, publishToken: currentPublishToken, fetchImpl })
+        );
       }
-      return deletePromise;
+      return republishPromise;
     },
     setPublishToken(nextPublishToken: string): void {
       currentPublishToken = nextPublishToken;

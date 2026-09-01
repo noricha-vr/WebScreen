@@ -44,6 +44,8 @@ describe('配信の後始末', () => {
         publisher: {
           close: () => { released.push('peerConnection'); },
           deleteResource: async () => undefined,
+          stop: async () => undefined,
+          republish: async () => { throw new Error('not used'); },
           setPublishToken: () => undefined,
         },
         media: { getTracks: () => [{ stop: () => { released.push('media'); } }] } as unknown as MediaStream,
@@ -61,19 +63,24 @@ describe('画面共有 controller', () => {
     let stopped = 0;
     let closed = 0;
     let deleted = 0;
+    let requestedConstraints: MediaStreamConstraints | undefined;
     const page = fakeScreenSharePage();
     const publisher: WhipPublisher = {
       close: () => { closed += 1; },
       deleteResource: async () => { deleted += 1; },
+      stop: async () => undefined,
+      republish: async () => { throw new Error('not used'); },
       setPublishToken: () => undefined,
     };
     const videoTrack = {
       addEventListener: () => undefined,
       stop: () => { stopped += 1; },
     };
+    const audioTrack = { stop: () => { stopped += 1; } };
     const media = {
-      getTracks: () => [videoTrack],
+      getTracks: () => [videoTrack, audioTrack],
       getVideoTracks: () => [videoTrack],
+      getAudioTracks: () => [audioTrack],
     } as unknown as MediaStream;
     const dependencies: ScreenShareDependencies = {
       requestJson: (async (path: string) => {
@@ -91,7 +98,10 @@ describe('画面共有 controller', () => {
         return null;
       }) as unknown as ScreenShareDependencies['requestJson'],
       startWhipPublisher: async () => publisher,
-      getDisplayMedia: async () => media,
+      getDisplayMedia: async (constraints) => {
+        requestedConstraints = constraints;
+        return media;
+      },
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
       onPageHide: () => undefined,
@@ -102,6 +112,15 @@ describe('画面共有 controller', () => {
     page.button('[data-screen-start]').click();
     await waitFor(() => !page.step('url').hidden);
     expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
+    expect(page.button('[data-screen-audio-status]').textContent).toBe('audio-included');
+    expect(requestedConstraints).toEqual({
+      audio: true,
+      video: {
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30, max: 30 },
+      },
+    });
 
     page.button('[data-screen-show-live]').click();
     expect(page.step('live').hidden).toBe(false);
@@ -109,7 +128,7 @@ describe('画面共有 controller', () => {
     page.button('[data-screen-stop]').click();
     page.button('[data-screen-stop]').click();
     expect(closed).toBe(1);
-    expect(stopped).toBe(1);
+    expect(stopped).toBe(2);
     expect(deleted).toBe(1);
     expect(page.step('idle').hidden).toBe(false);
     expect(calls).toEqual(['/api/streams/', '/api/streams/Ab12Cd34Ef56/stop/']);
@@ -182,12 +201,15 @@ describe('画面共有 controller', () => {
     const publisher: WhipPublisher = {
       close: () => undefined,
       deleteResource: async () => undefined,
+      stop: async () => undefined,
+      republish: async () => { throw new Error('not used'); },
       setPublishToken: () => undefined,
     };
     const videoTrack = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
     const media = {
       getTracks: () => [videoTrack],
       getVideoTracks: () => [videoTrack],
+      getAudioTracks: () => [],
     } as unknown as MediaStream;
     const dependencies: ScreenShareDependencies = {
       requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
@@ -201,6 +223,7 @@ describe('画面共有 controller', () => {
 
     page.button('[data-screen-start]').click();
     await waitFor(() => !page.step('url').hidden);
+    expect(page.button('[data-screen-audio-status]').textContent).toBe('video-only');
     pageHide?.();
 
     expect(beaconUrls).toEqual(['/api/streams/Ab12Cd34Ef56/stop/']);
@@ -217,10 +240,12 @@ describe('画面共有 controller', () => {
     const publisher: WhipPublisher = {
       close: () => { closed += 1; },
       deleteResource: async () => { deleted += 1; },
+      stop: async () => undefined,
+      republish: async () => { throw new Error('not used'); },
       setPublishToken: () => undefined,
     };
     const track = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
-    const media = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
+    const media = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
     const dependencies: ScreenShareDependencies = {
       requestJson: ((path: string) => {
         calls.push(path);
@@ -261,7 +286,7 @@ describe('画面共有 controller', () => {
     let createRequests = 0;
     let publisherStarts = 0;
     const track = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
-    const media = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
+    const media = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
     const dependencies: ScreenShareDependencies = {
       requestJson: (async () => {
         createRequests += 1;
@@ -312,6 +337,7 @@ function fakeScreenSharePage(): {
     '[data-screen-extend]', '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
     '[data-screen-preview]', '[data-screen-elapsed]', '[data-screen-expires]',
     '[data-screen-expiry-warning]', '[data-screen-error-message]', '[data-screen-indicators]',
+    '[data-screen-audio-status]',
   ]) elements.set(selector, new FakeElement());
   const steps = ['idle', 'login', 'url', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
@@ -329,6 +355,7 @@ function fakeScreenSharePage(): {
       labelExtend: 'extend', labelExtending: 'extending', labelStop: 'stop', labelStopping: 'stopping',
       msgGeneric: 'error', msgH264: 'h264', msgWhip: 'whip', msgDisplayDenied: 'denied',
       msgStreamAlreadyLive: 'already-live', msgRateLimited: 'rate-limited', msgStreamEnded: 'ended',
+      msgAudioIncluded: 'audio-included', msgVideoOnly: 'video-only',
     },
     querySelector: (selector: string) => elements.get(selector) ?? null,
     querySelectorAll: (selector: string) => {

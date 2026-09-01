@@ -291,6 +291,7 @@
     "wizard": {
       "start": "Start screen sharing",
       "startHint": "This opens your browser's screen picker. Choose the tab, window, or screen you want to show.",
+      "selectAudioHint": "To include audio in Chrome, choose a tab and turn on Share tab audio.",
       "selecting": "Choosing a screen…",
       "loginHeading": "Sign in with Discord to start",
       "loginBody": "You need to sign in before creating a streaming URL. There is no password to create.",
@@ -302,6 +303,8 @@
       "showLive": "View the live stream",
       "liveHeading": "Live now",
       "preview": "Preview of the shared screen",
+      "audioIncluded": "Streaming with audio.",
+      "videoOnly": "No audio track was selected, so this stream is video only.",
       "elapsed": "Elapsed time",
       "expires": "Time until extension expires",
       "extend": "Extend",

@@ -291,6 +291,7 @@
     "wizard": {
       "start": "画面共有をはじめる",
       "startHint": "押すとブラウザの画面選択が開きます。見せたいタブ・ウィンドウ・画面を選んでください。",
+      "selectAudioHint": "Chrome で音声も配信するには、共有するタブを選び、「タブの音声を共有」をオンにしてください。",
       "selecting": "画面を選んでいます…",
       "loginHeading": "Discord でログインすると始められます",
       "loginBody": "配信 URL を作るにはログインが必要です。パスワードの登録はありません。",
@@ -302,6 +303,8 @@
       "showLive": "配信中の画面を見る",
       "liveHeading": "配信中",
       "preview": "共有中の画面プレビュー",
+      "audioIncluded": "音声を含めて配信しています。",
+      "videoOnly": "音声トラックがないため、映像のみで配信しています。",
       "elapsed": "経過時間",
       "expires": "延長期限まで",
       "extend": "延長",
