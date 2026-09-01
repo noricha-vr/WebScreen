@@ -28,7 +28,10 @@ function cachePurge(fetcher?: PurgeFetcher): CachePurgeSettings {
 class FakeMoviesDatabase implements MoviesDatabase {
   deletedRows = 0;
 
-  constructor(private readonly failDelete = false) {}
+  constructor(
+    private readonly failDelete = false,
+    private readonly status: 'pending' | 'ready' | 'failed' = 'ready'
+  ) {}
 
   prepare(query: string) {
     const isDelete = query.startsWith('DELETE');
@@ -39,7 +42,7 @@ class FakeMoviesDatabase implements MoviesDatabase {
             short_id: SHORT_ID,
             user_id: USER_ID,
             filename: 'movie.mp4',
-            status: 'ready',
+            status: this.status,
             pinned: 0,
             created_at: '2026-08-25 12:00:00',
             expires_at: null,
@@ -92,6 +95,24 @@ async function captureErrorEvents(run: () => Promise<void>): Promise<string[]> {
 }
 
 describe('deleteMovie', () => {
+  it.each(['pending', 'failed'] as const)('%s は 409 で拒否し、R2 と D1 に触らない', async (status) => {
+    const database = new FakeMoviesDatabase(false, status);
+    const bucket = new FakeMovieBucket();
+
+    await expect(
+      deleteMovie({
+        database,
+        bucket,
+        cachePurge: cachePurge(),
+        userId: USER_ID,
+        shortId: SHORT_ID,
+      })
+    ).rejects.toMatchObject({ status: 409 });
+
+    expect(bucket.deletedKeys).toEqual([]);
+    expect(database.deletedRows).toBe(0);
+  });
+
   it('R2 を消した後に行の削除が失敗したら、実体の無い行が残ったことをログに残す', async () => {
     const database = new FakeMoviesDatabase(true);
     const bucket = new FakeMovieBucket();
