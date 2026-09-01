@@ -170,7 +170,7 @@ VRChat PC 実機（ProTV の Stream モード）+ Indigo 上の MediaMTX **v1.20
 | maxBitrate 2500 kbps | 毎フレーム | **0.08 秒（5 サンプル全て ±0.01 秒以内）** |
 
 - **パイプライン遅延は実網越しでも約 0.1 秒**。ローカル実測の約 100ms（V10)と整合し、
-  想定レンジ 0.3〜0.5 秒より良い。訴求は「対応ワールドなら 0.1 秒級」まで言える
+  想定レンジ 0.3〜0.5 秒より良い。訴求は「実測した `Use Low Latency` ON のワールドでは 0.1 秒級」までに限定する
 - **ビットレート不足は遅延にも化ける**: 600 kbps ではデルタフレームが実質空（I5）のため表示が
   キーフレーム周期でしか進まず、体感遅延が最大 2.5 秒まで揺れる。画質の段設計は帯域だけでなく
   体感遅延の問題でもある
@@ -253,7 +253,7 @@ Meta Quest 単体の VRChat で `rtspt://stream.web-screen.net/live/qtest`（本
 |---|---|
 | 映像 | 再生 OK（RTSP over TCP。サーバーログに `with TCP, 2 tracks (H264, MPEG-4 Audio)`） |
 | 音声 | **AAC が Quest で鳴る**（R3 の実機裏取り） |
-| 体感遅延 | **2〜3 秒**（PC の Use Low Latency ON = 0.08 秒より大きい。ExoPlayer 側のバッファ） |
+| 体感遅延 | **2〜3 秒**（PC の Use Low Latency ON = 0.08 秒より大きい。Quest/VRChat 受信経路側に残る現状境界） |
 | 安定性 | 80 秒前後のセッションを複数回、切断なし |
 | `rtsp://`（8554 明示） | 再生 OK |
 
@@ -271,7 +271,7 @@ Meta Quest 単体の VRChat で `rtspt://stream.web-screen.net/live/qtest`（本
 
 配信ホストを専用ドメイン `webscreen.tv`（apex・A レコードで Indigo 直指し・Cloudflare プロキシ OFF）へ
 切り替え、`rtspt://webscreen.tv/live/qtest` を **PC / Quest の両実機で再生確認**した。
-体感遅延は PC < Quest（PC = Use Low Latency ON の 0.08 秒水準、Quest = ExoPlayer バッファで 2〜3 秒。I7 / I12 と整合）。
+体感遅延は PC < Quest（PC = Use Low Latency ON の 0.08 秒水準、Quest = Quest/VRChat 受信経路側に残る 2〜3 秒の現状境界。network 受信後の decode / render / buffer の具体的要因と値は未確認。I7 / I12 と整合）。
 
 - 移行理由: Quest では URL を手打ちするしかなく、ホストが 21 文字 → 12 文字・ハイフン 2 個 → 0 個になる
 - DNS のみで完結（RTSP はホスト名を見ないため、サーバー側の設定変更は不要だった）
@@ -381,6 +381,36 @@ actual YouTube を音声共有ありで本番 relay と VRChat PC 実機へ配�
 
 本番WebScreen UIからactual YouTubeを再確認する最終確認は未実施。I17のactual YouTube観測とこのI18のrelay合格を混同しない。
 
+### I19: 約3秒に見えた RTSPT 遅延を配信経路と受信側に分離（2026-09-01）
+
+RTMP が約 0.5 秒、RTSPT が約 3 秒に見えた観測を、同一 H.264 packet と送信元時計で分けて再測定した。
+結論は、**配信元のオンライン時計から本番 RTSPT 出口までは 1 秒未満**であり、MediaMTX + FFmpeg relay は約 70 ms である。
+
+| 測定 | 方法 | 結果 |
+|---|---|---|
+| ingress → egress | 同一 H.264 packet payload hash を照合（335 packets） | median **69.6 ms** / p95 **132.8 ms** / max **183.9 ms** |
+| 配信元時計 → RTSPT 出口 | 入力にオンライン時計を描画し、出口で `-use_wallclock_as_timestamps 1` + `-copyts` + `-frame_pts 1` を用いて 9 フレームを OCR | **0.097〜0.294 秒**、中央値約 **0.11 秒** |
+| WebRTC 入力の損失（単一時点） | MediaMTX 統計とログを確認 | 197,851 received / 79 lost（約 **0.04%**）、discarded frame 1、write queue full なし |
+
+初期の `strftime` / fps 採取は約 3 秒に見えたが、採取側のバッファを含んでいたため結論に使わない。長時間観測は **24分47秒**で stream 終了まで確認した時点で、28〜29 fps、egress 1.2〜1.3 Mbps だった。30 分の安定性合格は未達である。
+
+relay 設定の A/B では、通常設定から実質的な改善はなかった。
+
+| relay 設定 | median | p95 | max | 判定 |
+|---|---:|---:|---:|---|
+| baseline | 65.0 ms | 122.6 ms | 178.2 ms | 基準 |
+| `nobuffer` + `low_delay` + `flush` | 61.1 ms | 124.7 ms | — | 実質改善なし |
+| 上記 + `max_delay=0` | 61.6 ms | 126.7 ms | — | 実質改善なし |
+
+`-probesize 32 -analyzeduration 0` は H.264 dimensions unspecified / Could not write header で起動不能となり不採用。FFmpeg の低遅延入力オプションは [formats documentation](https://ffmpeg.org/ffmpeg-formats.html) を参照。MediaMTX は reader へ即時送出し、遅延用バッファを持たないという maintainer の説明とも整合する（[discussion #3660](https://github.com/bluenviron/mediamtx/discussions/3660)）。したがって、**本番 relay 設定は変更しない**。約 70 ms の relay を危険な起動不能設定で削っても 3 秒の説明にならず、RTMP を復活させる理由にもならない。
+
+判断境界は Quest/VRChat 受信経路側に残る。
+
+- **PC VRChat が約 3 秒の場合**: ワールドの AVPro `Use Low Latency` が ON かを確認する。Windows 向けの同プロパティは [AVPro documentation](https://www.renderheads.com/content/docs/AVProVideo/articles/inline-component-media-player-properties-windows.html) を参照。既存の I7 は ON のワールドで約 0.08 秒であり、現在使うワールドの実値は未確認である。
+- **Quest の 2〜3 秒**: 同じ `rtspt://webscreen.tv/live/{id}` で再生できるが、これは Quest/VRChat 受信経路側に残る現状境界である。ネットワーク受信後の decode / render / buffer の具体的要因と値は未確認。Media3 の標準 `DefaultLoadControl` の既定バッファは説明可能性の参考にすぎず、VRChat の具体的な設定値を示さない（[Android reference](https://developer.android.com/reference/androidx/media3/exoplayer/DefaultLoadControl)）。サーバー設定だけで Quest の 1 秒未満を保証することはできない。
+
+未確認のまま残すものは、現在のワールドの `Use Low Latency` 実値、Quest の 1 秒未満、および 30 分の長時間安定性である。
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |
@@ -395,3 +425,6 @@ actual YouTube を音声共有ありで本番 relay と VRChat PC 実機へ配�
 | 8 | ~~WHIP の UDP を NAT 越しに到達させる実構成~~ | **2026-08-31 解消**（I1。Indigo は NAT なしのグローバル IP 直付けで、`webrtcAdditionalHosts` 不要） |
 | 9 | 本番WebScreen UIからactual YouTubeをループさせる長時間確認 | I18の合成relay QAとは別に、UI経路のfps・freeze・帯域・文字可読性を最終確認する |
 | 10 | Safariでのfull設定の受理・実送出 | full設定拒否時はmaxBitrate-only fallbackで配信を継続するが、文字品質は別途確認する |
+| 11 | 現在使うワールドの `Use Low Latency` 実値 | I7 は ON の別ワールドで約 0.08 秒。PC で約 3 秒なら最初に確認する |
+| 12 | Quest で 1 秒未満 | 現状は 2〜3 秒。Quest/VRChat 受信経路の decode / render / buffer の具体的要因と値は未確認で、サーバー設定だけでは保証不能 |
+| 13 | 30 分の長時間安定性 | 24分47秒まで 28〜29 fps、egress 1.2〜1.3 Mbps を観測後に stream 終了。合格扱いにしない |

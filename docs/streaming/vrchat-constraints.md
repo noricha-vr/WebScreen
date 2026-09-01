@@ -24,8 +24,8 @@ PC だけが桁違いに外れている。
 
 | | 最小遅延 | 経路 | 条件 |
 |---|---|---|---|
-| **PC** | **約 0.08 秒** | `rtspt://` + AVPro `Use Low Latency` **ON** | Indigo 往復の実機実測。ワールド依存 |
-| **Quest** | **体感 2〜3 秒** | PC と同じ `rtspt://` | ExoPlayer 側のバッファ。80 秒前後を複数回、切断なし |
+| **PC** | **約 0.08 秒**（既存実測） | `rtspt://` + AVPro `Use Low Latency` **ON** | Indigo 往復の実機実測。現在使うワールドの設定値は未確認。合格条件は ON かつ 1 秒未満 |
+| **Quest** | **体感 2〜3 秒** | PC と同じ `rtspt://webscreen.tv/live/{id}` | Quest/VRChat 受信経路側に残る現状境界。network 受信後の decode / render / buffer の具体的要因と値は未確認。URL は一本化できるが、サーバー設定だけで 1 秒未満は保証できない |
 
 ## PC の遅延はワールド作者が決める（こちらから制御できない）
 
@@ -34,11 +34,11 @@ PC だけが桁違いに外れている。
 
 | ワールドの設定 | PC の遅延 |
 |---|---|
-| `Use Low Latency` ON | **約 0.08 秒（WebScreen 実測）** |
-| `Use Low Latency` OFF | **+8〜10 秒** |
+| `Use Low Latency` ON | **約 0.08 秒（WebScreen の既存実測）**。ただし現在使うワールドの実値は未確認 |
+| `Use Low Latency` OFF | 現行ワールドで未実測。旧比較の +8〜10 秒を現行の合格値には使わない |
 
-**製品としての意味**: WebScreen が「超低遅延」を謳っても、**視聴されるワールド次第で 20 倍変わる**。
-訴求できるのは「対応ワールドなら 0.1 秒級」であって「常に 0.1 秒」ではない。対応ワールドの案内をドキュメントに置く必要がある。
+**製品としての意味**: WebScreen が「超低遅延」を謳っても、**視聴されるワールド次第で大きく変わる**。
+訴求できるのは「`Use Low Latency` ON かつ実測で 1 秒未満を確認したワールドなら 1 秒未満（既存実測は 0.1 秒級）」であって「常に 0.1 秒」ではない。現在のワールドの設定と実測を確認してから案内する。Windows の設定説明は [AVPro documentation](https://www.renderheads.com/content/docs/AVProVideo/articles/inline-component-media-player-properties-windows.html) を参照。
 
 また、ワールド側は **AVPro の Stream モード**である必要がある（VRChat 公式が Unity 標準 VideoPlayer は "does not support these live streams" と明記）。
 
@@ -71,4 +71,5 @@ VRCDN / TopazChat が既定 allowlist 入りなのは、技術投資では買え
 | **Quest の HTTP 系 URL は HTTPS 必須** | 静的 MP4 / HLS の HTTP 配信に対する制約。RTSP は `rtspt://webscreen.tv/...` を実機確認済み |
 | URL 投入のレート制限 | ユーザーあたり 5 秒に 1 回のグローバル制限。リトライ設計に効く |
 | **60 秒切断の既知問題** | MediaMTX v1.20.1 + VRChat PC 実機で 7 分以上の単一 RTSP セッションを確認し、再現しなかった。バージョン更新時は [acceptance-test.md](acceptance-test.md) A5 を再実行する |
+| **開始直後のカクつき** | actual YouTube の既存観測では約 30 秒で自然に安定。まず 30 秒待ち、継続時は ingress / egress bytes を確認する。relay 未到達の場合だけ再接続し、到達済みなら再接続を合格手順にしない。無条件の再起動は案内しない |
 | AVPro のバージョン | VRChat の AVPro は **v3.3.6**（Build 1864 / 2026-06-22, VRChat 2026.2.3）。上記の遅延実測値はすべて 2.x 時代のもので、**PC HLS 35 秒が現在も再現するかは未検証** |

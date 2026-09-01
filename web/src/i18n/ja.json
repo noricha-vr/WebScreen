@@ -284,7 +284,7 @@
   },
   "screenSharePage": {
     "title": "VRChat で画面共有する方法 — OBS 不要・ブラウザだけ | WebScreen",
-    "description": "VRChat に自分の画面をそのまま映せます。OBS もインストールも不要、ブラウザで画面を選んで URL を貼るだけ。PC・Quest 対応、対応ワールドなら遅延約 0.1 秒。",
+    "description": "VRChat に自分の画面をそのまま映せます。OBS もインストールも不要、ブラウザで画面を選んで URL を貼るだけ。PC では Use Low Latency ON を確認済みのワールドで遅延約 0.1 秒、Quest では 2〜3 秒です。",
     "heading": "VRChat に画面共有 — ブラウザだけで、OBS 不要",
     "lead": "見せたい画面を選ぶだけで、VRChat のビデオプレイヤーに貼れる配信 URL を作れます。",
     "badges": ["OBS 不要", "インストール不要", "PC・Quest 対応"],
@@ -336,7 +336,7 @@
         { "heading": "VRChat に貼る", "body": "対応ワールドのビデオプレイヤーへ URL を貼り付けます。", "placeholder": "VRChat へ貼り付けるイメージ" }
       ]
     },
-    "features": { "heading": "特徴", "items": ["OBS 不要、ブラウザだけで配信", "Use Low Latency 対応ワールドなら遅延約 0.1 秒", "Quest も同じ URL で視聴", "無料で使える"] },
+    "features": { "heading": "特徴", "items": ["OBS 不要、ブラウザだけで配信", "Use Low Latency ON の確認済みワールドで遅延約 0.1 秒", "Quest も同じ URL で視聴", "無料で使える"] },
     "faq": {
       "heading": "よくある質問",
       "items": [
