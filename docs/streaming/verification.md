@@ -226,6 +226,19 @@ path をハイフンなしの短い名前に変えると即座に再生できた
 - UI のコピーボタン実装時（#128）に、貼り付け先で URL が欠けないことを実機で確認する
 - 原因の特定までは至っていない（VRChat 側の入力処理か、コピー経路のどちらか）。**未確認**
 
+### I11: VRChat はポート省略の RTSP URL を受ける（2026-09-01）
+
+`rtspt://161.34.34.128/live/p554`（**ポート番号なし**）を VRChat PC 実機に貼って再生できた。
+RTSP の既定ポート 554 が補われている。
+
+- 検証構成: Indigo の 554/tcp をポータル FW で開け、`iptables -t nat -A PREROUTING -p tcp --dport 554 -j REDIRECT --to-port 8554`
+  で 8554 の MediaMTX へ転送した（PoC 用の暫定。**本番は MediaMTX に 554 を直接リッスンさせる** → [requirements.md](requirements.md)）
+- 事前確認: Mac から `ffprobe -rtsp_transport tcp rtsp://161.34.34.128/live/p554` が
+  h264 / Constrained Baseline / yuv420p / `has_b_frames=0` を返した
+- 結論: 配信 URL から `:8554` を落とせる。**ホスト名は #93 の凍結どおり変えない**ので、
+  allowlist 登録済みワールドへの影響はない（VRChat の Allowed Domains はホスト名だけを見る）
+- 効果: `rtspt://stream.web-screen.net/live/{id}` となり、TopazChat（`rtspt://topaz.chat/live/{key}`）と同程度の長さになる
+
 ### I5: 動画素材の画面共有は 600 kbps では成立しない（VRChat 実機・2026-08-31）
 
 VRChat PC 実機（ProTV）で `getDisplayMedia` の実画面（YouTube 再生中のタブ・1916x1060）を配信して観測した。
