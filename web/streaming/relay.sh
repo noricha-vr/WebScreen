@@ -8,6 +8,11 @@ readonly BASE_BACKOFF_SECONDS=1
 readonly INGRESS_RTSP_ORIGIN="${INGRESS_RTSP_ORIGIN:-rtsp://127.0.0.1:8554}"
 readonly EGRESS_RTSP_ORIGIN="${EGRESS_RTSP_ORIGIN:-rtsp://127.0.0.1:554}"
 readonly FFMPEG_BIN="${FFMPEG_BIN:-ffmpeg}"
+script_directory="$(unset CDPATH; cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIRECTORY="$script_directory"
+
+# shellcheck disable=SC1091
+. "$SCRIPT_DIRECTORY/audio-profile.sh"
 
 child_pid=''
 stopping=0
@@ -46,7 +51,8 @@ run_relay() {
 
   while (( retry_count <= MAX_RETRIES )); do
     "$FFMPEG_BIN" -nostdin -rtsp_transport tcp -i "$input_url" \
-      -map 0:v:0 -c:v copy -map 0:a? -c:a aac -ar 48000 -ac 2 -b:a 128k \
+      -map 0:v:0 -c:v copy -map 0:a? -c:a "$RELAY_AUDIO_ENCODER" \
+      -ar "$AUDIO_SAMPLE_RATE" -ac "$AUDIO_CHANNELS" -b:a "$AUDIO_BITRATE" \
       -f rtsp -rtsp_transport tcp "$output_url" &
     child_pid=$!
     if wait "$child_pid"; then

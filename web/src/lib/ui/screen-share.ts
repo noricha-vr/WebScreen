@@ -7,6 +7,7 @@ import {
 import { copyToClipboard } from './clipboard';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
 import { waitForStreamReady } from './stream-health';
+import { keyframeRequestIntervalForSearch } from './stream-profile';
 import {
   SCREEN_SHARE_VIDEO_SETTINGS,
   startWhipPublisher,
@@ -210,6 +211,7 @@ export class ScreenShareController {
         stream: media,
         streamId: created.id,
         publishToken: created.publishToken,
+        keyframeRequestIntervalMs: keyframeRequestIntervalForSearch(globalThis.window?.location?.search ?? ''),
       });
       stream = { ...created, publisher, media };
       if (!this.isActiveStart(generation)) {

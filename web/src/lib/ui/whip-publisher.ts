@@ -14,6 +14,9 @@ export const SCREEN_SHARE_VIDEO_SETTINGS = {
   scaleResolutionDownBy: 1,
 } as const;
 
+/** MP3 beta 配信だけで許可するkeyframe要求の固定間隔。 */
+export const MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS = 500;
+
 /** WHIP publish が開始できなかった理由を保持する。 */
 export class WhipPublishError extends Error {
   constructor(readonly code: WhipPublishErrorCode) {
@@ -62,10 +65,25 @@ interface StartWhipPublisherInput {
   stream: MediaStream;
   streamId: string;
   publishToken: string;
+  keyframeRequestIntervalMs?: typeof MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS;
   fetchImpl?: typeof fetch;
 }
 
 const ICE_GATHERING_TIMEOUT_MS = 15_000;
+
+interface KeyframeRequestOptions {
+  encodingOptions: Array<{ keyFrame: true }>;
+}
+
+interface KeyframeRequestSender {
+  getParameters(): RTCRtpSendParameters;
+  setParameters(parameters: RTCRtpSendParameters, options: KeyframeRequestOptions): Promise<void>;
+}
+
+interface KeyframeRequester {
+  start(): void;
+  stop(): void;
+}
 
 /** 選択済みの画面を H.264 固定で WHIP endpoint へ publish する。 */
 export async function startWhipPublisher(input: StartWhipPublisherInput): Promise<WhipPublisher> {
@@ -89,7 +107,18 @@ export async function startWhipPublisher(input: StartWhipPublisherInput): Promis
     const response = await publishOffer(peerConnection, input, input.fetchImpl ?? fetch);
     resourceUrl = response.resourceUrl;
     await peerConnection.setRemoteDescription({ type: 'answer', sdp: response.answerSdp });
-    return publisherFor(peerConnection, resourceUrl, input.publishToken, input.fetchImpl ?? fetch, input);
+    const keyframeRequester = input.keyframeRequestIntervalMs === MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS
+      ? createKeyframeRequester(transceiver.sender)
+      : undefined;
+    keyframeRequester?.start();
+    return publisherFor(
+      peerConnection,
+      resourceUrl,
+      input.publishToken,
+      input.fetchImpl ?? fetch,
+      input,
+      keyframeRequester
+    );
   } catch (error) {
     peerConnection.close();
     if (resourceUrl) {
@@ -119,6 +148,44 @@ async function configureVideoSender(sender: RTCRtpSender): Promise<void> {
     delete fallback.degradationPreference;
     await sender.setParameters(fallback);
   }
+}
+
+function createKeyframeRequester(sender: RTCRtpSender): KeyframeRequester {
+  const keyframeSender = sender as unknown as KeyframeRequestSender;
+  let stopped = false;
+  let started = false;
+  let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+
+  const stop = (): void => {
+    stopped = true;
+    if (timer !== undefined) globalThis.clearTimeout(timer);
+    timer = undefined;
+  };
+  const schedule = (): void => {
+    if (stopped) return;
+    timer = globalThis.setTimeout(request, MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS);
+  };
+  const request = (): void => {
+    timer = undefined;
+    if (stopped) return;
+    try {
+      const parameters = keyframeSender.getParameters();
+      const options: KeyframeRequestOptions = {
+        encodingOptions: (parameters.encodings ?? []).map(() => ({ keyFrame: true })),
+      };
+      void keyframeSender.setParameters(parameters, options).then(schedule, stop);
+    } catch {
+      stop();
+    }
+  };
+  return {
+    start(): void {
+      if (started || stopped) return;
+      started = true;
+      request();
+    },
+    stop,
+  };
 }
 
 async function waitForIceGathering(peerConnection: RTCPeerConnection): Promise<void> {
@@ -177,7 +244,8 @@ function publisherFor(
   resourceUrl: string,
   publishToken: string,
   fetchImpl: typeof fetch,
-  input: StartWhipPublisherInput
+  input: StartWhipPublisherInput,
+  keyframeRequester?: KeyframeRequester
 ): WhipPublisher {
   let currentPublishToken = publishToken;
   let closed = false;
@@ -186,6 +254,7 @@ function publisherFor(
   const close = (): void => {
     if (closed) return;
     closed = true;
+    keyframeRequester?.stop();
     peerConnection.close();
   };
   const deleteResource = (): Promise<void> => {

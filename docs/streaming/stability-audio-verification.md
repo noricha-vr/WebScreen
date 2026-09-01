@@ -17,7 +17,7 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 | ビットレート | 1000 kbps | **映像 1200 kbps + 音声 128 kbps（公称合計 1328 kbps）** | 実測出口 1.385 Mbps で、1.5 Mbps 上限から 115 kbps の余裕を確保した |
 | 劣化方針 | OBS プリセット P7 / 高品質 | **`contentHint = 'detail'` + `maintain-resolution`** | I18 の本番 relay 合成QAで、文字可読性と動画安定性が合格 |
 | スケール | — | **`scaleResolutionDownBy = 1`** | I18 で動画像区間の送出解像度を1280x720に維持 |
-| キーフレーム | 0 秒（自動） | **MediaMTX の PLI により約 2 秒** | ブラウザから固定できないため、受信側の途中参加待ちとして受け入れる |
+| キーフレーム | 0 秒（自動） | **通常はMediaMTXのPLIにより約2秒** | MP3 betaのChromeだけ500 ms周期で次キーフレームを要求。first-packet IDRは保証しない |
 | 音声 | FFmpeg AAC、音声トラック 1 | **タブ音声 → WebRTC 音声 → AAC-LC 48 kHz / stereo / 128 kbps** | Chrome で「タブの音声を共有」をオンにした時だけ音声を付ける |
 
 採用実装の正本は `web/src/lib/ui/whip-publisher.ts`。本番 relay の合成 motion/static QA は合格したが、WebScreen UI からの actual YouTube 最終確認は未実施。
@@ -104,9 +104,13 @@ checksum が不変、ingress / egress のテスト path が 404、remote の一�
 
 この設計により、再起動は一般的な注意書きではなく、実際に relay 未到達を検知した時だけ行う回復操作になる。
 
+MP3 betaの20回途中参加ではfirst packet Kが3/20、non-Kが17/20、次キーフレームまで0〜463 msだった。decoder probeは初期missing-reference警告後も継続した。開始直後のカクつきや約30秒後の安定は、常設の再起動案内ではなく初動buffer / decoder recoveryの観測として扱う。
+
+MP3 48 kHz stereo 128 kbpsは30分・非無音・A/V 7〜15 msまで自動確認済みで、ユーザーからも「聞こえた」「めっちゃ速い」との観測がある。ただしPC/Quest別の実聴と1秒未満、および実Mac 24/30 fps比較はA12で未完である。
+
 ## 音声の確認境界
 
 - 画面選択前に「Chrome でタブを選び、タブの音声を共有をオンにする」と案内する。
 - 選択結果に音声トラックがあれば「音声を含めて配信しています」、なければ「映像のみ」と表示する。
-- relay 出口は `verify-codecs.sh` で H.264 + AAC を検証する。
+- relay 出口は現行でH.264 + AAC、MP3 beta候補でH.264 + MP3を `verify-codecs.sh` で検証する。
 - 表示文言は **「検証時に音声が出ることを確認済み」** とし、PoC という表現は使わない。

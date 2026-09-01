@@ -64,6 +64,8 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 | `webrtcTrackGatherTimeout` | **15 秒程度へ延ばす**（既定 2 秒は短い） | 既定のままだと publish 開始に失敗することがある |
 | キーフレーム間隔 | **2.00 秒固定・変更不可** | MediaMTX が WebRTC publisher へ 2 秒周期で PLI を送る。Go の `const` のため設定で変えられない |
 
+MP3 betaだけは、ChromeでURL queryに `stream-profile=mp3-beta` が**ちょうど1個**ある時、ブラウザから500 ms周期で次キーフレームを要求する。通常アクセス、unknown値、重複値では無効で、任意intervalは受け付けない。これは生成完了やreaderのfirst-packet IDRを保証せず、MediaMTXにGOP cacheもない。非対応ブラウザでは第2引数が無視され、要求がno-opになる可能性がある。本番AACの2秒GOP契約は変更しない。
+
 ### キーフレーム 2 秒固定が連鎖させる制約
 
 これは設定で回避できないため、仕様として受け入れるか、MediaMTX をフォークするかの二択になる。
