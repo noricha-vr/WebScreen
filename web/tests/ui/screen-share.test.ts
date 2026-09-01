@@ -100,9 +100,6 @@ describe('画面共有 controller', () => {
     controller.mount();
 
     page.button('[data-screen-start]').click();
-    expect(page.step('select').hidden).toBe(false);
-
-    page.button('[data-screen-select]').click();
     await waitFor(() => !page.step('url').hidden);
     expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
 
@@ -116,6 +113,65 @@ describe('画面共有 controller', () => {
     expect(deleted).toBe(1);
     expect(page.step('idle').hidden).toBe(false);
     expect(calls).toEqual(['/api/streams/', '/api/streams/Ab12Cd34Ef56/stop/']);
+  });
+
+  test('ステップドットは開始前に隠れ、URL 表示で 1 つ目が点灯する', async () => {
+    const page = fakeScreenSharePage();
+    const track = { addEventListener: () => undefined, stop: () => undefined };
+    const media = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
+    new ScreenShareController(page.root, {
+      requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => ({
+        close: () => undefined, deleteResource: async () => undefined, setPublishToken: () => undefined,
+      }),
+      getDisplayMedia: async () => media,
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: () => undefined,
+    }).mount();
+
+    expect(page.indicators.hidden).toBe(true);
+    expect(page.activeIndicators()).toEqual([]);
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('url').hidden);
+
+    expect(page.indicators.hidden).toBe(false);
+    expect(page.activeIndicators()).toEqual(['1']);
+
+    page.button('[data-screen-show-live]').click();
+    expect(page.activeIndicators()).toEqual(['2']);
+  });
+
+  test('ピッカー選択中は開始・再試行を無効化し、ラベルは span だけ差し替えてアイコンを保つ', async () => {
+    const page = fakeScreenSharePage();
+    const start = page.button('[data-screen-start]');
+    const retry = page.button('[data-screen-retry]');
+    start.labelSpan = new FakeElement();
+    start.labelSpan.textContent = 'start';
+    let rejectPicker: ((reason: unknown) => void) | undefined;
+    new ScreenShareController(page.root, {
+      requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => ({
+        close: () => undefined, deleteResource: async () => undefined, setPublishToken: () => undefined,
+      }),
+      getDisplayMedia: () => new Promise((_resolve, reject) => { rejectPicker = reject; }),
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: () => undefined,
+    }).mount();
+
+    start.click();
+    expect(start.disabled).toBe(true);
+    expect(retry.disabled).toBe(true);
+    expect(start.labelSpan.textContent).toBe('selecting');
+    expect(start.textContent).toBe(''); // ボタン直下（アイコン）は書き換えない
+
+    rejectPicker!(new DOMException('denied', 'NotAllowedError'));
+    await waitFor(() => !page.step('error').hidden);
+    expect(start.disabled).toBe(false);
+    expect(retry.disabled).toBe(false);
+    expect(start.labelSpan.textContent).toBe('start');
   });
 
   test('pagehide では空 body の sendBeacon で停止を通知する', async () => {
@@ -144,7 +200,6 @@ describe('画面共有 controller', () => {
     new ScreenShareController(page.root, dependencies).mount();
 
     page.button('[data-screen-start]').click();
-    page.button('[data-screen-select]').click();
     await waitFor(() => !page.step('url').hidden);
     pageHide?.();
 
@@ -182,7 +237,6 @@ describe('画面共有 controller', () => {
     const controller = new ScreenShareController(page.root, dependencies);
     controller.mount();
     page.button('[data-screen-start]').click();
-    page.button('[data-screen-select]').click();
     await waitFor(() => !page.step('url').hidden);
     page.button('[data-screen-show-live]').click();
     page.button('[data-screen-extend]').click();
@@ -225,7 +279,6 @@ describe('画面共有 controller', () => {
     new ScreenShareController(page.root, dependencies).mount();
 
     page.button('[data-screen-start]').click();
-    page.button('[data-screen-select]').click();
     pageHide?.();
     pendingMedia.resolve(media);
     await flushMicrotasks();
@@ -250,27 +303,29 @@ function fakeScreenSharePage(): {
   button: (selector: string) => FakeElement;
   step: (phase: string) => FakeElement;
   url: FakeElement;
+  indicators: FakeElement;
+  activeIndicators: () => string[];
 } {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
-    '[data-screen-start]', '[data-screen-select]', '[data-screen-copy]', '[data-screen-show-live]',
+    '[data-screen-start]', '[data-screen-copy]', '[data-screen-show-live]',
     '[data-screen-extend]', '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
     '[data-screen-preview]', '[data-screen-elapsed]', '[data-screen-expires]',
-    '[data-screen-expiry-warning]', '[data-screen-error-message]',
+    '[data-screen-expiry-warning]', '[data-screen-error-message]', '[data-screen-indicators]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'select', 'login', 'url', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'url', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;
   });
-  const indicators = ['1', '2', '3'].map((value) => {
+  const indicators = ['1', '2'].map((value) => {
     const indicator = new FakeElement();
     indicator.dataset.screenIndicator = value;
     return indicator;
   });
   const root = {
     dataset: {
-      labelSelect: 'select', labelSelecting: 'selecting', labelCopy: 'copy', labelCopied: 'copied',
+      labelStart: 'start', labelSelecting: 'selecting', labelCopy: 'copy', labelCopied: 'copied',
       labelExtend: 'extend', labelExtending: 'extending', labelStop: 'stop', labelStopping: 'stopping',
       msgGeneric: 'error', msgH264: 'h264', msgWhip: 'whip', msgDisplayDenied: 'denied',
       msgStreamAlreadyLive: 'already-live', msgRateLimited: 'rate-limited', msgStreamEnded: 'ended',
@@ -287,6 +342,9 @@ function fakeScreenSharePage(): {
     button: (selector) => elements.get(selector)!,
     step: (phase) => steps.find((step) => step.dataset.screenStep === phase)!,
     url: elements.get('[data-screen-url]')!,
+    indicators: elements.get('[data-screen-indicators]')!,
+    activeIndicators: () => indicators.filter((indicator) => indicator.dataset.active === 'true')
+      .map((indicator) => indicator.dataset.screenIndicator!),
   };
 }
 
@@ -297,7 +355,13 @@ class FakeElement {
   srcObject: MediaProvider | null = null;
   textContent = '';
   value = '';
+  /** 実 DOM の「アイコン + <span>ラベル</span>」構造を模す。あれば querySelector('span') が返す */
+  labelSpan: FakeElement | null = null;
   private readonly listeners: Array<() => void> = [];
+
+  querySelector(selector: string): FakeElement | null {
+    return selector === 'span' ? this.labelSpan : null;
+  }
 
   addEventListener(event: string, listener: () => void): void {
     if (event === 'click') this.listeners.push(listener);
