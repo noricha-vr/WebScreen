@@ -16,7 +16,7 @@
 | **R8** | **WHIP の UDP ポート（既定 8189/udp）を配信者から直接到達させる** | **Cloudflare の裏に隠せない**。配信ドメインとは別に、オリジンへ直接届く経路が要る |
 | **R9** | 最初の画面取得は**必ずユーザーのクリック起点**にする | `getDisplayMedia` はユーザージェスチャ必須。ただし取得済み MediaStream を使う WHIP の再 publish は自動で 1 回行ってよい |
 | **R10** | `contentHint = 'motion'` + `degradationPreference = 'maintain-framerate'` を設定する | ライブ用途の中心を動画・動きのある画面に置き、カクつきの主因になるフレーム落ちを抑える。静止資料は既存の MP4 変換を使う |
-| **R11** | 送出解像度は `getSettings()` ではなく **`outbound-rtp` の `frameWidth/frameHeight`** で確認する | `ideal: 1920x1080` 要求で `getSettings()` が 1920x1080 を返しても、実送出は 1602x1032 だった |
+| **R11** | 送出解像度は `getSettings()` ではなく **`outbound-rtp` の `frameWidth/frameHeight`** で確認する | 過去は 1920x1080 要求に対し実送出 1602x1032、現行の 1280x720 入力でも帯域適応時は 960x540 になった |
 | **R12** | URL を表示する前に ingress / egress の受信 bytes 増加を確認する | WHIP の 201 だけでは VRChat 出口まで映像が届いたことを保証しない。未到達なら同じ画面で 1 回自動再接続し、それでも失敗した時だけ再接続ボタンを出す |
 
 ## 配信ホスト名と path 規則（2026-09-01 凍結。以後変更しない）
@@ -78,10 +78,10 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 | 設定 | 値 | 補足 |
 |---|---|---|
 | コーデック | `setCodecPreferences` で H.264 を先頭へ | R1 |
-| ビットレート上限 | **`encodings[0].maxBitrate = 2_000_000`（単一。モード選択 UI は作らない）** | 旧 1.5 Mbps で YouTube 再生がカクついた観測を受け、30 fps のフレーム予算に余裕を持たせる。根拠と実測は [stability-audio-verification.md](stability-audio-verification.md) |
+| ビットレート上限 | **`encodings[0].maxBitrate = 1_200_000`（単一。モード選択 UI は作らない）** | 30 / 24 fps・1.1〜1.3 Mbps を比較し、30 fps維持と total egress 1.5 Mbps 未満を両立した。根拠と実測は [stability-audio-verification.md](stability-audio-verification.md) |
 | 劣化ポリシー | `degradationPreference = 'maintain-framerate'` | R10 |
 | コンテンツヒント | `track.contentHint = 'motion'` | R10。動画・画面操作の滑らかさを優先する |
-| 解像度 / fps | **1920x1080 / 最大 30 fps** | 記事の 60 fps は採らない。1 Mbps / 60 fps より 2 Mbps / 30 fps の方が 1 フレーム当たりの予算を確保できる |
+| 解像度 / fps | **入力 1280x720 / 最大 30 fps** | 24 fps は出口が全候補で 23 fps 未満だったため不採用。帯域適応により実送出が 960x540 になる場合がある |
 | 画面取得 | `getDisplayMedia({ video, audio: true })`（**既定ピッカー**。画面全体・ウィンドウ・タブから選ばせる） | Chrome のタブ共有で「タブの音声を共有」をオンにした時だけ音声が付く。macOS の画面収録未許可はエラー文言でシステム設定へ案内する |
 | 開始判定 | ingress / egress bytes を最大 10 秒、1 秒間隔で監視 | 両方が連続観測で増えた時だけ URL を表示する。未到達なら 1 回自動再 publish する |
 

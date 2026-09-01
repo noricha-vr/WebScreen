@@ -14,6 +14,17 @@ describe('WHIP publisher', () => {
     expect(buildWhipUrl('Ab12Cd34Ef56')).toBe(`${STREAM_WHIP_BASE_URL}/Ab12Cd34Ef56/whip`);
   });
 
+  test('画面共有の映像設定を実測済みの上限へ固定する', () => {
+    expect(SCREEN_SHARE_VIDEO_SETTINGS).toEqual({
+      width: 1280,
+      height: 720,
+      frameRate: 30,
+      maxBitrate: 1_200_000,
+      contentHint: 'motion',
+      degradationPreference: 'maintain-framerate',
+    });
+  });
+
   test('H.264 を最優先にし、H.264 が無ければ開始不可を示す', () => {
     const codecs = [
       { mimeType: 'video/VP8' },

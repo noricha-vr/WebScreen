@@ -1,6 +1,6 @@
 # 検証結果（2026-08-29 実測）
 
-2026-09-01 の 1.5 Mbps カクつき再現、2 Mbps / 30 fps、音声 AAC、relay 到達確認の追加検証は
+2026-09-01 の 1.5 Mbps カクつき観測、2 Mbps の旧測定、30 / 24 fps・1.1〜1.3 Mbps 比較、音声 AAC、relay 到達確認は
 [stability-audio-verification.md](stability-audio-verification.md) に分離して記録する。本ファイルの 300〜1500 kbps の測定は
 過去の比較データであり、現行設定の正本ではない。
 
@@ -219,7 +219,7 @@ CPU は mediamtx プロセスの CPU 時間差分（60 秒窓）で測定した�
 - 同じ測定を合成素材（文字ラダー）で行うと 600k でも 23.5 fps・フリーズ 0 だった。
   **素材を実物に寄せないとレート設計を誤る**
 - この結果から一度は画質段を廃し **1500 kbps 単一**としたが、同日の YouTube 再生でカクつきが出たため、
-  現行は 2000 kbps / 30 fps / motion 優先へ上書きした（詳細は stability-audio-verification.md）
+  一度 2000 kbps / 30 fps / motion 優先へ上書きした。現行値は後続の I16 と stability-audio-verification.md を参照
 
 ### I10: VRChat に貼る URL はハイフンで切り詰められる（2026-09-01）
 
@@ -319,6 +319,28 @@ PR #151 の本番反映後、実 Google Chrome 152.0.7977.65 から 1920x1080 ca
 ログイン済みブラウザを安全に自動操作できなかったため、テスト中だけランダムな1 path を JWT publish 除外へ追加した。
 測定後は除外を `read` / `api` のみに復元し、永続設定ファイルのchecksum不変、ingress / egress両方のpath消滅を確認した。
 この検証は media経路と設定値を対象とし、Workerのセッション発行とhealth gateは I14・自動テスト・deploy preflightで別に担保する。
+
+### I16: 30 / 24 fps・1.1〜1.3 Mbps の本番比較（2026-09-01）
+
+実 Google Chrome 152.0.7977.65 で、Wikipedia 富士山ページの実スクリーンショットを 240 px/秒で往復スクロールし、
+440 Hz 音声とともに本番 relay へ送った。これは actual YouTube ではなく、候補間を同条件で比べる代表素材である。
+
+| fps / 映像上限 | browser fps | RTSP fps | freeze | ingress | total egress | 判定 |
+|---|---:|---:|---:|---:|---:|---|
+| 30 / 1.1 Mbps | 30.02 | 27.75 | 0 | 1.183 Mbps | 1.279 Mbps | 最低合格 |
+| **30 / 1.2 Mbps** | **30.01** | **29.96** | **0** | **1.291 Mbps** | **1.385 Mbps** | **採用。1.5 Mbps から 115 kbps の余裕** |
+| 30 / 1.3 Mbps | 30.01 | 27.67 | 0 | 1.396 Mbps | 1.501 Mbps | 上限超過 |
+| 24 / 1.1 Mbps | 24.01 | 22.49 | 0 | 1.168 Mbps | 1.260 Mbps | 不採用 |
+| 24 / 1.2 Mbps | 24.00 | 22.12 | 0 | 1.292 Mbps | 1.389 Mbps | 不採用 |
+| 24 / 1.3 Mbps | 24.02 | 22.97 | 0 | 1.401 Mbps | 1.491 Mbps | 23 fps 未満かつ余裕不足 |
+
+- 全候補で H.264 Baseline / yuv420p / B フレーム 0、AAC-LC / 48 kHz / stereo を確認
+- 5秒音声は mean 約 -27.5 dB、max 約 -24 dB、RMS 約 -27.45 dB で非無音
+- 入力 canvas は 1280x720。Chrome の `maintain-framerate` 帯域適応により実送出・RTSP は 960x540
+- 一時的な publish 認証除外は復元済み。永続設定 checksum 不変、テスト path 404、remote 一時ファイル削除を確認
+
+30 fps / 1.2 Mbps は出口 fps が入力に追従し、freeze 0 のまま total egress を 1.5 Mbps 未満に収めた。
+24 fps は帯域をほぼ減らさず出口が全候補で 23 fps 未満のため、余裕を増やす手段として採用しない。
 
 ## 検証できていないこと
 
