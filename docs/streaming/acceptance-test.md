@@ -21,8 +21,8 @@
 |---|---|---|---|
 | **A1** | ブラウザから WHIP publish し、`ffprobe` で RTSP を取得 | `codec_name=h264` / `profile=Baseline` / `pix_fmt=yuv420p` / `has_b_frames=0` | ローカルと同じなので通るはず。通らなければ NAT / ポートを疑う |
 | **A2** | Private / Friends / Friends+ / Public で `rtspt://webscreen.tv/live/{id}` を貼る | Private / Friends / Friends+ は視聴者の `Allow Untrusted URLs` が ON。Public は**視聴者の同設定が ON**かつ**ワールド作者が Allowed Domains に `webscreen.tv` を登録済み**なら映像が出る | reader が 0 本なら RTSP 前の許可設定を確認する。relay / codec を先に疑わない |
-| **A3** | 個別のPCワールドで遅延を実測 | **1 秒以下**。YamaStream の精密実測は 1.203〜1.282 秒（中央値 1.256 秒）で**未合格**、別ワールドの ON 実測は 0.08 秒 | `Use Low Latency` の値をログで直接確認できなければ ON と断定しない。満たさなければ訴求文言を変える |
-| **A4** | `Use Low Latency` **OFF** のワールドで遅延を実測 | 値を記録する（現行の合格値は未設定） | 旧比較の +8〜10 秒を前提にせず、製品の訴求文言を決める |
+| **A3** | 個別のPCワールドで遅延を実測 | **音声付きで1秒以下**。同じYamaStreamのRTSPT H.264/MP3候補は16標本すべて1秒未満（中央値0.151秒）で、映像表示までの遅延のみ暫定合格。MP3音声を実聴していないため、音声付きA3は判定保留。AACは独立2回とも中央値1.239秒で未合格 | NTP補正済み時計を使い、映像のみ／音声付きの条件を分ける。MP3は2トラック選択だけで実聴確認を代替せず、Quest確認前に本番昇格しない |
+| **A4** | `Use Low Latency` の実値を確認できるワールドで遅延を実測 | 設定値と映像のみ／音声付きの遅延を記録する（現行の合格値は未設定） | RTMPは現行YamaStreamのMedia Foundation経路でLoading failedとなりA/B不能。過去値との差をプロトコル差と断定しない |
 | **A5** | **5 分以上再生を維持** | **60 秒で切断しないか** | 切れる場合、視聴者数ぶんの再接続が毎分走りスケールに直撃する。バージョンを変えて再試行 |
 | **A6** | 途中から URL を貼り直す | 2 秒以内に映るか | キーフレーム間隔（2 秒固定）どおりか |
 | **A7** | Quest 実機で PC と同じ `rtspt://webscreen.tv/live/{id}` を貼る | 映像と AAC 音声が出るか。現状境界の体感 2〜3 秒を記録する | URL は分岐しない。Quest の 1 秒未満はサーバー設定だけで保証しない |
@@ -30,11 +30,12 @@
 | **A9** | Chrome でタブと「タブの音声を共有」を選ぶ | UI が音声ありと表示し、出口が H.264 + AAC になる | audio track、relay の ffmpeg、egress の順に切り分ける |
 | **A10** | ingress または relay を一時的に未到達にして開始する | 同じ画面で 1 回自動再接続し、失敗時だけ再接続ボタンを出す | 一律の「再起動してください」案内へ逃げず、health bytes を確認する |
 | **A11** | actual YouTube を開始して直後のカクつきを観察する | 約 30 秒待って安定すること。継続時は ingress / egress bytes を確認し、relay 未到達の場合だけ再接続する | 到達済みなら再接続を合格手順にしない。無条件の再起動は勧めない |
+| **A12** | MP3 relayを本番候補として昇格判定する | 同じURLでPCのMP3音声を実聴し、Questで映像・MP3音声・1秒未満を確認する。30分連続再生に成功し、実Mac動的映像で30 / 24 fpsを比較して採否を記録し、`capacity.md` をMP3条件で再計算・実測する。H.264 + MP3をdeploy codec gateと自動テストで検出し、全条件を満たす | 1項目でも未達・未確認ならAACを維持する。昇格後にA12のいずれかの条件が退行したらAACへ戻す |
 
 ## 測定の方法
 
 遅延（A3 / A4）は、[poc/whip-publisher.html](poc/whip-publisher.html) が画面にミリ秒時刻を大きく描画しているので、
-**VRChat の画面と配信元の画面を同時に撮影して差を読む**。配信元から RTSPT 出口までの切り分けでは、オンライン時計を送出し、出口で `-use_wallclock_as_timestamps 1`、`-copyts`、`-frame_pts 1` を用いて別に読む（[verification.md](verification.md) I19）。
+**VRChat の画面と配信元の画面を同時に撮影して差を読む**。今回使ったNTP時計は大時計自体が補正済みであり、下段の端末ずれを時計差から重ねて引かない。配信元から RTSPT 出口までの切り分けでは、オンライン時計を送出し、出口で `-use_wallclock_as_timestamps 1`、`-copyts`、`-frame_pts 1` を用いて別に読む（[verification.md](verification.md) I19）。
 
 ## この後に決めること
 
@@ -42,7 +43,7 @@
 
 | 論点 | 補足 |
 |---|---|
-| PC の遅延をどう訴求するか | YamaStream 単一実測をPCワールド全般へ一般化しない。YamaStream は中央値 1.256 秒で1秒以下未合格、別ワールドの `Use Low Latency` ON 実測は 0.1 秒級として分け、個別に実測する |
+| PC の遅延をどう訴求するか | YamaStream単一ワールドをPC全般へ一般化しない。AACは中央値1.239秒、MP3候補は中央値0.151秒で分ける。MP3はA12が未合格のため、本番はAACを維持する |
 | Quest を出すか | PC と同じ `rtspt://webscreen.tv/live/{id}` で映像・AAC 音声を確認済み。URL は共通にし、「Quest は現状 2〜3 秒」と明示する。サーバー設定だけで 1 秒未満は約束しない |
 | 同時配信本数の上限 | ユーザー在席型ならサーバー CPU をほぼ使わないので path 数の管理だけで済む |
 | 配信の再開 | 取得済み画面の WHIP 再 publish は 1 回自動で行う。画面共有そのものが終了した時だけ、ユーザー操作で選び直す |
