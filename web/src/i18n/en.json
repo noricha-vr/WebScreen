@@ -291,6 +291,7 @@
     "wizard": {
       "start": "Start screen sharing",
       "startHint": "This opens your browser's screen picker. Choose the tab, window, or screen you want to show.",
+      "selectAudioHint": "To include audio in Chrome, choose a tab and turn on Share tab audio.",
       "selecting": "Choosing a screen…",
       "loginHeading": "Sign in with Discord to start",
       "loginBody": "You need to sign in before creating a streaming URL. There is no password to create.",
@@ -302,6 +303,8 @@
       "showLive": "View the live stream",
       "liveHeading": "Live now",
       "preview": "Preview of the shared screen",
+      "audioIncluded": "Streaming with audio.",
+      "videoOnly": "No audio track was selected, so this stream is video only.",
       "elapsed": "Elapsed time",
       "expires": "Time until extension expires",
       "extend": "Extend",
@@ -311,12 +314,16 @@
       "expiryWarning": "This stream will end soon. Extend it to keep sharing.",
       "errorHeading": "We could not start the stream",
       "retry": "Try again",
+      "reconnect": "Reconnect to the streaming server",
+      "reconnecting": "Reconnecting…",
       "errors": {
         "h264": "This browser cannot send H.264 video. Open this page in Chrome or Safari and try again.",
         "displayDenied": "No screen was selected. Please try again. On macOS, sharing your entire screen requires allowing your browser under System Settings > Privacy & Security > Screen Recording.",
         "streamAlreadyLive": "You already have a live stream. End it before starting another one.",
+        "streamCapacity": "The streaming service is at capacity. Wait a moment and try again.",
         "rateLimited": "A new stream cannot be created yet. Wait a moment and try again.",
         "streamEnded": "This stream has ended. Start a new stream instead.",
+        "streamUnhealthy": "Video has not reached the streaming server. You can reconnect without choosing the screen again.",
         "whip": "We could not connect to the streaming server. Check your network and try again.",
         "generic": "Something went wrong while preparing the stream. Try again."
       }
@@ -335,7 +342,7 @@
       "items": [
         { "question": "Which worlds work?", "answer": "Worlds with an AVPro video player that supports Stream mode." },
         { "question": "Does it work on Quest?", "answer": "Yes. Paste the same URL. Expect about 2–3 seconds of latency." },
-        { "question": "Is there audio?", "answer": "Currently, video only." },
+        { "question": "Is there audio?", "answer": "Yes. In Chrome, share a tab and turn on Share tab audio. Audio output was confirmed during verification." },
         { "question": "Is it free?", "answer": "Yes. Press Extend every two hours to keep streaming." },
         { "question": "What if I forget to stop?", "answer": "The stream ends automatically unless you extend it." }
       ]

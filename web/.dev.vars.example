@@ -11,11 +11,14 @@ SESSION_SIGNING_KEY=replace_with_a_long_random_value
 # 本番: `bunx wrangler secret put STREAM_JWT_PRIVATE_KEY`
 STREAM_JWT_PRIVATE_KEY=
 
-# MediaMTX Control API。#126 の実サーバー構築後に cron Worker へ投入する。
-# 本番: `bunx wrangler secret put MEDIAMTX_API_URL -c cron/wrangler.jsonc`
-#       `bunx wrangler secret put MEDIAMTX_API_TOKEN -c cron/wrangler.jsonc`
+# MediaMTX Control API。二段構成では INGRESS / EGRESS を両 Worker へ投入する。
+# 新キーがあれば旧単一MEDIAMTX_API_URL/TOKENより優先する。値はHTTPS originとsecretのみ。
 MEDIAMTX_API_URL=
 MEDIAMTX_API_TOKEN=
+MEDIAMTX_INGRESS_API_URL=https://ingress-control.example.invalid
+MEDIAMTX_INGRESS_API_TOKEN=replace_with_ingress_control_token
+MEDIAMTX_EGRESS_API_URL=https://egress-control.example.invalid
+MEDIAMTX_EGRESS_API_TOKEN=replace_with_egress_control_token
 
 # web-capture サービスの Bearer token
 WEBCAPTURE_TOKEN=replace_with_webcapture_token

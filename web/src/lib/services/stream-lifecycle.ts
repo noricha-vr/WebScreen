@@ -36,23 +36,29 @@ interface LifecycleRow {
 /** 3 層の停止判定と MediaMTX publisher の再 kick を実行する。 */
 export async function runStreamLifecycle(input: {
   database: StreamLifecycleDatabase;
+  /** 旧単一 endpoint。split endpoint 未設定時だけ ingress / egress の両方として使う。 */
   mediaMtx?: MediaMtxClient;
+  ingressMediaMtx?: MediaMtxClient;
+  egressMediaMtx?: MediaMtxClient;
   settings: StreamLifecycleSettings;
   now: Date;
 }): Promise<StreamLifecycleSummary> {
   const summary = emptySummary();
+  const newlyEnded = new Set<string>();
   const initialRows = await listRelevant(input.database);
   if (initialRows.length === 0) return summary;
 
   for (const row of initialRows) {
     if (row.status !== 'live') continue;
     if (row.extend_expires_at <= input.now.toISOString()) {
-      summary.endedByExtendTimeout += await endStream(
+      const ended = await endStream(
         input.database,
         row,
         input.now,
         'extend_timeout'
       );
+      summary.endedByExtendTimeout += ended;
+      if (ended) newlyEnded.add(row.id);
       continue;
     }
     const heartbeatCutoff = subtractSeconds(
@@ -60,23 +66,31 @@ export async function runStreamLifecycle(input: {
       input.settings.heartbeatTimeoutSeconds
     ).toISOString();
     if (row.last_heartbeat_at <= heartbeatCutoff) {
-      summary.endedByHeartbeatLost += await endStream(
+      const ended = await endStream(
         input.database,
         row,
         input.now,
         'heartbeat_lost'
       );
+      summary.endedByHeartbeatLost += ended;
+      if (ended) newlyEnded.add(row.id);
     }
   }
 
   const rowsAfterD1Checks = await listRelevant(input.database);
   if (rowsAfterD1Checks.length === 0) return summary;
-  if (!input.mediaMtx) throw new Error('MediaMTX configuration is required for active streams');
+  const mediaMtx = resolveMediaMtx(input);
+  if (!mediaMtx) throw new Error('MediaMTX configuration is required for active streams');
 
-  const paths = await input.mediaMtx.listPaths();
-  const pathsByName = new Map(paths.map((path) => [path.name, path]));
-  await applyViewerChecks(input, rowsAfterD1Checks, pathsByName, summary);
-  await processPendingKicks(input, pathsByName, summary);
+  const ingressPaths = await mediaMtx.ingress.listPaths();
+  const egressPaths =
+    mediaMtx.egress === mediaMtx.ingress
+      ? ingressPaths
+      : await mediaMtx.egress.listPaths();
+  const ingressByName = new Map(ingressPaths.map((path) => [path.name, path]));
+  const egressByName = new Map(egressPaths.map((path) => [path.name, path]));
+  await applyViewerChecks(input, rowsAfterD1Checks, egressByName, summary, newlyEnded);
+  await processPendingKicks(input, mediaMtx.ingress, ingressByName, egressByName, newlyEnded, summary);
   return summary;
 }
 
@@ -88,7 +102,8 @@ async function applyViewerChecks(
   },
   rows: LifecycleRow[],
   paths: Map<string, MediaPath>,
-  summary: StreamLifecycleSummary
+  summary: StreamLifecycleSummary,
+  newlyEnded: Set<string>
 ): Promise<void> {
   const viewerCutoff = subtractSeconds(
     input.now,
@@ -109,45 +124,63 @@ async function applyViewerChecks(
       continue;
     }
     if (row.last_viewer_at > viewerCutoff) continue;
-    summary.endedByNoViewers += await endStream(
+    const ended = await endStream(
       input.database,
       row,
       input.now,
       'no_viewers'
     );
+    summary.endedByNoViewers += ended;
+    if (ended) newlyEnded.add(row.id);
   }
 }
 
 async function processPendingKicks(
   input: {
     database: StreamLifecycleDatabase;
-    mediaMtx?: MediaMtxClient;
-    now: Date;
   },
-  paths: Map<string, MediaPath>,
+  ingress: MediaMtxClient,
+  ingressPaths: Map<string, MediaPath>,
+  egressPaths: Map<string, MediaPath>,
+  newlyEnded: Set<string>,
   summary: StreamLifecycleSummary
 ): Promise<void> {
   const pending = (await listRelevant(input.database)).filter(
     (row) => row.status === 'ended' && row.kick_pending === 1
   );
   for (const row of pending) {
-    const path = paths.get(`live/${row.id}`);
-    if (path?.publisherId) {
-      await input.mediaMtx?.kickPublisher(path.publisherId);
+    const pathName = `live/${row.id}`;
+    const ingressPath = ingressPaths.get(pathName);
+    if (ingressPath?.publisherId && ingressPath.publisherSessionType) {
+      await ingress.kickPublisher({
+        id: ingressPath.publisherId,
+        sessionType: ingressPath.publisherSessionType,
+      });
       summary.publishersKicked += 1;
       continue;
     }
-    if (path || row.extend_expires_at > input.now.toISOString()) continue;
+    if (newlyEnded.has(row.id) || ingressPath || egressPaths.has(pathName)) continue;
     const cleared = await input.database
       .prepare(
         `UPDATE stream_sessions SET kick_pending = 0
-         WHERE id = ? AND status = 'ended' AND kick_pending = 1
-         AND extend_expires_at <= ?`
+         WHERE id = ? AND status = 'ended' AND kick_pending = 1`
       )
-      .bind(row.id, input.now.toISOString())
+      .bind(row.id)
       .run();
     summary.kickPendingCleared += cleared.meta.changes;
   }
+}
+
+function resolveMediaMtx(input: {
+  mediaMtx?: MediaMtxClient;
+  ingressMediaMtx?: MediaMtxClient;
+  egressMediaMtx?: MediaMtxClient;
+}): { ingress: MediaMtxClient; egress: MediaMtxClient } | undefined {
+  if (input.ingressMediaMtx && input.egressMediaMtx) {
+    return { ingress: input.ingressMediaMtx, egress: input.egressMediaMtx };
+  }
+  if (input.mediaMtx) return { ingress: input.mediaMtx, egress: input.mediaMtx };
+  return undefined;
 }
 
 async function endStream(

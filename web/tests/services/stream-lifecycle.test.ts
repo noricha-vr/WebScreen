@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import type { MediaMtxClient, MediaPath } from '../../src/lib/infra/mediamtx';
+import type { MediaMtxClient, MediaMtxPublisher, MediaPath } from '../../src/lib/infra/mediamtx';
 import { runStreamLifecycle } from '../../src/lib/services/stream-lifecycle';
 import { createStreamDatabase, type StreamSqliteAdapter } from './helpers/stream-db';
 
@@ -10,12 +10,19 @@ const SETTINGS = { noViewerTimeoutSeconds: 600, heartbeatTimeoutSeconds: 60 };
 class FakeMediaMtx implements MediaMtxClient {
   kicks: string[] = [];
   constructor(readonly paths: MediaPath[] = [], readonly listFailure?: Error) {}
+  async getPath(name: string): Promise<MediaPath | undefined> {
+    return this.paths.find((path) => path.name === name);
+  }
   async listPaths(): Promise<MediaPath[]> {
     if (this.listFailure) throw this.listFailure;
-    return this.paths;
+    return this.paths.map((path) => ({
+      ...path,
+      publisherSessionType:
+        path.publisherId === null ? null : (path.publisherSessionType ?? 'webRTCSession'),
+    }));
   }
-  async kickPublisher(id: string): Promise<void> {
-    this.kicks.push(id);
+  async kickPublisher(publisher: MediaMtxPublisher): Promise<void> {
+    this.kicks.push(publisher.id);
   }
 }
 
@@ -148,6 +155,75 @@ describe('配信セッション lifecycle', () => {
       ])
     );
     expect(row(database).kick_pending).toBe(1);
+  });
+
+  it('ingress relay readerをviewerに数えず、egress RTSP readerだけで猶予を更新する', async () => {
+    const database = await createStreamDatabase();
+    await insertLive(database, {
+      extendAt: '2026-09-01T04:00:00.000Z',
+      viewerAt: '2026-09-01T01:50:00.000Z',
+    });
+    const ingress = new FakeMediaMtx([
+      { name: 'live/AbCdEf123456', publisherId: 'relay', rtspReaders: 1 },
+    ]);
+    await runStreamLifecycle({
+      database,
+      ingressMediaMtx: ingress,
+      egressMediaMtx: new FakeMediaMtx(),
+      settings: SETTINGS,
+      now: NOW,
+    });
+    expect(row(database)).toMatchObject({ status: 'ended', end_reason: 'no_viewers' });
+
+    const second = await createStreamDatabase();
+    await insertLive(second, {
+      extendAt: '2026-09-01T04:00:00.000Z',
+      viewerAt: '2026-09-01T01:50:00.000Z',
+    });
+    await runStreamLifecycle({
+      database: second,
+      ingressMediaMtx: ingress,
+      egressMediaMtx: new FakeMediaMtx([
+        { name: 'live/AbCdEf123456', publisherId: 'relay', rtspReaders: 1 },
+      ]),
+      settings: SETTINGS,
+      now: NOW,
+    });
+    expect(row(second)).toMatchObject({ status: 'live', last_viewer_at: NOW.toISOString() });
+  });
+
+  it('ingressをkickした次のcronでegress path不在を確認してからpendingを解除する', async () => {
+    const database = await createStreamDatabase();
+    await insertLive(database, { extendAt: '2026-09-01T04:00:00.000Z' });
+    database.sqlite
+      .query("UPDATE stream_sessions SET status='ended', ended_at=?, end_reason='user_stop', kick_pending=1")
+      .run(NOW.toISOString());
+    const ingress = new FakeMediaMtx([
+      {
+        name: 'live/AbCdEf123456',
+        publisherId: 'publisher-1',
+        publisherSessionType: 'webRTCSession',
+        rtspReaders: 0,
+      },
+    ]);
+    await runStreamLifecycle({
+      database,
+      ingressMediaMtx: ingress,
+      egressMediaMtx: new FakeMediaMtx(),
+      settings: SETTINGS,
+      now: NOW,
+    });
+    expect(ingress.kicks).toEqual(['publisher-1']);
+    expect(row(database).kick_pending).toBe(1);
+
+    await runStreamLifecycle({
+      database,
+      ingressMediaMtx: new FakeMediaMtx(),
+      egressMediaMtx: new FakeMediaMtx(),
+      settings: SETTINGS,
+      now: NOW,
+    });
+    expect(row(database).kick_pending).toBe(0);
   });
 
   it('閾値を30秒へ変更するとreaderゼロ30秒で終了する', async () => {

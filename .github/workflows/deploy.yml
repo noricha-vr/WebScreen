@@ -58,6 +58,46 @@ jobs:
       - name: ビルド
         run: bun run build
 
+      # Worker が split Control API を使い始める前に、VPS 側の ingress / egress と
+      # Caddy の別 token route が両方準備済みであることを確認する。ここで落とせば
+      # D1・Worker・本番トラフィックにはまだ触れていない。
+      - name: MediaMTX split Control API の事前確認
+        env:
+          MEDIAMTX_INGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_INGRESS_API_TOKEN }}
+          MEDIAMTX_EGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_EGRESS_API_TOKEN }}
+        run: |
+          test -n "$MEDIAMTX_INGRESS_API_TOKEN"
+          test -n "$MEDIAMTX_EGRESS_API_TOKEN"
+          if [ "$MEDIAMTX_INGRESS_API_TOKEN" = "$MEDIAMTX_EGRESS_API_TOKEN" ]; then
+            echo '::error::MediaMTX ingress and egress API tokens must differ'
+            exit 1
+          fi
+          headers_file=$(mktemp)
+          trap 'rm -f "$headers_file"' EXIT
+          probe_control_api() {
+            expected_role=$1
+            token=$2
+            : > "$headers_file"
+            if ! status=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+              -H "Authorization: Bearer ${token}" \
+              'https://stream.web-screen.net/v3/paths/list?itemsPerPage=1' \
+              -D "$headers_file" -o /dev/null -w '%{http_code}'); then
+              echo "::error::MediaMTX ${expected_role} Control API probe failed"
+              exit 1
+            fi
+            if [ "$status" != '200' ]; then
+              echo "::error::MediaMTX ${expected_role} Control API returned an unexpected status"
+              exit 1
+            fi
+            actual_role=$(awk 'tolower($1) == "x-webscreen-mediamtx-role:" { gsub("\\r", "", $2); print $2 }' "$headers_file")
+            if [ "$actual_role" != "$expected_role" ]; then
+              echo "::error::MediaMTX ${expected_role} Control API role marker mismatch"
+              exit 1
+            fi
+          }
+          probe_control_api ingress "$MEDIAMTX_INGRESS_API_TOKEN"
+          probe_control_api egress "$MEDIAMTX_EGRESS_API_TOKEN"
+
       # ロールバック先を「この実行が始まる前に稼働していた版」に固定する。
       # ID を省略すると直前に upload された別の版が選ばれうる。
       - name: 現在の本番バージョンを記録
@@ -86,8 +126,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MEDIAMTX_INGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_INGRESS_API_TOKEN }}
+          MEDIAMTX_EGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_EGRESS_API_TOKEN }}
         run: |
-          bunx wrangler deploy -c dist/server/wrangler.json | tee deploy-app.log
+          test -n "$MEDIAMTX_INGRESS_API_TOKEN"
+          test -n "$MEDIAMTX_EGRESS_API_TOKEN"
+          jq -n \
+            --arg ingress "$MEDIAMTX_INGRESS_API_TOKEN" \
+            --arg egress "$MEDIAMTX_EGRESS_API_TOKEN" \
+            '{MEDIAMTX_INGRESS_API_TOKEN: $ingress, MEDIAMTX_EGRESS_API_TOKEN: $egress}' \
+            | bunx wrangler deploy -c dist/server/wrangler.json --secrets-file /dev/stdin \
+            | tee deploy-app.log
           uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
           version=$(grep -oiE "Current Version ID: ?$uuid" deploy-app.log | grep -oE "$uuid" | head -1 || true)
           echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -98,7 +147,16 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler deploy -c cron/wrangler.jsonc
+          MEDIAMTX_INGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_INGRESS_API_TOKEN }}
+          MEDIAMTX_EGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_EGRESS_API_TOKEN }}
+        run: |
+          test -n "$MEDIAMTX_INGRESS_API_TOKEN"
+          test -n "$MEDIAMTX_EGRESS_API_TOKEN"
+          jq -n \
+            --arg ingress "$MEDIAMTX_INGRESS_API_TOKEN" \
+            --arg egress "$MEDIAMTX_EGRESS_API_TOKEN" \
+            '{MEDIAMTX_INGRESS_API_TOKEN: $ingress, MEDIAMTX_EGRESS_API_TOKEN: $egress}' \
+            | bunx wrangler deploy -c cron/wrangler.jsonc --secrets-file /dev/stdin
 
       # 200 が返るだけでは旧版が生きている可能性を否定できないので、
       # /api/health/ が名乗るバージョンとデプロイしたバージョンを突き合わせる。

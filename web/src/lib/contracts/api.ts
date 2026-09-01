@@ -10,15 +10,14 @@
  */
 
 import { isShortId } from './r2key';
-
 export type {
   CreateStreamResponse,
   ExtendStreamResponse,
   StreamEndReason,
+  StreamHealthResponse,
   StreamSessionStatus,
   StreamStatusResponse,
 } from './streams';
-
 /** 1 ファイルあたりのアップロード上限（50 MiB）。R2 の単発 PUT で扱える範囲に収める。 */
 export const MAX_UPLOAD_BYTES = 52_428_800;
 
@@ -74,6 +73,7 @@ export const ERROR_CODES = {
   tooManyPendingUploads: 'TOO_MANY_PENDING_UPLOADS',
   tooManyPresignRequests: 'TOO_MANY_PRESIGN_REQUESTS',
   streamAlreadyLive: 'STREAM_ALREADY_LIVE',
+  streamCapacityReached: 'STREAM_CAPACITY_REACHED',
   streamCreateRateLimited: 'STREAM_CREATE_RATE_LIMITED',
   streamEnded: 'STREAM_ENDED',
   captureFailed: 'CAPTURE_FAILED',

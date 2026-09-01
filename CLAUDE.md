@@ -81,3 +81,8 @@ main への push で GitHub Actions が本番へ反映する（`.github/workflow
 - **VRChat 互換のエンコード条件を変えない**（全キーフレーム `-g 1 -bf 0`。変えると再生できなくなる）
 - 変換した動画とキャプチャ画像は**公開**（認証なしで取得できる）。保護は 12 文字のランダム ID だけ
 - ブラウザ内変換は FFmpeg.wasm を使うため COOP/COEP ヘッダーが要る（`web/src/middleware.ts`）
+
+## Review guidelines
+
+- すべてのレビューコメントは日本語で記述してください。
+- コードの問題点、改善提案、賞賛はすべて日本語で行ってください。

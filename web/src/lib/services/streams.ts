@@ -21,6 +21,7 @@ export interface StreamDatabase {
 export interface StreamSettings {
   extensionCycleSeconds: number;
   maxLiveStreamsPerUser: number;
+  maxLiveStreams: number;
   createIntervalSeconds: number;
 }
 export interface StreamJwtSignInput {
@@ -178,7 +179,8 @@ async function insertStream(
          last_heartbeat_at, last_viewer_at, kick_pending
        )
        SELECT ?, ?, 'live', ?, ?, ?, ?, 0
-       WHERE (SELECT COUNT(*) FROM stream_sessions WHERE user_id = ? AND status = 'live') < ?
+       WHERE (SELECT COUNT(*) FROM stream_sessions WHERE status = 'live') < ?
+       AND (SELECT COUNT(*) FROM stream_sessions WHERE user_id = ? AND status = 'live') < ?
        AND NOT EXISTS (
          SELECT 1 FROM stream_sessions WHERE user_id = ? AND started_at > ?
        )`
@@ -190,6 +192,7 @@ async function insertStream(
       expiresAt.toISOString(),
       iso,
       iso,
+      input.settings.maxLiveStreams,
       input.userId,
       input.settings.maxLiveStreamsPerUser,
       input.userId,
@@ -209,6 +212,13 @@ async function throwCreateRejection(
     .prepare("SELECT COUNT(*) AS count FROM stream_sessions WHERE user_id = ? AND status = 'live'")
     .bind(userId)
     .first<{ count: number }>();
+  const allLive = await database
+    .prepare("SELECT COUNT(*) AS count FROM stream_sessions WHERE status = 'live'")
+    .bind()
+    .first<{ count: number }>();
+  if ((allLive?.count ?? 0) >= settings.maxLiveStreams) {
+    throw new StreamError(429, ERROR_CODES.streamCapacityReached, '配信の同時接続上限に達しました');
+  }
   if ((active?.count ?? 0) >= settings.maxLiveStreamsPerUser) {
     throw new StreamError(409, ERROR_CODES.streamAlreadyLive, '既に配信中です');
   }

@@ -34,7 +34,9 @@
     "R2_PUBLIC_BASE_URL": "https://cdn.web-screen.net",
     "CLOUDFLARE_ZONE_ID": "2210192b51f9f0eb6761d70341ca09b0",
     "STREAM_NO_VIEWER_SECONDS": "600",
-    "STREAM_HEARTBEAT_SECONDS": "60"
+    "STREAM_HEARTBEAT_SECONDS": "60",
+    "MEDIAMTX_INGRESS_API_URL": "https://stream.web-screen.net",
+    "MEDIAMTX_EGRESS_API_URL": "https://stream.web-screen.net"
   },
   "d1_databases": [
     {

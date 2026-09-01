@@ -1,0 +1,26 @@
+# Control API tokens are loaded from /etc/caddy/mediamtx-api.env by caddy.service.
+stream.web-screen.net {
+	@ingress header Authorization "Bearer {env.MEDIAMTX_API_TOKEN}"
+	handle @ingress {
+		header X-WebScreen-MediaMTX-Role ingress
+		reverse_proxy 127.0.0.1:9997
+	}
+	@egress header Authorization "Bearer {env.MEDIAMTX_EGRESS_API_TOKEN}"
+	handle @egress {
+		header X-WebScreen-MediaMTX-Role egress
+		reverse_proxy 127.0.0.1:9998
+	}
+	handle {
+		respond 401
+	}
+}
+
+webscreen.tv {
+	@whip path /live/*/whip /live/*/whip/*
+	handle @whip {
+		reverse_proxy 127.0.0.1:8889
+	}
+	handle {
+		redir https://web-screen.net/ 302
+	}
+}

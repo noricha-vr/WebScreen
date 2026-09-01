@@ -1,5 +1,9 @@
 # 検証結果（2026-08-29 実測）
 
+2026-09-01 の 1.5 Mbps カクつき再現、2 Mbps / 30 fps、音声 AAC、relay 到達確認の追加検証は
+[stability-audio-verification.md](stability-audio-verification.md) に分離して記録する。本ファイルの 300〜1500 kbps の測定は
+過去の比較データであり、現行設定の正本ではない。
+
 数字の根拠。**V1〜V10 はローカルループバックでの検証であり、VRChat 実機と実ネットワークは含まない**（実機は [acceptance-test.md](acceptance-test.md)）。
 実サーバー（Indigo）での実測は「[Indigo 実機検証](#indigo-実機検証2026-08-31-実測issue-91)」節（2026-08-31 追記）。
 
@@ -152,7 +156,7 @@ VRChat PC 実機（ProTV の Stream モード）+ Indigo 上の MediaMTX **v1.20
 
 - 同一インスタンスの別プレイヤー（別グローバル IP）のクライアントが同じ path を直接読みに来ることもログで確認
   （視聴者ごとの直接ユニキャストという設計前提のとおり）
-- 残る実機項目は A3 / A4（遅延の実測 = Issue #95）と A7（Quest = Issue #96）
+- A3（低遅延）と A7（Quest）は実機確認済み。残る実機項目は A4（`Use Low Latency` OFF の遅延実測 = Issue #95）
 
 ### I7: 遅延の実測 — `Use Low Latency` ON で約 0.08 秒（VRChat 実機・2026-08-31。Issue #95 A3）
 
@@ -214,7 +218,8 @@ CPU は mediamtx プロセスの CPU 時間差分（60 秒窓）で測定した�
   1200k でもスクロール中の文字が読め、遅延も感じないレベル
 - 同じ測定を合成素材（文字ラダー）で行うと 600k でも 23.5 fps・フリーズ 0 だった。
   **素材を実物に寄せないとレート設計を誤る**
-- この結果から画質段を廃し、**1500 kbps 単一**に確定した（膝 1200k + うねりの余裕。詳細は quality-tiers.md）
+- この結果から一度は画質段を廃し **1500 kbps 単一**としたが、同日の YouTube 再生でカクつきが出たため、
+  現行は 2000 kbps / 30 fps / motion 優先へ上書きした（詳細は stability-audio-verification.md）
 
 ### I10: VRChat に貼る URL はハイフンで切り詰められる（2026-09-01）
 

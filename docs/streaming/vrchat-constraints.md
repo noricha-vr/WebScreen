@@ -6,8 +6,8 @@
 
 | 形式 | PC（AVPro + Media Foundation） | Quest（AVPro + media3 ExoPlayer） |
 |---|---|---|
-| **`rtspt://`**（RTSP over TCP） | **最低遅延。日本の VRDJ の事実上の標準** | **✕ スキーム非対応** |
-| `rtsp://`（UDP） | ○ | △ Android codec 起因で不安定の報告 |
+| **`rtspt://`**（RTSP over TCP） | **最低遅延。日本の VRDJ の事実上の標準** | **○ WebScreen + MediaMTX v1.20.1 で映像・AAC 音声を実機確認** |
+| `rtsp://` | ○ | ○（8554 明示でも実機確認。製品案内は TCP の `rtspt://` に統一） |
 | MPEG-TS over HTTP | ○ | ◎ VRCDN が Quest 向けに指定 |
 | HLS (.m3u8) | ○ だが遅い（実測 35 秒） | ◎ 標準経路（実測 約 3 秒） |
 | LL-HLS | **✕ 実効非対応**（実測 約 30 秒） | △ プレイヤーは対応するが VRChat 側の fMP4 音声バグ |
@@ -24,8 +24,8 @@ PC だけが桁違いに外れている。
 
 | | 最小遅延 | 経路 | 条件 |
 |---|---|---|---|
-| **PC** | **0.3〜0.5 秒** | `rtspt://` + AVPro `Use Low Latency` **ON** | 下記のとおりワールド依存 |
-| **Quest** | **約 3 秒** | HLS / MPEG-TS | `rtspt://` 非対応。実機実測 2.5〜3.8 秒 |
+| **PC** | **約 0.08 秒** | `rtspt://` + AVPro `Use Low Latency` **ON** | Indigo 往復の実機実測。ワールド依存 |
+| **Quest** | **体感 2〜3 秒** | PC と同じ `rtspt://` | ExoPlayer 側のバッファ。80 秒前後を複数回、切断なし |
 
 ## PC の遅延はワールド作者が決める（こちらから制御できない）
 
@@ -34,11 +34,11 @@ PC だけが桁違いに外れている。
 
 | ワールドの設定 | PC の遅延 |
 |---|---|
-| `Use Low Latency` ON | **0.3〜0.5 秒** |
+| `Use Low Latency` ON | **約 0.08 秒（WebScreen 実測）** |
 | `Use Low Latency` OFF | **+8〜10 秒** |
 
 **製品としての意味**: WebScreen が「超低遅延」を謳っても、**視聴されるワールド次第で 20 倍変わる**。
-訴求できるのは「対応ワールドなら 0.5 秒」であって「常に 0.5 秒」ではない。対応ワールドの案内をドキュメントに置く必要がある。
+訴求できるのは「対応ワールドなら 0.1 秒級」であって「常に 0.1 秒」ではない。対応ワールドの案内をドキュメントに置く必要がある。
 
 また、ワールド側は **AVPro の Stream モード**である必要がある（VRChat 公式が Unity 標準 VideoPlayer は "does not support these live streams" と明記）。
 
@@ -68,7 +68,7 @@ VRCDN / TopazChat が既定 allowlist 入りなのは、技術投資では買え
 
 | 項目 | 内容 |
 |---|---|
-| **Quest は HTTPS 必須** | "VRChat on Android will not play video if the host is not using HTTPS protocol."（`cdn.web-screen.net` は既に HTTPS なので追加コストなし） |
+| **Quest の HTTP 系 URL は HTTPS 必須** | 静的 MP4 / HLS の HTTP 配信に対する制約。RTSP は `rtspt://webscreen.tv/...` を実機確認済み |
 | URL 投入のレート制限 | ユーザーあたり 5 秒に 1 回のグローバル制限。リトライ設計に効く |
-| **60 秒切断の既知問題** | VRChat の RTSP キープアライブ送信が遅く、MediaMTX の一部バージョンで接続タイムアウトする（gortsplib #932 で修正されたが、修正後も切れる報告が残る）。**ffmpeg クライアントでは再現しなかったため、実機で確認する必要がある**（[acceptance-test.md](acceptance-test.md) A5） |
+| **60 秒切断の既知問題** | MediaMTX v1.20.1 + VRChat PC 実機で 7 分以上の単一 RTSP セッションを確認し、再現しなかった。バージョン更新時は [acceptance-test.md](acceptance-test.md) A5 を再実行する |
 | AVPro のバージョン | VRChat の AVPro は **v3.3.6**（Build 1864 / 2026-06-22, VRChat 2026.2.3）。上記の遅延実測値はすべて 2.x 時代のもので、**PC HLS 35 秒が現在も再現するかは未検証** |

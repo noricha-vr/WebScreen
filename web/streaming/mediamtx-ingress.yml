@@ -1,0 +1,33 @@
+# MediaMTX v1.20.1 ingress. Secret values belong in the systemd EnvironmentFile.
+logLevel: info
+readTimeout: 20s
+writeTimeout: 20s
+api: true
+apiAddress: 127.0.0.1:9997
+rtsp: true
+rtspAddress: 127.0.0.1:8554
+rtspTransports: [tcp]
+rtmp: false
+hls: false
+srt: false
+moq: false
+webrtc: true
+webrtcAddress: 127.0.0.1:8889
+webrtcTrustedProxies: [127.0.0.1]
+webrtcLocalUDPAddress: :8189
+webrtcIPsFromInterfaces: false
+webrtcAdditionalHosts: [161.34.34.128]
+webrtcHandshakeTimeout: 15s
+webrtcTrackGatherTimeout: 15s
+authMethod: jwt
+authJWTJWKS: https://web-screen.net/api/streams/jwks/
+authJWTClaimKey: mediamtx_permissions
+authJWTExclude:
+  - action: read
+  - action: api
+pathDefaults:
+  overridePublisher: false
+  runOnAvailable: /opt/webscreen/streaming/relay.sh
+  runOnAvailableRestart: false
+paths:
+  "~^live/[A-Za-z0-9]{12}$": {}

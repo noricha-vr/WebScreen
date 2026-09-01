@@ -2,7 +2,7 @@ import {
   runStreamLifecycle,
   type StreamLifecycleDatabase,
 } from '../../src/lib/services/stream-lifecycle';
-import { createStreamMediaMtxClient } from '../../src/lib/services/stream-media';
+import { createStreamMediaMtxClients } from '../../src/lib/services/stream-media';
 
 const SOURCE = 'webscreen-beta-cron';
 const DEFAULT_NO_VIEWER_SECONDS = 10 * 60;
@@ -14,6 +14,10 @@ export interface StreamCronEnv {
   MEDIAMTX_API_URL?: string;
   /** secret。Control API の Bearer token。 */
   MEDIAMTX_API_TOKEN?: string;
+  MEDIAMTX_INGRESS_API_URL?: string;
+  MEDIAMTX_INGRESS_API_TOKEN?: string;
+  MEDIAMTX_EGRESS_API_URL?: string;
+  MEDIAMTX_EGRESS_API_TOKEN?: string;
   STREAM_NO_VIEWER_SECONDS?: string;
   STREAM_HEARTBEAT_SECONDS?: string;
 }
@@ -26,16 +30,18 @@ export async function runStreamCron(
 ): Promise<void> {
   const startedAt = Date.now();
   try {
-    const mediaMtx =
-      env.MEDIAMTX_API_URL && env.MEDIAMTX_API_TOKEN
-        ? createStreamMediaMtxClient({
-            apiUrl: env.MEDIAMTX_API_URL,
-            apiToken: env.MEDIAMTX_API_TOKEN,
-          })
-        : undefined;
+    const mediaMtx = createStreamMediaMtxClients({
+      legacyApiUrl: env.MEDIAMTX_API_URL,
+      legacyApiToken: env.MEDIAMTX_API_TOKEN,
+      ingressApiUrl: env.MEDIAMTX_INGRESS_API_URL,
+      ingressApiToken: env.MEDIAMTX_INGRESS_API_TOKEN,
+      egressApiUrl: env.MEDIAMTX_EGRESS_API_URL,
+      egressApiToken: env.MEDIAMTX_EGRESS_API_TOKEN,
+    });
     const summary = await runStreamLifecycle({
       database: env.DB,
-      mediaMtx,
+      ingressMediaMtx: mediaMtx?.ingress,
+      egressMediaMtx: mediaMtx?.egress,
       now: new Date(scheduledTime),
       settings: {
         noViewerTimeoutSeconds: positiveInt(

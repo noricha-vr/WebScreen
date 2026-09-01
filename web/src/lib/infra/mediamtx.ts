@@ -2,12 +2,23 @@
 export interface MediaPath {
   name: string;
   publisherId: string | null;
+  publisherSessionType?: MediaMtxSessionType | null;
   rtspReaders: number;
+  bytesReceived?: number;
+  bytesSent?: number;
+}
+
+export type MediaMtxSessionType = 'webRTCSession' | 'rtspSession';
+
+export interface MediaMtxPublisher {
+  id: string;
+  sessionType: MediaMtxSessionType;
 }
 
 export interface MediaMtxClient {
+  getPath(name: string): Promise<MediaPath | undefined>;
   listPaths(): Promise<MediaPath[]>;
-  kickPublisher(publisherId: string): Promise<void>;
+  kickPublisher(publisher: MediaMtxPublisher): Promise<void>;
 }
 
 export type MediaMtxFetch = typeof fetch;
@@ -25,6 +36,21 @@ export function createMediaMtxClient(config: {
   const headers = { Authorization: `Bearer ${config.apiToken}` };
 
   return {
+    async getPath(name: string): Promise<MediaPath | undefined> {
+      const response = await fetchImpl(
+        `${baseUrl}/v3/paths/get/${encodeURIComponent(name)}`,
+        { headers }
+      );
+      if (response.status === 404) return undefined;
+      if (!response.ok) throw new Error(`MediaMTX path get failed with status ${response.status}`);
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        throw new Error('MediaMTX path get returned invalid JSON');
+      }
+      return parsePath(body);
+    },
     async listPaths(): Promise<MediaPath[]> {
       const first = await fetchPage(fetchImpl, baseUrl, headers, 0);
       const paths = first.items.map(parsePath);
@@ -35,11 +61,14 @@ export function createMediaMtxClient(config: {
       }
       return paths;
     },
-    async kickPublisher(publisherId: string): Promise<void> {
+    async kickPublisher(publisher: MediaMtxPublisher): Promise<void> {
+      const sessionPath =
+        publisher.sessionType === 'webRTCSession' ? 'webrtcsessions' : 'rtspsessions';
       const response = await fetchImpl(
-        `${baseUrl}/v3/webrtcsessions/kick/${encodeURIComponent(publisherId)}`,
+        `${baseUrl}/v3/${sessionPath}/kick/${encodeURIComponent(publisher.id)}`,
         { method: 'POST', headers }
       );
+      if (response.status === 404) return;
       if (!response.ok) throw new Error(`MediaMTX kick failed with status ${response.status}`);
     },
   };
@@ -83,12 +112,27 @@ function parsePath(value: unknown): MediaPath {
     throw new Error('MediaMTX path item is malformed');
   }
   const source = isRecord(value.source) ? value.source : null;
-  const publisherId =
-    source?.type === 'webRTCSession' && typeof source.id === 'string' ? source.id : null;
+  const publisherSessionType = sessionType(source?.type);
+  const publisherId = publisherSessionType && typeof source?.id === 'string' ? source.id : null;
   const rtspReaders = value.readers.filter(
     (reader) => isRecord(reader) && reader.type === 'rtspSession'
   ).length;
-  return { name: value.name, publisherId, rtspReaders };
+  return {
+    name: value.name,
+    publisherId,
+    publisherSessionType: publisherId ? publisherSessionType : null,
+    rtspReaders,
+    bytesReceived: nonNegativeNumber(value.bytesReceived),
+    bytesSent: nonNegativeNumber(value.bytesSent),
+  };
+}
+
+function sessionType(value: unknown): MediaMtxSessionType | null {
+  return value === 'webRTCSession' || value === 'rtspSession' ? value : null;
+}
+
+function nonNegativeNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
 function normalizeBaseUrl(value: string): string {

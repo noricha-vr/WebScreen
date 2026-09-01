@@ -1,18 +1,32 @@
-import { ERROR_CODES, type CreateStreamResponse, type ExtendStreamResponse } from '../contracts/api';
+import {
+  ERROR_CODES,
+  type CreateStreamResponse,
+  type ExtendStreamResponse,
+} from '../contracts/api';
 import { copyToClipboard } from './clipboard';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
-import { startWhipPublisher, WhipPublishError, type WhipPublisher } from './whip-publisher';
+import { waitForStreamReady } from './stream-health';
+import {
+  SCREEN_SHARE_VIDEO_SETTINGS,
+  startWhipPublisher,
+  WhipPublishError,
+  type WhipPublisher,
+} from './whip-publisher';
 
 export const HEARTBEAT_INTERVAL_MS = 25_000;
 export const EXPIRY_WARNING_SECONDS = 5 * 60;
 
 type ScreenSharePhase = 'idle' | 'login' | 'url' | 'live' | 'error';
 type LiveStream = CreateStreamResponse & { publisher: WhipPublisher; media: MediaStream };
+type StartedStream = { live: LiveStream; ready: boolean };
+
+class StreamHealthError extends Error {}
 
 /** DOM controller の外部境界。テストでは画面・API・WHIP を独立して差し替える。 */
 export interface ScreenShareDependencies {
   requestJson: typeof requestJson;
   startWhipPublisher: typeof startWhipPublisher;
+  waitForStreamReady: (streamId: string) => Promise<boolean>;
   getDisplayMedia: typeof navigator.mediaDevices.getDisplayMedia;
   now: () => number;
   sendBeacon: (url: string) => boolean;
@@ -22,6 +36,7 @@ export interface ScreenShareDependencies {
 const DEFAULT_DEPENDENCIES: ScreenShareDependencies = {
   requestJson,
   startWhipPublisher,
+  waitForStreamReady: (streamId) => waitForStreamReady(streamId, requestJson),
   getDisplayMedia: (constraints) => navigator.mediaDevices.getDisplayMedia(constraints),
   now: () => Date.now(),
   sendBeacon: (url) => navigator.sendBeacon(url),
@@ -78,7 +93,7 @@ export class ScreenShareController {
     this.button('[data-screen-show-live]')?.addEventListener('click', () => this.show(nextStreamStep('url') ?? 'live'));
     this.button('[data-screen-extend]')?.addEventListener('click', () => void this.extend());
     this.button('[data-screen-stop]')?.addEventListener('click', () => void this.stop());
-    this.button('[data-screen-retry]')?.addEventListener('click', () => void this.selectScreen());
+    this.button('[data-screen-retry]')?.addEventListener('click', () => void this.retry());
     this.deps.onPageHide(() => this.stopForPageHide());
     this.show('idle');
   }
@@ -97,19 +112,22 @@ export class ScreenShareController {
         stopMedia(media);
         return;
       }
-      const stream = await this.createAndPublish(media, generation);
-      if (!stream) return;
+      const started = await this.createAndPublish(media, generation);
+      if (!started) return;
+      const stream = started.live;
       if (!this.isActiveStart(generation)) {
         releaseScreenShare(stream, () => this.clearTimers());
-        this.notifyRemoteStop(stream);
+        void this.notifyRemoteStop(stream);
         return;
       }
       this.live = stream;
       this.setUrl(stream.streamUrl);
+      this.setAudioStatus(stream.media);
       this.preview(stream.media);
       this.startTimers();
       stream.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
-      this.show('url');
+      if (started.ready) this.show('url');
+      else this.showError(new StreamHealthError());
     } catch (error) {
       if (this.isActiveStart(generation)) this.handleStartError(error);
     } finally {
@@ -118,7 +136,7 @@ export class ScreenShareController {
     }
   }
 
-  private async createAndPublish(media: MediaStream, generation: number): Promise<LiveStream | null> {
+  private async createAndPublish(media: MediaStream, generation: number): Promise<StartedStream | null> {
     let created: CreateStreamResponse;
     try {
       created = asCreateStream(await this.deps.requestJson('/api/streams/', { method: 'POST' }));
@@ -131,24 +149,59 @@ export class ScreenShareController {
       void this.notifyServerStop(created.id);
       return null;
     }
+    return this.publishAndVerify(media, created, generation);
+  }
+
+  private async publishAndVerify(
+    media: MediaStream,
+    created: CreateStreamResponse,
+    generation: number
+  ): Promise<StartedStream | null> {
+    let publisher: WhipPublisher | null = null;
+    let stream: LiveStream | null = null;
     try {
-      const publisher = await this.deps.startWhipPublisher({
+      publisher = await this.deps.startWhipPublisher({
         stream: media,
         streamId: created.id,
         publishToken: created.publishToken,
       });
-      const stream = { ...created, publisher, media };
+      stream = { ...created, publisher, media };
       if (!this.isActiveStart(generation)) {
         releaseScreenShare(stream, () => this.clearTimers());
-        this.notifyRemoteStop(stream);
+        void this.notifyRemoteStop(stream);
         return null;
       }
-      return stream;
+      this.live = stream;
+      return await this.verifyInitialStream(stream, generation);
     } catch (error) {
+      if (stream && !this.isActiveLive(stream)) return null;
+      if (stream) this.live = null;
+      const failedPublisher = stream?.publisher ?? publisher;
+      if (failedPublisher) {
+        failedPublisher.close();
+        void failedPublisher.deleteResource().catch((deleteError) => {
+          console.warn('Failed to delete WHIP resource after start failure', deleteError);
+        });
+      }
       stopMedia(media);
       void this.notifyServerStop(created.id);
       throw error;
     }
+  }
+
+  private async verifyInitialStream(stream: LiveStream, generation: number): Promise<StartedStream | null> {
+    const ready = await this.deps.waitForStreamReady(stream.id);
+    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) return null;
+    if (ready) return { live: stream, ready: true };
+    const replacement = await stream.publisher.republish();
+    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) {
+      await this.releasePublisher(replacement);
+      return null;
+    }
+    stream.publisher = replacement;
+    const retryReady = await this.deps.waitForStreamReady(stream.id);
+    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) return null;
+    return { live: stream, ready: retryReady };
   }
 
   private async copyUrl(): Promise<void> {
@@ -156,6 +209,37 @@ export class ScreenShareController {
     if (!input) return;
     const copied = await copyToClipboard(input.value, input);
     this.setButtonLabel('[data-screen-copy]', copied ? 'labelCopied' : 'labelCopy');
+  }
+
+  private async retry(): Promise<void> {
+    const live = this.live;
+    if (!live) {
+      await this.selectScreen();
+      return;
+    }
+    this.setBusy('[data-screen-retry]', true, 'labelReconnecting');
+    try {
+      const publisher = await live.publisher.republish();
+      if (!this.isActiveLive(live)) {
+        await this.releasePublisher(publisher);
+        return;
+      }
+      live.publisher = publisher;
+      const ready = await this.deps.waitForStreamReady(live.id);
+      if (!this.isActiveLive(live)) return;
+      if (ready) {
+        this.setUrl(live.streamUrl);
+        this.show('url');
+      } else {
+        this.showError(new StreamHealthError());
+      }
+    } catch (error) {
+      if (!this.isActiveLive(live)) return;
+      const stopped = this.finishLocally('error', error);
+      if (stopped) await this.notifyRemoteStop(stopped);
+    } finally {
+      this.setBusy('[data-screen-retry]', false, this.live ? 'labelReconnect' : 'labelRetry');
+    }
   }
 
   private async extend(): Promise<void> {
@@ -178,9 +262,9 @@ export class ScreenShareController {
     }
   }
 
-  private stop(): void {
+  private async stop(): Promise<void> {
     const live = this.finishLocally('idle');
-    if (live) this.notifyRemoteStop(live);
+    if (live) await this.notifyRemoteStop(live);
   }
 
   private startTimers(): void {
@@ -217,7 +301,7 @@ export class ScreenShareController {
 
   private handleRuntimeError(error: unknown): void {
     const live = this.finishLocally('error', error);
-    if (live) this.notifyRemoteStop(live);
+    if (live) void this.notifyRemoteStop(live);
   }
 
   private finishLocally(phase: 'idle' | 'error', error?: unknown): LiveStream | null {
@@ -244,12 +328,11 @@ export class ScreenShareController {
       console.warn('Failed to queue stream stop beacon', error);
       void this.notifyServerStop(live.id);
     }
-    this.notifyWhipDeletion(live);
+    void this.notifyWhipDeletion(live);
   }
 
-  private notifyRemoteStop(live: LiveStream): void {
-    void this.notifyServerStop(live.id);
-    this.notifyWhipDeletion(live);
+  private async notifyRemoteStop(live: LiveStream): Promise<void> {
+    await Promise.all([this.notifyServerStop(live.id), this.notifyWhipDeletion(live)]);
   }
 
   private async notifyServerStop(id: string): Promise<void> {
@@ -260,8 +343,15 @@ export class ScreenShareController {
     }
   }
 
-  private notifyWhipDeletion(live: LiveStream): void {
-    void live.publisher.deleteResource().catch((error) => {
+  private async notifyWhipDeletion(live: LiveStream): Promise<void> {
+    await live.publisher.deleteResource().catch((error) => {
+      console.warn('Failed to delete WHIP resource', error);
+    });
+  }
+
+  private async releasePublisher(publisher: WhipPublisher): Promise<void> {
+    publisher.close();
+    await publisher.deleteResource().catch((error) => {
       console.warn('Failed to delete WHIP resource', error);
     });
   }
@@ -270,8 +360,13 @@ export class ScreenShareController {
     return !this.stopping && this.startGeneration === generation;
   }
 
+  private isActiveLive(live: LiveStream): boolean {
+    return !this.stopping && this.live === live;
+  }
+
   private showError(error: unknown): void {
     this.text('[data-screen-error-message]', this.messageFor(error));
+    this.setButtonLabel('[data-screen-retry]', this.live ? 'labelReconnect' : 'labelRetry');
     this.show('error');
   }
 
@@ -281,9 +376,11 @@ export class ScreenShareController {
     }
     if (error instanceof JsonRequestError) {
       if (error.errorCode === ERROR_CODES.streamAlreadyLive) return this.message('msgStreamAlreadyLive');
+      if (error.errorCode === ERROR_CODES.streamCapacityReached) return this.message('msgStreamCapacity');
       if (error.errorCode === ERROR_CODES.streamCreateRateLimited) return this.message('msgRateLimited');
       if (error.errorCode === ERROR_CODES.streamEnded) return this.message('msgStreamEnded');
     }
+    if (error instanceof StreamHealthError) return this.message('msgStreamUnhealthy');
     if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
       return this.message('msgDisplayDenied');
     }
@@ -321,6 +418,11 @@ export class ScreenShareController {
     if (input) input.value = url;
   }
 
+  private setAudioStatus(media: MediaStream): void {
+    const key = media.getAudioTracks().length > 0 ? 'msgAudioIncluded' : 'msgVideoOnly';
+    this.text('[data-screen-audio-status]', this.message(key));
+  }
+
   private setBusy(selector: string, busy: boolean, label: string): void {
     const button = this.button(selector);
     if (!button) return;
@@ -350,11 +452,15 @@ export class ScreenShareController {
 
 function displayMediaConstraints(): MediaStreamConstraints {
   return {
-    // ピッカーは既定のまま（画面全体・ウィンドウ・タブから選ばせる）。PoC の
+    // ピッカーは既定のまま（画面全体・ウィンドウ・タブから選ばせる）。検証時の
     // preferCurrentTab は macOS 権限回避用で、自タブ共有は製品では意味がない。
     // macOS の画面収録が未許可だと NotAllowedError になる（displayDenied 文言で案内）
-    video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
-    audio: false,
+    video: {
+      width: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.width },
+      height: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.height },
+      frameRate: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.frameRate, max: SCREEN_SHARE_VIDEO_SETTINGS.frameRate },
+    },
+    audio: true,
   };
 }
 
