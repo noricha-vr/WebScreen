@@ -66,7 +66,7 @@ Issue #93 で決定・凍結した。
 | 設定 | 値 | 補足 |
 |---|---|---|
 | コーデック | `setCodecPreferences` で H.264 を先頭へ | R1 |
-| ビットレート上限 | `encodings[0].maxBitrate = 600_000`（既定）/ `300_000`（省帯域） | 実効 352 kbps・24.5 fps。段の設計は [quality-tiers.md](quality-tiers.md) |
+| ビットレート上限 | **`encodings[0].maxBitrate = 1_500_000`（単一。モード選択 UI は作らない）** | 実ページのスクロールで実効 約1,620 kbps・24.8 fps・フリーズなし（2026-09-01 実測）。600k は実ページで破綻する。根拠と却下案は [quality-tiers.md](quality-tiers.md) |
 | 劣化ポリシー | `degradationPreference = 'maintain-resolution'` | R10 |
 | コンテンツヒント | `track.contentHint = 'text'` | R10。**`'detail'` ではない** |
 | 解像度 | **1920x1080 固定**（省帯域でも下げない） | `maintain-resolution` が解像度を守り、足りなければ fps が落ちる。**720p / 480p の段は作らない**（[quality-tiers.md](quality-tiers.md)） |
