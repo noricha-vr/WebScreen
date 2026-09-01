@@ -46,7 +46,7 @@
   "r2_buckets": [
     {
       "binding": "BUCKET",
-      "bucket_name": "webscreen-beta"
+      "bucket_name": "webscreen"
     }
   ]
 }
