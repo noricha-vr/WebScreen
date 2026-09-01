@@ -55,6 +55,7 @@ describe('WHIP publisher', () => {
     const requests: RequestInit[] = [];
     let codecPreferences: RTCRtpCodec[] | undefined;
     const senderParameters: RTCRtpSendParameters[] = [];
+    let keyframeRequests = 0;
     const addedAudioTracks: MediaStreamTrack[] = [];
     let delayedDelete: ReturnType<typeof deferred<Response>> | null = null;
     let closed = 0;
@@ -77,7 +78,10 @@ describe('WHIP publisher', () => {
           setCodecPreferences: (codecs: RTCRtpCodec[]) => { codecPreferences = codecs; },
           sender: {
             getParameters: () => ({}),
-            setParameters: async (parameters: RTCRtpSendParameters) => { senderParameters.push(parameters); },
+            setParameters: async (parameters: RTCRtpSendParameters, options?: unknown) => {
+              if (options) keyframeRequests += 1;
+              else senderParameters.push(parameters);
+            },
           },
         } as unknown as RTCRtpTransceiver;
       }
@@ -164,6 +168,7 @@ describe('WHIP publisher', () => {
       expect(requests[3]?.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
       expect(requests).toHaveLength(4);
       expect(closed).toBe(3);
+      expect(keyframeRequests).toBe(0);
     } finally {
       Object.defineProperty(globalThis, 'RTCRtpSender', { configurable: true, value: previousSender });
       Object.defineProperty(globalThis, 'RTCPeerConnection', { configurable: true, value: previousConnection });
@@ -211,6 +216,7 @@ describe('WHIP publisher', () => {
       restore.globals();
     }
   });
+
 });
 
 interface WebRtcMockState {
@@ -254,7 +260,8 @@ function installWebRtcMocks(
         setCodecPreferences() {},
         sender: {
           getParameters: () => (parameterSnapshots[state.getParametersCalls++] ?? {}) as RTCRtpSendParameters,
-          setParameters: async (parameters: RTCRtpSendParameters) => {
+          setParameters: async (parameters: RTCRtpSendParameters, options?: unknown) => {
+            if (options) return;
             state.parameters.push({
               maxBitrate: parameters.encodings?.[0]?.maxBitrate,
               scaleResolutionDownBy: parameters.encodings?.[0]?.scaleResolutionDownBy,
