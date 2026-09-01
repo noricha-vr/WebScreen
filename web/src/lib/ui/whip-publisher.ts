@@ -35,7 +35,10 @@ export function prioritizeH264(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] | 
 
 /** WHIP 接続を終了するために必要な操作を返す。 */
 export interface WhipPublisher {
-  close(): Promise<void>;
+  /** ローカルの RTCPeerConnection を同期的に閉じる。 */
+  close(): void;
+  /** WHIP resource を best-effort で削除する。 */
+  deleteResource(): Promise<void>;
   setPublishToken(publishToken: string): void;
 }
 
@@ -74,7 +77,9 @@ export async function startWhipPublisher(input: StartWhipPublisherInput): Promis
     return publisherFor(peerConnection, resourceUrl, input.publishToken, input.fetchImpl ?? fetch);
   } catch (error) {
     peerConnection.close();
-    if (resourceUrl) await deleteWhipResource(resourceUrl, input.publishToken, input.fetchImpl ?? fetch);
+    if (resourceUrl) {
+      void deleteWhipResource(resourceUrl, input.publishToken, input.fetchImpl ?? fetch);
+    }
     throw error;
   }
 }
@@ -149,17 +154,24 @@ function publisherFor(
   fetchImpl: typeof fetch
 ): WhipPublisher {
   let currentPublishToken = publishToken;
+  let closed = false;
+  let deletePromise: Promise<void> | null = null;
   return {
-    async close(): Promise<void> {
-      try {
-        const response = await fetchImpl(resourceUrl, {
+    close(): void {
+      if (closed) return;
+      closed = true;
+      peerConnection.close();
+    },
+    deleteResource(): Promise<void> {
+      if (!deletePromise) {
+        deletePromise = fetchImpl(resourceUrl, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${currentPublishToken}` },
+        }).then((response) => {
+          if (!response.ok) throw new WhipPublishError('WHIP_REQUEST_FAILED');
         });
-        if (!response.ok) throw new WhipPublishError('WHIP_REQUEST_FAILED');
-      } finally {
-        peerConnection.close();
       }
+      return deletePromise;
     },
     setPublishToken(nextPublishToken: string): void {
       currentPublishToken = nextPublishToken;

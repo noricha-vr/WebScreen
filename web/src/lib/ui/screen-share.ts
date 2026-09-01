@@ -15,6 +15,8 @@ export interface ScreenShareDependencies {
   startWhipPublisher: typeof startWhipPublisher;
   getDisplayMedia: typeof navigator.mediaDevices.getDisplayMedia;
   now: () => number;
+  sendBeacon: (url: string) => boolean;
+  onPageHide: (handler: () => void) => void;
 }
 
 const DEFAULT_DEPENDENCIES: ScreenShareDependencies = {
@@ -22,23 +24,18 @@ const DEFAULT_DEPENDENCIES: ScreenShareDependencies = {
   startWhipPublisher,
   getDisplayMedia: (constraints) => navigator.mediaDevices.getDisplayMedia(constraints),
   now: () => Date.now(),
+  sendBeacon: (url) => navigator.sendBeacon(url),
+  onPageHide: (handler) => window.addEventListener('pagehide', handler),
 };
 
-/** ローカル配信を停止し、WHIP DELETE の成否を呼び出し元へ返す。 */
-export async function releaseScreenShare(
+/** タイマー・画面共有・PeerConnection をこの順に同期で解放する。 */
+export function releaseScreenShare(
   live: Pick<LiveStream, 'publisher' | 'media'>,
   clearTimers: () => void
-): Promise<unknown | null> {
-  let closeError: unknown = null;
-  try {
-    await live.publisher.close();
-  } catch (error) {
-    closeError = error;
-  } finally {
-    stopMedia(live.media);
-    clearTimers();
-  }
-  return closeError;
+): void {
+  clearTimers();
+  stopMedia(live.media);
+  live.publisher.close();
 }
 
 /** ISO8601 の期限まで残る秒数を、表示に使える非負整数で返す。 */
@@ -66,6 +63,8 @@ export class ScreenShareController {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private clockTimer: ReturnType<typeof setInterval> | null = null;
   private phase: ScreenSharePhase = 'idle';
+  private stopping = false;
+  private startGeneration = 0;
 
   constructor(
     private readonly root: HTMLElement,
@@ -80,14 +79,27 @@ export class ScreenShareController {
     this.button('[data-screen-extend]')?.addEventListener('click', () => void this.extend());
     this.button('[data-screen-stop]')?.addEventListener('click', () => void this.stop());
     this.button('[data-screen-retry]')?.addEventListener('click', () => this.show('select'));
+    this.deps.onPageHide(() => this.stopForPageHide());
     this.show('idle');
   }
 
   private async selectScreen(): Promise<void> {
+    const generation = ++this.startGeneration;
+    this.stopping = false;
     this.setBusy('[data-screen-select]', true, 'labelSelecting');
     try {
       const media = await this.deps.getDisplayMedia(displayMediaConstraints());
-      const stream = await this.createAndPublish(media);
+      if (!this.isActiveStart(generation)) {
+        stopMedia(media);
+        return;
+      }
+      const stream = await this.createAndPublish(media, generation);
+      if (!stream) return;
+      if (!this.isActiveStart(generation)) {
+        releaseScreenShare(stream, () => this.clearTimers());
+        this.notifyRemoteStop(stream);
+        return;
+      }
       this.live = stream;
       this.setUrl(stream.streamUrl);
       this.preview(stream.media);
@@ -95,13 +107,13 @@ export class ScreenShareController {
       stream.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
       this.show('url');
     } catch (error) {
-      this.handleStartError(error);
+      if (this.isActiveStart(generation)) this.handleStartError(error);
     } finally {
       this.setBusy('[data-screen-select]', false, 'labelSelect');
     }
   }
 
-  private async createAndPublish(media: MediaStream): Promise<LiveStream> {
+  private async createAndPublish(media: MediaStream, generation: number): Promise<LiveStream | null> {
     let created: CreateStreamResponse;
     try {
       created = asCreateStream(await this.deps.requestJson('/api/streams/', { method: 'POST' }));
@@ -109,16 +121,27 @@ export class ScreenShareController {
       stopMedia(media);
       throw error;
     }
+    if (!this.isActiveStart(generation)) {
+      stopMedia(media);
+      void this.notifyServerStop(created.id);
+      return null;
+    }
     try {
       const publisher = await this.deps.startWhipPublisher({
         stream: media,
         streamId: created.id,
         publishToken: created.publishToken,
       });
-      return { ...created, publisher, media };
+      const stream = { ...created, publisher, media };
+      if (!this.isActiveStart(generation)) {
+        releaseScreenShare(stream, () => this.clearTimers());
+        this.notifyRemoteStop(stream);
+        return null;
+      }
+      return stream;
     } catch (error) {
       stopMedia(media);
-      await this.deps.requestJson(`/api/streams/${encodeURIComponent(created.id)}/stop/`, { method: 'POST' });
+      void this.notifyServerStop(created.id);
       throw error;
     }
   }
@@ -131,44 +154,28 @@ export class ScreenShareController {
   }
 
   private async extend(): Promise<void> {
-    if (!this.live) return;
+    const live = this.live;
+    if (!live || this.stopping) return;
     this.setBusy('[data-screen-extend]', true, 'labelExtending');
     try {
       const response = asExtendStream(
-        await this.deps.requestJson(`/api/streams/${encodeURIComponent(this.live.id)}/extend/`, { method: 'POST' })
+        await this.deps.requestJson(`/api/streams/${encodeURIComponent(live.id)}/extend/`, { method: 'POST' })
       );
-      this.live.extendExpiresAt = response.extendExpiresAt;
-      this.live.publishToken = response.publishToken;
-      this.live.publisher.setPublishToken(response.publishToken);
+      if (this.stopping || this.live !== live) return;
+      live.extendExpiresAt = response.extendExpiresAt;
+      live.publishToken = response.publishToken;
+      live.publisher.setPublishToken(response.publishToken);
       this.updateClock();
     } catch (error) {
-      await this.handleRuntimeError(error);
+      if (!this.stopping && this.live === live) this.handleRuntimeError(error);
     } finally {
       this.setBusy('[data-screen-extend]', false, 'labelExtend');
     }
   }
 
-  private async stop(): Promise<void> {
-    if (!this.live) return;
-    const live = this.live;
-    this.setBusy('[data-screen-stop]', true, 'labelStopping');
-    try {
-      await this.deps.requestJson(`/api/streams/${encodeURIComponent(live.id)}/stop/`, { method: 'POST' });
-    } catch (error) {
-      await this.handleRuntimeError(error);
-      this.setBusy('[data-screen-stop]', false, 'labelStop');
-      return;
-    }
-
-    const closeError = await releaseScreenShare(live, () => this.clearTimers());
-    this.live = null;
-
-    if (closeError) {
-      this.showError(closeError);
-    } else {
-      this.show('idle');
-    }
-    this.setBusy('[data-screen-stop]', false, 'labelStop');
+  private stop(): void {
+    const live = this.finishLocally('idle');
+    if (live) this.notifyRemoteStop(live);
   }
 
   private startTimers(): void {
@@ -179,11 +186,12 @@ export class ScreenShareController {
   }
 
   private async heartbeat(): Promise<void> {
-    if (!this.live) return;
+    const live = this.live;
+    if (!live || this.stopping) return;
     try {
-      await this.deps.requestJson(`/api/streams/${encodeURIComponent(this.live.id)}/heartbeat/`, { method: 'POST' });
+      await this.deps.requestJson(`/api/streams/${encodeURIComponent(live.id)}/heartbeat/`, { method: 'POST' });
     } catch (error) {
-      await this.handleRuntimeError(error);
+      if (!this.stopping && this.live === live) this.handleRuntimeError(error);
     }
   }
 
@@ -202,12 +210,59 @@ export class ScreenShareController {
     this.showError(error);
   }
 
-  private async handleRuntimeError(error: unknown): Promise<void> {
+  private handleRuntimeError(error: unknown): void {
+    const live = this.finishLocally('error', error);
+    if (live) this.notifyRemoteStop(live);
+  }
+
+  private finishLocally(phase: 'idle' | 'error', error?: unknown): LiveStream | null {
+    if (this.stopping || !this.live) return null;
+    this.stopping = true;
+    this.startGeneration += 1;
     const live = this.live;
     this.live = null;
-    if (live) await releaseScreenShare(live, () => this.clearTimers());
-    else this.clearTimers();
-    this.showError(error);
+    releaseScreenShare(live, () => this.clearTimers());
+    if (phase === 'error') this.showError(error);
+    else this.show('idle');
+    return live;
+  }
+
+  private stopForPageHide(): void {
+    const live = this.finishLocally('idle');
+    this.startGeneration += 1;
+    this.stopping = true;
+    if (!live) return;
+    const stopUrl = streamStopUrl(live.id);
+    try {
+      if (!this.deps.sendBeacon(stopUrl)) void this.notifyServerStop(live.id);
+    } catch (error) {
+      console.warn('Failed to queue stream stop beacon', error);
+      void this.notifyServerStop(live.id);
+    }
+    this.notifyWhipDeletion(live);
+  }
+
+  private notifyRemoteStop(live: LiveStream): void {
+    void this.notifyServerStop(live.id);
+    this.notifyWhipDeletion(live);
+  }
+
+  private async notifyServerStop(id: string): Promise<void> {
+    try {
+      await this.deps.requestJson(streamStopUrl(id), { method: 'POST' });
+    } catch (error) {
+      console.warn('Failed to stop stream session remotely', error);
+    }
+  }
+
+  private notifyWhipDeletion(live: LiveStream): void {
+    void live.publisher.deleteResource().catch((error) => {
+      console.warn('Failed to delete WHIP resource', error);
+    });
+  }
+
+  private isActiveStart(generation: number): boolean {
+    return !this.stopping && this.startGeneration === generation;
   }
 
   private showError(error: unknown): void {
@@ -314,6 +369,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stopMedia(media: MediaStream): void {
   for (const track of media.getTracks()) track.stop();
+}
+
+function streamStopUrl(id: string): string {
+  return `/api/streams/${encodeURIComponent(id)}/stop/`;
 }
 
 function formatDuration(seconds: number): string {

@@ -37,90 +37,299 @@ describe('配信のタイマー', () => {
 });
 
 describe('配信の後始末', () => {
-  test('WHIP の DELETE が失敗してもローカルの画面共有とタイマーを必ず止める', async () => {
-    let stopped = 0;
-    let timersCleared = 0;
-    const closeError = await releaseScreenShare(
+  test('ネットワークを待たずにタイマー・画面共有・PeerConnection をこの順で止める', () => {
+    const released: string[] = [];
+    releaseScreenShare(
       {
         publisher: {
-          close: async () => { throw new Error('network failure'); },
+          close: () => { released.push('peerConnection'); },
+          deleteResource: async () => undefined,
           setPublishToken: () => undefined,
         },
-        media: { getTracks: () => [{ stop: () => { stopped += 1; } }] } as unknown as MediaStream,
+        media: { getTracks: () => [{ stop: () => { released.push('media'); } }] } as unknown as MediaStream,
       },
-      () => { timersCleared += 1; }
+      () => { released.push('timers'); }
     );
 
-    expect(closeError).toBeInstanceOf(Error);
-    expect(stopped).toBe(1);
-    expect(timersCleared).toBe(1);
+    expect(released).toEqual(['timers', 'media', 'peerConnection']);
   });
 });
 
 describe('画面共有 controller', () => {
-  test('heartbeat・延長・通信失敗時の後始末を API 応答に従って実行する', async () => {
+  test('開始クリックから URL・配信中を経て停止クリックでローカル資源を解放する', async () => {
     const calls: string[] = [];
-    let token = '';
     let stopped = 0;
     let closed = 0;
-    const controls = new Map<string, { disabled?: boolean; textContent?: string; hidden?: boolean }>();
-    for (const selector of [
-      '[data-screen-extend]',
-      '[data-screen-stop]',
-      '[data-screen-elapsed]',
-      '[data-screen-expires]',
-      '[data-screen-expiry-warning]',
-      '[data-screen-error-message]',
-    ]) controls.set(selector, {});
-    const root = {
-      dataset: { labelExtending: 'extending', labelExtend: 'extend', msgGeneric: 'error' },
-      querySelector: (selector: string) => controls.get(selector) ?? null,
-      querySelectorAll: () => [],
-    } as unknown as HTMLElement;
+    let deleted = 0;
+    const page = fakeScreenSharePage();
     const publisher: WhipPublisher = {
-      close: async () => { closed += 1; },
-      setPublishToken: (value) => { token = value; },
+      close: () => { closed += 1; },
+      deleteResource: async () => { deleted += 1; },
+      setPublishToken: () => undefined,
     };
+    const videoTrack = {
+      addEventListener: () => undefined,
+      stop: () => { stopped += 1; },
+    };
+    const media = {
+      getTracks: () => [videoTrack],
+      getVideoTracks: () => [videoTrack],
+    } as unknown as MediaStream;
     const dependencies: ScreenShareDependencies = {
       requestJson: (async (path: string) => {
         calls.push(path);
-        if (path.endsWith('/extend/')) {
+        if (path === '/api/streams/') {
           return {
-            id: 'Ab12Cd34Ef56', status: 'live', publishToken: 'extended-token',
-            publishTokenExpiresAt: '2026-09-01T02:00:00.000Z',
-            extendExpiresAt: '2026-09-01T02:00:00.000Z',
+            id: 'Ab12Cd34Ef56', streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56',
+            status: 'live', publishToken: 'initial-token',
+            publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',
+            extendExpiresAt: '2026-09-01T01:00:00.000Z',
+            startedAt: '2026-09-01T00:00:00.000Z', lastHeartbeatAt: '2026-09-01T00:00:00.000Z',
+            endedAt: null, endReason: null,
           };
         }
-        if (path.endsWith('/heartbeat/')) throw new Error('network failure');
-        return undefined;
+        return null;
       }) as unknown as ScreenShareDependencies['requestJson'],
       startWhipPublisher: async () => publisher,
-      getDisplayMedia: async () => ({ getTracks: () => [] }) as unknown as MediaStream,
+      getDisplayMedia: async () => media,
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: () => undefined,
     };
-    const controller = new ScreenShareController(root, dependencies);
-    const live = {
-      id: 'Ab12Cd34Ef56', streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56',
-      publishToken: 'initial-token', publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',
-      extendExpiresAt: '2026-09-01T01:00:00.000Z', status: 'live' as const,
-      startedAt: '2026-09-01T00:00:00.000Z', lastHeartbeatAt: '2026-09-01T00:00:00.000Z',
-      endedAt: null, endReason: null,
-      publisher,
-      media: { getTracks: () => [{ stop: () => { stopped += 1; } }] } as unknown as MediaStream,
-    };
-    (controller as unknown as { live: typeof live }).live = live;
+    const controller = new ScreenShareController(page.root, dependencies);
+    controller.mount();
 
-    await (controller as unknown as { extend: () => Promise<void> }).extend();
-    expect(token).toBe('extended-token');
-    expect(live.extendExpiresAt).toBe('2026-09-01T02:00:00.000Z');
+    page.button('[data-screen-start]').click();
+    expect(page.step('select').hidden).toBe(false);
 
-    await (controller as unknown as { heartbeat: () => Promise<void> }).heartbeat();
-    expect(calls).toEqual([
-      '/api/streams/Ab12Cd34Ef56/extend/',
-      '/api/streams/Ab12Cd34Ef56/heartbeat/',
-    ]);
+    page.button('[data-screen-select]').click();
+    await waitFor(() => !page.step('url').hidden);
+    expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
+
+    page.button('[data-screen-show-live]').click();
+    expect(page.step('live').hidden).toBe(false);
+
+    page.button('[data-screen-stop]').click();
+    page.button('[data-screen-stop]').click();
     expect(closed).toBe(1);
     expect(stopped).toBe(1);
-    expect((controller as unknown as { live: unknown }).live).toBeNull();
+    expect(deleted).toBe(1);
+    expect(page.step('idle').hidden).toBe(false);
+    expect(calls).toEqual(['/api/streams/', '/api/streams/Ab12Cd34Ef56/stop/']);
+  });
+
+  test('pagehide では空 body の sendBeacon で停止を通知する', async () => {
+    const page = fakeScreenSharePage();
+    const beaconUrls: string[] = [];
+    let pageHide: (() => void) | undefined;
+    let stopped = 0;
+    const publisher: WhipPublisher = {
+      close: () => undefined,
+      deleteResource: async () => undefined,
+      setPublishToken: () => undefined,
+    };
+    const videoTrack = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
+    const media = {
+      getTracks: () => [videoTrack],
+      getVideoTracks: () => [videoTrack],
+    } as unknown as MediaStream;
+    const dependencies: ScreenShareDependencies = {
+      requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => publisher,
+      getDisplayMedia: async () => media,
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: (url) => { beaconUrls.push(url); return true; },
+      onPageHide: (handler) => { pageHide = handler; },
+    };
+    new ScreenShareController(page.root, dependencies).mount();
+
+    page.button('[data-screen-start]').click();
+    page.button('[data-screen-select]').click();
+    await waitFor(() => !page.step('url').hidden);
+    pageHide?.();
+
+    expect(beaconUrls).toEqual(['/api/streams/Ab12Cd34Ef56/stop/']);
+    expect(stopped).toBe(1);
+  });
+
+  test('停止後に遅延した延長失敗が届いても error カードへ戻さない', async () => {
+    const page = fakeScreenSharePage();
+    const calls: string[] = [];
+    const delayedExtend = deferred<never>();
+    let closed = 0;
+    let deleted = 0;
+    let stopped = 0;
+    const publisher: WhipPublisher = {
+      close: () => { closed += 1; },
+      deleteResource: async () => { deleted += 1; },
+      setPublishToken: () => undefined,
+    };
+    const track = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
+    const media = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
+    const dependencies: ScreenShareDependencies = {
+      requestJson: ((path: string) => {
+        calls.push(path);
+        if (path === '/api/streams/') return Promise.resolve(createResponse());
+        if (path.endsWith('/extend/')) return delayedExtend.promise;
+        return Promise.resolve(null);
+      }) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => publisher,
+      getDisplayMedia: async () => media,
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: () => undefined,
+    };
+    const controller = new ScreenShareController(page.root, dependencies);
+    controller.mount();
+    page.button('[data-screen-start]').click();
+    page.button('[data-screen-select]').click();
+    await waitFor(() => !page.step('url').hidden);
+    page.button('[data-screen-show-live]').click();
+    page.button('[data-screen-extend]').click();
+    await waitFor(() => calls.some((path) => path.endsWith('/extend/')));
+
+    page.button('[data-screen-stop]').click();
+    delayedExtend.reject(new Error('late failure'));
+    await flushMicrotasks();
+
+    expect(page.step('idle').hidden).toBe(false);
+    expect(page.step('error').hidden).toBe(true);
+    expect(closed).toBe(1);
+    expect(deleted).toBe(1);
+    expect(stopped).toBe(1);
+  });
+
+  test('pagehide が画面選択中でも後から取得された track を即座に停止する', async () => {
+    const page = fakeScreenSharePage();
+    const pendingMedia = deferred<MediaStream>();
+    let pageHide: (() => void) | undefined;
+    let stopped = 0;
+    let createRequests = 0;
+    let publisherStarts = 0;
+    const track = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
+    const media = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
+    const dependencies: ScreenShareDependencies = {
+      requestJson: (async () => {
+        createRequests += 1;
+        return createResponse();
+      }) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => {
+        publisherStarts += 1;
+        throw new Error('publisher should not start');
+      },
+      getDisplayMedia: () => pendingMedia.promise,
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: (handler) => { pageHide = handler; },
+    };
+    new ScreenShareController(page.root, dependencies).mount();
+
+    page.button('[data-screen-start]').click();
+    page.button('[data-screen-select]').click();
+    pageHide?.();
+    pendingMedia.resolve(media);
+    await flushMicrotasks();
+
+    expect(stopped).toBe(1);
+    expect(createRequests).toBe(0);
+    expect(publisherStarts).toBe(0);
   });
 });
+
+function createResponse(): Record<string, unknown> {
+  return {
+    id: 'Ab12Cd34Ef56', streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56', status: 'live',
+    publishToken: 'initial-token', publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',
+    extendExpiresAt: '2026-09-01T01:00:00.000Z', startedAt: '2026-09-01T00:00:00.000Z',
+    lastHeartbeatAt: '2026-09-01T00:00:00.000Z', endedAt: null, endReason: null,
+  };
+}
+
+function fakeScreenSharePage(): {
+  root: HTMLElement;
+  button: (selector: string) => FakeElement;
+  step: (phase: string) => FakeElement;
+  url: FakeElement;
+} {
+  const elements = new Map<string, FakeElement>();
+  for (const selector of [
+    '[data-screen-start]', '[data-screen-select]', '[data-screen-copy]', '[data-screen-show-live]',
+    '[data-screen-extend]', '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
+    '[data-screen-preview]', '[data-screen-elapsed]', '[data-screen-expires]',
+    '[data-screen-expiry-warning]', '[data-screen-error-message]',
+  ]) elements.set(selector, new FakeElement());
+  const steps = ['idle', 'select', 'login', 'url', 'live', 'error'].map((phase) => {
+    const step = new FakeElement();
+    step.dataset.screenStep = phase;
+    return step;
+  });
+  const indicators = ['1', '2', '3'].map((value) => {
+    const indicator = new FakeElement();
+    indicator.dataset.screenIndicator = value;
+    return indicator;
+  });
+  const root = {
+    dataset: {
+      labelSelect: 'select', labelSelecting: 'selecting', labelCopy: 'copy', labelCopied: 'copied',
+      labelExtend: 'extend', labelExtending: 'extending', labelStop: 'stop', labelStopping: 'stopping',
+      msgGeneric: 'error', msgH264: 'h264', msgWhip: 'whip', msgDisplayDenied: 'denied',
+      msgStreamAlreadyLive: 'already-live', msgRateLimited: 'rate-limited', msgStreamEnded: 'ended',
+    },
+    querySelector: (selector: string) => elements.get(selector) ?? null,
+    querySelectorAll: (selector: string) => {
+      if (selector === '[data-screen-step]') return steps;
+      if (selector === '[data-screen-indicator]') return indicators;
+      return [];
+    },
+  } as unknown as HTMLElement;
+  return {
+    root,
+    button: (selector) => elements.get(selector)!,
+    step: (phase) => steps.find((step) => step.dataset.screenStep === phase)!,
+    url: elements.get('[data-screen-url]')!,
+  };
+}
+
+class FakeElement {
+  dataset: Record<string, string> = {};
+  disabled = false;
+  hidden = false;
+  srcObject: MediaProvider | null = null;
+  textContent = '';
+  value = '';
+  private readonly listeners: Array<() => void> = [];
+
+  addEventListener(event: string, listener: () => void): void {
+    if (event === 'click') this.listeners.push(listener);
+  }
+
+  click(): void {
+    for (const listener of this.listeners) listener();
+  }
+}
+
+type MediaProvider = MediaStream | null;
+
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (condition()) return;
+    await Promise.resolve();
+  }
+  throw new Error('Expected asynchronous UI update');
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (reason: unknown) => void } {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
