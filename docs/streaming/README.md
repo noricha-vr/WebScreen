@@ -20,7 +20,7 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 | PC | 同じYamaStreamのRTSPTで、AACは独立2回とも中央値1.239秒、MP3昇格候補は0.129〜0.416秒（16標本、中央値0.151秒、平均0.175秒）で全件1秒未満。音声は聞こえたとの手動観測があるが、A12の統制条件では未確認 | 実測 |
 | Quest | PC と同じ `rtspt://`。AAC 音声を含め実機確認済み、体感 2〜3 秒 | 実測 |
 
-**おすすめは現行AACを維持すること。** `stream-profile=mp3-beta` が重複なく1個だけあるChrome配信では、500 ms周期のキーフレーム要求を試せる。通常アクセス・unknown・重複値は従来の2秒GOPのままで、任意周期は指定できない。MP3 relayの30分・capacity・codec gateは合格したが、PC / Questの統制済み実聴、Quest 1秒未満、実Macの30 / 24 fps比較がA12に残る。
+**おすすめは現行AACを維持すること。** `stream-profile=mp3-beta` が重複なく1個だけあるChrome配信では、500 ms周期のキーフレーム要求を試せる。通常アクセス・unknown・重複値は従来の2秒GOPのままで、任意周期は指定できない。MP3 relayの30分・capacity・codec gateと実Macの30 / 24 fps比較は合格し、30 fpsを維持する。PC / Questの統制済み実聴とQuest 1秒未満はA12に残る。
 
 ## 読む順番
 

@@ -106,7 +106,7 @@ checksum が不変、ingress / egress のテスト path が 404、remote の一�
 
 MP3 betaの20回途中参加ではfirst packet Kが3/20、non-Kが17/20、次キーフレームまで0〜463 msだった。decoder probeは初期missing-reference警告後も継続した。開始直後のカクつきや約30秒後の安定は、常設の再起動案内ではなく初動buffer / decoder recoveryの観測として扱う。
 
-MP3 48 kHz stereo 128 kbpsは30分・非無音・A/V 7〜15 msまで自動確認済みで、ユーザーからも「聞こえた」「めっちゃ速い」との観測がある。ただしPC/Quest別の実聴と1秒未満、および実Mac 24/30 fps比較はA12で未完である。
+MP3 48 kHz stereo 128 kbpsは30分・非無音・A/V 7〜15 msまで自動確認済みで、ユーザーからも「聞こえた」「めっちゃ速い」との観測がある。実Mac 24/30 fps比較では30 fpsを採用した。ただしPC/Quest別の実聴と1秒未満はA12で未完である。
 
 ## 音声の確認境界
 
