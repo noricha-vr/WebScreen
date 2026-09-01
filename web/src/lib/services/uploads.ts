@@ -13,6 +13,7 @@ import {
   exceedsStorageQuota,
   getUserStorageUsage,
   MOVIE_RETENTION_MS,
+  USER_STORAGE_QUOTA_BYTES,
   type QuotaDatabase,
 } from './quota';
 
@@ -87,20 +88,11 @@ export function createR2UploadUrlGenerator(config: R2PresignConfig): UploadUrlGe
 export async function createPendingUpload(
   input: CreatePendingUploadInput
 ): Promise<PresignResponse> {
-  const usedBytes = await getUserStorageUsage(input.database, input.userId);
-  if (exceedsStorageQuota(usedBytes, input.request.sizeBytes)) {
-    throw new UploadError(
-      413,
-      ERROR_CODES.payloadTooLarge,
-      '保存容量の上限を超えるためアップロードできません'
-    );
-  }
-
   const shortId = (input.generateId ?? generateShortId)();
   const key = movieKey(shortId);
 
   // URL の発行を INSERT より先に行う。逆順だと発行に失敗した時に pending 行だけが残り、
-  // 24 時間の孤児掃除が拾うまで保存容量を食い続ける（利用者からは理由が見えない）。
+  // 署名失効後の回収が拾うまで保存容量を食い続ける（利用者からは理由が見えない）。
   // 先に発行して失敗すれば行を作らずに終わる。行の無い署名 URL は呼び出し元へ返らない
   // ので PUT されず、R2 にも D1 にも何も残らない。
   const uploadUrl = await input.createUploadUrl(key);
@@ -108,12 +100,36 @@ export async function createPendingUpload(
   const expiresAt = new Date(
     (input.now ?? new Date()).getTime() + MOVIE_RETENTION_MS
   ).toISOString();
-  await input.database
+  // 容量判定を INSERT と同じ SQL 文へ入れる。先に使用量を読んでから INSERT すると、
+  // 並行リクエストが同じ残量を見て両方通り、予約合計が上限を超える。SQLite/D1 は
+  // 1 文の書き込みを直列化するため、後から実行された INSERT は先行予約を含めて判定する。
+  const reservation = await input.database
     .prepare(
-      "INSERT INTO movies (short_id, user_id, filename, size_bytes, status, expires_at) VALUES (?, ?, ?, ?, 'pending', ?)"
+      `INSERT INTO movies (short_id, user_id, filename, size_bytes, status, expires_at)
+       SELECT ?, ?, ?, ?, 'pending', ?
+       WHERE COALESCE((
+         SELECT SUM(size_bytes) FROM movies
+         WHERE user_id = ? AND status IN ('pending', 'ready', 'failed')
+       ), 0) + ? <= ?`
     )
-    .bind(shortId, input.userId, input.request.filename, input.request.sizeBytes, expiresAt)
+    .bind(
+      shortId,
+      input.userId,
+      input.request.filename,
+      input.request.sizeBytes,
+      expiresAt,
+      input.userId,
+      input.request.sizeBytes,
+      USER_STORAGE_QUOTA_BYTES
+    )
     .run();
+  if (reservation.meta.changes === 0) {
+    throw new UploadError(
+      413,
+      ERROR_CODES.payloadTooLarge,
+      '保存容量の上限を超えるためアップロードできません'
+    );
+  }
 
   return {
     shortId,
