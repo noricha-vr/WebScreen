@@ -2,9 +2,9 @@
 
 VRChat のビデオプレイヤーで再生できる mp4 の必須条件。**この条件を満たさない出力は不良品**として扱う。
 
-## エンコード系統は 1 つだけ
+## VOD のエンコード系統は 1 つだけ
 
-動画化はブラウザ上の **FFmpeg.wasm の 1 系統のみ**で行う。サーバー側に第 2 のエンコーダを置かない。
+保存する MP4 の動画化はブラウザ上の **FFmpeg.wasm の 1 系統のみ**で行う。VOD のサーバー側に第 2 のエンコーダを置かない。
 
 - web-capture サービスは**スクリーンショット画像を返すだけ**で、動画化しない（責務は撮影と順序保証のみ）
 - 画像 → 動画の変換はすべてクライアントの FFmpeg.wasm が担当し、成果物を R2 へ直接アップロードする
@@ -76,9 +76,9 @@ ffprobe -v trace -i output.mp4 2>&1 | grep -o 'type:.moov\|type:.mdat' | head -2
 
 - API の契約（撮影順序の保証を含む）: [api-contracts.md](api-contracts.md)
 - 型の正本: `web/src/lib/contracts/api.ts`
-- ライブ配信（**未実装**。実装時にこの契約の改定を伴う）: [streaming/](streaming/)
+- ライブ配信（実装・運用の別契約）: [streaming/](streaming/)
 
-ライブ配信を実装する場合、エンコードはユーザーのブラウザの WebRTC が行う。
-**サーバー側にエンコーダは増えない**が、「エンコード系統は 1 つだけ」の節は改定が要る。
-上記の必須パラメータは維持し、GOP だけ例外（`g=1` は 1fps のスライドでは実質無料だが、
-30fps のライブでは 30 倍の無駄になるため通常 GOP に戻す）。詳細は [streaming/architecture.md](streaming/architecture.md)。
+ライブ映像はユーザーのブラウザの WebRTC が H.264 を生成する。サーバーの relay は映像を再エンコードせず copy し、
+ブラウザ音声だけを VRChat 互換の AAC-LC 48 kHz / stereo / 128 kbps に変換する。
+上記の VOD 必須パラメータとは成果物が異なり、GOP も通常 GOP を使う（`g=1` を 30fps のライブへ持ち込まない）。
+ライブ側の正本は [streaming/requirements.md](streaming/requirements.md)。

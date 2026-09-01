@@ -8,16 +8,16 @@
 |---|---|---|
 | **R1** | ブラウザ側で `setCodecPreferences` により **H.264 を最優先に固定する** | 既定の受入順は `VP8, rtx, H264…` で **VP8 が選ばれる**。VP8 で publish しても MediaMTX はエラーを返さず素通しし、**VRChat 側で「再生できない」という静かな失敗**になる |
 | **R2** | H.264 が使えない環境を**検出して配信を開始しない** | `RTCRtpSender.getCapabilities('video')` に H264 が無ければエラーにする。黙って VP8 で始めない |
-| **R3** | 音声を出すなら **AAC へ変換する**（Opus のままにしない） | AVPro 公式が「Media Foundation では Opus は読み込み失敗」と明記。映像は `-c:v copy` のままでよく、CPU は 1 配信 0.77% |
+| **R3** | ブラウザ音声を **relay で AAC-LC 48 kHz / stereo / 128 kbps へ変換する**（Opus のままにしない） | AVPro 公式が「Media Foundation では Opus は読み込み失敗」と明記。映像は `-c:v copy` のままにし、音声がない配信も許可する |
 | **R4** | `overridePublisher: no` を設定する | 既定 `true` は**後発の publisher が先発を蹴る**。他人の配信を奪える |
 | **R5** | publish は path 単位の認証で保護する | JWT の `mediamtx_permissions` で `{action: publish, path: live/{id}}` を払い出す |
-| **R6** | `hlsVariant: mpegts` を使う（LL-HLS を使わない） | LL-HLS は PC の AVPro が実効非対応、Quest も fMP4 の音声バグに当たる |
+| **R6** | 本番は ingress / egress を分け、**映像 copy + 音声 AAC 変換だけを relay する** | WebRTC publisher と公開 RTSP reader の責務・認証・障害を分離する。HLS / RTMP / SRT / MoQ は無効にする |
 | **R7** | HTTPS で提供する | Quest は HTTPS 必須。`getDisplayMedia` も secure context 必須 |
 | **R8** | **WHIP の UDP ポート（既定 8189/udp）を配信者から直接到達させる** | **Cloudflare の裏に隠せない**。配信ドメインとは別に、オリジンへ直接届く経路が要る |
-| **R9** | 配信開始は**必ずユーザーのクリック起点**にする | `getDisplayMedia` はユーザージェスチャ必須。読み込み直後に呼ぶと Promise が解決も棄却もしない。**自動復帰・自動再開は構造的に作れない** |
-| **R10** | `contentHint = 'text'` + `degradationPreference = 'maintain-resolution'` を設定する | **既定のままだと文字が読めなくなる**。実測で既定寄りの設定は 640x360 まで落ちて判読不能になった |
+| **R9** | 最初の画面取得は**必ずユーザーのクリック起点**にする | `getDisplayMedia` はユーザージェスチャ必須。ただし取得済み MediaStream を使う WHIP の再 publish は自動で 1 回行ってよい |
+| **R10** | `contentHint = 'motion'` + `degradationPreference = 'maintain-framerate'` を設定する | ライブ用途の中心を動画・動きのある画面に置き、カクつきの主因になるフレーム落ちを抑える。静止資料は既存の MP4 変換を使う |
 | **R11** | 送出解像度は `getSettings()` ではなく **`outbound-rtp` の `frameWidth/frameHeight`** で確認する | `ideal: 1920x1080` 要求で `getSettings()` が 1920x1080 を返しても、実送出は 1602x1032 だった |
-| **R12** | 帯域の見積もりは **Safari 基準**で行う | 同一素材で Safari は Chrome の**約 1.9 倍**（940 kbps vs 500 kbps） |
+| **R12** | URL を表示する前に ingress / egress の受信 bytes 増加を確認する | WHIP の 201 だけでは VRChat 出口まで映像が届いたことを保証しない。未到達なら同じ画面で 1 回自動再接続し、それでも失敗した時だけ再接続ボタンを出す |
 
 ## 配信ホスト名と path 規則（2026-09-01 凍結。以後変更しない）
 
@@ -46,16 +46,19 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 - 複数台へスケールする時は L4 ロードバランサか DNS の複数 A レコードで**同一ホスト名のまま**振り分ける
   （[server-plan.md](server-plan.md) Phase 3）。ホスト名は凍結だが、**A レコードの向き先（IP）は自由に変えてよい**
 
-## MediaMTX の設定
+## MediaMTX と relay の設定
 
 動作確認済みの雛形は [poc/mediamtx-poc.yml](poc/mediamtx-poc.yml)（検証用にポートをずらしてある。本番は既定ポートでよい）。
 
 | 設定 | 値 | 補足 |
 |---|---|---|
 | バージョン | **v1.20.1（2026-08-31 に VRChat 実機で確定。Issue #94 / A8）** | PC 実機で A2（映る）/ A5（5 分以上・60 秒切断なし）/ A6（途中参加 2 秒以内）を通過。60 秒切断問題は再現しなかった |
-| `rtspTransports` | `[tcp, udp]` | VRChat の `rtspt://` は TCP を使う |
-| `hlsVariant` | `mpegts` | R6 |
-| `hlsAlwaysRemux` | `yes` | 視聴者ゼロでも生成し続け、初回視聴の生成待ちを消す |
+| ingress RTSP | `127.0.0.1:8554` / TCP のみ | relay の入力専用。外部公開しない |
+| egress RTSP | `:554` / TCP のみ | VRChat の `rtspt://` 出口。匿名 read のみ公開する |
+| ingress WebRTC | HTTP `127.0.0.1:8889`、ICE `:8189/udp` | Caddy は WHIP HTTP を中継し、ICE はオリジンへ直接到達させる |
+| Control API | ingress `127.0.0.1:9997` / egress `127.0.0.1:9998` | Caddy で別 bearer token を要求し、Worker も別 token を持つ |
+| relay | H.264 `copy`、音声は任意で AAC-LC 48 kHz / stereo / 128 kbps | path ID を検証し、通常失敗は最大 3 回だけ再試行。停止シグナル時は再試行しない |
+| 不使用プロトコル | RTMP / HLS / SRT / MoQ を無効化 | 公開面と不要な listener を増やさない |
 | `overridePublisher` | `no` | R4 |
 | `webrtcTrackGatherTimeout` | **15 秒程度へ延ばす**（既定 2 秒は短い） | 既定のままだと publish 開始に失敗することがある |
 | キーフレーム間隔 | **2.00 秒固定・変更不可** | MediaMTX が WebRTC publisher へ 2 秒周期で PLI を送る。Go の `const` のため設定で変えられない |
@@ -75,11 +78,12 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 | 設定 | 値 | 補足 |
 |---|---|---|
 | コーデック | `setCodecPreferences` で H.264 を先頭へ | R1 |
-| ビットレート上限 | **`encodings[0].maxBitrate = 1_500_000`（単一。モード選択 UI は作らない）** | 実ページのスクロールで実効 約1,620 kbps・24.8 fps・フリーズなし（2026-09-01 実測）。600k は実ページで破綻する。根拠と却下案は [quality-tiers.md](quality-tiers.md) |
-| 劣化ポリシー | `degradationPreference = 'maintain-resolution'` | R10 |
-| コンテンツヒント | `track.contentHint = 'text'` | R10。**`'detail'` ではない** |
-| 解像度 | **1920x1080 固定**（省帯域でも下げない） | `maintain-resolution` が解像度を守り、足りなければ fps が落ちる。**720p / 480p の段は作らない**（[quality-tiers.md](quality-tiers.md)） |
-| 画面取得 | `getDisplayMedia({ video, audio: false })`（**既定ピッカー**。画面全体・ウィンドウ・タブから選ばせる） | 製品では自タブ共有に意味がないため `preferCurrentTab` は使わない（PoC の権限回避用だった）。**macOS は画面収録許可が未付与だと NotAllowedError になる**ので、エラー文言でシステム設定への導線を案内する |
+| ビットレート上限 | **`encodings[0].maxBitrate = 2_000_000`（単一。モード選択 UI は作らない）** | 旧 1.5 Mbps で YouTube 再生がカクついた観測を受け、30 fps のフレーム予算に余裕を持たせる。根拠と実測は [stability-audio-verification.md](stability-audio-verification.md) |
+| 劣化ポリシー | `degradationPreference = 'maintain-framerate'` | R10 |
+| コンテンツヒント | `track.contentHint = 'motion'` | R10。動画・画面操作の滑らかさを優先する |
+| 解像度 / fps | **1920x1080 / 最大 30 fps** | 記事の 60 fps は採らない。1 Mbps / 60 fps より 2 Mbps / 30 fps の方が 1 フレーム当たりの予算を確保できる |
+| 画面取得 | `getDisplayMedia({ video, audio: true })`（**既定ピッカー**。画面全体・ウィンドウ・タブから選ばせる） | Chrome のタブ共有で「タブの音声を共有」をオンにした時だけ音声が付く。macOS の画面収録未許可はエラー文言でシステム設定へ案内する |
+| 開始判定 | ingress / egress bytes を最大 10 秒、1 秒間隔で監視 | 両方が連続観測で増えた時だけ URL を表示する。未到達なら 1 回自動再 publish する |
 
 ### 対応ブラウザ
 

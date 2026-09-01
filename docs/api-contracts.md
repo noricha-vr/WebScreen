@@ -32,20 +32,22 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `PATCH /api/movies/{shortId}/` | ファイル名の変更 | 本人（所有者） | `RenameMovieRequest` / `RenameMovieResponse` |
 | `DELETE /api/movies/{shortId}/` | `ready` 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | `pending` / `failed` は 409 `INVALID_REQUEST`。`pending` の破棄は abandon を使う |
 | `POST /api/client-error/` | クライアント側の失敗報告（識別子だけを受けて `client_error` として構造化ログに残す。応答は 204） | 任意（Cookie があれば `userId` を添える） | `ClientErrorReport` |
-| `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行 | 本人 | `CreateStreamResponse`。同時配信上限は 409 `STREAM_ALREADY_LIVE`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
+| `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行 | 本人 | `CreateStreamResponse`。本人の同時配信は 409 `STREAM_ALREADY_LIVE`、全体 20 本到達は 409 `STREAM_CAPACITY_REACHED`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
 | `POST /api/streams/{id}/extend/` | 延長期限を更新し、同じ期限の新 publish JWT を発行 | 本人（所有者） | `ExtendStreamResponse`。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/heartbeat/` | 配信ブラウザの生存時刻を更新 | 本人（所有者） | 成功は 204。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/stop/` | 配信を `user_stop` で終了し、cron の kick 対象にする | 本人（所有者） | 冪等 204 |
 | `GET /api/streams/{id}/` | 配信状態を取得 | 本人（所有者） | `StreamStatusResponse`、`Cache-Control: no-store` |
+| `GET /api/streams/{id}/health/` | ingress → relay → egress の到達状態を取得 | 本人（所有者） | `StreamHealthResponse`。`ingressBytes` / `egressBytes` を返し、両方の増加をブラウザが確認してから配信 URL を表示する |
 | `GET /api/streams/jwks/` | MediaMTX が publish JWT を検証する公開 JWKS | 不要 | RS256 公開鍵のみ。秘密要素は返さない。`Cache-Control: no-store` |
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
 
 ### 配信JWTとMediaMTXの運用ゲート
 
-#126 のMediaMTX構築前に、Workerの `STREAM_JWT_PRIVATE_KEY`、cron Workerの
-`MEDIAMTX_API_URL` / `MEDIAMTX_API_TOKEN`、MediaMTXからのJWKS取得をすべて設定し、
-JWKS取得とMediaMTX側の再読込を確認してから配信APIを利用可能にする。
+#126 のMediaMTX構築前に、Workerの `STREAM_JWT_PRIVATE_KEY`、Web / cron Worker の
+`MEDIAMTX_INGRESS_API_*` / `MEDIAMTX_EGRESS_API_*`、MediaMTXからのJWKS取得をすべて設定し、
+JWKS取得と ingress / egress の再読込を確認してから配信APIを利用可能にする。単一 MediaMTX から移行する間だけ
+旧 `MEDIAMTX_API_*` を fallback として利用できる。
 
 現在のJWKSは単一鍵で、publish JWTは最大で延長サイクル（初期2時間）有効なため、鍵の即時切替は
 active JWTとの互換を保てない。ローテーションは配信停止メンテナンスとして、secret投入 →
@@ -56,13 +58,14 @@ JWKSへ併載する後続対応が必要。
 |---|---|
 | `STREAM_EXTENSION_SECONDS` | `7200` / Web Worker vars |
 | `STREAM_MAX_LIVE_PER_USER` | `1` / Web Worker vars |
+| `STREAM_MAX_LIVE` | `20` / Web Worker vars |
 | `STREAM_CREATE_INTERVAL_SECONDS` | `10` / Web Worker vars |
 | `STREAM_NO_VIEWER_SECONDS` | `600` / cron Worker vars |
 | `STREAM_HEARTBEAT_SECONDS` | `60` / cron Worker vars |
 
-秘密値は `bunx wrangler secret put STREAM_JWT_PRIVATE_KEY`、
-`bunx wrangler secret put MEDIAMTX_API_URL -c cron/wrangler.jsonc`、
-`bunx wrangler secret put MEDIAMTX_API_TOKEN -c cron/wrangler.jsonc` で各 Worker へ投入する。
+秘密値は `STREAM_JWT_PRIVATE_KEY`、`MEDIAMTX_INGRESS_API_TOKEN`、`MEDIAMTX_EGRESS_API_TOKEN`。
+deploy workflow は 2 つの MediaMTX token を Worker code と同じ version の secret file として原子的に反映する。
+URL は `MEDIAMTX_INGRESS_API_URL` / `MEDIAMTX_EGRESS_API_URL` の vars に置く。token をログや設定ファイルへ展開しない。
 
 `/api/client-error/` は無認証なので、受け付けるのは allowlist に載る `stage` / `errorCode` /
 `httpStatus` だけで、未知フィールド・1 KiB 超の本文・`application/json` 以外の Content-Type は

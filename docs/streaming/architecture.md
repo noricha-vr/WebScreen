@@ -6,14 +6,15 @@
 
 ```
 ユーザーのブラウザ
-  getDisplayMedia（自タブ共有）
+  getDisplayMedia（画面・ウィンドウ・タブ。タブ音声は任意）
   → RTCPeerConnection（H.264 Baseline を明示固定）
   → WHIP (HTTP POST)
         │  ※ UDP が配信者から直接届く必要がある（Cloudflare の裏に置けない）
         ▼
-   MediaMTX（VPS 1 台・トランスコードしない）
-     ├─ rtspt://…  ─────────────────→ VRChat PC     遅延: 約 100ms + 網 + AVPro
-     └─ HLS → R2 → cdn.web-screen.net → VRChat Quest 遅延: 約 6 秒 / 帯域消費ゼロ
+   MediaMTX ingress（WHIP / publish JWT）
+     → ffmpeg relay（H.264 copy / 音声だけ AAC-LC へ変換）
+     → MediaMTX egress（公開 RTSP read）
+       └─ rtspt://webscreen.tv/live/{id} ─→ VRChat PC / Quest
 ```
 
 ## なぜこの形なのか
@@ -39,28 +40,32 @@ HLS は「連番の静的ファイル」なのでキャッシュでき、視聴�
 
 「画質を落として多くの人に配る」という発想が意味を持つのは、この低遅延構成だからこそ。計算は [capacity.md](capacity.md)。
 
-### サーバーでエンコードしない（WebRTC ingest の効果）
+### サーバーでは映像を再エンコードしない（WebRTC ingest の効果）
 
 当初は「サーバーでヘッドレス Chromium を動かして画面を撮り、x264 でエンコードする」形を想定していた。
 これだと**配信 1 本あたり 1〜2 vCPU** かかり、同時配信本数が最初の壁になる。
 
-ブラウザから WebRTC で送る形にすると、**エンコードはユーザーのブラウザが行う**ため、サーバーは再多重化するだけで済む。
+ブラウザから WebRTC で送る形にすると、**映像エンコードはユーザーのブラウザが行う**ため、サーバーは H.264 を copy するだけで済む。
 ブラウザが出す H.264 がそのまま VRChat 互換の条件を満たすことは実測で確認済み（[verification.md](verification.md) V1）。
+ブラウザ音声は Opus なので、VRChat 互換のため relay で AAC-LC 48 kHz / stereo / 128 kbps にだけ変換する。
 
 **この結果、2 つの配信形態を区別する必要がある:**
 
 | 形態 | 実現方法 | サーバー CPU | 状態 |
 |---|---|---|---|
-| **ユーザー在席型** | ユーザーのブラウザが送る | **エンコードなし** | 本設計の対象 |
+| **ユーザー在席型** | ユーザーのブラウザが送る | **映像 copy + 音声だけ AAC** | 本設計の対象 |
 | サーバー生成型 | サーバーでヘッドレスブラウザ + x264 | 1 配信あたり 1〜2 vCPU | 将来。スケジュール配信・常設チャンネル向け |
 
-### Quest は「おまけ」として付ける
+### Quest も PC と同じ RTSP 出口を使う
 
-Quest は `rtspt://` に対応しておらず、下限が約 3 秒。ただし**その 3 秒は HLS でも達成できる**ため、
-MediaMTX の HLS 出力を R2 経由で配れば**帯域を一切消費せずに** Quest 対応を足せる。
+Quest 実機で `rtspt://webscreen.tv/live/{id}` の映像と AAC 音声を確認済み。PC と URL を分けず、
+HLS は実装しない。Quest の体感遅延は 2〜3 秒、PC の `Use Low Latency` 対応ワールドは約 0.1 秒級。
 
-実測ではキーフレーム間隔が 2 秒に固定されており、HLS のセグメント長もそれに縛られるため、
-**実際の Quest の遅延は約 6 秒**になる（当初想定の 3 秒より悪い）。
+### ingress / egress を分ける理由
+
+WHIP publisher と公開 RTSP reader を別プロセスにすると、公開権限と Control API token を分離できる。
+ingress は publish JWT を検証し、egress は loopback からの relay publish だけを許可する。Worker は両方の bytes を観測し、
+ブラウザから出口まで実データが流れた時だけ配信開始と判定する。
 
 ## 捨てた選択肢
 
@@ -77,8 +82,8 @@ MediaMTX の HLS 出力を R2 経由で配れば**帯域を一切消費せずに
 
 `docs/encode-contract.md` は「エンコード系統はブラウザの FFmpeg.wasm の 1 つだけ / サーバー側に第 2 のエンコーダを置かない」と定めている。
 
-ライブ配信はこの契約に触れる。ただし**サーバー側にエンコーダが増えるわけではない**（増えるのはブラウザの WebRTC エンコーダ）ため、
-実装時には「エンコード系統はクライアント側の 2 つ（FFmpeg.wasm / WebRTC）に限り、サーバー側には置かない」という形の改定で契約の精神を保てる。
+ライブ配信ではブラウザの WebRTC が映像を作り、サーバー relay は映像を copy して音声だけ AAC に変換する。
+VOD の FFmpeg.wasm と責務を混ぜず、`docs/encode-contract.md` ではライブを明示的な別契約として扱う。
 
 VRChat 互換の必須パラメータ（h264 / yuv420p / baseline / B フレームなし）は**ライブでもそのまま維持する**。
 GOP だけは例外で、VOD の `-g 1`（全キーフレーム）を 30fps のライブに持ち込むと 30 倍の無駄になるため、通常 GOP に戻す。
