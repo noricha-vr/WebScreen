@@ -1,13 +1,13 @@
 /** failed アップロードのR2早期回収と24時間後の行削除を扱う。 */
 
 import { movieKey } from '../contracts/r2key';
-import { PRESIGN_TTL_MS } from '../infra/r2presign';
+import { PRESIGN_EXPIRY_GRACE_MS } from '../infra/r2presign';
 
 /** failed 行を残す期間（原因調査のための猶予）。 */
 const FAILED_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /** 署名失効後に遅延 PUT の実体を早期回収するまでの安全余裕。 */
-const FAILED_OBJECT_CLEANUP_GRACE_MS = PRESIGN_TTL_MS + 60 * 1000;
+const FAILED_OBJECT_CLEANUP_GRACE_MS = PRESIGN_EXPIRY_GRACE_MS;
 
 /** 1 文の UPDATE / DELETE に載せるID数。D1のバインド変数上限に収める。 */
 const MAX_IDS_PER_MUTATION = 50;

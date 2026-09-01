@@ -297,7 +297,7 @@ describe('runRetention: 1 回の実行の上限', () => {
 });
 
 describe('runRetention: サマリ', () => {
-  it('補完と 4 種類の削除件数をまとめて返す', async () => {
+  it('補完・pending 回収・各削除件数をまとめて返す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'expiredBBBBB', expiresAt: iso(-HOUR_MS) }),
       movie({ shortId: 'orphanBBBBBB', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
@@ -313,14 +313,14 @@ describe('runRetention: サマリ', () => {
       backfilledPinned: 0,
       deletedMovies: 1,
       strandedMovies: 0,
-      deletedOrphans: 1,
-      deletedFailed: 1,
+      recoveredPendingUploads: 1,
+      deletedFailed: 2,
       sweptFailedObjects: 0,
       deferredObjectDeletions: 0,
       skippedRows: 0,
       sweepCapped: false,
-      // 期限切れ・孤児・failed の 3 経路がそれぞれ 1 回ずつ purge を投げる。
-      cachePurgeRequests: 3,
+      // 期限切れと、pending から引き渡した行を含む failed の 2 経路で purge する。
+      cachePurgeRequests: 2,
       cachePurgeFailures: 0,
       deletedCaptures: 1,
       checkedReadyRows: 0,
