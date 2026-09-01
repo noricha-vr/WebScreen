@@ -290,9 +290,7 @@
     "badges": ["No OBS", "No installation", "PC and Quest"],
     "wizard": {
       "start": "Start screen sharing",
-      "selectHeading": "Choose a screen to share",
-      "selectBody": "Choose the tab, window, or screen you want to show from your browser picker.",
-      "select": "Choose a screen",
+      "startHint": "This opens your browser's screen picker. Choose the tab, window, or screen you want to show.",
       "selecting": "Choosing a screen…",
       "loginHeading": "Sign in with Discord to start",
       "loginBody": "You need to sign in before creating a streaming URL. There is no password to create.",

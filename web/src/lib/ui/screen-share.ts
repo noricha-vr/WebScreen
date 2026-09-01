@@ -6,7 +6,7 @@ import { startWhipPublisher, WhipPublishError, type WhipPublisher } from './whip
 export const HEARTBEAT_INTERVAL_MS = 25_000;
 export const EXPIRY_WARNING_SECONDS = 5 * 60;
 
-type ScreenSharePhase = 'idle' | 'select' | 'login' | 'url' | 'live' | 'error';
+type ScreenSharePhase = 'idle' | 'login' | 'url' | 'live' | 'error';
 type LiveStream = CreateStreamResponse & { publisher: WhipPublisher; media: MediaStream };
 
 /** DOM controller の外部境界。テストでは画面・API・WHIP を独立して差し替える。 */
@@ -72,13 +72,13 @@ export class ScreenShareController {
   ) {}
 
   mount(): void {
-    this.button('[data-screen-start]')?.addEventListener('click', () => this.show('select'));
-    this.button('[data-screen-select]')?.addEventListener('click', () => void this.selectScreen());
+    // getDisplayMedia はクリック起点でのみ許可されるため、開始ボタンから直接呼ぶ。
+    this.button('[data-screen-start]')?.addEventListener('click', () => void this.selectScreen());
     this.button('[data-screen-copy]')?.addEventListener('click', () => void this.copyUrl());
     this.button('[data-screen-show-live]')?.addEventListener('click', () => this.show(nextStreamStep('url') ?? 'live'));
     this.button('[data-screen-extend]')?.addEventListener('click', () => void this.extend());
     this.button('[data-screen-stop]')?.addEventListener('click', () => void this.stop());
-    this.button('[data-screen-retry]')?.addEventListener('click', () => this.show('select'));
+    this.button('[data-screen-retry]')?.addEventListener('click', () => void this.selectScreen());
     this.deps.onPageHide(() => this.stopForPageHide());
     this.show('idle');
   }
@@ -86,7 +86,7 @@ export class ScreenShareController {
   private async selectScreen(): Promise<void> {
     const generation = ++this.startGeneration;
     this.stopping = false;
-    this.setBusy('[data-screen-select]', true, 'labelSelecting');
+    this.setBusy('[data-screen-start]', true, 'labelSelecting');
     try {
       const media = await this.deps.getDisplayMedia(displayMediaConstraints());
       if (!this.isActiveStart(generation)) {
@@ -109,7 +109,7 @@ export class ScreenShareController {
     } catch (error) {
       if (this.isActiveStart(generation)) this.handleStartError(error);
     } finally {
-      this.setBusy('[data-screen-select]', false, 'labelSelect');
+      this.setBusy('[data-screen-start]', false, 'labelStart');
     }
   }
 
@@ -290,9 +290,12 @@ export class ScreenShareController {
     for (const step of this.root.querySelectorAll<HTMLElement>('[data-screen-step]')) {
       step.hidden = step.dataset['screenStep'] !== phase;
     }
-    const active = phase === 'url' ? 2 : phase === 'live' ? 3 : 1;
+    // 開始前（idle / login / error）は進捗を示す段階がないのでドットごと隠す。
+    const active = phase === 'url' ? '1' : phase === 'live' ? '2' : null;
+    const indicators = this.root.querySelector<HTMLElement>('[data-screen-indicators]');
+    if (indicators) indicators.hidden = active === null;
     for (const indicator of this.root.querySelectorAll<HTMLElement>('[data-screen-indicator]')) {
-      indicator.dataset['active'] = indicator.dataset['screenIndicator'] === String(active) ? 'true' : 'false';
+      indicator.dataset['active'] = indicator.dataset['screenIndicator'] === active ? 'true' : 'false';
     }
   }
 
@@ -322,7 +325,8 @@ export class ScreenShareController {
 
   private setButtonLabel(selector: string, label: string): void {
     const button = this.button(selector);
-    if (button) button.textContent = this.message(label);
+    // ラベル用の span があればそこだけ差し替える（button 直下の FontAwesome アイコンを消さない）
+    if (button) (button.querySelector('span') ?? button).textContent = this.message(label);
   }
 
   private message(key: string): string {
