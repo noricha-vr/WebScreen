@@ -311,6 +311,8 @@
       "extending": "Extending…",
       "stop": "End stream",
       "stopping": "Ending…",
+      "stopOthers": "End other streams and start",
+      "stoppingOthers": "Stopping…",
       "expiryWarning": "This stream will end soon. Extend it to keep sharing.",
       "errorHeading": "We could not start the stream",
       "retry": "Try again",

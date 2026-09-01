@@ -6,6 +6,7 @@ import {
   extendStream,
   getStreamStatus,
   heartbeatStream,
+  stopAllLiveStreams,
   stopStream,
   type StreamSettings,
 } from '../../src/lib/services/streams';
@@ -227,5 +228,74 @@ describe('配信セッション service', () => {
     expect(
       database.sqlite.query('SELECT kick_pending FROM stream_sessions').get()
     ).toEqual({ kick_pending: 1 });
+  });
+
+  it('live 配信をすべて user_stop と kick_pending で終了し、停止件数を返す', async () => {
+    const database = await createStreamDatabase();
+    const settings = { ...SETTINGS, maxLiveStreamsPerUser: 2 };
+    await createStream({ ...input(database, 'AbCdEf123456'), settings });
+    await createStream({
+      ...input(database, 'ZyXwVu987654', new Date(NOW.getTime() + 11_000)),
+      settings,
+    });
+
+    const response = await stopAllLiveStreams({
+      database,
+      userId: 10,
+      settings,
+      now: new Date(NOW.getTime() + 15_000),
+    });
+
+    expect(response).toEqual({ stopped: 2, retryAfterSeconds: 6 });
+    expect(
+      database.sqlite.query(
+        "SELECT status, ended_at, end_reason, kick_pending FROM stream_sessions WHERE user_id = 10 ORDER BY id"
+      ).all()
+    ).toEqual([
+      {
+        status: 'ended',
+        ended_at: '2026-09-01T00:00:15.000Z',
+        end_reason: 'user_stop',
+        kick_pending: 1,
+      },
+      {
+        status: 'ended',
+        ended_at: '2026-09-01T00:00:15.000Z',
+        end_reason: 'user_stop',
+        kick_pending: 1,
+      },
+    ]);
+  });
+
+  it('最新の開始から間隔を過ぎた時とセッションがない時は待機不要にする', async () => {
+    const database = await createStreamDatabase();
+    await createStream(input(database, 'AbCdEf123456'));
+    const afterInterval = await stopAllLiveStreams({
+      database,
+      userId: 10,
+      settings: SETTINGS,
+      now: new Date(NOW.getTime() + 10_000),
+    });
+    const noSessions = await stopAllLiveStreams({
+      database,
+      userId: 20,
+      settings: SETTINGS,
+      now: NOW,
+    });
+
+    expect(afterInterval.retryAfterSeconds).toBe(0);
+    expect(noSessions).toEqual({ stopped: 0, retryAfterSeconds: 0 });
+  });
+
+  it('別ユーザーの live 配信は終了しない', async () => {
+    const database = await createStreamDatabase();
+    await createStream(input(database, 'AbCdEf123456'));
+    await createStream({ ...input(database, 'ZyXwVu987654'), userId: 20 });
+
+    await stopAllLiveStreams({ database, userId: 10, settings: SETTINGS, now: NOW });
+
+    expect(
+      database.sqlite.query('SELECT status FROM stream_sessions WHERE user_id = 20').get()
+    ).toEqual({ status: 'live' });
   });
 });

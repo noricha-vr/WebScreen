@@ -3,6 +3,7 @@ import {
   type CreateStreamResponse,
   type ErrorCode,
   type ExtendStreamResponse,
+  type StopLiveStreamsResponse,
   type StreamEndReason,
   type StreamStatusResponse,
 } from '../contracts/api';
@@ -155,6 +156,33 @@ export async function stopStream(input: {
   if (result.meta.changes === 0) await requireOwnedStream(input.database, input.userId, input.id);
 }
 
+/** 所有する live セッションをすべて終了し、次回作成までの待機秒数を返す。 */
+export async function stopAllLiveStreams(input: {
+  database: StreamDatabase;
+  userId: number;
+  settings: StreamSettings;
+  now?: Date;
+}): Promise<StopLiveStreamsResponse> {
+  const now = input.now ?? new Date();
+  const latest = await input.database
+    .prepare('SELECT MAX(started_at) AS started_at FROM stream_sessions WHERE user_id = ?')
+    .bind(input.userId)
+    .first<{ started_at: string | null }>();
+  const result = await input.database
+    .prepare(
+      `UPDATE stream_sessions
+       SET status = 'ended', ended_at = ?, end_reason = 'user_stop', kick_pending = 1
+       WHERE user_id = ? AND status = 'live'`
+    )
+    .bind(now.toISOString(), input.userId)
+    .run();
+
+  return {
+    stopped: result.meta.changes,
+    retryAfterSeconds: retryAfterSeconds(latest?.started_at ?? null, now, input.settings),
+  };
+}
+
 /** 所有するセッションの状態を返す。他人の ID は不存在と同じ 404。 */
 export async function getStreamStatus(input: {
   database: StreamDatabase;
@@ -298,6 +326,16 @@ function streamUrl(id: string): string {
 
 function addSeconds(date: Date, seconds: number): Date {
   return new Date(date.getTime() + seconds * 1000);
+}
+
+function retryAfterSeconds(
+  latestStartedAt: string | null,
+  now: Date,
+  settings: StreamSettings
+): number {
+  if (!latestStartedAt) return 0;
+  const elapsedSeconds = (now.getTime() - Date.parse(latestStartedAt)) / 1000;
+  return Math.max(0, Math.ceil(settings.createIntervalSeconds - elapsedSeconds));
 }
 
 function toNumericDate(date: Date): number {

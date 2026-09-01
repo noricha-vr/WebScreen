@@ -33,6 +33,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `DELETE /api/movies/{shortId}/` | `ready` 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | `pending` / `failed` は 409 `INVALID_REQUEST`。`pending` の破棄は abandon を使う |
 | `POST /api/client-error/` | クライアント側の失敗報告（識別子だけを受けて `client_error` として構造化ログに残す。応答は 204） | 任意（Cookie があれば `userId` を添える） | `ClientErrorReport` |
 | `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行 | 本人 | `CreateStreamResponse`。本人の同時配信は 409 `STREAM_ALREADY_LIVE`、全体 20 本到達は 429 `STREAM_CAPACITY_REACHED`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
+| `POST /api/streams/stop-live/` | 本人の live 配信をすべて `user_stop` で終了し、cron の kick 対象にする | 本人 | `StopLiveStreamsResponse`（`stopped` と `retryAfterSeconds`）。冪等 200 |
 | `POST /api/streams/{id}/extend/` | 延長期限を更新し、同じ期限の新 publish JWT を発行 | 本人（所有者） | `ExtendStreamResponse`。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/heartbeat/` | 配信ブラウザの生存時刻を更新 | 本人（所有者） | 成功は 204。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/stop/` | 配信を `user_stop` で終了し、cron の kick 対象にする | 本人（所有者） | 冪等 204 |

@@ -41,6 +41,12 @@ export interface ExtendStreamResponse {
   extendExpiresAt: string;
 }
 
+/** `POST /api/streams/stop-live/` の停止件数と再作成までの待機秒数。 */
+export interface StopLiveStreamsResponse {
+  stopped: number;
+  retryAfterSeconds: number;
+}
+
 /** `GET /api/streams/{id}/health/` の relay 到達状態。 */
 export interface StreamHealthResponse {
   state: 'starting' | 'ready';
