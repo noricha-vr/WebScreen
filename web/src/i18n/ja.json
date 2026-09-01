@@ -311,6 +311,8 @@
       "extending": "延長しています…",
       "stop": "配信を終了",
       "stopping": "終了しています…",
+      "stopOthers": "他の配信を終了して開始",
+      "stoppingOthers": "停止中…",
       "expiryWarning": "まもなく配信が自動終了します。続ける場合は延長してください。",
       "errorHeading": "配信を開始できませんでした",
       "retry": "もう一度試す",

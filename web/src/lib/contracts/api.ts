@@ -8,11 +8,11 @@
  * 外部公開フィールドは camelCase（~/.claude/rules/api-design.md）。
  * D1 のカラム名（short_id など）は snake_case なので、境界で変換する。
  */
-
 import { isShortId } from './r2key';
 export type {
   CreateStreamResponse,
   ExtendStreamResponse,
+  StopLiveStreamsResponse,
   StreamEndReason,
   StreamHealthResponse,
   StreamSessionStatus,

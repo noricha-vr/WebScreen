@@ -2,6 +2,7 @@ import {
   ERROR_CODES,
   type CreateStreamResponse,
   type ExtendStreamResponse,
+  type StopLiveStreamsResponse,
 } from '../contracts/api';
 import { copyToClipboard } from './clipboard';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
@@ -28,6 +29,7 @@ export interface ScreenShareDependencies {
   startWhipPublisher: typeof startWhipPublisher;
   waitForStreamReady: (streamId: string) => Promise<boolean>;
   getDisplayMedia: typeof navigator.mediaDevices.getDisplayMedia;
+  delay?: (ms: number) => Promise<void>;
   now: () => number;
   sendBeacon: (url: string) => boolean;
   onPageHide: (handler: () => void) => void;
@@ -38,6 +40,7 @@ const DEFAULT_DEPENDENCIES: ScreenShareDependencies = {
   startWhipPublisher,
   waitForStreamReady: (streamId) => waitForStreamReady(streamId, requestJson),
   getDisplayMedia: (constraints) => navigator.mediaDevices.getDisplayMedia(constraints),
+  delay: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
   now: () => Date.now(),
   sendBeacon: (url) => navigator.sendBeacon(url),
   onPageHide: (handler) => window.addEventListener('pagehide', handler),
@@ -94,6 +97,7 @@ export class ScreenShareController {
     this.button('[data-screen-extend]')?.addEventListener('click', () => void this.extend());
     this.button('[data-screen-stop]')?.addEventListener('click', () => void this.stop());
     this.button('[data-screen-retry]')?.addEventListener('click', () => void this.retry());
+    this.button('[data-screen-stop-others]')?.addEventListener('click', () => void this.stopOthersAndStart());
     this.deps.onPageHide(() => this.stopForPageHide());
     this.show('idle');
   }
@@ -112,28 +116,70 @@ export class ScreenShareController {
         stopMedia(media);
         return;
       }
-      const started = await this.createAndPublish(media, generation);
-      if (!started) return;
-      const stream = started.live;
-      if (!this.isActiveStart(generation)) {
-        releaseScreenShare(stream, () => this.clearTimers());
-        void this.notifyRemoteStop(stream);
-        return;
-      }
-      this.live = stream;
-      this.setUrl(stream.streamUrl);
-      this.setAudioStatus(stream.media);
-      this.preview(stream.media);
-      this.startTimers();
-      stream.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
-      if (started.ready) this.show('url');
-      else this.showError(new StreamHealthError());
+      await this.continueStart(media, generation);
     } catch (error) {
       if (this.isActiveStart(generation)) this.handleStartError(error);
     } finally {
       this.setBusy('[data-screen-start]', false, 'labelStart');
       if (retry) retry.disabled = false;
     }
+  }
+
+  private async stopOthersAndStart(): Promise<void> {
+    const generation = ++this.startGeneration;
+    let media: MediaStream | null = null;
+    this.stopping = false;
+    this.setBusy('[data-screen-stop-others]', true, 'labelStopOthers');
+    const retry = this.button('[data-screen-retry]');
+    if (retry) retry.disabled = true;
+    try {
+      media = await this.deps.getDisplayMedia(displayMediaConstraints());
+      if (!this.isActiveStart(generation)) {
+        stopMedia(media);
+        return;
+      }
+      const stopped = asStopLiveStreams(
+        await this.deps.requestJson('/api/streams/stop-live/', { method: 'POST' })
+      );
+      if (!this.isActiveStart(generation)) {
+        stopMedia(media);
+        return;
+      }
+      this.text('[data-screen-error-message]', this.message('labelStoppingOthers'));
+      this.setButtonLabel('[data-screen-stop-others]', 'labelStoppingOthers');
+      await (this.deps.delay ?? delay)(Math.max(stopped.retryAfterSeconds, 3) * 1000);
+      if (!this.isActiveStart(generation)) {
+        stopMedia(media);
+        return;
+      }
+      await this.continueStart(media, generation);
+      media = null;
+    } catch (error) {
+      if (media) stopMedia(media);
+      if (this.isActiveStart(generation)) this.handleStartError(error);
+    } finally {
+      this.setBusy('[data-screen-stop-others]', false, 'labelStopOthers');
+      if (retry) retry.disabled = false;
+    }
+  }
+
+  private async continueStart(media: MediaStream, generation: number): Promise<void> {
+    const started = await this.createAndPublish(media, generation);
+    if (!started) return;
+    const stream = started.live;
+    if (!this.isActiveStart(generation)) {
+      releaseScreenShare(stream, () => this.clearTimers());
+      void this.notifyRemoteStop(stream);
+      return;
+    }
+    this.live = stream;
+    this.setUrl(stream.streamUrl);
+    this.setAudioStatus(stream.media);
+    this.preview(stream.media);
+    this.startTimers();
+    stream.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
+    if (started.ready) this.show('url');
+    else this.showError(new StreamHealthError());
   }
 
   private async createAndPublish(media: MediaStream, generation: number): Promise<StartedStream | null> {
@@ -367,6 +413,12 @@ export class ScreenShareController {
   private showError(error: unknown): void {
     this.text('[data-screen-error-message]', this.messageFor(error));
     this.setButtonLabel('[data-screen-retry]', this.live ? 'labelReconnect' : 'labelRetry');
+    const stopOthers = this.button('[data-screen-stop-others]');
+    if (stopOthers) {
+      stopOthers.hidden = !isStreamAlreadyLiveError(error);
+      stopOthers.disabled = false;
+      this.setButtonLabel('[data-screen-stop-others]', 'labelStopOthers');
+    }
     this.show('error');
   }
 
@@ -478,8 +530,31 @@ function asExtendStream(value: unknown): ExtendStreamResponse {
   return value as unknown as ExtendStreamResponse;
 }
 
+function asStopLiveStreams(value: unknown): StopLiveStreamsResponse {
+  if (
+    !isRecord(value) ||
+    !isNonNegativeInteger(value.stopped) ||
+    !isNonNegativeInteger(value.retryAfterSeconds)
+  ) {
+    throw new Error('Invalid stop live streams response');
+  }
+  return value as unknown as StopLiveStreamsResponse;
+}
+
+function isStreamAlreadyLiveError(error: unknown): boolean {
+  return error instanceof JsonRequestError && error.errorCode === ERROR_CODES.streamAlreadyLive;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function stopMedia(media: MediaStream): void {
