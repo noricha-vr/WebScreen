@@ -27,15 +27,17 @@ Issue #93 で決定・凍結した。
 
 | 経路 | URL 形式 |
 |---|---|
-| PC（RTSP） | `rtspt://stream.web-screen.net/live/{id}`（**ポート省略**。2026-09-01 に VRChat 実機で確認 = I11） |
-| Quest（HLS） | `https://cdn.web-screen.net/live/{id}/index.m3u8` |
+| **PC / Quest 共通（RTSP）** | `rtspt://stream.web-screen.net/live/{id}`（**ポート省略**。PC = I11、Quest = I12 で実機確認） |
+| Quest（HLS・**保留**） | `https://cdn.web-screen.net/live/{id}/index.m3u8`（Quest が rtspt を直接再生できたため実装しない。rtspt が使えなくなった時のフォールバック設計として残す） |
 
 - `{id}` は**推測困難な 12 文字のランダム ID**（既存の動画 shortId と同じ文字種・長さ）。
   **ハイフンを含めない**（VRChat 側でハイフン以降が切り詰められる = I10）
 - RTSP は**既定ポート 554 でリッスンする**（`rtspAddress: :554`）。VRChat がポート省略の URL を受けるため、
   URL から `:8554` を落とせる（I11）。1024 未満のバインドには root か `CAP_NET_BIND_SERVICE` が要るので、
   systemd ユニットに `AmbientCapabilities=CAP_NET_BIND_SERVICE` を入れる（#126）
-- Quest 向け HLS は新ホストを作らず **既存の `cdn.web-screen.net` に相乗り**する（HLS セグメントを R2 経由で配る設計と一致し、
+- **Quest も PC と同一の rtspt URL を案内する**（I12）。音声も AAC で鳴る。体感遅延は 2〜3 秒（PC の 0.08 秒より大きいが十分低遅延）。
+  **`rtmp://` は案内しない**: Quest のプレイヤーは rtmp スキームでも RTSP を話すため、スキームを検査する MediaMTX が弾く（I12）
+- Quest 向け HLS を実装する場合は新ホストを作らず **既存の `cdn.web-screen.net` に相乗り**する（HLS セグメントを R2 経由で配る設計と一致し、
   ワールド作者の allowlist 消費が新規 1 枠 = `stream.web-screen.net` だけで済む）
 - **サブドメインを今後増やさない**（ワイルドカード非対応のため、増やすたびに全ワールドの再登録が要る）
 - 複数台へスケールする時は L4 ロードバランサか DNS の複数 A レコードで**同一ホスト名のまま**振り分ける
