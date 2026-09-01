@@ -11,7 +11,7 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 | 項目 | 記事の OBS 設定 | WebScreen の採用値 | 判断 |
 |---|---|---|---|
 | 解像度 | 1920x1080 | **入力 1280x720** | 1.5 Mbps 以下でフレームレートを保つため入力画素数を抑える |
-| フレームレート | 60 fps | **30 fps** | 24 fps も比較したが RTSP 出口が 23 fps 未満になったため採らない |
+| フレームレート | 60 fps | **30 fps** | 実Macの各600秒比較で30 fpsは29.853 fps・約564.6 kbps・quality limitationなし。24 fpsは23.870 fpsで、平均QPも30 fpsの20.76が24 fpsの21.41よりわずかに良く、1.2 Mbps内なので30 fpsを採用 |
 | 映像 | NVIDIA NVENC H.264 | **ブラウザ WebRTC の H.264** | 実装は違うが、VRChat 互換の H.264 を優先固定する目的は同じ |
 | レート制御 | CBR | **`maxBitrate = 1_200_000`** | WebRTC は内容と回線に応じて変動する。1.2 Mbps は CBR ではなく映像送出上限 |
 | ビットレート | 1000 kbps | **映像 1200 kbps + 音声 128 kbps（公称合計 1328 kbps）** | 実測出口 1.385 Mbps で、1.5 Mbps 上限から 115 kbps の余裕を確保した |
@@ -106,7 +106,7 @@ checksum が不変、ingress / egress のテスト path が 404、remote の一�
 
 MP3 betaの20回途中参加ではfirst packet Kが3/20、non-Kが17/20、次キーフレームまで0〜463 msだった。decoder probeは初期missing-reference警告後も継続した。開始直後のカクつきや約30秒後の安定は、常設の再起動案内ではなく初動buffer / decoder recoveryの観測として扱う。
 
-MP3 48 kHz stereo 128 kbpsは30分・非無音・A/V 7〜15 msまで自動確認済みで、ユーザーからも「聞こえた」「めっちゃ速い」との観測がある。ただしPC/Quest別の実聴と1秒未満、および実Mac 24/30 fps比較はA12で未完である。
+MP3 48 kHz stereo 128 kbpsは30分・非無音・A/V 7〜15 msまで自動確認済みで、ユーザーからも「聞こえた」「めっちゃ速い」との観測がある。実Mac 24/30 fps比較では30 fpsを採用した。ただしPC/Quest別の実聴と1秒未満はA12で未完である。
 
 ## 音声の確認境界
 
