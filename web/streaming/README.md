@@ -21,7 +21,9 @@ After publishing to the candidate environment, run `./verify-codecs.sh rtspt://y
 
 ## Candidate test, production promotion, and rollback
 
-Do not use the candidate test as production cutover approval. Stage and test `0.2.0-beta` away from the production service while production continues to use AAC. Promote the MP3 profile only after A12 passes in full: PC and Quest audio listening, sub-second Quest playback, 30-minute stability, 24/30 fps comparison, capacity, and codec gate.
+Do not use the candidate test as production cutover approval. Stage and test `0.2.0-beta` away from the production service while production continues to use AAC. The 30-minute stability, capacity, and codec gates have passed; promotion still requires controlled PC and Quest audio listening, sub-second Quest playback, and an actual-Mac 24/30 fps comparison.
+
+For the browser-side recovery candidate, open the screen-share page with exactly one `stream-profile=mp3-beta` query value in Chrome. It requests the next keyframe every 500 ms; normal, unknown, and duplicate values keep the existing behavior. The request does not guarantee that a new reader's first packet is an IDR, because MediaMTX has no GOP cache. Unsupported browsers may ignore the optional `setParameters` argument and keep a no-op request loop. Do not expose an arbitrary interval in the URL.
 
 After A12 passes, the VPS must be ready before any Worker version containing the split settings is deployed.
 

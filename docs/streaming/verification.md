@@ -426,7 +426,16 @@ relay 設定の A/B では、通常設定から実質的な改善はなかった
 | MP3 A/B | 実Mac動的H.264 + MP3 48 kHz stereo 128 kbpsを同じYamaStream / AVPro 3.3.6 Media Foundationで再生し、30 fps同時録画16標本を採取 | AVPro readerはH.264 + MPEG-1/2 Audioの2トラックを選択。**0.129〜0.416秒、中央値0.151秒、平均0.175秒で全件1秒未満**。映像と低遅延は確認したがMP3音声の実聴は未確認 |
 | RTMP A/B | egressを一時有効化し、Mac / WindowsのffprobeでH.264 + AACを取得。VRChat 2026.3.1で同じURLを開く | URL解決後、AVPro Media FoundationのOpeningからLoading failed。AVPro v3のWindows RTMPはDirectShow + LAV経路のため現行YamaStreamでは比較不能。検証後 `rtmp: false` に戻し1935 listenerなし |
 
-YamaStreamの `Use Low Latency` 実値はログから直接確認できない。AACは独立2回とも中央値1.239秒で未合格、MP3候補は映像表示までのPC遅延のみ暫定合格した。MP3 test relayは4分8秒稼働し、元Mac配信EOFでAACと同時終了するまでMP3固有エラーはなかったが、2トラック選択を音声実聴へ一般化しない。QuestのMP3映像・音声、30分、capacityは未確認なのでproduction設定はAACのまま変更しない。昇格条件は [acceptance-test.md](acceptance-test.md) A12に集約し、I16の合成素材 + AACによる24 fps比較を同条件の確認として代用しない。
+YamaStreamの `Use Low Latency` 実値はログから直接確認できない。AACは独立2回とも中央値1.239秒で未合格、MP3候補は映像表示までのPC遅延のみ暫定合格した。MP3の30分・capacity・codec gateはI21で合格したが、PC/Quest別の実聴・Quest 1秒未満・実Mac 24/30 fps比較が未確認なのでproduction設定はAACのまま変更しない。
+
+### I21: MP3 betaの長時間・capacity・途中参加（2026-09-02）
+
+- 20 relayはgate 20/20、relay CPU合計88.826%（1コア比）、host 26.49%（headroom 73.51%）。1 relay + 20 readersは全接続し、relay 6.974%、egress 11.031%、host 8.203%、約1.434 Mbps/viewer。
+- 30分continuous sourceは53,975 frames、freeze/error/restart 0、memory約1.7%増。H.264 + MP3 48 kHz stereo 128 kbpsは非無音で、A/V nearest PTSは7〜15 ms。最初のlooping MKVはnon-monotonic DTSで無効、991 msはfirst-to-first計算の誤りとして破棄した。
+- real Chrome + MediaMTXの20 reconnectはfirst packet K 3/20、non-K 17/20、次keyframe 0〜463 ms。decoderは初期missing-reference警告後に継続した。MediaMTXにGOP cacheがないため初回IDRは保証しない（従来本番は2〜3秒）。
+- Chromeの単純な720p30 / 1.2 Mbps上限では、通常8秒が237 kbps / key 1、500 ms要求が456 kbps / key 16、quality limitationなし。24/30 fpsのsequential合成値は24設定が20.5 fps / 342.834 kbps / key 15、30設定が29.875 fps / 422.682 kbps / key 16。24設定はheadlessでunder-deliveryしたため実Mac比較には使わない。
+- exact one `stream-profile=mp3-beta` のChromeだけ500 ms要求を有効化する。unknown/duplicate/通常アクセスは無効で、任意interval不可。非対応UAでは第2引数が無視されno-op loopになる可能性がある。
+- 手動では初動カクつき後約30秒で安定、音声可、PCモード + Mac配信は安定し、今回は「めっちゃ速い」と観測された。ただしA12のPC/Quest別MP3実聴・1秒未満と実Mac 24/30 fps比較は未完。再起動を常設回避策にしない。
 
 ## 検証できていないこと
 
@@ -443,6 +452,6 @@ YamaStreamの `Use Low Latency` 実値はログから直接確認できない。
 | 9 | 本番WebScreen UIからactual YouTubeをループさせる長時間確認 | I18の合成relay QAとは別に、UI経路のfps・freeze・帯域・文字可読性を最終確認する |
 | 10 | Safariでのfull設定の受理・実送出 | full設定拒否時はmaxBitrate-only fallbackで配信を継続するが、文字品質は別途確認する |
 | 11 | YamaStream の `Use Low Latency` 実値とRTMP対RTSPTの差 | RTMPはMedia FoundationでLoading failedとなり現行ワールドではA/B不能。設定値もログから直接確認できない |
-| 12 | Quest でMP3音声付き1秒未満 | MP3候補はPCで全16標本1秒未満だが、Questの映像・音声は未確認。現行AACは体感2〜3秒で、サーバー設定だけでは保証不能 |
-| 13 | 30 分の長時間安定性 | 24分47秒まで 28〜29 fps、egress 1.2〜1.3 Mbps を観測後に stream 終了。合格扱いにしない |
-| 14 | 実Mac動的映像 + MP3の24 fps安定性比較 | 30 fps候補との画質・カクつき・遅延比較は次回実施。I16の合成素材 + AAC比較は実施済みだが条件が異なる |
+| 12 | Quest でMP3音声付き1秒未満 | PC/Quest別の統制済み実聴は未完。現行AACは体感2〜3秒で、サーバー設定だけでは保証不能 |
+| 13 | ~~30 分の長時間安定性~~ | **2026-09-02解消**（I21。continuous sourceで30分、freeze/error/restart 0） |
+| 14 | 実Mac動的映像 + MP3の24 fps安定性比較 | headless 24設定は20.5 fpsへunder-deliveryしたため代用不可。実Macの30/24比較が必要 |

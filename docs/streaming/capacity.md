@@ -27,6 +27,15 @@ HLS + CDN 構成ならこの計算は不要（視聴者数と無関係になる�
 音声 AAC 変換は viewer ごとではなく配信 path ごとに 1 プロセスで行う。実測 0.77% / 配信・上限 20 本なので、
 最大でも約 15.4%（1 コア=100%）が目安となり、viewer の出口帯域より先には詰まらない。
 
+### MP3 betaの候補実測（本番式には未採用）
+
+- 20 relayはcodec gate 20/20、relay合計CPU 88.826%（1コア比）、host CPU 26.49%、headroom 73.51%。
+- 1 relay + 20 readersは全接続し、relay 6.974%、egress 11.031%、host 8.203%、egress約1.434 Mbps/viewer。
+- 30分continuous sourceは53,975 frames、freeze/error/restart 0、memory約1.7%増。H.264 + MP3 48 kHz stereo 128 kbpsは非無音、A/V nearest PTSは7〜15 ms。
+- ループMKVでの最初の30分測定はnon-monotonic DTSのため無効。A/V 991 msもfirst-to-first比較の誤りで、上記nearest PTSへ訂正した。
+
+Chromeの単純な720p30合成シーンでは、8秒の通常条件が237 kbps / keyframe 1、500 ms要求が456 kbps / keyframe 16（quality limitationなし）だった。素材依存の候補値なので、全画面のworst-caseや本番収容式へ一般化しない。
+
 ## 画質の階層
 
 Web ページのスクリーンショットを実際にエンコードし、日本語の最小文字を等倍で目視判定した結果。

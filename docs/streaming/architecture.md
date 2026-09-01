@@ -61,7 +61,9 @@ HLS は「連番の静的ファイル」なのでキャッシュでき、視聴�
 Quest 実機で `rtspt://webscreen.tv/live/{id}` の映像と AAC 音声を確認済み。PC と URL を分けず、
 HLS は実装しない。配信元時計から本番 RTSPT 出口までは 1 秒未満（I19）だが、Quest の体感遅延は 2〜3 秒である。
 これは Quest/VRChat 受信経路側に残る現状境界であり、network 受信後の decode / render / buffer の具体的要因と値は未確認。
-PCの同じYamaStreamでは、RTSPTの動画のみが中央値0.059秒、H.264/AACが独立2回とも中央値1.239秒だった。実Mac動的H.264 + MP3候補は16標本すべて1秒未満（0.129〜0.416秒、中央値0.151秒、平均0.175秒）で、AVProは映像とMPEG-1/2 Audioの2トラックを選択した。ただしMP3音声の実聴、Quest、30分、capacity、同条件の24 fpsは未確認なので本番AACから昇格しない。RTMPは一時有効化時にH.264/AACを取得できたが、現行YamaStreamのMedia Foundation経路ではLoading failedとなりA/B不能で、検証後に無効へ戻した。`Use Low Latency` の実値も未確認である。
+PCの同じYamaStreamでは、RTSPTの動画のみが中央値0.059秒、H.264/AACが独立2回とも中央値1.239秒だった。実Mac動的H.264 + MP3候補は16標本すべて1秒未満（0.129〜0.416秒、中央値0.151秒、平均0.175秒）で、AVProは映像とMPEG-1/2 Audioの2トラックを選択した。30分とcapacityは合格し、音声が聞こえた手動観測も得たが、PC/Quest別の統制済み実聴・Quest 1秒未満・同条件の24 fpsは未確認なので本番AACから昇格しない。RTMPは現行YamaStreamのMedia Foundation経路ではLoading failedとなりA/B不能で、検証後に無効へ戻した。
+
+MP3 betaは通常経路を変えず、Chrome publisherだけをURL queryで明示的に分岐する。500 ms要求により途中参加後の次キーフレームは実測0〜463 msまで短縮したが、MediaMTXにGOP cacheがないためfirst packetは20接続中17接続がnon-Kだった。したがって、これはdecoder recovery短縮であってfirst-packet IDR保証ではない。30分・capacityは合格済みだが、実Mac 24/30 fpsとQuestを含むA12は未完である。
 
 ### ingress / egress を分ける理由
 
