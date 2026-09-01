@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { movieKey } from '../../src/lib/contracts/r2key';
+import { movieKey, temporaryUploadKey } from '../../src/lib/contracts/r2key';
 import { PRESIGN_TTL_MS } from '../../src/lib/infra/r2presign';
 import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
 import { deleteMovie, type MoviesDatabase } from '../../src/lib/services/movies';
@@ -221,6 +221,23 @@ class RecoveryBucket implements UploadBucket, RetentionBucket {
     return size === undefined ? null : { size };
   }
 
+  async get(key: string): Promise<{ size: number; body: ReadableStream<Uint8Array> } | null> {
+    const size = this.objects.get(key);
+    return size === undefined
+      ? null
+      : { size, body: new Blob([new Uint8Array(Math.min(size, 1024))]).stream() };
+  }
+
+  async put(
+    key: string,
+    body: ReadableStream<Uint8Array>
+  ): Promise<{ size: number } | null> {
+    if (this.objects.has(key)) return null;
+    const size = (await new Response(body).arrayBuffer()).byteLength;
+    this.objects.set(key, size);
+    return { size };
+  }
+
   async delete(keys: string | string[]): Promise<void> {
     for (const key of Array.isArray(keys) ? keys : [keys]) {
       this.onDelete?.(key);
@@ -303,7 +320,7 @@ describe('upload recovery', () => {
     const database = new RecoveryDatabase(CREATED_AT.toISOString());
     const bucket = new RecoveryBucket();
     const first = await reserve(database, 'FirstUpload1', 1);
-    const key = movieKey(first.shortId);
+    const key = temporaryUploadKey(first.shortId);
     bucket.objects.set(key, 3);
 
     await expect(
@@ -335,7 +352,7 @@ describe('upload recovery', () => {
     const database = new RecoveryDatabase(CREATED_AT.toISOString());
     const bucket = new RecoveryBucket();
     const upload = await reserve(database, 'AbandonUp001', 1);
-    const key = movieKey(upload.shortId);
+    const key = temporaryUploadKey(upload.shortId);
 
     await abandonUpload({ database, userId: USER_ID, shortId: upload.shortId });
     bucket.objects.set(key, 3);
@@ -355,7 +372,7 @@ describe('upload recovery', () => {
     const database = new RecoveryDatabase(CREATED_AT.toISOString());
     const bucket = new RecoveryBucket();
     const upload = await reserve(database, 'PendingLrg01', 1);
-    const key = movieKey(upload.shortId);
+    const key = temporaryUploadKey(upload.shortId);
     bucket.objects.set(key, USER_STORAGE_QUOTA_BYTES);
 
     await retain(database, bucket);
@@ -376,7 +393,7 @@ describe('upload recovery', () => {
     const database = new RecoveryDatabase(CREATED_AT.toISOString());
     const bucket = new RecoveryBucket();
     const upload = await reserve(database, 'DeleteLate01', 1);
-    const key = movieKey(upload.shortId);
+    const key = temporaryUploadKey(upload.shortId);
 
     await expect(
       deleteMovie({

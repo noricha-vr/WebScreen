@@ -63,6 +63,14 @@ export function movieKey(shortId: string): string {
   return `movies/${shortId}.mp4`;
 }
 
+/** 署名 PUT が書き込む、公開配信キーと分離した一時キー。 */
+export function temporaryUploadKey(shortId: string): string {
+  if (!isShortId(shortId)) {
+    throw new Error(`temporaryUploadKey: shortId の形式が不正です (length=${shortId.length})`);
+  }
+  return `tmp/${shortId}`;
+}
+
 /**
  * 完成した mp4 の公開 URL。配信元（R2_PUBLIC_BASE_URL）とキー規則をここで結ぶ。
  *

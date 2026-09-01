@@ -14,7 +14,7 @@ export const PRESIGN_TTL_MS = 5 * 60 * 1000;
 export const PRESIGN_EXPIRY_GRACE_MS = PRESIGN_TTL_MS + 60 * 1000;
 const PRESIGN_TTL_SECONDS = PRESIGN_TTL_MS / 1000;
 
-/** R2 への video/mp4 専用、5分間有効な単発 PUT 署名 URL を発行する。 */
+/** R2 への video/mp4 専用、5分間有効な PUT 署名 URL を発行する。 */
 export async function createR2PutPresignedUrl(
   config: R2PresignConfig,
   key: string

@@ -14,6 +14,8 @@ const WORKER_FAILURE_EVENTS = [
   'upload_commit_failed',
   'upload_abandon_failed',
   'upload_commit_oversize_claim_missed',
+  'upload_tmp_cleanup_failed',
+  'upload_public_cleanup_failed',
   'movie_delete_row_stranded',
   'preview_owner_check_failed',
   'capture_request_json_invalid',
@@ -62,6 +64,28 @@ export function logWorkerFailure({
     return;
   }
   console.error(entry);
+}
+
+/** upload commit の cleanup 失敗を、安全な識別子だけで記録する。 */
+export function logUploadCleanupFailure({
+  event,
+  errorName,
+}: {
+  event: 'upload_tmp_cleanup_failed' | 'upload_public_cleanup_failed';
+  errorName?: string;
+}): void {
+  console.warn(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      source: SOURCE,
+      severity: 'warn',
+      kind: 'event',
+      level: 'warn',
+      event,
+      errorName,
+      summary: `${event}; tracked cleanup or the tmp lifecycle remains available.`,
+    })
+  );
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   validatePresignRequest,
   type PresignRequest,
 } from '../../src/lib/contracts/api';
+import { temporaryUploadKey } from '../../src/lib/contracts/r2key';
 import {
   MAX_PENDING_UPLOADS_PER_USER,
   USER_STORAGE_QUOTA_BYTES,
@@ -90,12 +91,32 @@ function uploadInput(database: UploadDatabase, shortId: string, sizeBytes = 100)
 }
 
 class SizedBucket implements UploadBucket {
+  private readonly publishedSizes = new Map<string, number>();
+
   constructor(private readonly sizes: ReadonlyMap<string, number>) {}
 
-  async head(key: string): Promise<{ size: number } | null> {
+  async get(key: string): Promise<{ size: number; body: ReadableStream<Uint8Array> } | null> {
     const size = this.sizes.get(key);
+    return size === undefined
+      ? null
+        : { size, body: new Blob([new Uint8Array(Math.min(size, 1024))]).stream() };
+  }
+
+  async head(key: string): Promise<{ size: number } | null> {
+    const size = this.publishedSizes.get(key);
     return size === undefined ? null : { size };
   }
+
+  async put(key: string): Promise<{ size: number } | null> {
+    if (this.publishedSizes.has(key)) return null;
+    const shortId = key.slice('movies/'.length, -'.mp4'.length);
+    const size = this.sizes.get(temporaryUploadKey(shortId));
+    if (size === undefined) throw new Error(`missing temporary object for ${key}`);
+    this.publishedSizes.set(key, size);
+    return { size };
+  }
+
+  async delete(): Promise<void> {}
 }
 
 async function releaseTogether<T>(operations: Array<() => Promise<T>>): Promise<PromiseSettledResult<T>[]> {
@@ -178,8 +199,8 @@ describe('アップロードのクォータと検証', () => {
     await insertMovie(database, { shortId: 'CommitTwo001', sizeBytes: declaredSize });
     const bucket = new SizedBucket(
       new Map([
-        ['movies/CommitOne001.mp4', actualSize],
-        ['movies/CommitTwo001.mp4', actualSize],
+        [temporaryUploadKey('CommitOne001'), actualSize],
+        [temporaryUploadKey('CommitTwo001'), actualSize],
       ])
     );
 

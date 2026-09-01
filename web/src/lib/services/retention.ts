@@ -22,7 +22,7 @@
  * 失敗しても行は消えず、failed の掃除が同じ順序（R2 → D1）で回収し直せる。
  */
 
-import { movieKey } from '../contracts/r2key';
+import { movieKey, temporaryUploadKey } from '../contracts/r2key';
 import { purgeMovieCache, type CachePurgeSettings } from './cache-purge';
 import { PINNED_RETENTION_MS } from './quota';
 import { auditReadyObjects } from './retention-audit';
@@ -240,7 +240,7 @@ async function deleteExpiredMovies(
     }
 
     try {
-      await bucket.delete(movieKey(row.short_id));
+      await bucket.delete([movieKey(row.short_id), temporaryUploadKey(row.short_id)]);
     } catch {
       // R2 が落ちている間に D1 の行だけ消すと実体が孤児になるため、この行は
       // 飛ばして次回の実行に委ねる（削除は冪等なのでやり直しで問題ない）。
