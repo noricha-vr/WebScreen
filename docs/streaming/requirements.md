@@ -37,7 +37,8 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 - RTSP は**既定ポート 554 でリッスンする**（`rtspAddress: :554`）。VRChat がポート省略の URL を受けるため、
   URL から `:8554` を落とせる（I11）。1024 未満のバインドには root か `CAP_NET_BIND_SERVICE` が要るので、
   systemd ユニットに `AmbientCapabilities=CAP_NET_BIND_SERVICE` を入れる（#126）
-- **Quest も PC と同一の rtspt URL を案内する**（I12）。音声も AAC で鳴る。体感遅延は 2〜3 秒（PC の 0.08 秒より大きいが十分低遅延）。
+- **Quest も PC と同一の rtspt URL を案内する**（I12）。音声も AAC で鳴る。体感遅延は 2〜3 秒。
+  同じYamaStreamで測ったPCの現行RTSPTは、映像のみ中央値0.059秒、AAC音声付き中央値1.239秒。過去の0.08秒はQuest対応前のRTMP映像条件であり、現行RTSPTの値として扱わない。
   **`rtmp://` は案内しない**: Quest のプレイヤーは rtmp スキームでも RTSP を話すため、スキームを検査する MediaMTX が弾く（I12）
 - Quest 向け HLS を実装する場合は新ホストを作らず **既存の `cdn.web-screen.net` に相乗り**する（HLS セグメントを R2 経由で配る設計と一致し、
   ワールド作者の allowlist 消費が新規 1 枠 = `webscreen.tv` だけで済む）
