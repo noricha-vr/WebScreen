@@ -303,6 +303,23 @@ VRChat PC 実機（ProTV）で `getDisplayMedia` の実画面（YouTube 再生�
 - lifecycle: heartbeat 失効の合成セッションが毎分 cron により `ended / heartbeat_lost` になることも同日確認（cron トリガーは `wrangler triggers deploy` の再実行が必要だった。運用注意は [operations.md](operations.md)）
 - 未検証のまま残る点: 実ブラウザの getDisplayMedia からの一気通貫（画面ピッカーはネイティブ UI のため自動化不可。ユーザーの実操作で確認する）と、バックグラウンドタブでの heartbeat 維持（10 分放置）
 
+### I15: 2 Mbps・音声付き split relay の本番実測（2026-09-01）
+
+PR #151 の本番反映後、実 Google Chrome 152.0.7977.65 から 1920x1080 canvas と 48 kHz stereo のテスト音を
+45 秒間 publish し、ingress → ffmpeg relay → egress を確認した。
+
+| 確認 | 結果 |
+|---|---|
+| ブラウザ送出 | H.264 Baseline / **1920x1080 / 30 fps**。45 秒時点で 1,254 frames encoded |
+| ingress | H.264 + Opus、20.067 秒窓で **1.891 Mbps** |
+| egress | H.264 + MPEG-4 Audio、20.067 秒窓で **1.984 Mbps** |
+| ffprobe | H.264 Baseline / yuv420p / B フレーム 0 / 1920x1080 / 30 fps、AAC-LC / 48 kHz / stereo |
+| codec gate | `verify-codecs.sh` が H.264 + AAC を検出して合格 |
+
+ログイン済みブラウザを安全に自動操作できなかったため、テスト中だけランダムな1 path を JWT publish 除外へ追加した。
+測定後は除外を `read` / `api` のみに復元し、永続設定ファイルのchecksum不変、ingress / egress両方のpath消滅を確認した。
+この検証は media経路と設定値を対象とし、Workerのセッション発行とhealth gateは I14・自動テスト・deploy preflightで別に担保する。
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |

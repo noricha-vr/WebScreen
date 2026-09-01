@@ -23,8 +23,8 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 
 ## 実測条件
 
-- 配信元: Chrome 系ブラウザ内の 1920x1080 canvas
-- 動き: グラデーション、18 個の移動矩形、フレーム番号を 30 fps で連続描画
+- 配信元: 実 Google Chrome 152.0.7977.65 内の 1920x1080 canvas
+- 動き: グラデーション、移動矩形、フレーム番号を 30 fps で連続描画
 - 経路: ブラウザ → WebRTC / WHIP → Indigo ingress → ffmpeg relay → Indigo egress → RTSP/TCP
 - 測定: ingress / egress の `bytesReceived` 差分を 20 秒窓で取得し、出口を ffprobe で確認
 - 比較のため映像素材と解像度・fps は固定する
@@ -34,10 +34,16 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 | 条件 | ingress 実効 | egress 実効 | 出口 | 音声 | 判定 |
 |---|---:|---:|---|---|---|
 | 旧設定（上限 1.5 Mbps、2026-09-01 本番） | **1.394 Mbps** | **1.391 Mbps** | H.264 / 1920x1080 / 30 fps | なし | 比較基準。ユーザー観測では YouTube 再生時にカクつき、再起動後は滑らかになった |
-| 新設定（上限 2.0 Mbps） | 本番反映後に追記 | 本番反映後に追記 | H.264 / 1920x1080 / 30 fps を期待 | AAC を期待 | 未測定 |
+| 新設定（上限 2.0 Mbps、2026-09-01 本番） | **1.891 Mbps** | **1.984 Mbps** | H.264 Baseline / 1920x1080 / 30 fps | AAC-LC / 48 kHz / stereo | **合格**。映像・音声とも45秒間送出し、20.067秒窓で測定 |
 
-旧設定の relay は ingress / egress の両方で bytes が増え、コーデック検証も通った。つまり「カクついたら必ず接続不良」ではなく、
+新設定はブラウザ送出で H.264 Baseline / 1920x1080 / 30 fps、relay 出口で AAC-LC / 48 kHz / stereo を確認し、
+`verify-codecs.sh` も通過した。ブラウザの音声入力は Opus、relay 後は設定どおり AAC へ変換されている。
+旧設定も ingress / egress の両方で bytes が増え、コーデック検証は通っていた。つまり「カクついたら必ず接続不良」ではなく、
 映像内容に対するビットレート不足と、一時的な WHIP / relay 未到達を分けて扱う必要がある。
+
+本番のログイン済みタブを安全に自動操作できなかったため、測定時だけランダムな1 path を JWT 検証の除外対象にし、製品と同じ
+WHIP / H.264優先 / 2 Mbps上限 / relay経路へ直接 publish した。測定後は除外設定を元の `read` / `api` のみに戻し、
+設定ファイルのchecksumが不変であることと、ingress / egressからテストpathが消えたことを確認した。
 
 ## 再起動の案内方針
 
