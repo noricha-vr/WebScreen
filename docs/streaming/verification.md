@@ -288,6 +288,16 @@ VRChat PC 実機（ProTV）で `getDisplayMedia` の実画面（YouTube 再生�
   収容人数と転送量の計算（[capacity.md](capacity.md) / [quality-tiers.md](quality-tiers.md)）が素材依存で変わる。
   製品設計で「静止ページ向け（600k）/ 動画向け（2.5M）」の段を分けるか、動画素材を制限するかの判断が要る
 
+### I14: 本番一気通貫の E2E — API 発行 JWT で WHIP publish → rtspt 視聴（2026-09-01）
+
+本番構成（#126 の MediaMTX + Caddy + Worker secrets + PR #142 の配信 API）で、製品と同じ経路の配信開始〜視聴を実証した。
+
+- 経路: 本番ページのオリジンから `POST /api/streams/`（Discord ログイン済み）→ 返された publishToken で `https://webscreen.tv/live/{id}/whip` へ WHIP publish（映像源は canvas.captureStream。画面ピッカーだけ代替、コーデック選定・認証・接続は製品と同一）→ WHIP 201・Location は相対パス・PeerConnection connected
+- 視聴: `rtspt://webscreen.tv/live/{id}` を ffprobe で受信し、**h264 / Baseline / yuv420p / B フレーム 0**（encode-contract の 4 条件）を確認。実フレームのデコードも確認
+- 停止: `POST /api/streams/{id}/stop/` が 204 → MediaMTX から path が消え、再アクセスは 404
+- lifecycle: heartbeat 失効の合成セッションが毎分 cron により `ended / heartbeat_lost` になることも同日確認（cron トリガーは `wrangler triggers deploy` の再実行が必要だった。運用注意は [operations.md](operations.md)）
+- 未検証のまま残る点: 実ブラウザの getDisplayMedia からの一気通貫（画面ピッカーはネイティブ UI のため自動化不可。ユーザーの実操作で確認する）と、バックグラウンドタブでの heartbeat 維持（10 分放置）
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |
