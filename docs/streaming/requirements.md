@@ -10,7 +10,7 @@
 | **R2** | H.264 が使えない環境を**検出して配信を開始しない** | `RTCRtpSender.getCapabilities('video')` に H264 が無ければエラーにする。黙って VP8 で始めない |
 | **R3** | 音声を出すなら **AAC へ変換する**（Opus のままにしない） | AVPro 公式が「Media Foundation では Opus は読み込み失敗」と明記。映像は `-c:v copy` のままでよく、CPU は 1 配信 0.77% |
 | **R4** | `overridePublisher: no` を設定する | 既定 `true` は**後発の publisher が先発を蹴る**。他人の配信を奪える |
-| **R5** | publish は path 単位の認証で保護する | JWT の `mediamtx_permissions` で `{action: publish, path: live/u_xxx}` を払い出す |
+| **R5** | publish は path 単位の認証で保護する | JWT の `mediamtx_permissions` で `{action: publish, path: live/{id}}` を払い出す |
 | **R6** | `hlsVariant: mpegts` を使う（LL-HLS を使わない） | LL-HLS は PC の AVPro が実効非対応、Quest も fMP4 の音声バグに当たる |
 | **R7** | HTTPS で提供する | Quest は HTTPS 必須。`getDisplayMedia` も secure context 必須 |
 | **R8** | **WHIP の UDP ポート（既定 8189/udp）を配信者から直接到達させる** | **Cloudflare の裏に隠せない**。配信ドメインとは別に、オリジンへ直接届く経路が要る |
@@ -19,15 +19,17 @@
 | **R11** | 送出解像度は `getSettings()` ではなく **`outbound-rtp` の `frameWidth/frameHeight`** で確認する | `ideal: 1920x1080` 要求で `getSettings()` が 1920x1080 を返しても、実送出は 1602x1032 だった |
 | **R12** | 帯域の見積もりは **Safari 基準**で行う | 同一素材で Safari は Chrome の**約 1.9 倍**（940 kbps vs 500 kbps） |
 
-## 配信ホスト名と path 規則（2026-08-31 凍結。以後変更しない）
+## 配信ホスト名と path 規則（2026-09-01 凍結。以後変更しない）
 
 VRChat の **Video Player Allowed Domains** はワールド作者が上限 10 枠・ワイルドカード非対応で登録するため、
 **ここを後から変えると登録済みワールドすべてで再生できなくなり、こちらからは直せない**（[vrchat-constraints.md](vrchat-constraints.md)）。
-Issue #93 で決定・凍結した。
+Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-01 に **`webscreen.tv`**（専用ドメイン・apex 直付け）へ
+上書きして再凍結した。理由: Quest では URL を手打ちするしかなく、9 文字短くハイフンが消えることの利便が大きい。
+ドメインの**失効は allowlist 焼き込み後は致命傷**なので、レジストラの自動更新を切らないこと。
 
 | 経路 | URL 形式 |
 |---|---|
-| **PC / Quest 共通（RTSP）** | `rtspt://stream.web-screen.net/live/{id}`（**ポート省略**。PC = I11、Quest = I12 で実機確認） |
+| **PC / Quest 共通（RTSP）** | `rtspt://webscreen.tv/live/{id}`（**ポート省略**。PC = I11、Quest = I12 で実機確認） |
 | Quest（HLS・**保留**） | `https://cdn.web-screen.net/live/{id}/index.m3u8`（Quest が rtspt を直接再生できたため実装しない。rtspt が使えなくなった時のフォールバック設計として残す） |
 
 - `{id}` は**推測困難な 12 文字のランダム ID**（既存の動画 shortId と同じ文字種・長さ）。
@@ -38,7 +40,8 @@ Issue #93 で決定・凍結した。
 - **Quest も PC と同一の rtspt URL を案内する**（I12）。音声も AAC で鳴る。体感遅延は 2〜3 秒（PC の 0.08 秒より大きいが十分低遅延）。
   **`rtmp://` は案内しない**: Quest のプレイヤーは rtmp スキームでも RTSP を話すため、スキームを検査する MediaMTX が弾く（I12）
 - Quest 向け HLS を実装する場合は新ホストを作らず **既存の `cdn.web-screen.net` に相乗り**する（HLS セグメントを R2 経由で配る設計と一致し、
-  ワールド作者の allowlist 消費が新規 1 枠 = `stream.web-screen.net` だけで済む）
+  ワールド作者の allowlist 消費が新規 1 枠 = `webscreen.tv` だけで済む）
+- 旧凍結名 `stream.web-screen.net` の DNS A レコードは検証用に残っているが、**案内には使わない**（実装・文言はすべて webscreen.tv）
 - **サブドメインを今後増やさない**（ワイルドカード非対応のため、増やすたびに全ワールドの再登録が要る）
 - 複数台へスケールする時は L4 ロードバランサか DNS の複数 A レコードで**同一ホスト名のまま**振り分ける
   （[server-plan.md](server-plan.md) Phase 3）。ホスト名は凍結だが、**A レコードの向き先（IP）は自由に変えてよい**

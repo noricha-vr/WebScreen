@@ -5,6 +5,18 @@ DISCORD_CLIENT_SECRET=your_discord_client_secret
 # ws_session / ws_oauth_state の HMAC-SHA256 署名鍵
 SESSION_SIGNING_KEY=replace_with_a_long_random_value
 
+# MediaMTX publish JWT の RS256 秘密鍵（PKCS#8 DER を base64 化した値）。
+# 生成例: openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | \
+#   openssl pkcs8 -topk8 -nocrypt -outform DER | openssl base64 -A
+# 本番: `bunx wrangler secret put STREAM_JWT_PRIVATE_KEY`
+STREAM_JWT_PRIVATE_KEY=
+
+# MediaMTX Control API。#126 の実サーバー構築後に cron Worker へ投入する。
+# 本番: `bunx wrangler secret put MEDIAMTX_API_URL -c cron/wrangler.jsonc`
+#       `bunx wrangler secret put MEDIAMTX_API_TOKEN -c cron/wrangler.jsonc`
+MEDIAMTX_API_URL=
+MEDIAMTX_API_TOKEN=
+
 # web-capture サービスの Bearer token
 WEBCAPTURE_TOKEN=replace_with_webcapture_token
 
