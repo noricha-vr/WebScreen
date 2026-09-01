@@ -282,6 +282,69 @@
     "screenShareLink": "About screen sharing in VRChat",
     "comingSoon": "Screen recording and screen sharing are still on the way"
   },
+  "screenSharePage": {
+    "title": "How to share your screen in VRChat — no OBS, just your browser | WebScreen",
+    "description": "Share your screen in VRChat with no OBS or install. Pick it in your browser and paste the URL. Works on PC and Quest, with about 0.1 seconds of latency.",
+    "heading": "Share your screen in VRChat — browser only, no OBS",
+    "lead": "Pick a screen and get a streaming URL you can paste into a VRChat video player.",
+    "badges": ["No OBS", "No installation", "PC and Quest"],
+    "wizard": {
+      "start": "Start screen sharing",
+      "selectHeading": "Choose a screen to share",
+      "selectBody": "Choose the tab, window, or screen you want to show from your browser picker.",
+      "select": "Choose a screen",
+      "selecting": "Choosing a screen…",
+      "loginHeading": "Sign in with Discord to start",
+      "loginBody": "You need to sign in before creating a streaming URL. There is no password to create.",
+      "login": "Sign in with Discord",
+      "urlHeading": "Paste this streaming URL into VRChat",
+      "urlBody": "Paste it into a VRChat video player to show the screen you chose. On Quest, enter this URL manually.",
+      "copy": "Copy URL",
+      "copied": "Copied",
+      "showLive": "View the live stream",
+      "liveHeading": "Live now",
+      "preview": "Preview of the shared screen",
+      "elapsed": "Elapsed time",
+      "expires": "Time until extension expires",
+      "extend": "Extend",
+      "extending": "Extending…",
+      "stop": "End stream",
+      "stopping": "Ending…",
+      "expiryWarning": "This stream will end soon. Extend it to keep sharing.",
+      "errorHeading": "We could not start the stream",
+      "retry": "Try again",
+      "errors": {
+        "h264": "This browser cannot send H.264 video. Open this page in Chrome or Safari and try again.",
+        "displayDenied": "No screen was selected. Please try again. On macOS, sharing your entire screen requires allowing your browser under System Settings > Privacy & Security > Screen Recording.",
+        "streamAlreadyLive": "You already have a live stream. End it before starting another one.",
+        "rateLimited": "A new stream cannot be created yet. Wait a moment and try again.",
+        "streamEnded": "This stream has ended. Start a new stream instead.",
+        "whip": "We could not connect to the streaming server. Check your network and try again.",
+        "generic": "Something went wrong while preparing the stream. Try again."
+      }
+    },
+    "howTo": {
+      "heading": "How it works",
+      "steps": [
+        { "heading": "Choose a screen", "body": "Choose the tab, window, or screen you want to share.", "placeholder": "Screen selection preview" },
+        { "heading": "Copy the URL", "body": "Copy the short streaming URL that is created for you.", "placeholder": "Copying the URL preview" },
+        { "heading": "Paste it into VRChat", "body": "Paste the URL into a video player in a compatible world.", "placeholder": "Pasting into VRChat preview" }
+      ]
+    },
+    "features": { "heading": "Features", "items": ["No OBS: stream from your browser", "About 0.1 seconds of latency in Use Low Latency compatible worlds", "Quest uses the same URL", "Free to use"] },
+    "faq": {
+      "heading": "FAQ",
+      "items": [
+        { "question": "Which worlds work?", "answer": "Worlds with an AVPro video player that supports Stream mode." },
+        { "question": "Does it work on Quest?", "answer": "Yes. Paste the same URL. Expect about 2–3 seconds of latency." },
+        { "question": "Is there audio?", "answer": "Currently, video only." },
+        { "question": "Is it free?", "answer": "Yes. Press Extend every two hours to keep streaming." },
+        { "question": "What if I forget to stop?", "answer": "The stream ends automatically unless you extend it." }
+      ]
+    },
+    "explainer": { "heading": "How screen sharing works in VRChat", "body": "VRChat has no built-in screen sharing. This page turns your screen into a streaming URL that a video player in a world can play." },
+    "convert": { "heading": "Showing a recording instead?", "body": "If you only need to paste a recorded video, slides, or images, use the conversion tools to keep a URL you can play again later.", "home": "Convert from the home page", "web": "Convert a web page" }
+  },
   "useCases": {
     "stepsHeading": "How to use it",
     "relatedHeading": "Related pages",
@@ -341,7 +404,7 @@
     },
     "screenShare": {
       "title": "Screen sharing in VRChat, and what to use instead — WebScreen",
-      "navLabel": "Instead of screen sharing",
+      "navLabel": "Screen Share",
       "heading": "When you want to share your screen in VRChat",
       "lead": "Sharing your screen in VRChat usually means showing someone a web page, a slide deck or a photo. WebScreen turns that content into a video URL that plays in any world with a video player.",
       "description": "Want to share your screen in VRChat? For web pages and slides, converting them to video is the reliable way — no lag, no world requirements.",

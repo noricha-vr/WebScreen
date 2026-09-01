@@ -79,7 +79,7 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 | 劣化ポリシー | `degradationPreference = 'maintain-resolution'` | R10 |
 | コンテンツヒント | `track.contentHint = 'text'` | R10。**`'detail'` ではない** |
 | 解像度 | **1920x1080 固定**（省帯域でも下げない） | `maintain-resolution` が解像度を守り、足りなければ fps が落ちる。**720p / 480p の段は作らない**（[quality-tiers.md](quality-tiers.md)） |
-| 画面取得 | `getDisplayMedia({ preferCurrentTab: true })`（自タブ共有） | **画面全体の共有は macOS の画面収録許可が要り、未付与だとピッカーが解決しない。**自タブ共有はこれを回避でき 300ms で解決する |
+| 画面取得 | `getDisplayMedia({ video, audio: false })`（**既定ピッカー**。画面全体・ウィンドウ・タブから選ばせる） | 製品では自タブ共有に意味がないため `preferCurrentTab` は使わない（PoC の権限回避用だった）。**macOS は画面収録許可が未付与だと NotAllowedError になる**ので、エラー文言でシステム設定への導線を案内する |
 
 ### 対応ブラウザ
 

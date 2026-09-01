@@ -282,6 +282,69 @@
     "screenShareLink": "VRChat の画面共有について",
     "comingSoon": "画面録画・画面共有は対応中です"
   },
+  "screenSharePage": {
+    "title": "VRChat で画面共有する方法 — OBS 不要・ブラウザだけ | WebScreen",
+    "description": "VRChat に自分の画面をそのまま映せます。OBS もインストールも不要、ブラウザで画面を選んで URL を貼るだけ。PC・Quest 対応、対応ワールドなら遅延約 0.1 秒。",
+    "heading": "VRChat に画面共有 — ブラウザだけで、OBS 不要",
+    "lead": "見せたい画面を選ぶだけで、VRChat のビデオプレイヤーに貼れる配信 URL を作れます。",
+    "badges": ["OBS 不要", "インストール不要", "PC・Quest 対応"],
+    "wizard": {
+      "start": "画面共有をはじめる",
+      "selectHeading": "共有する画面を選ぶ",
+      "selectBody": "ブラウザの画面選択から、見せたいタブ・ウィンドウ・画面を選んでください。",
+      "select": "画面を選ぶ",
+      "selecting": "画面を選んでいます…",
+      "loginHeading": "Discord でログインすると始められます",
+      "loginBody": "配信 URL を作るにはログインが必要です。パスワードの登録はありません。",
+      "login": "Discord でログイン",
+      "urlHeading": "配信 URL を VRChat に貼る",
+      "urlBody": "VRChat のビデオプレイヤーに貼るだけで、選んだ画面を映せます。Quest ではこの URL を手入力してください。",
+      "copy": "URL をコピー",
+      "copied": "コピーしました",
+      "showLive": "配信中の画面を見る",
+      "liveHeading": "配信中",
+      "preview": "共有中の画面プレビュー",
+      "elapsed": "経過時間",
+      "expires": "延長期限まで",
+      "extend": "延長",
+      "extending": "延長しています…",
+      "stop": "配信を終了",
+      "stopping": "終了しています…",
+      "expiryWarning": "まもなく配信が自動終了します。続ける場合は延長してください。",
+      "errorHeading": "配信を開始できませんでした",
+      "retry": "もう一度試す",
+      "errors": {
+        "h264": "このブラウザでは H.264 映像を送れません。Chrome または Safari で開き直してください。",
+        "displayDenied": "画面が選択されませんでした。もう一度お試しください。Mac で画面全体を共有するには、システム設定の「プライバシーとセキュリティ > 画面収録」でブラウザを許可する必要があります。",
+        "streamAlreadyLive": "すでに配信中の画面があります。先にその配信を終了してください。",
+        "rateLimited": "短時間に配信を作り直せません。少し待ってから試してください。",
+        "streamEnded": "この配信は終了しました。新しい配信を始めてください。",
+        "whip": "配信サーバーに接続できませんでした。ネットワークを確認して、もう一度試してください。",
+        "generic": "配信の準備中に問題が起きました。もう一度試してください。"
+      }
+    },
+    "howTo": {
+      "heading": "使い方",
+      "steps": [
+        { "heading": "画面を選ぶ", "body": "共有したいタブ、ウィンドウ、または画面を選びます。", "placeholder": "画面選択のイメージ" },
+        { "heading": "URL をコピー", "body": "発行された短い配信 URL をコピーします。", "placeholder": "URL コピーのイメージ" },
+        { "heading": "VRChat に貼る", "body": "対応ワールドのビデオプレイヤーへ URL を貼り付けます。", "placeholder": "VRChat へ貼り付けるイメージ" }
+      ]
+    },
+    "features": { "heading": "特徴", "items": ["OBS 不要、ブラウザだけで配信", "Use Low Latency 対応ワールドなら遅延約 0.1 秒", "Quest も同じ URL で視聴", "無料で使える"] },
+    "faq": {
+      "heading": "よくある質問",
+      "items": [
+        { "question": "対応ワールドは？", "answer": "AVPro の Stream モードに対応したビデオプレイヤーがあるワールドです。" },
+        { "question": "Quest でも使える？", "answer": "使えます。同じ URL を貼り付けてください。遅延は 2〜3 秒ほどです。" },
+        { "question": "音は出る？", "answer": "現在は映像のみです。" },
+        { "question": "無料？", "answer": "無料です。2 時間ごとに延長ボタンを押せば継続できます。" },
+        { "question": "止め忘れたら？", "answer": "延長しなければ自動で終了します。" }
+      ]
+    },
+    "explainer": { "heading": "VRChat で画面を見せる仕組み", "body": "VRChat には標準の画面共有機能がありません。そこで、画面をビデオプレイヤーで再生できる配信 URL に変え、ワールド内のプレイヤーへ貼り付けます。" },
+    "convert": { "heading": "録画済みのものを見せるなら", "body": "録画済みの動画・スライド・画像を貼りたいだけなら、変換機能を使うと URL を残して何度でも再生できます。", "home": "トップで変換する", "web": "Web ページを変換する" }
+  },
   "useCases": {
     "stepsHeading": "使い方",
     "relatedHeading": "関連ページ",
@@ -341,7 +404,7 @@
     },
     "screenShare": {
       "title": "VRChat の画面共有と、代わりに使える動画変換 — WebScreen",
-      "navLabel": "画面共有の代わりに使う",
+      "navLabel": "画面共有",
       "heading": "VRChat で画面共有をしたいとき",
       "lead": "VRChat で画面を共有したい理由の多くは、Web ページ・スライド・写真を誰かに見せることです。WebScreen はその中身を動画に変換して、ワールドを選ばずに見せられる URL を発行します。",
       "description": "VRChat で画面共有したいとき、Web ページやスライドなら動画に変換するのが確実です。ワールドを選ばず、遅延も音ズレもありません。",
