@@ -1,12 +1,14 @@
 /**
  * cron トリガー専用の Worker。
  *
- * 2 本のスケジュールを 1 つの Worker で受ける（web/cron/wrangler.jsonc の triggers.crons）:
+ * 3 本のスケジュールを 1 つの Worker で受ける（web/cron/wrangler.jsonc の triggers.crons）:
  *   - 保持期間バッチ本体（期限切れの掃除）
  *   - その死活監視（バッチが止まっていないかを見て通知する）
+ *   - 配信セッション lifecycle（延長・heartbeat・視聴者・publisher kick）
  *
  * entry 層なので責務は 3 つだけ: bindings をサービスの型に渡す・実行時刻を注入する・
- * 結果を構造化ログにする。判定ロジックは services/retention.ts と services/cron-health.ts が持つ。
+ * 結果を構造化ログにする。判定ロジックは services/retention.ts、services/cron-health.ts、
+ * services/stream-lifecycle.ts が持つ。
  * fetch ハンドラは持たない（HTTP からは叩けない）。
  */
 
@@ -22,12 +24,13 @@ import {
 } from '../../src/lib/services/cron-health';
 import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
 import { runAlertCron, type AlertEnv } from './alert';
+import { runStreamCron, type StreamCronEnv } from './stream';
 
 /**
  * 使う binding だけを宣言する。@cloudflare/workers-types を入れず、サービス側の
  * 最小インターフェースをそのまま契約にする（実 binding は構造的に適合する）。
  */
-interface Env extends AlertEnv {
+interface Env extends AlertEnv, StreamCronEnv {
   DB: RetentionDatabase & CronRunDatabase;
   BUCKET: RetentionBucket;
   /** 動画の配信元。web/wrangler.jsonc の同名 var と同じ値であること（purge の URL に使う）。 */
@@ -51,6 +54,7 @@ const SOURCE = 'webscreen-beta-cron';
  */
 const RETENTION_CRON = '17 * * * *';
 const ALERT_CRON = '47 * * * *';
+const STREAM_CRON = '* * * * *';
 
 /**
  * 式の表記ゆれ（前後の空白・フィールド間の連続空白）を吸収する。workerd が渡す文字列は
@@ -69,6 +73,11 @@ export default {
     // 気づけるようにする（黙って握り潰さない）。
     if (cron === ALERT_CRON) {
       await runAlertCron(env, event.scheduledTime, cron);
+      return;
+    }
+
+    if (cron === STREAM_CRON) {
+      await runStreamCron(env, event.scheduledTime, cron);
       return;
     }
 

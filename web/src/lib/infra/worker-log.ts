@@ -23,6 +23,8 @@ const WORKER_FAILURE_EVENTS = [
   'capture_upstream_rejected',
   'capture_upstream_error_unmapped',
   'health_cron_read_failed',
+  'stream_api_failed',
+  'stream_jwks_failed',
 ] as const;
 type WorkerFailureEvent = (typeof WORKER_FAILURE_EVENTS)[number];
 
