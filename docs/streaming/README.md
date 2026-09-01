@@ -17,6 +17,7 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 | 文字の可読性 | **本番 relay 合成QAは合格**（1280x720を維持し16 / 24pxは明瞭、12pxも判読可）。WebScreen UIからの actual YouTube は未検証 | [stability-audio-verification.md](stability-audio-verification.md) |
 | 同時配信 | **全体 20 本 / 1 ユーザー 1 本** | API の原子的な上限 |
 | 途中参加の待ち | 最大 2 秒（**変更できない**） | 実測 |
+| PC | YamaStream 単一実測は音声・明瞭な文字で再生できた。体感は約1秒だが、精密実測は 1.203〜1.282 秒（中央値1.256秒）で1秒以下未合格。別ワールドの `Use Low Latency` ON 実測は約0.08秒 | 実測 |
 | Quest | PC と同じ `rtspt://`。AAC 音声を含め実機確認済み、体感 2〜3 秒 | 実測 |
 
 ## 読む順番

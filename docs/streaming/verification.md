@@ -406,10 +406,23 @@ relay 設定の A/B では、通常設定から実質的な改善はなかった
 
 判断境界は Quest/VRChat 受信経路側に残る。
 
-- **PC VRChat が約 3 秒の場合**: ワールドの AVPro `Use Low Latency` が ON かを確認する。Windows 向けの同プロパティは [AVPro documentation](https://www.renderheads.com/content/docs/AVProVideo/articles/inline-component-media-player-properties-windows.html) を参照。既存の I7 は ON のワールドで約 0.08 秒であり、現在使うワールドの実値は未確認である。
+- **PC VRChat（YamaStream）**: 音声・明瞭な文字で再生でき、体感は約1秒だった。ただし精密実測は 1.203〜1.282 秒（中央値1.256秒）で1秒以下未合格。ログから `Use Low Latency` の値は直接確認できない。Public で egress reader が 0 本なら、RTSP前の Allowed Domains 拒否を確認する。既存の I7 は別ワールドで ON / 約0.08秒であり、混同しない。Windows 向けの同プロパティは [AVPro documentation](https://www.renderheads.com/content/docs/AVProVideo/articles/inline-component-media-player-properties-windows.html) を参照。
 - **Quest の 2〜3 秒**: 同じ `rtspt://webscreen.tv/live/{id}` で再生できるが、これは Quest/VRChat 受信経路側に残る現状境界である。ネットワーク受信後の decode / render / buffer の具体的要因と値は未確認。Media3 の標準 `DefaultLoadControl` の既定バッファは説明可能性の参考にすぎず、VRChat の具体的な設定値を示さない（[Android reference](https://developer.android.com/reference/androidx/media3/exoplayer/DefaultLoadControl)）。サーバー設定だけで Quest の 1 秒未満を保証することはできない。
 
-未確認のまま残すものは、現在のワールドの `Use Low Latency` 実値、Quest の 1 秒未満、および 30 分の長時間安定性である。
+未確認のまま残すものは、YamaStream の `Use Low Latency` 実値、Quest の 1 秒未満、および 30 分の長時間安定性である。
+
+### I20: YamaStream の PC 実機 — Public の許可設定と精密遅延（2026-09-02）
+
+`rtspt://webscreen.tv/live/{id}` を音声付きで YamaStream の AVProVideoPlayer に再生した。画面文字はクリアで、ユーザー実画面の体感は約1秒だった。Windowsデスクトップとの同時録画による精密測定では、表示されたNTP時計との差は 1.203〜1.282 秒、中央値 1.256 秒となり、1秒以下は未合格だった。I19 の配信元時計から本番 RTSPT 出口までの中央値約 0.11 秒とは測定境界が異なり、PCプレイヤーまで含む実測として記録する。
+
+| 段階 | 観測 | 結論 |
+|---|---|---|
+| Public | VRChat ログは `webscreen.tv` が Video Player Allowed Domains に無いとして AccessDenied。VRChat Public API の当該ワールド `urlList` は空、MediaMTX egress readers は 0 | URL は RTSP 接続前に拒否された。relay / codec / 遅延の問題ではない |
+| Friends+ | hidden instance へ移動し `Allow Untrusted URLs` を有効化 | 再生開始 |
+| AVPro 再生 | `MediaFoundation` で open、`MF-MediaEngine-Hardware` で 1280x708 / 30.00 fps。egress reader 1 本が継続し bytesSent が増加 | PC の Media Foundation 経路で映像・音声を継続再生 |
+| 精密遅延 | Windowsデスクトップ同時録画（30 fps、分解能約0.033秒）でNTP時計差を5回採取: 1.257 / 1.256 / 1.206 / 1.282 / 1.203 秒 | 範囲 **1.203〜1.282秒**、中央値 **1.256秒**。YamaStream は1秒以下未合格 |
+
+YamaStream の `Use Low Latency` 値はログから直接確認できない。体感約1秒を精密測定の合格と扱わず、I7 の別ワールドでの ON / 約0.08秒実測とも混同しない。Quest は従来どおり 2〜3秒であり、1秒以下の達成とはしない。一時的なvideo-only A/Bは実施待ちで、結果は未取得のためここには推測を書かない。
 
 ## 検証できていないこと
 
@@ -425,6 +438,6 @@ relay 設定の A/B では、通常設定から実質的な改善はなかった
 | 8 | ~~WHIP の UDP を NAT 越しに到達させる実構成~~ | **2026-08-31 解消**（I1。Indigo は NAT なしのグローバル IP 直付けで、`webrtcAdditionalHosts` 不要） |
 | 9 | 本番WebScreen UIからactual YouTubeをループさせる長時間確認 | I18の合成relay QAとは別に、UI経路のfps・freeze・帯域・文字可読性を最終確認する |
 | 10 | Safariでのfull設定の受理・実送出 | full設定拒否時はmaxBitrate-only fallbackで配信を継続するが、文字品質は別途確認する |
-| 11 | 現在使うワールドの `Use Low Latency` 実値 | I7 は ON の別ワールドで約 0.08 秒。PC で約 3 秒なら最初に確認する |
+| 11 | YamaStream の `Use Low Latency` 実値 | 1.203〜1.282秒（中央値1.256秒）のPC実測は得たが、ログから値を直接確認できない。I7 の別ワールド ON / 約0.08秒とは分離する |
 | 12 | Quest で 1 秒未満 | 現状は 2〜3 秒。Quest/VRChat 受信経路の decode / render / buffer の具体的要因と値は未確認で、サーバー設定だけでは保証不能 |
 | 13 | 30 分の長時間安定性 | 24分47秒まで 28〜29 fps、egress 1.2〜1.3 Mbps を観測後に stream 終了。合格扱いにしない |

@@ -24,7 +24,7 @@ PC だけが桁違いに外れている。
 
 | | 最小遅延 | 経路 | 条件 |
 |---|---|---|---|
-| **PC** | **約 0.08 秒**（既存実測） | `rtspt://` + AVPro `Use Low Latency` **ON** | Indigo 往復の実機実測。現在使うワールドの設定値は未確認。合格条件は ON かつ 1 秒未満 |
+| **PC** | **約0.08秒**（既存実測） | `rtspt://` + AVPro `Use Low Latency` ON | 別ワールドの実測。YamaStream は 1.203〜1.282 秒（中央値 1.256 秒）で1秒以下未合格、`Use Low Latency` 実値も未確認 |
 | **Quest** | **体感 2〜3 秒** | PC と同じ `rtspt://webscreen.tv/live/{id}` | Quest/VRChat 受信経路側に残る現状境界。network 受信後の decode / render / buffer の具体的要因と値は未確認。URL は一本化できるが、サーバー設定だけで 1 秒未満は保証できない |
 
 ## PC の遅延はワールド作者が決める（こちらから制御できない）
@@ -34,11 +34,12 @@ PC だけが桁違いに外れている。
 
 | ワールドの設定 | PC の遅延 |
 |---|---|
-| `Use Low Latency` ON | **約 0.08 秒（WebScreen の既存実測）**。ただし現在使うワールドの実値は未確認 |
+| `Use Low Latency` ON | **約 0.08 秒（WebScreen の既存実測）**。YamaStream とは別ワールドで、YamaStream の値はログから未確認 |
+| YamaStream（単一ワールド実測） | **1.203〜1.282 秒、中央値 1.256 秒**（30 fps録画の分解能約0.033秒）。`Use Low Latency` 値はログから直接確認できず、1秒以下は未合格 |
 | `Use Low Latency` OFF | 現行ワールドで未実測。旧比較の +8〜10 秒を現行の合格値には使わない |
 
 **製品としての意味**: WebScreen が「超低遅延」を謳っても、**視聴されるワールド次第で大きく変わる**。
-訴求できるのは「`Use Low Latency` ON かつ実測で 1 秒未満を確認したワールドなら 1 秒未満（既存実測は 0.1 秒級）」であって「常に 0.1 秒」ではない。現在のワールドの設定と実測を確認してから案内する。Windows の設定説明は [AVPro documentation](https://www.renderheads.com/content/docs/AVProVideo/articles/inline-component-media-player-properties-windows.html) を参照。
+YamaStream の単一実測をPCワールド全般へ一般化しない。YamaStream は中央値 1.256 秒で1秒以下未合格、別ワールドの `Use Low Latency` ON 実測は約0.08秒として分け、公開前に対象ワールドを個別に測る。Windows の設定説明は [AVPro documentation](https://www.renderheads.com/content/docs/AVProVideo/articles/inline-component-media-player-properties-windows.html) を参照。
 
 また、ワールド側は **AVPro の Stream モード**である必要がある（VRChat 公式が Unity 標準 VideoPlayer は "does not support these live streams" と明記）。
 
@@ -54,8 +55,12 @@ VRChat は**ホスト単位**の既定 allowlist（13 サービス: YouTube / Tw
 
 | インスタンス種別 | 必要な条件 |
 |---|---|
-| Private / Friends | 視聴者が `Allow Untrusted URLs` を ON |
-| **Public / Group Public** | 上記 **かつ** **ワールド作者**がワールド設定にドメインを登録（**上限 10・ワイルドカード非対応・既定は空**） |
+| Private | 視聴者が `Allow Untrusted URLs` を ON |
+| Friends | 視聴者が `Allow Untrusted URLs` を ON |
+| Friends+ | 視聴者が `Allow Untrusted URLs` を ON |
+| **Public / Group Public** | 視聴者の同設定が ON **かつ** ワールド作者がワールド設定にドメインを登録（**上限 10・ワイルドカード非対応・既定は空**） |
+
+YamaStream の 2026-09-02 実測では、Public の `urlList` が空で `webscreen.tv` を許可しておらず、AccessDenied のまま MediaMTX egress reader が 0 本だった。これは RTSP 接続前の拒否である。Friends+ では `Allow Untrusted URLs` を有効化して再生できた。Public で使うにはワールド作者が `webscreen.tv` を Allowed Domains へ登録する必要がある。
 
 **重要な切り分け: これはライブ配信で新たに増える制約ではない。**
 `cdn.web-screen.net` の静的 MP4 も既にこの制約下にあり、それで本番稼働している = WebScreen は既にこの摩擦を受け入れている。
