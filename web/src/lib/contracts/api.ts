@@ -63,6 +63,7 @@ export const ERROR_CODES = {
   notFound: 'NOT_FOUND',
   expired: 'EXPIRED',
   payloadTooLarge: 'PAYLOAD_TOO_LARGE',
+  tooManyPendingUploads: 'TOO_MANY_PENDING_UPLOADS',
   captureFailed: 'CAPTURE_FAILED',
   pageTooLong: 'PAGE_TOO_LONG',
   captureTimeout: 'CAPTURE_TIMEOUT',

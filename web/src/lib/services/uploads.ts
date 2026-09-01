@@ -10,8 +10,8 @@ import { generateShortId, movieKey, movieUrl } from '../contracts/r2key';
 import { createR2PutPresignedUrl, type R2PresignConfig } from '../infra/r2presign';
 import { logWorkerFailure } from '../infra/worker-log';
 import {
-  exceedsStorageQuota,
-  getUserStorageUsage,
+  getUserUploadQuota,
+  MAX_PENDING_UPLOADS_PER_USER,
   MOVIE_RETENTION_MS,
   USER_STORAGE_QUOTA_BYTES,
   type QuotaDatabase,
@@ -38,7 +38,7 @@ export type UploadUrlGenerator = (key: string) => Promise<string>;
 /** API ハンドラが HTTP 応答へ変換するドメインエラー。 */
 export class UploadError extends Error {
   constructor(
-    public readonly status: 400 | 404 | 413,
+    public readonly status: 400 | 404 | 413 | 429,
     public readonly errorCode: ErrorCode,
     message: string
   ) {
@@ -110,7 +110,8 @@ export async function createPendingUpload(
        WHERE COALESCE((
          SELECT SUM(size_bytes) FROM movies
          WHERE user_id = ? AND status IN ('pending', 'ready', 'failed')
-       ), 0) + ? <= ?`
+       ), 0) + ? <= ?
+       AND (SELECT COUNT(*) FROM movies WHERE user_id = ? AND status = 'pending') < ?`
     )
     .bind(
       shortId,
@@ -120,10 +121,20 @@ export async function createPendingUpload(
       expiresAt,
       input.userId,
       input.request.sizeBytes,
-      USER_STORAGE_QUOTA_BYTES
+      USER_STORAGE_QUOTA_BYTES,
+      input.userId,
+      MAX_PENDING_UPLOADS_PER_USER
     )
     .run();
   if (reservation.meta.changes === 0) {
+    const quota = await getUserUploadQuota(input.database, input.userId);
+    if (quota.pendingUploads >= MAX_PENDING_UPLOADS_PER_USER) {
+      throw new UploadError(
+        429,
+        ERROR_CODES.tooManyPendingUploads,
+        '同時に予約できるアップロード数の上限に達しました'
+      );
+    }
     throw new UploadError(
       413,
       ERROR_CODES.payloadTooLarge,
@@ -162,14 +173,9 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
     throw new UploadError(400, ERROR_CODES.invalidRequest, 'アップロード済みの動画が見つかりません');
   }
 
-  const usageBeforeCommit = await getUserStorageUsage(input.database, input.userId);
   const exceedsPerFileLimit = object.size > MAX_UPLOAD_BYTES;
   const exceedsDeclaredSizeLimit = object.size > movie.size_bytes * 2;
-  const exceedsUserLimit = exceedsStorageQuota(
-    usageBeforeCommit - movie.size_bytes,
-    object.size
-  );
-  if (exceedsPerFileLimit || exceedsDeclaredSizeLimit || exceedsUserLimit) {
+  if (exceedsPerFileLimit || exceedsDeclaredSizeLimit) {
     // 確保に負けた行は、この呼び出しが上限超過として扱ってよい対象ではない。
     // 413 を返し続けると既に ready の行へ誤った理由を返すため、最終状態から引き直す。
     if (!(await claimOversizedUpload(input, object.size))) return resolveCommitConflict(input);
@@ -182,14 +188,39 @@ export async function commitUpload(input: CommitUploadInput): Promise<CommitResp
 
   const updated = await input.database
     .prepare(
-      "UPDATE movies SET status = 'ready', size_bytes = ? WHERE short_id = ? AND user_id = ? AND status = 'pending'"
+      `UPDATE movies SET status = 'ready', size_bytes = ?
+       WHERE short_id = ? AND user_id = ? AND status = 'pending'
+       AND COALESCE((
+         SELECT SUM(size_bytes) FROM movies
+         WHERE user_id = ? AND short_id <> ? AND status IN ('pending', 'ready', 'failed')
+       ), 0) + ? <= ?`
     )
-    .bind(object.size, input.shortId, input.userId)
+    .bind(
+      object.size,
+      input.shortId,
+      input.userId,
+      input.userId,
+      input.shortId,
+      object.size,
+      USER_STORAGE_QUOTA_BYTES
+    )
     .run();
 
   // 0 件 = SELECT と R2 確認の間に行が pending でなくなった。成功として返すと、
   // 保持期間バッチが回収した動画の公開 URL を返してしまう（行も実体も無いのに再生できる想定になる）。
-  if (updated.meta.changes === 0) return resolveCommitConflict(input);
+  if (updated.meta.changes === 0) {
+    const current = await findMovie(input.database, input.userId, input.shortId);
+    if (current?.status === 'pending') {
+      if (await claimOversizedUpload(input, object.size)) {
+        throw new UploadError(
+          413,
+          ERROR_CODES.payloadTooLarge,
+          'アップロード済み動画が保存上限を超えています'
+        );
+      }
+    }
+    return resolveCommitConflict(input);
+  }
 
   return toCommitResponse({ ...movie, size_bytes: object.size, status: 'ready' }, input.publicBaseUrl);
 }
@@ -250,18 +281,27 @@ export async function abandonUpload(input: AbandonUploadInput): Promise<void> {
  * 稀な経路なので、通常時に追加のクエリを増やさないようここでだけ読み直す。
  */
 async function resolveCommitConflict(input: CommitUploadInput): Promise<CommitResponse> {
-  const current = await input.database
-    .prepare(
-      'SELECT short_id, user_id, size_bytes, status, expires_at FROM movies WHERE short_id = ? AND user_id = ?'
-    )
-    .bind(input.shortId, input.userId)
-    .first<MovieRow>();
+  const current = await findMovie(input.database, input.userId, input.shortId);
 
   if (!current) {
     throw new UploadError(404, ERROR_CODES.notFound, '対象の動画が見つかりません');
   }
   if (current.status === 'ready') return toCommitResponse(current, input.publicBaseUrl);
   throw new UploadError(400, ERROR_CODES.invalidRequest, 'この動画は commit できません');
+}
+
+/** shortId と所有者で movie を読み出す。並行更新後の状態解決に使う。 */
+async function findMovie(
+  database: UploadDatabase,
+  userId: number,
+  shortId: string
+): Promise<MovieRow | null> {
+  return database
+    .prepare(
+      'SELECT short_id, user_id, size_bytes, status, expires_at FROM movies WHERE short_id = ? AND user_id = ?'
+    )
+    .bind(shortId, userId)
+    .first<MovieRow>();
 }
 
 function toCommitResponse(movie: MovieRow, publicBaseUrl: string): CommitResponse {

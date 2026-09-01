@@ -1,6 +1,12 @@
 /** ユーザーごとの動画保存容量上限（500 MiB）。 */
 export const USER_STORAGE_QUOTA_BYTES = 524_288_000;
 
+/**
+ * ユーザーごとに同時に予約できる pending アップロード数。
+ * 正常な変換の並行利用は妨げず、署名URLを大量に確保して容量と回収キューを占有する乱用を抑える。
+ */
+export const MAX_PENDING_UPLOADS_PER_USER = 10;
+
 /** ユーザーごとの pin 上限。pin API 実装時にもこの定数を使用する。 */
 export const MAX_PINNED_MOVIES = 10;
 
@@ -32,6 +38,10 @@ interface UsageRow {
   total: number | null;
 }
 
+interface UploadQuotaRow extends UsageRow {
+  pending_count: number | null;
+}
+
 /**
  * pending・ready・failed の movies を合計し、ユーザーの予約済み使用量を返す。
  *
@@ -50,6 +60,21 @@ export async function getUserStorageUsage(
     .first<UsageRow>();
 
   return row?.total ?? 0;
+}
+
+/** pending 作成に失敗した後、容量と予約件数のどちらが上限かを判定する。 */
+export async function getUserUploadQuota(
+  database: QuotaDatabase,
+  userId: number
+): Promise<{ usedBytes: number; pendingUploads: number }> {
+  const row = await database
+    .prepare(
+      "SELECT COALESCE(SUM(size_bytes), 0) AS total, COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count FROM movies WHERE user_id = ? AND status IN ('pending', 'ready', 'failed')"
+    )
+    .bind(userId)
+    .first<UploadQuotaRow>();
+
+  return { usedBytes: row?.total ?? 0, pendingUploads: row?.pending_count ?? 0 };
 }
 
 /** 既存使用量に追加サイズを加えて保存容量を超えるか判定する。 */

@@ -314,6 +314,7 @@ describe('uploadErrorCode', () => {
     ['PAGE_TOO_LONG', 400, 'pageTooLong'],
     ['CAPTURE_TIMEOUT', 504, 'captureTimeout'],
     ['PAYLOAD_TOO_LARGE', 413, 'tooLarge'],
+    ['TOO_MANY_PENDING_UPLOADS', 429, 'failed'],
     ['UNAUTHORIZED', 401, 'sessionExpired'],
   ])('%s を %s へ変換する', (errorCode, status, expected) => {
     expect(uploadErrorCode(new JsonRequestError(status as number, errorCode as string))).toBe(

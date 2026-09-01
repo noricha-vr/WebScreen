@@ -64,9 +64,26 @@ class FakeUploadDatabase implements UploadDatabase {
 
   private run(query: string, values: unknown[]): number {
     if (query.includes("status = 'ready'")) {
-      const [sizeBytes, shortId, userId] = values as [number, string, number];
+      const [sizeBytes, shortId, userId, quotaUserId, excludedShortId, actualSize, quotaBytes] = values as [
+        number,
+        string,
+        number,
+        number,
+        string,
+        number,
+        number,
+      ];
       const movie = this.movies.get(shortId);
       if (!movie || movie.userId !== userId || movie.status !== 'pending') return 0;
+      const usedBytes = [...this.movies.values()]
+        .filter(
+          (candidate) =>
+            candidate.userId === quotaUserId &&
+            candidate.shortId !== excludedShortId &&
+            ['pending', 'ready', 'failed'].includes(candidate.status)
+        )
+        .reduce((total, candidate) => total + candidate.sizeBytes, 0);
+      if (usedBytes + actualSize > quotaBytes) return 0;
       movie.status = 'ready';
       movie.sizeBytes = sizeBytes;
       return 1;

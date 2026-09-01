@@ -1,197 +1,212 @@
+import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import { describe, expect, it } from 'bun:test';
 
 import {
+  ERROR_CODES,
   MAX_UPLOAD_BYTES,
   validateAbandonUploadRequest,
   validatePresignRequest,
   type PresignRequest,
 } from '../../src/lib/contracts/api';
 import {
+  MAX_PENDING_UPLOADS_PER_USER,
   USER_STORAGE_QUOTA_BYTES,
   getUserStorageUsage,
 } from '../../src/lib/services/quota';
-import { createPendingUpload, type UploadDatabase } from '../../src/lib/services/uploads';
+import {
+  commitUpload,
+  createPendingUpload,
+  type UploadBucket,
+  type UploadDatabase,
+} from '../../src/lib/services/uploads';
 
-type MovieStatus = 'pending' | 'ready' | 'failed';
+const USER_ID = 10;
+const PUBLIC_URL = 'https://public.example';
 
-interface TestMovie {
-  shortId: string;
-  userId: number;
-  filename: string;
-  sizeBytes: number;
-  status: MovieStatus;
-  expiresAt: string | null;
-}
-
-class FakeQuotaDatabase implements UploadDatabase {
-  readonly movies = new Map<string, TestMovie>();
-
-  constructor(movies: TestMovie[] = []) {
-    for (const movie of movies) this.movies.set(movie.shortId, { ...movie });
-  }
+/** bun:sqlite を D1 のサービス境界へ合わせる最小アダプター。 */
+class SqliteD1Adapter implements UploadDatabase {
+  constructor(readonly sqlite: Database) {}
 
   prepare(query: string) {
     return {
       bind: (...values: unknown[]) => ({
-        first: async <T>(): Promise<T | null> => this.first<T>(query, values),
-        run: async () => ({ meta: { changes: this.run(query, values) } }),
+        first: async <T>(): Promise<T | null> =>
+          (this.sqlite.query(query).get(...(values as SQLQueryBindings[])) as T | null) ?? null,
+        all: async <T>(): Promise<{ results: T[] }> => ({
+          results: this.sqlite.query(query).all(...(values as SQLQueryBindings[])) as T[],
+        }),
+        run: async (): Promise<{ meta: { changes: number } }> => {
+          const result = this.sqlite.query(query).run(...(values as SQLQueryBindings[]));
+          return { meta: { changes: result.changes } };
+        },
       }),
     };
   }
-
-  private first<T>(query: string, values: unknown[]): T | null {
-    if (!query.startsWith('SELECT COALESCE')) return null;
-    const userId = values[0] as number;
-    const total = [...this.movies.values()]
-      .filter(
-        (movie) =>
-          movie.userId === userId && ['pending', 'ready', 'failed'].includes(movie.status)
-      )
-      .reduce((sum, movie) => sum + movie.sizeBytes, 0);
-    return { total } as T;
-  }
-
-  private run(query: string, values: unknown[]): number {
-    if (!query.startsWith('INSERT INTO movies')) return 0;
-    const [shortId, userId, filename, sizeBytes, expiresAt] = values as [
-      string,
-      number,
-      string,
-      number,
-      string,
-    ];
-    if (query.includes('SELECT SUM(size_bytes)')) {
-      const quotaUserId = values[5] as number;
-      const additionalBytes = values[6] as number;
-      const quotaBytes = values[7] as number;
-      const usedBytes = [...this.movies.values()]
-        .filter(
-          (movie) =>
-            movie.userId === quotaUserId && ['pending', 'ready', 'failed'].includes(movie.status)
-        )
-        .reduce((sum, movie) => sum + movie.sizeBytes, 0);
-      if (usedBytes + additionalBytes > quotaBytes) return 0;
-    }
-    this.movies.set(shortId, {
-      shortId,
-      userId,
-      filename,
-      sizeBytes,
-      status: 'pending',
-      expiresAt,
-    });
-    return 1;
-  }
 }
 
-const USER_ID = 10;
-const SHORT_ID = 'AbCdEf123456';
-const PUBLIC_URL = 'https://public.example';
+/** 実際の初期 migration を適用した、テストごとに独立なD1代替を作る。 */
+async function createDatabase(): Promise<SqliteD1Adapter> {
+  const sqlite = new Database(':memory:');
+  sqlite.exec(await Bun.file(new URL('../../migrations/0001_init.sql', import.meta.url)).text());
+  sqlite.query('INSERT INTO users (id, discord_id, name) VALUES (?, ?, ?)').run(USER_ID, '10', 'tester');
+  return new SqliteD1Adapter(sqlite);
+}
 
-function movie(overrides: Partial<TestMovie> = {}): TestMovie {
-  return {
-    shortId: SHORT_ID,
-    userId: USER_ID,
-    filename: 'movie.mp4',
-    sizeBytes: 100,
-    status: 'pending',
-    expiresAt: '2026-09-24T00:00:00.000Z',
-    ...overrides,
-  };
+async function insertMovie(
+  database: SqliteD1Adapter,
+  input: {
+    shortId: string;
+    sizeBytes: number;
+    status?: 'pending' | 'ready' | 'failed';
+    userId?: number;
+  }
+): Promise<void> {
+  database.sqlite
+    .query(
+      "INSERT INTO movies (short_id, user_id, filename, size_bytes, status, expires_at) VALUES (?, ?, 'movie.mp4', ?, ?, ?)"
+    )
+    .run(
+      input.shortId,
+      input.userId ?? USER_ID,
+      input.sizeBytes,
+      input.status ?? 'pending',
+      '2026-09-24T00:00:00.000Z'
+    );
 }
 
 function validPresignRequest(sizeBytes = 100): PresignRequest {
   return { filename: 'movie.mp4', sizeBytes, kind: 'pdf' };
 }
 
+function uploadInput(database: UploadDatabase, shortId: string, sizeBytes = 100) {
+  return {
+    database,
+    userId: USER_ID,
+    request: validPresignRequest(sizeBytes),
+    publicBaseUrl: PUBLIC_URL,
+    createUploadUrl: async () => 'https://upload.example',
+    generateId: () => shortId,
+  };
+}
+
+class SizedBucket implements UploadBucket {
+  constructor(private readonly sizes: ReadonlyMap<string, number>) {}
+
+  async head(key: string): Promise<{ size: number } | null> {
+    const size = this.sizes.get(key);
+    return size === undefined ? null : { size };
+  }
+}
+
+async function releaseTogether<T>(operations: Array<() => Promise<T>>): Promise<PromiseSettledResult<T>[]> {
+  let arrived = 0;
+  let release: (() => void) | undefined;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return Promise.allSettled(
+    operations.map(async (operation) => {
+      arrived += 1;
+      if (arrived === operations.length) release?.();
+      await barrier;
+      return operation();
+    })
+  );
+}
+
 describe('アップロードのクォータと検証', () => {
   it('500 MiB ちょうどまで、pending 分を含めて予約できる', async () => {
-    const database = new FakeQuotaDatabase([
-      movie({ sizeBytes: USER_STORAGE_QUOTA_BYTES - 100 }),
-    ]);
+    const database = await createDatabase();
+    await insertMovie(database, { shortId: 'Existing00001', sizeBytes: USER_STORAGE_QUOTA_BYTES - 100 });
 
-    await expect(
-      createPendingUpload({
-        database,
-        userId: USER_ID,
-        request: validPresignRequest(100),
-        publicBaseUrl: PUBLIC_URL,
-        createUploadUrl: async () => 'https://upload.example',
-        generateId: () => 'ZyXwVu987654',
-      })
-    ).resolves.toMatchObject({ shortId: 'ZyXwVu987654' });
-
+    await expect(createPendingUpload(uploadInput(database, 'ZyXwVu987654'))).resolves.toMatchObject({
+      shortId: 'ZyXwVu987654',
+    });
     expect(await getUserStorageUsage(database, USER_ID)).toBe(USER_STORAGE_QUOTA_BYTES);
   });
 
   it('500 MiB を超える予約を 413 で拒否する', async () => {
-    const database = new FakeQuotaDatabase([
-      movie({ sizeBytes: USER_STORAGE_QUOTA_BYTES }),
-    ]);
+    const database = await createDatabase();
+    await insertMovie(database, { shortId: 'Existing00001', sizeBytes: USER_STORAGE_QUOTA_BYTES });
 
-    await expect(
-      createPendingUpload({
-        database,
-        userId: USER_ID,
-        request: validPresignRequest(1),
-        publicBaseUrl: PUBLIC_URL,
-        createUploadUrl: async () => 'https://upload.example',
-      })
-    ).rejects.toMatchObject({ status: 413 });
+    await expect(createPendingUpload(uploadInput(database, 'ZyXwVu987654', 1))).rejects.toMatchObject({
+      status: 413,
+    });
   });
 
   it('残り 1 件分の容量へ 2 件を並行予約しても片方だけを確保する', async () => {
-    const database = new FakeQuotaDatabase([
-      movie({ sizeBytes: USER_STORAGE_QUOTA_BYTES - 100, status: 'ready' }),
-    ]);
-    let signed = 0;
-    let releaseSignatures: (() => void) | undefined;
-    const bothSigned = new Promise<void>((resolve) => {
-      releaseSignatures = resolve;
+    const database = await createDatabase();
+    await insertMovie(database, {
+      shortId: 'Existing00001',
+      sizeBytes: USER_STORAGE_QUOTA_BYTES - 100,
+      status: 'ready',
     });
-    const createUploadUrl = async (): Promise<string> => {
-      signed += 1;
-      if (signed === 2) releaseSignatures?.();
-      await bothSigned;
-      return 'https://upload.example';
-    };
 
-    const results = await Promise.allSettled(
-      ['Concurrent01', 'Concurrent02'].map((shortId) =>
-        createPendingUpload({
-          database,
-          userId: USER_ID,
-          request: validPresignRequest(100),
-          publicBaseUrl: PUBLIC_URL,
-          createUploadUrl,
-          generateId: () => shortId,
-        })
-      )
-    );
+    const results = await releaseTogether([
+      () => createPendingUpload(uploadInput(database, 'Concurrent01')),
+      () => createPendingUpload(uploadInput(database, 'Concurrent02')),
+    ]);
 
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    const rejected = results.filter((result) => result.status === 'rejected');
-    expect(rejected).toHaveLength(1);
-    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ status: 413 });
+    expect((results.find((result) => result.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({
+      status: 413,
+    });
     expect(await getUserStorageUsage(database, USER_ID)).toBe(USER_STORAGE_QUOTA_BYTES);
   });
 
-  it('署名 URL の発行に失敗したら pending 行を残さない', async () => {
-    const database = new FakeQuotaDatabase();
+  it('pending は10件まで予約でき、同じawait境界の11件目を429で拒否する', async () => {
+    const database = await createDatabase();
+    const results = await releaseTogether(
+      Array.from({ length: MAX_PENDING_UPLOADS_PER_USER + 1 }, (_, index) => () =>
+        createPendingUpload(uploadInput(database, `Pending${String(index).padStart(5, '0')}`))
+      )
+    );
 
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(MAX_PENDING_UPLOADS_PER_USER);
+    expect((results.find((result) => result.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({
+      status: 429,
+      errorCode: ERROR_CODES.tooManyPendingUploads,
+    });
+  });
+
+  it('同じユーザーの並行commitは実測サイズ込みの上限で片方だけreadyにする', async () => {
+    const database = await createDatabase();
+    const declaredSize = 25 * 1024 * 1024;
+    const actualSize = declaredSize * 2;
+    await insertMovie(database, { shortId: 'Existing00001', sizeBytes: 401 * 1024 * 1024, status: 'ready' });
+    await insertMovie(database, { shortId: 'CommitOne001', sizeBytes: declaredSize });
+    await insertMovie(database, { shortId: 'CommitTwo001', sizeBytes: declaredSize });
+    const bucket = new SizedBucket(
+      new Map([
+        ['movies/CommitOne001.mp4', actualSize],
+        ['movies/CommitTwo001.mp4', actualSize],
+      ])
+    );
+
+    const results = await releaseTogether(['CommitOne001', 'CommitTwo001'].map((shortId) => () =>
+      commitUpload({ database, bucket, userId: USER_ID, shortId, publicBaseUrl: PUBLIC_URL })
+    ));
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect((results.find((result) => result.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({
+      status: 413,
+    });
+    const statuses = database.sqlite
+      .query("SELECT status FROM movies WHERE short_id LIKE 'Commit%' ORDER BY short_id")
+      .all() as Array<{ status: string }>;
+    expect(statuses.map((row) => row.status).sort()).toEqual(['failed', 'ready']);
+  });
+
+  it('署名 URL の発行に失敗したら pending 行を残さない', async () => {
+    const database = await createDatabase();
     await expect(
       createPendingUpload({
-        database,
-        userId: USER_ID,
-        request: validPresignRequest(100),
-        publicBaseUrl: PUBLIC_URL,
+        ...uploadInput(database, 'ZyXwVu987654'),
         createUploadUrl: async () => {
           throw new Error('signing failed');
         },
       })
     ).rejects.toThrow('signing failed');
-
-    expect(database.movies.size).toBe(0);
     expect(await getUserStorageUsage(database, USER_ID)).toBe(0);
   });
 
@@ -201,7 +216,7 @@ describe('アップロードのクォータと検証', () => {
   });
 
   it('failed を含め、短い ID の abandon リクエストは拒否する', () => {
-    expect(validateAbandonUploadRequest({ shortId: SHORT_ID }).ok).toBe(true);
+    expect(validateAbandonUploadRequest({ shortId: 'AbCdEf123456' }).ok).toBe(true);
     expect(validateAbandonUploadRequest({ shortId: 'short' }).ok).toBe(false);
   });
 });
