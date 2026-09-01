@@ -127,12 +127,12 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   // 落ちた時に先行の分まで purge されず「消したのに 120 分見える」が残る）。
   const expired = await deleteExpiredMovies(database, bucket, now);
   const expiredPurge = await purgeMovieCache(expired.purged, cachePurge);
-  // 署名失効後の pending を failed へ確保する。実体は行を残す既存の failed sweep が
-  // 同じ実行で回収し、遅延 PUT が後から完了しても次回以降に反復削除する。
-  const pending = await recoverPendingUploads(database, now);
   const failed = await deleteFailedMovies(database, bucket, now);
   const failedPurge = await purgeMovieCache(failed.purged, cachePurge);
-  const failedObjects = await sweepFailedObjects(database, bucket, now);
+  // 24時間超の pending をこの実行で failed にしても、墓石を即消さない。
+  // 次の failed object sweep が実体を回収し、行は次サイクルの failed purge まで残す。
+  const pending = await recoverPendingUploads(database, now);
+  const failedObjects = await sweepFailedObjects(database, bucket, now, pending.recoveredShortIds);
   const failedObjectsPurge = await purgeMovieCache(failedObjects.purged, cachePurge);
   // purge の成否にかかわらず試行後に記録する。R2 delete 失敗時は purged が空なので更新しない。
   await recordFailedObjectSweep(database, failedObjects.purged, now);

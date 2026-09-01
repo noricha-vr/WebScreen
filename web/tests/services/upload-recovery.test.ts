@@ -109,6 +109,12 @@ class RecoveryDatabase
           )
           .reduce((sum, movie) => sum + movie.sizeBytes, 0);
         if (usedBytes + additionalBytes > quotaBytes) return 0;
+        const pendingUserId = values[8] as number;
+        const maxPendingUploads = values[9] as number;
+        const pendingUploads = [...this.movies.values()].filter(
+          (movie) => movie.userId === pendingUserId && movie.status === 'pending'
+        ).length;
+        if (pendingUploads >= maxPendingUploads) return 0;
       }
       this.movies.set(shortId, {
         shortId,
@@ -144,6 +150,32 @@ class RecoveryDatabase
       const movie = this.movies.get(values[0] as string);
       if (!movie || (query.includes("status = 'failed'") && movie.status !== 'failed')) return 0;
       this.movies.delete(movie.shortId);
+      return 1;
+    }
+
+    if (query.includes("SET status = 'ready'")) {
+      const [sizeBytes, shortId, userId, quotaUserId, excludedShortId, actualSize, quotaBytes] = values as [
+        number,
+        string,
+        number,
+        number,
+        string,
+        number,
+        number,
+      ];
+      const movie = this.movies.get(shortId);
+      if (!movie || movie.userId !== userId || movie.status !== 'pending') return 0;
+      const usedBytes = [...this.movies.values()]
+        .filter(
+          (candidate) =>
+            candidate.userId === quotaUserId &&
+            candidate.shortId !== excludedShortId &&
+            ['pending', 'ready', 'failed'].includes(candidate.status)
+        )
+        .reduce((total, candidate) => total + candidate.sizeBytes, 0);
+      if (usedBytes + actualSize > quotaBytes) return 0;
+      movie.status = 'ready';
+      movie.sizeBytes = sizeBytes;
       return 1;
     }
 

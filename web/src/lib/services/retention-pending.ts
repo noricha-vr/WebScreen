@@ -25,13 +25,13 @@ interface ShortIdRow {
  * 署名失効後の pending を条件付きで failed へ確保する。
  *
  * commit も status = 'pending' を条件にするため、同じ行で勝つのは片方だけ。failed 行は
- * 24 時間残り、後続の sweepFailedObjects が R2 を毎時反復削除する。署名の失効直前に
- * 始まった PUT が最初の delete 後に完了しても、D1 から追跡不能な孤児にはならない。
+ * 通常24時間、古いbacklogでも最低1サイクル残り、後続の sweepFailedObjects が R2 を
+ * 毎時反復削除する。署名失効直前の PUT が delete 後に完了しても追跡不能にしない。
  */
 export async function recoverPendingUploads(
   database: PendingRetentionDatabase,
   now: Date
-): Promise<{ recovered: number; skipped: number; capped: boolean }> {
+): Promise<{ recovered: number; recoveredShortIds: string[]; skipped: number; capped: boolean }> {
   const threshold = new Date(now.getTime() - PENDING_RECOVERY_GRACE_MS).toISOString();
   const { results } = await database
     .prepare(
@@ -41,6 +41,7 @@ export async function recoverPendingUploads(
     .all<ShortIdRow>();
 
   let recovered = 0;
+  const recoveredShortIds: string[] = [];
   let skipped = 0;
   for (const row of results) {
     const claim = await database
@@ -50,8 +51,9 @@ export async function recoverPendingUploads(
       .bind(row.short_id, threshold)
       .run();
     recovered += claim.meta.changes;
+    if (claim.meta.changes === 1) recoveredShortIds.push(row.short_id);
     if (claim.meta.changes === 0) skipped += 1;
   }
 
-  return { recovered, skipped, capped: results.length === MAX_PENDING_CLAIMS_PER_RUN };
+  return { recovered, recoveredShortIds, skipped, capped: results.length === MAX_PENDING_CLAIMS_PER_RUN };
 }

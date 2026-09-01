@@ -314,20 +314,20 @@ describe('runRetention: サマリ', () => {
       deletedMovies: 1,
       strandedMovies: 0,
       recoveredPendingUploads: 1,
-      deletedFailed: 2,
-      sweptFailedObjects: 0,
+      deletedFailed: 1,
+      sweptFailedObjects: 1,
       deferredObjectDeletions: 0,
       skippedRows: 0,
       sweepCapped: false,
-      // 期限切れと、pending から引き渡した行を含む failed の 2 経路で purge する。
-      cachePurgeRequests: 2,
+      // 期限切れ・既存failedの削除・今回failed化したpending実体の3経路で purge する。
+      cachePurgeRequests: 3,
       cachePurgeFailures: 0,
       deletedCaptures: 1,
       checkedReadyRows: 0,
       missingObjectRows: 0,
       auditErrors: 0,
     });
-    expect(database.movies.size).toBe(0);
+    expect(database.movies.get('orphanBBBBBB')?.status).toBe('failed');
   });
 
   it('created_at が SQLite 既定の表記でも ISO の閾値と比較できる', async () => {

@@ -58,14 +58,17 @@ export class FakeRetentionDatabase implements RetentionDatabase {
 
   prepare(query: string) {
     return {
-      bind: (...values: unknown[]) => ({
-        all: async <T>(): Promise<{ results: T[] }> => ({
-          results: this.select(query, values) as T[],
-        }),
-        run: async (): Promise<{ meta: { changes: number } }> => ({
-          meta: { changes: this.delete(query, values) },
-        }),
-      }),
+      bind: (...values: unknown[]) => {
+        if (values.length > 100) throw new Error('D1 allows at most 100 bound parameters per query');
+        return {
+          all: async <T>(): Promise<{ results: T[] }> => ({
+            results: this.select(query, values) as T[],
+          }),
+          run: async (): Promise<{ meta: { changes: number } }> => ({
+            meta: { changes: this.delete(query, values) },
+          }),
+        };
+      },
     };
   }
 
@@ -100,11 +103,7 @@ export class FakeRetentionDatabase implements RetentionDatabase {
       if (query.includes('datetime(created_at) >= datetime(?)')) {
         const upperThreshold = parseSqliteTime(values[1] as string);
         const createdAt = parseSqliteTime(movie.createdAt);
-        return (
-          movie.status === status &&
-          createdAt >= threshold &&
-          createdAt < upperThreshold
-        );
+        return movie.status === status && createdAt >= threshold && createdAt < upperThreshold;
       }
       return movie.status === status && parseSqliteTime(movie.createdAt) < threshold;
     });
