@@ -14,7 +14,7 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 |---|---|---|
 | パイプライン遅延 | 約 100 ms（+ 実網の RTT と AVPro のバッファ） | 実測 |
 | 送出上限 | **映像 1.2 Mbps + 音声 AAC 128 kbps**（入力 720p / 最大 30 fps、公称合計 1.328 Mbps） | [stability-audio-verification.md](stability-audio-verification.md) |
-| 文字の可読性 | **現行設定では未再検証**（代表測定の実送出は960x540。旧1080p測定では12pxまで判読可） | [stability-audio-verification.md](stability-audio-verification.md) |
+| 文字の可読性 | **本番 relay 合成QAは合格**（1280x720を維持し16 / 24pxは明瞭、12pxも判読可）。WebScreen UIからの actual YouTube は未検証 | [stability-audio-verification.md](stability-audio-verification.md) |
 | 同時配信 | **全体 20 本 / 1 ユーザー 1 本** | API の原子的な上限 |
 | 途中参加の待ち | 最大 2 秒（**変更できない**） | 実測 |
 | Quest | PC と同じ `rtspt://`。AAC 音声を含め実機確認済み、体感 2〜3 秒 | 実測 |

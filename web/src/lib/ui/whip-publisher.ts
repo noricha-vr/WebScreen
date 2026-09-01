@@ -9,8 +9,9 @@ export const SCREEN_SHARE_VIDEO_SETTINGS = {
   height: 720,
   frameRate: 30,
   maxBitrate: 1_200_000,
-  contentHint: 'motion',
-  degradationPreference: 'maintain-framerate',
+  contentHint: 'detail',
+  degradationPreference: 'maintain-resolution',
+  scaleResolutionDownBy: 1,
 } as const;
 
 /** WHIP publish が開始できなかった理由を保持する。 */
@@ -106,8 +107,18 @@ async function configureVideoSender(sender: RTCRtpSender): Promise<void> {
   const parameters = sender.getParameters();
   parameters.encodings = parameters.encodings?.length ? parameters.encodings : [{}];
   parameters.encodings[0]!.maxBitrate = SCREEN_SHARE_VIDEO_SETTINGS.maxBitrate;
+  parameters.encodings[0]!.scaleResolutionDownBy = SCREEN_SHARE_VIDEO_SETTINGS.scaleResolutionDownBy;
   parameters.degradationPreference = SCREEN_SHARE_VIDEO_SETTINGS.degradationPreference;
-  await sender.setParameters(parameters);
+  try {
+    await sender.setParameters(parameters);
+  } catch {
+    const fallback = sender.getParameters();
+    fallback.encodings = fallback.encodings?.length ? fallback.encodings : [{}];
+    fallback.encodings[0]!.maxBitrate = SCREEN_SHARE_VIDEO_SETTINGS.maxBitrate;
+    delete fallback.encodings[0]!.scaleResolutionDownBy;
+    delete fallback.degradationPreference;
+    await sender.setParameters(fallback);
+  }
 }
 
 async function waitForIceGathering(peerConnection: RTCPeerConnection): Promise<void> {

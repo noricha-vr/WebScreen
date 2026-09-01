@@ -1,7 +1,7 @@
 # 画質の設計（実測 2026-08-29 / 安定性再検証 2026-09-01）
 
-> **現行仕様は入力 1280x720 / 30 fps / 映像上限 1200 kbps / `motion` / `maintain-framerate` の単一設定。**
-> 公称音声込み 1328 kbps、代表素材の実測 total egress 1385 kbps とし、1.5 Mbps 上限に余裕を持たせる。
+> **採用設定は入力 1280x720 / 30 fps / 映像上限 1200 kbps / `detail` / `maintain-resolution` / scale 1 の単一設定。**
+> 本番relayの合成motion/static QAは、動画像で1280x720・30 fps・total egress約1.04 Mbps・freeze 0を確認した。WebScreen UIからのactual YouTube最終確認は未実施。
 > 最新の設定・同条件比較・再接続方針は [stability-audio-verification.md](stability-audio-verification.md) を正本とする。
 > 以下の 300〜1500 kbps の表は過去の判断経緯として残すが、現行実装値ではない。
 
@@ -10,9 +10,9 @@
 ## 結論
 
 旧設計では解像度を守って fps を削ったが、ライブの主用途を動画・動く画面へ絞ると、fps 低下そのものが不具合になる。
-現行設計は 30 fps の維持を優先し、静止資料は既存の MP4 変換へ誘導する。24 fps も 1.1〜1.3 Mbps で比較したが、
-RTSP 出口がすべて 23 fps 未満だったため採用しない。今回の `maintain-framerate` 帯域適応では入力 1280x720 に対し
-実送出が 960x540 になったため、入力要求と実送出解像度を区別する。
+既存比較では 30 fps を優先し、24 fps も 1.1〜1.3 Mbps で比較したが、RTSP 出口がすべて 23 fps 未満だったため採用しない。
+旧 `maintain-framerate` 測定では入力 1280x720 に対し実送出が 960x540 になった。採用設定はI18で動画像の1280x720・30 fps・freeze 0、
+16 / 24 px文字の明瞭さと12 pxの判読性を確認した。WebScreen UIからのactual YouTube最終確認までは、入力要求と実送出解像度を区別する。
 
 | 段 | 上限指定 | **実効ビットレート** | **実 fps** | 解像度 | 12px 日本語 | 用途 |
 |---|---|---|---|---|---|---|
@@ -75,13 +75,19 @@ QP は既定寄りの方が良い（19.6 vs 35）にもかかわらず読めな�
 
 ## 実装への反映
 
-```js
-encoding.maxBitrate = 1_200_000;
-sender.getParameters().degradationPreference = 'maintain-framerate';
-track.contentHint = 'motion';
+```ts
+const parameters = sender.getParameters();
+parameters.encodings = parameters.encodings?.length ? parameters.encodings : [{}];
+parameters.encodings[0]!.maxBitrate = 1_200_000;
+parameters.encodings[0]!.scaleResolutionDownBy = 1;
+parameters.degradationPreference = 'maintain-resolution';
+await sender.setParameters(parameters);
+track.contentHint = 'detail';
 ```
 
 画質モードの UI は作らず、全配信でこの単一設定を使う。
+
+full設定がブラウザに拒否された時はfresh parametersからmaxBitrate-only fallbackを1回だけ試す。これは配信継続の互換策であり、文字品質を保証しない。
 
 ## 実機検証を受けた段構成（2026-09-01 確定。Issue #124）
 
@@ -165,9 +171,6 @@ VRChat 実機でも 1200k / 1500k / 2000k の差を体感できなかった（20
   2026-09-01 の実機テストで、ハイフン入りの path を VRChat に貼るとハイフン以降が欠落し
   「映らない」状態になる事例を確認した（サーバーログに切り詰められた path への接続が残る）
 
-## 現行 1.2 Mbps 設定で残る検証
+## 1.2 Mbps 採用設定で残る最終確認
 
-- 実際の YouTube タブを入力 720p / 30 fps / 映像 1200k で共有した時の長時間安定性
-- Safari で 1200k 指定時の実効値と 30 fps 維持
-- 高フレームレート素材（ゲーム画面等）で帯域適応が選ぶ実解像度と fps
-- Indigo の混雑時間帯や配信者側上りが細い環境で `maintain-framerate` が選ぶ実解像度
+- 本番WebScreen UIから `detail` / `maintain-resolution` / scale 1 でactual YouTubeの動画像をループさせ、入力 720p / 30 fps / 映像 1200k で確認する。I18で本番relay合成QAは合格済みであり、ここではUI経路のactual YouTube最終確認だけを行う。音声が聞こえることと14分超の接続継続は確認済み（[verification.md](verification.md) I17、I18）。

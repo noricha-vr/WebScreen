@@ -15,8 +15,8 @@
 | **R7** | HTTPS で提供する | Quest は HTTPS 必須。`getDisplayMedia` も secure context 必須 |
 | **R8** | **WHIP の UDP ポート（既定 8189/udp）を配信者から直接到達させる** | **Cloudflare の裏に隠せない**。配信ドメインとは別に、オリジンへ直接届く経路が要る |
 | **R9** | 最初の画面取得は**必ずユーザーのクリック起点**にする | `getDisplayMedia` はユーザージェスチャ必須。ただし取得済み MediaStream を使う WHIP の再 publish は自動で 1 回行ってよい |
-| **R10** | `contentHint = 'motion'` + `degradationPreference = 'maintain-framerate'` を設定する | ライブ用途の中心を動画・動きのある画面に置き、カクつきの主因になるフレーム落ちを抑える。静止資料は既存の MP4 変換を使う |
-| **R11** | 送出解像度は `getSettings()` ではなく **`outbound-rtp` の `frameWidth/frameHeight`** で確認する | 過去は 1920x1080 要求に対し実送出 1602x1032、現行の 1280x720 入力でも帯域適応時は 960x540 になった |
+| **R10** | 対応ブラウザで `contentHint = 'detail'`、`degradationPreference = 'maintain-resolution'`、`scaleResolutionDownBy = 1` のfull設定を試し、拒否時のみfresh parametersでmaxBitrate-only fallbackを1回だけ試す | I18の本番 relay 合成QAで文字可読性と動画安定性が合格。fallbackは配信継続の互換策であり、文字品質を保証しない |
+| **R11** | 送出解像度は `getSettings()` ではなく **`outbound-rtp` の `frameWidth/frameHeight`** で確認する | 過去は 1920x1080 要求に対し実送出 1602x1032、旧 `maintain-framerate` の 1280x720 入力では 960x540 になった |
 | **R12** | URL を表示する前に ingress / egress の受信 bytes 増加を確認する | WHIP の 201 だけでは VRChat 出口まで映像が届いたことを保証しない。未到達なら同じ画面で 1 回自動再接続し、それでも失敗した時だけ再接続ボタンを出す |
 
 ## 配信ホスト名と path 規則（2026-09-01 凍結。以後変更しない）
@@ -78,10 +78,11 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 | 設定 | 値 | 補足 |
 |---|---|---|
 | コーデック | `setCodecPreferences` で H.264 を先頭へ | R1 |
-| ビットレート上限 | **`encodings[0].maxBitrate = 1_200_000`（単一。モード選択 UI は作らない）** | 30 / 24 fps・1.1〜1.3 Mbps を比較し、30 fps維持と total egress 1.5 Mbps 未満を両立した。根拠と実測は [stability-audio-verification.md](stability-audio-verification.md) |
-| 劣化ポリシー | `degradationPreference = 'maintain-framerate'` | R10 |
-| コンテンツヒント | `track.contentHint = 'motion'` | R10。動画・画面操作の滑らかさを優先する |
-| 解像度 / fps | **入力 1280x720 / 最大 30 fps** | 24 fps は出口が全候補で 23 fps 未満だったため不採用。帯域適応により実送出が 960x540 になる場合がある |
+| ビットレート上限 | **`encodings[0].maxBitrate = 1_200_000`（単一。モード選択 UI は作らない）** | I18では動画像のtotal egress約1.04 Mbpsで30 fps・freeze 0。WebScreen UIからactual YouTubeを最終確認する |
+| 劣化ポリシー | `degradationPreference = 'maintain-resolution'` | R10。I18で動画像・文字可読性とも合格 |
+| コンテンツヒント | `track.contentHint = 'detail'` | R10。I18で動画像・文字可読性とも合格 |
+| スケール | `encodings[0].scaleResolutionDownBy = 1` | R10。I18で動画像・文字可読性とも合格 |
+| 解像度 / fps | **入力 1280x720 / 最大 30 fps** | I18で動画像のRTSP出力は1280x720 / 30.00〜30.06 fps。24 fpsの旧代表素材比較は変更しない |
 | 画面取得 | `getDisplayMedia({ video, audio: true })`（**既定ピッカー**。画面全体・ウィンドウ・タブから選ばせる） | Chrome のタブ共有で「タブの音声を共有」をオンにした時だけ音声が付く。macOS の画面収録未許可はエラー文言でシステム設定へ案内する |
 | 開始判定 | ingress / egress bytes を最大 10 秒、1 秒間隔で監視 | 両方が連続観測で増えた時だけ URL を表示する。未到達なら 1 回自動再 publish する |
 
@@ -90,9 +91,11 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 | | H.264 | `setCodecPreferences` | WHIP | `degradationPreference` | 実効帯域 | 判定 |
 |---|---|---|---|---|---|---|
 | Chrome | あり | 有効 | 201 | 対応 | 500 kbps | **可** |
-| Safari 26.5.2 | あり（`42e01f` / `640c1f`） | 有効 | 201 | 対応 | **940 kbps** | **可**。提示順の先頭が High なので R1 が特に重要 |
+| Safari 26.5.2 | あり（`42e01f` / `640c1f`） | 有効 | 201 | 旧設定で対応 | **940 kbps** | **旧設定で可**。現行full設定は未確認で、R10どおり拒否時だけmaxBitrate-only fallbackで配信を継続する |
 | Playwright 同梱 Chromium | あり | 有効 | 201 | 対応 | — | **可**。CI で回帰テストを回せる |
 | Firefox | **未実測** | — | — | — | — | **判断保留** |
+
+対応ブラウザではまずR10のfull設定を試す。Safari のfull設定での受理と実送出は未検証で、拒否時だけfresh parametersからmaxBitrate-only fallbackを1回だけ試す。このfallbackは配信継続の互換策であり、文字品質を保証しない。
 
 **サーバー側の安全網**: MediaMTX は answer から Main / High プロファイルを落とすことが確認されている（High を先頭にした offer でも Baseline へ矯正された）。
 ただし**これに依存せず、ブラウザ側で固定すること**（R1）。
