@@ -64,6 +64,7 @@ export const ERROR_CODES = {
   expired: 'EXPIRED',
   payloadTooLarge: 'PAYLOAD_TOO_LARGE',
   tooManyPendingUploads: 'TOO_MANY_PENDING_UPLOADS',
+  tooManyPresignRequests: 'TOO_MANY_PRESIGN_REQUESTS',
   captureFailed: 'CAPTURE_FAILED',
   pageTooLong: 'PAGE_TOO_LONG',
   captureTimeout: 'CAPTURE_TIMEOUT',

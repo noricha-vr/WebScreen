@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { movieKey } from '../../src/lib/contracts/r2key';
+import { movieKey, temporaryUploadKey } from '../../src/lib/contracts/r2key';
 import {
   MAX_FAILED_DELETIONS_PER_RUN,
   MAX_PENDING_CLAIMS_PER_RUN,
@@ -21,14 +21,20 @@ describe('runRetention: pending 孤児と failed', () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'orphanAAAAAA', status: 'pending', createdAt: iso(-DAY_MS - HOUR_MS) }),
     ]);
-    const bucket = new FakeRetentionBucket(new Set([movieKey('orphanAAAAAA')]));
+    const bucket = new FakeRetentionBucket(
+      new Set([movieKey('orphanAAAAAA'), temporaryUploadKey('orphanAAAAAA')])
+    );
 
     const summary = await run(database, bucket);
 
     expect(summary.recoveredPendingUploads).toBe(1);
     expect(summary.deletedFailed).toBe(0);
     expect(summary.sweptFailedObjects).toBe(1);
-    expect(bucket.deleted).toEqual([movieKey('orphanAAAAAA')]);
+    expect(bucket.deleted).toEqual([
+      movieKey('orphanAAAAAA'),
+      temporaryUploadKey('orphanAAAAAA'),
+    ]);
+    expect(bucket.objects.size).toBe(0);
     expect(database.movies.get('orphanAAAAAA')?.status).toBe('failed');
   });
 
@@ -95,7 +101,9 @@ describe('runRetention: pending 孤児と failed', () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'orphanFailAA', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
     ]);
-    const bucket = new FakeRetentionBucket(new Set([movieKey('orphanFailAA')]));
+    const bucket = new FakeRetentionBucket(
+      new Set([movieKey('orphanFailAA'), temporaryUploadKey('orphanFailAA')])
+    );
     bucket.failingKeys.add(movieKey('orphanFailAA'));
 
     const first = await run(database, bucket);
@@ -111,7 +119,10 @@ describe('runRetention: pending 孤児と failed', () => {
 
     expect(second.deletedFailed).toBe(1);
     expect(second.deferredObjectDeletions).toBe(0);
-    expect(bucket.deleted).toEqual([movieKey('orphanFailAA')]);
+    expect(bucket.deleted).toEqual([
+      movieKey('orphanFailAA'),
+      temporaryUploadKey('orphanFailAA'),
+    ]);
     expect(database.movies.size).toBe(0);
   });
 
@@ -126,7 +137,10 @@ describe('runRetention: pending 孤児と failed', () => {
     expect(summary.recoveredPendingUploads).toBe(1);
     expect(summary.deletedFailed).toBe(0);
     expect(summary.sweptFailedObjects).toBe(1);
-    expect(bucket.deleted).toEqual([movieKey('noObjectAAAA')]);
+    expect(bucket.deleted).toEqual([
+      movieKey('noObjectAAAA'),
+      temporaryUploadKey('noObjectAAAA'),
+    ]);
     expect(database.movies.get('noObjectAAAA')?.status).toBe('failed');
   });
 
@@ -177,7 +191,7 @@ describe('runRetention: pending 孤児と failed', () => {
 
     expect(summary.deletedFailed).toBe(MAX_FAILED_DELETIONS_PER_RUN);
     expect(summary.sweepCapped).toBe(true);
-    expect(bucket.deleted).toHaveLength(MAX_FAILED_DELETIONS_PER_RUN);
+    expect(bucket.deleted).toHaveLength(MAX_FAILED_DELETIONS_PER_RUN * 2);
     expect(database.movies.size).toBe(overflow);
   });
 });

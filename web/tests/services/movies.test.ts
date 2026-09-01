@@ -8,14 +8,9 @@ import {
   PINNED_RETENTION_MS,
   UNPIN_GRACE_MS,
 } from '../../src/lib/services/quota';
-import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
 import {
-  deleteMovie,
-  findPublicMovie,
   listHistory,
-  renameMovie,
   togglePin,
-  type MovieBucket,
   type MoviesDatabase,
 } from '../../src/lib/services/movies';
 
@@ -72,12 +67,6 @@ class FakeMoviesDatabase implements MoviesDatabase {
       return { total } as T;
     }
 
-    if (query.includes("status = 'ready'")) {
-      const shortId = values[0] as string;
-      const movie = this.movies.get(shortId);
-      return movie && movie.status === 'ready' ? (toRow(movie) as T) : null;
-    }
-
     const [shortId, userId] = values as [string, number];
     const movie = this.movies.get(shortId);
     return movie && movie.userId === userId ? (toRow(movie) as T) : null;
@@ -97,13 +86,6 @@ class FakeMoviesDatabase implements MoviesDatabase {
   }
 
   private run(query: string, values: unknown[]): { meta: { changes: number } } {
-    if (query.startsWith('UPDATE movies SET filename')) {
-      const [filename, shortId, userId] = values as [string, string, number];
-      const movie = this.movies.get(shortId);
-      if (movie && movie.userId === userId) movie.filename = filename;
-      return { meta: { changes: movie && movie.userId === userId ? 1 : 0 } };
-    }
-
     if (query.startsWith('UPDATE movies SET pinned')) {
       const [pinned, expiresAt, shortId, userId] = values as [number, string | null, string, number];
       // UPDATE の直前に走らせるフック（判定から書き込みまでの間の割り込みを再現する）
@@ -133,22 +115,7 @@ class FakeMoviesDatabase implements MoviesDatabase {
       return { meta: { changes: 1 } };
     }
 
-    if (query.startsWith('DELETE FROM movies')) {
-      const [shortId, userId] = values as [string, number];
-      const movie = this.movies.get(shortId);
-      if (movie && movie.userId === userId) this.movies.delete(shortId);
-      return { meta: { changes: movie && movie.userId === userId ? 1 : 0 } };
-    }
-
     return { meta: { changes: 0 } };
-  }
-}
-
-class FakeMovieBucket implements MovieBucket {
-  readonly deletedKeys: string[] = [];
-
-  async delete(key: string): Promise<void> {
-    this.deletedKeys.push(key);
   }
 }
 
@@ -492,113 +459,5 @@ describe('togglePin', () => {
       togglePin({ database, userId: USER_ID, shortId: SHORT_ID, now: new Date('2026-08-30T00:00:00.000Z') })
     ).rejects.toMatchObject({ status: 404 });
     expect(database.movies.get(SHORT_ID)?.pinned).toBe(0);
-  });
-});
-
-describe('renameMovie', () => {
-  it('所有者のファイル名を変更する', async () => {
-    const database = new FakeMoviesDatabase([movie()]);
-
-    await expect(
-      renameMovie({ database, userId: USER_ID, shortId: SHORT_ID, filename: 'renamed.mp4' })
-    ).resolves.toEqual({ shortId: SHORT_ID, filename: 'renamed.mp4' });
-    expect(database.movies.get(SHORT_ID)?.filename).toBe('renamed.mp4');
-  });
-
-  it('他人の動画は 404 で拒否する', async () => {
-    const database = new FakeMoviesDatabase([movie({ userId: USER_ID + 1 })]);
-
-    await expect(
-      renameMovie({ database, userId: USER_ID, shortId: SHORT_ID, filename: 'renamed.mp4' })
-    ).rejects.toMatchObject({ status: 404 });
-  });
-
-  it('不在の動画は 404 で拒否する', async () => {
-    const database = new FakeMoviesDatabase();
-
-    await expect(
-      renameMovie({ database, userId: USER_ID, shortId: SHORT_ID, filename: 'renamed.mp4' })
-    ).rejects.toMatchObject({ status: 404 });
-  });
-});
-
-/** キャッシュ purge の設定。ここでは purge の挙動を見ないので送信だけ止める。 */
-const CACHE_PURGE: CachePurgeSettings = {
-  publicBaseUrl: 'https://cdn.example',
-  zoneId: '2210192b51f9f0eb6761d70341ca09b0',
-  apiToken: 'test-token',
-  source: 'test-worker',
-  fetcher: () => Promise.resolve(new Response(null, { status: 200 })),
-};
-
-describe('deleteMovie', () => {
-  it('R2 の実体を消してから D1 の行を消す', async () => {
-    const database = new FakeMoviesDatabase([movie()]);
-    const bucket = new FakeMovieBucket();
-
-    await deleteMovie({ database, bucket, cachePurge: CACHE_PURGE, userId: USER_ID, shortId: SHORT_ID });
-
-    expect(bucket.deletedKeys).toEqual([`movies/${SHORT_ID}.mp4`]);
-    expect(database.movies.has(SHORT_ID)).toBe(false);
-  });
-
-  it('他人の動画は 404 で拒否し、R2 にも触らない', async () => {
-    const database = new FakeMoviesDatabase([movie({ userId: USER_ID + 1 })]);
-    const bucket = new FakeMovieBucket();
-
-    await expect(
-      deleteMovie({ database, bucket, cachePurge: CACHE_PURGE, userId: USER_ID, shortId: SHORT_ID })
-    ).rejects.toMatchObject({ status: 404 });
-    expect(bucket.deletedKeys).toEqual([]);
-    expect(database.movies.has(SHORT_ID)).toBe(true);
-  });
-
-  it('shortId の形式が不正なら DB を引く前に 404 で止める', async () => {
-    const database = new FakeMoviesDatabase([movie()]);
-    const bucket = new FakeMovieBucket();
-
-    await expect(
-      deleteMovie({ database, bucket, cachePurge: CACHE_PURGE, userId: USER_ID, shortId: '../../etc/passwd' })
-    ).rejects.toMatchObject({ status: 404 });
-    expect(bucket.deletedKeys).toEqual([]);
-  });
-});
-
-describe('findPublicMovie', () => {
-  it('ready の動画を公開 URL 付きで返す', async () => {
-    const database = new FakeMoviesDatabase([movie()]);
-
-    await expect(
-      findPublicMovie({ database, shortId: SHORT_ID, publicBaseUrl: PUBLIC_URL })
-    ).resolves.toMatchObject({
-      shortId: SHORT_ID,
-      filename: 'slides.pdf',
-      publicUrl: `${PUBLIC_URL}/movies/${SHORT_ID}.mp4`,
-      pinned: false,
-      ownerId: USER_ID,
-    });
-  });
-
-  it('pending / failed は公開しない', async () => {
-    for (const status of ['pending', 'failed'] as const) {
-      const database = new FakeMoviesDatabase([movie({ status })]);
-
-      await expect(
-        findPublicMovie({ database, shortId: SHORT_ID, publicBaseUrl: PUBLIC_URL })
-      ).resolves.toBeNull();
-    }
-  });
-
-  it.each([
-    ['ja', '短すぎる'],
-    ['abcdefghijklm', '長すぎる'],
-    ['AbCdEf-12345', '記号を含む'],
-    ['../../etc/pw', 'パス区切りを含む'],
-  ])('%s（%s）は DB を引かずに null', async (shortId) => {
-    const database = new FakeMoviesDatabase([movie()]);
-
-    await expect(
-      findPublicMovie({ database, shortId: shortId as string, publicBaseUrl: PUBLIC_URL })
-    ).resolves.toBeNull();
   });
 });

@@ -115,19 +115,32 @@ class FakeUploadBucket implements UploadBucket {
   deletedKeys: string[] = [];
   /** delete を失敗させる（R2 障害の再現）。 */
   failDelete = false;
-  /** head の直後に走らせるフック（保持期間バッチの割り込みを再現する）。 */
+  /** get の直後に走らせるフック（保持期間バッチの割り込みを再現する）。 */
   onHead: (() => void) | undefined;
 
   constructor(private readonly objectSize: number | null) {}
 
-  async head(): Promise<{ size: number } | null> {
+  async get(): Promise<{ size: number; body: ReadableStream<Uint8Array> } | null> {
     this.onHead?.();
+    return this.objectSize === null
+      ? null
+      : {
+          size: this.objectSize,
+          body: new Blob([new Uint8Array(Math.min(this.objectSize, 1024))]).stream(),
+        };
+  }
+
+  async head(): Promise<{ size: number } | null> {
     return this.objectSize === null ? null : { size: this.objectSize };
   }
 
-  async delete(key: string): Promise<void> {
+  async put(): Promise<{ size: number } | null> {
+    return this.objectSize === null ? null : { size: this.objectSize };
+  }
+
+  async delete(keys: string | string[]): Promise<void> {
     if (this.failDelete) throw new Error('R2 unavailable');
-    this.deletedKeys.push(key);
+    this.deletedKeys.push(...(Array.isArray(keys) ? keys : [keys]));
   }
 }
 

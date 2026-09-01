@@ -14,7 +14,7 @@ import {
   type PinResponse,
   type RenameMovieResponse,
 } from '../contracts/api';
-import { isShortId, movieKey, movieUrl } from '../contracts/r2key';
+import { isShortId, movieKey, movieUrl, temporaryUploadKey } from '../contracts/r2key';
 import { logWorkerFailure } from '../infra/worker-log';
 import {
   logMovieDeletePurgeFailure,
@@ -47,7 +47,7 @@ export interface MoviesDatabase {
 
 /** R2 の削除に必要な最小操作面。 */
 export interface MovieBucket {
-  delete(key: string): Promise<void>;
+  delete(keys: string | string[]): Promise<void>;
 }
 
 /** エントリポイントが HTTP 応答へ変換するドメインエラー。 */
@@ -293,7 +293,7 @@ export async function deleteMovie(
   // R2 を先に消せば、残るのは実体の無い ready 行で、保持期間バッチの監査
   // （services/retention-audit.ts）が拾える。自動では直せないので、その場でも
   // 気づける印としてログに残してから呼び出し元へ返す。
-  await input.bucket.delete(movieKey(input.shortId));
+  await input.bucket.delete([movieKey(input.shortId), temporaryUploadKey(input.shortId)]);
 
   // 実体を消した直後に Edge のキャッシュも落とす。ここを飛ばすと最大 120 分は
   // 削除済みの動画が配信され続ける（docs/r2-delivery.md）。D1 の行を消す前に呼ぶのは、

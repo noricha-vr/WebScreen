@@ -8,6 +8,7 @@ import {
   generateShortId,
   isShortId,
   movieKey,
+  temporaryUploadKey,
 } from '../../src/lib/contracts/r2key';
 
 const SESSION_ID = '0f9c2b1a-4d3e-4a6b-8c7d-1e2f3a4b5c6d';
@@ -69,6 +70,20 @@ describe('movieKey', () => {
     ['長すぎる', 'aB3dE5fG7hJ9X'],
   ])('%s shortId は拒否する', (_label, value) => {
     expect(() => movieKey(value)).toThrow(/shortId/);
+  });
+});
+
+describe('temporaryUploadKey', () => {
+  test('tmp/{shortId} を返す', () => {
+    expect(temporaryUploadKey('aB3dE5fG7hJ9')).toBe('tmp/aB3dE5fG7hJ9');
+  });
+
+  test.each([
+    ['短すぎる', 'abc'],
+    ['記号を含む', 'aB3dE5fG7h/9'],
+    ['長すぎる', 'aB3dE5fG7hJ9X'],
+  ])('%s shortId は拒否する', (_label, value) => {
+    expect(() => temporaryUploadKey(value)).toThrow(/shortId/);
   });
 });
 
