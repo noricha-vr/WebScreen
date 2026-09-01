@@ -1,6 +1,6 @@
 # 動画配信（R2）の構成
 
-動画の実体は R2 バケット `webscreen-beta` にあり、**2 つの経路で公開されている**。URL は保存値ではなく毎回 `vars.R2_PUBLIC_BASE_URL` から組み立てる（`web/src/lib/contracts/r2key.ts` の `movieUrl()`）。入力は `web/wrangler.jsonc` の同 var で、保持期間バッチが同じ URL を purge するため `web/cron/wrangler.jsonc` にも同じ値を置いている（下の「削除とキャッシュ」節）。
+動画の実体は R2 バケット `webscreen` にあり、**2 つの経路で公開されている**。URL は保存値ではなく毎回 `vars.R2_PUBLIC_BASE_URL` から組み立てる（`web/src/lib/contracts/r2key.ts` の `movieUrl()`）。入力は `web/wrangler.jsonc` の同 var で、保持期間バッチが同じ URL を purge するため `web/cron/wrangler.jsonc` にも同じ値を置いている（下の「削除とキャッシュ」節）。
 
 | 経路 | URL | 用途 | 無効化してよいか |
 |---|---|---|---|
@@ -22,7 +22,7 @@ WebScreen では VRChat のワールド内で複数人が同時に同じ動画�
 
 | 設定 | 管理場所 | 内容 |
 |---|---|---|
-| R2 Custom Domain | ダッシュボード | バケット `webscreen-beta` に `cdn.web-screen.net` を接続（Active） |
+| R2 Custom Domain | ダッシュボード | バケット `webscreen` に `cdn.web-screen.net` を接続（Active） |
 | Transform Rule `cdn: noindex for media` | ダッシュボード | `http.host eq "cdn.web-screen.net"` のとき `X-Robots-Tag: noindex` を付与 |
 | **R2 の CORS** | **`web/r2-cors.json`** | 下記「CORS」節 |
 
@@ -39,8 +39,8 @@ WebScreen では VRChat のワールド内で複数人が同時に同じ動画�
 設定の正本は `web/r2-cors.json`。反映はこのコマンド:
 
 ```bash
-cd web && bunx wrangler r2 bucket cors set webscreen-beta --file r2-cors.json
-bunx wrangler r2 bucket cors list webscreen-beta   # 確認
+cd web && bunx wrangler r2 bucket cors set webscreen --file r2-cors.json
+bunx wrangler r2 bucket cors list webscreen   # 確認
 ```
 
 **サイトのオリジンが増減したら必ずここも直す。** 2026-08-27 の本番ドメイン切替では、`https://web-screen.net` の登録漏れで変換が全滅した（`presign` は 200 を返すのに R2 への PUT だけが CORS エラーになるため、原因が分かりにくい）。
@@ -69,7 +69,7 @@ PUT の署名 URL は 5 分有効。ブラウザから `Content-Length` を固�
 
 アプリの commit・abandon・保持期間バッチが `tmp/` の主掃除主体で、R2 Lifecycle は D1 行が消えた後の遅延 PUT や継続的な R2 障害に対する最終安全網にする。Cloudflare ダッシュボードで次のルールを設定する。
 
-1. R2 Object Storage から対象バケット `webscreen-beta` を開く。
+1. R2 Object Storage から対象バケット `webscreen` を開く。
 2. Settings → Object lifecycle rules → Add rule を選ぶ。
 3. prefix を `tmp/`、action を object expiration、期間を 1 day にする。
 4. 保存後、ルールが Enabled で prefix が `tmp/` に限定されていることを確認する。
@@ -80,7 +80,7 @@ PUT の署名 URL は 5 分有効。ブラウザから `Content-Length` を固�
 
 `captures/{uuid}/{index}.{png|jpg}`（web-capture が置く動画化の中間物。拡張子は web-capture の設定で決まる。撮影を速くするため JPEG へ移行中で、掃除も取り込みも拡張子を見ないので混在しても問題ない）を消すのは **WebScreen の cron だけ**（`web/cron/` の Worker が `web/src/lib/services/retention-captures.ts` を毎時 17 分に実行し、アップロードから 24 時間経過したものを 1 回あたり最大 1000 件・list 10 ページまで削除する。残りは次の実行が拾う）。`tmp/` 専用ルールと違い、**`captures/` に R2 Lifecycle rule は使わない**。掃除を別の場所へ移す時は、この節と `retention-captures.ts` の両方を同時に直すこと。
 
-掃除対象バケット名の正本は **`web/cron/wrangler.jsonc` の `r2_buckets`**（現在 `webscreen-beta`）。web-capture 側の書き込み先（Cloud Run の環境変数 `R2_BUCKET`）が**これと一致していることが契約**で、ずれると中間のキャプチャ画像は誰にも消されず増え続ける（気づけるのは請求だけ）。2026-08-30 に `gcloud run services describe web-capture` で一致を確認済み。どちらかを変える時は両方同時に変える。
+掃除対象バケット名の正本は **`web/cron/wrangler.jsonc` の `r2_buckets`**（現在 `webscreen`。2026-09-01 に webscreen-beta から改名）。web-capture 側の書き込み先（Cloud Run の環境変数 `R2_BUCKET`）が**これと一致していることが契約**で、ずれると中間のキャプチャ画像は誰にも消されず増え続ける（気づけるのは請求だけ）。2026-08-30 に `gcloud run services describe web-capture` で一致を確認済み。どちらかを変える時は両方同時に変える。
 
 ## 削除とキャッシュ
 
