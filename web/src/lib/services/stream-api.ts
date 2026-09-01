@@ -8,6 +8,7 @@ import { StreamError, type StreamDatabase, type StreamJwtSigner, type StreamSett
 
 const DEFAULT_EXTENSION_SECONDS = 2 * 60 * 60;
 const DEFAULT_MAX_LIVE_STREAMS = 1;
+const DEFAULT_MAX_TOTAL_LIVE_STREAMS = 20;
 const DEFAULT_CREATE_INTERVAL_SECONDS = 10;
 
 export interface StreamApiBindings {
@@ -16,6 +17,7 @@ export interface StreamApiBindings {
   STREAM_JWT_PRIVATE_KEY: string;
   STREAM_EXTENSION_SECONDS?: string;
   STREAM_MAX_LIVE_PER_USER?: string;
+  STREAM_MAX_LIVE?: string;
   STREAM_CREATE_INTERVAL_SECONDS?: string;
 }
 
@@ -72,6 +74,7 @@ export function streamSettings(bindings: StreamApiBindings): StreamSettings {
       bindings.STREAM_MAX_LIVE_PER_USER,
       DEFAULT_MAX_LIVE_STREAMS
     ),
+    maxLiveStreams: positiveInt(bindings.STREAM_MAX_LIVE, DEFAULT_MAX_TOTAL_LIVE_STREAMS),
     createIntervalSeconds: positiveInt(
       bindings.STREAM_CREATE_INTERVAL_SECONDS,
       DEFAULT_CREATE_INTERVAL_SECONDS

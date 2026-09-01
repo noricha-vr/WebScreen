@@ -1,0 +1,24 @@
+# MediaMTX v1.20.1 egress. The host firewall exposes RTSP :554; publishing stays loopback-only.
+logLevel: info
+api: true
+apiAddress: 127.0.0.1:9998
+rtsp: true
+rtspAddress: :554
+webrtc: false
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass: ""
+    ips: [127.0.0.1/32, ::1/128]
+    permissions:
+      - action: publish
+        path: "~^live/[A-Za-z0-9]{12}$"
+  - user: any
+    pass: ""
+    permissions:
+      - action: read
+        path: "~^live/[A-Za-z0-9]{12}$"
+pathDefaults:
+  overridePublisher: false
+paths:
+  "~^live/[A-Za-z0-9]{12}$": {}

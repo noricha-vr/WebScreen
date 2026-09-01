@@ -35,8 +35,22 @@ describe('MediaMTX Control API adapter', () => {
     });
 
     expect(await client.listPaths()).toEqual([
-      { name: 'live/AbCdEf123456', publisherId: 'publisher-1', rtspReaders: 1 },
-      { name: 'live/ZyXwVu987654', publisherId: null, rtspReaders: 0 },
+      {
+        name: 'live/AbCdEf123456',
+        publisherId: 'publisher-1',
+        publisherSessionType: 'webRTCSession',
+        rtspReaders: 1,
+        bytesReceived: 0,
+        bytesSent: 0,
+      },
+      {
+        name: 'live/ZyXwVu987654',
+        publisherId: null,
+        publisherSessionType: null,
+        rtspReaders: 0,
+        bytesReceived: 0,
+        bytesSent: 0,
+      },
     ]);
     expect(requests.map((request) => request.url)).toEqual([
       'https://media.example/v3/paths/list?page=0',
@@ -52,7 +66,25 @@ describe('MediaMTX Control API adapter', () => {
       apiToken: 'test-token',
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
-    await expect(client.kickPublisher('publisher/unsafe')).rejects.toThrow('status 503');
+    await expect(
+      client.kickPublisher({ id: 'publisher/unsafe', sessionType: 'webRTCSession' })
+    ).rejects.toThrow('status 503');
+  });
+
+  it('RTSP publisherにはRTSP session kickを使い、404は冪等に成功する', async () => {
+    const requests: string[] = [];
+    const client = createMediaMtxClient({
+      apiUrl: 'https://media.example',
+      apiToken: 'test-token',
+      fetchImpl: (async (input: string | URL | Request) => {
+        requests.push(String(input));
+        return new Response(null, { status: 404 });
+      }) as unknown as typeof fetch,
+    });
+    await expect(
+      client.kickPublisher({ id: 'relay-1', sessionType: 'rtspSession' })
+    ).resolves.toBeUndefined();
+    expect(requests).toEqual(['https://media.example/v3/rtspsessions/kick/relay-1']);
   });
 
   it('不正なlist応答を例外にして握り潰さない', async () => {

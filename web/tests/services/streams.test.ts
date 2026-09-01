@@ -15,6 +15,7 @@ const NOW = new Date('2026-09-01T00:00:00.000Z');
 const SETTINGS: StreamSettings = {
   extensionCycleSeconds: 7200,
   maxLiveStreamsPerUser: 1,
+  maxLiveStreams: 20,
   createIntervalSeconds: 10,
 };
 const signer = async ({ expiresAtSeconds }: { expiresAtSeconds: number }) =>
@@ -128,6 +129,23 @@ describe('配信セッション service', () => {
         settings,
       })
     ).resolves.toMatchObject({ id: 'ZyXwVu987654' });
+  });
+
+  it('全利用者のliveが20本なら21件目を429の容量エラーで拒否する', async () => {
+    const database = await createStreamDatabase();
+    const settings = { ...SETTINGS, maxLiveStreamsPerUser: 21, maxLiveStreams: 20, createIntervalSeconds: 1 };
+    for (let index = 0; index < 20; index += 1) {
+      await createStream({
+        ...input(database, `AbCdEf${String(index).padStart(6, '0')}`, new Date(NOW.getTime() + index * 2_000)),
+        settings,
+      });
+    }
+    await expect(
+      createStream({
+        ...input(database, 'ZyXwVu999999', new Date(NOW.getTime() + 42_000)),
+        settings,
+      })
+    ).rejects.toMatchObject({ status: 429, errorCode: ERROR_CODES.streamCapacityReached });
   });
 
   it('停止直後の再作成を10秒の間隔制限で429にする', async () => {

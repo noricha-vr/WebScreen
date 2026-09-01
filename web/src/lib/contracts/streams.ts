@@ -40,3 +40,11 @@ export interface ExtendStreamResponse {
   publishTokenExpiresAt: string;
   extendExpiresAt: string;
 }
+
+/** `GET /api/streams/{id}/health/` の relay 到達状態。 */
+export interface StreamHealthResponse {
+  state: 'starting' | 'ready';
+  ingressBytes: number;
+  egressBytes: number;
+  audioDetected: boolean | null;
+}

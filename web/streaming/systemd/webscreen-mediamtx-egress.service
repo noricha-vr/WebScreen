@@ -1,0 +1,18 @@
+[Unit]
+Description=WebScreen MediaMTX egress
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=webscreen
+Group=webscreen
+EnvironmentFile=/etc/webscreen/streaming/mediamtx.env
+ExecStart=/usr/local/bin/mediamtx /etc/webscreen/streaming/mediamtx-egress.yml
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
