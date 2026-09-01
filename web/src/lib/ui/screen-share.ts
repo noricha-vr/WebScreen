@@ -87,6 +87,10 @@ export class ScreenShareController {
     const generation = ++this.startGeneration;
     this.stopping = false;
     this.setBusy('[data-screen-start]', true, 'labelSelecting');
+    // 再試行ボタンからも入るため連打でピッカーが競合しないよう無効化する
+    // （span なし構造なのでラベルは触らずアイコンを保つ）
+    const retry = this.button('[data-screen-retry]');
+    if (retry) retry.disabled = true;
     try {
       const media = await this.deps.getDisplayMedia(displayMediaConstraints());
       if (!this.isActiveStart(generation)) {
@@ -110,6 +114,7 @@ export class ScreenShareController {
       if (this.isActiveStart(generation)) this.handleStartError(error);
     } finally {
       this.setBusy('[data-screen-start]', false, 'labelStart');
+      if (retry) retry.disabled = false;
     }
   }
 

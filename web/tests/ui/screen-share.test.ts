@@ -143,6 +143,37 @@ describe('画面共有 controller', () => {
     expect(page.activeIndicators()).toEqual(['2']);
   });
 
+  test('ピッカー選択中は開始・再試行を無効化し、ラベルは span だけ差し替えてアイコンを保つ', async () => {
+    const page = fakeScreenSharePage();
+    const start = page.button('[data-screen-start]');
+    const retry = page.button('[data-screen-retry]');
+    start.labelSpan = new FakeElement();
+    start.labelSpan.textContent = 'start';
+    let rejectPicker: ((reason: unknown) => void) | undefined;
+    new ScreenShareController(page.root, {
+      requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => ({
+        close: () => undefined, deleteResource: async () => undefined, setPublishToken: () => undefined,
+      }),
+      getDisplayMedia: () => new Promise((_resolve, reject) => { rejectPicker = reject; }),
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: () => undefined,
+    }).mount();
+
+    start.click();
+    expect(start.disabled).toBe(true);
+    expect(retry.disabled).toBe(true);
+    expect(start.labelSpan.textContent).toBe('selecting');
+    expect(start.textContent).toBe(''); // ボタン直下（アイコン）は書き換えない
+
+    rejectPicker!(new DOMException('denied', 'NotAllowedError'));
+    await waitFor(() => !page.step('error').hidden);
+    expect(start.disabled).toBe(false);
+    expect(retry.disabled).toBe(false);
+    expect(start.labelSpan.textContent).toBe('start');
+  });
+
   test('pagehide では空 body の sendBeacon で停止を通知する', async () => {
     const page = fakeScreenSharePage();
     const beaconUrls: string[] = [];
@@ -324,10 +355,12 @@ class FakeElement {
   srcObject: MediaProvider | null = null;
   textContent = '';
   value = '';
+  /** 実 DOM の「アイコン + <span>ラベル</span>」構造を模す。あれば querySelector('span') が返す */
+  labelSpan: FakeElement | null = null;
   private readonly listeners: Array<() => void> = [];
 
-  querySelector(): null {
-    return null;
+  querySelector(selector: string): FakeElement | null {
+    return selector === 'span' ? this.labelSpan : null;
   }
 
   addEventListener(event: string, listener: () => void): void {
