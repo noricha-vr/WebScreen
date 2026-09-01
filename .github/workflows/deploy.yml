@@ -86,8 +86,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MEDIAMTX_INGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_INGRESS_API_TOKEN }}
+          MEDIAMTX_EGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_EGRESS_API_TOKEN }}
         run: |
-          bunx wrangler deploy -c dist/server/wrangler.json | tee deploy-app.log
+          test -n "$MEDIAMTX_INGRESS_API_TOKEN"
+          test -n "$MEDIAMTX_EGRESS_API_TOKEN"
+          jq -n \
+            --arg ingress "$MEDIAMTX_INGRESS_API_TOKEN" \
+            --arg egress "$MEDIAMTX_EGRESS_API_TOKEN" \
+            '{MEDIAMTX_INGRESS_API_TOKEN: $ingress, MEDIAMTX_EGRESS_API_TOKEN: $egress}' \
+            | bunx wrangler deploy -c dist/server/wrangler.json --secrets-file /dev/stdin \
+            | tee deploy-app.log
           uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
           version=$(grep -oiE "Current Version ID: ?$uuid" deploy-app.log | grep -oE "$uuid" | head -1 || true)
           echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -98,7 +107,16 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler deploy -c cron/wrangler.jsonc
+          MEDIAMTX_INGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_INGRESS_API_TOKEN }}
+          MEDIAMTX_EGRESS_API_TOKEN: ${{ secrets.MEDIAMTX_EGRESS_API_TOKEN }}
+        run: |
+          test -n "$MEDIAMTX_INGRESS_API_TOKEN"
+          test -n "$MEDIAMTX_EGRESS_API_TOKEN"
+          jq -n \
+            --arg ingress "$MEDIAMTX_INGRESS_API_TOKEN" \
+            --arg egress "$MEDIAMTX_EGRESS_API_TOKEN" \
+            '{MEDIAMTX_INGRESS_API_TOKEN: $ingress, MEDIAMTX_EGRESS_API_TOKEN: $egress}' \
+            | bunx wrangler deploy -c cron/wrangler.jsonc --secrets-file /dev/stdin
 
       # 200 が返るだけでは旧版が生きている可能性を否定できないので、
       # /api/health/ が名乗るバージョンとデプロイしたバージョンを突き合わせる。

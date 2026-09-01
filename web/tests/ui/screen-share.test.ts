@@ -98,6 +98,7 @@ describe('画面共有 controller', () => {
         return null;
       }) as unknown as ScreenShareDependencies['requestJson'],
       startWhipPublisher: async () => publisher,
+      waitForStreamReady: async () => true,
       getDisplayMedia: async (constraints) => {
         requestedConstraints = constraints;
         return media;
@@ -137,12 +138,15 @@ describe('画面共有 controller', () => {
   test('ステップドットは開始前に隠れ、URL 表示で 1 つ目が点灯する', async () => {
     const page = fakeScreenSharePage();
     const track = { addEventListener: () => undefined, stop: () => undefined };
-    const media = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
+    const media = {
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+      getAudioTracks: () => [],
+    } as unknown as MediaStream;
     new ScreenShareController(page.root, {
       requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
-      startWhipPublisher: async () => ({
-        close: () => undefined, deleteResource: async () => undefined, setPublishToken: () => undefined,
-      }),
+      startWhipPublisher: async () => publisherStub(),
+      waitForStreamReady: async () => true,
       getDisplayMedia: async () => media,
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
@@ -171,9 +175,8 @@ describe('画面共有 controller', () => {
     let rejectPicker: ((reason: unknown) => void) | undefined;
     new ScreenShareController(page.root, {
       requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
-      startWhipPublisher: async () => ({
-        close: () => undefined, deleteResource: async () => undefined, setPublishToken: () => undefined,
-      }),
+      startWhipPublisher: async () => publisherStub(),
+      waitForStreamReady: async () => true,
       getDisplayMedia: () => new Promise((_resolve, reject) => { rejectPicker = reject; }),
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
@@ -214,6 +217,7 @@ describe('画面共有 controller', () => {
     const dependencies: ScreenShareDependencies = {
       requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
       startWhipPublisher: async () => publisher,
+      waitForStreamReady: async () => true,
       getDisplayMedia: async () => media,
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: (url) => { beaconUrls.push(url); return true; },
@@ -254,6 +258,7 @@ describe('画面共有 controller', () => {
         return Promise.resolve(null);
       }) as unknown as ScreenShareDependencies['requestJson'],
       startWhipPublisher: async () => publisher,
+      waitForStreamReady: async () => true,
       getDisplayMedia: async () => media,
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
@@ -296,6 +301,7 @@ describe('画面共有 controller', () => {
         publisherStarts += 1;
         throw new Error('publisher should not start');
       },
+      waitForStreamReady: async () => true,
       getDisplayMedia: () => pendingMedia.promise,
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
@@ -311,6 +317,51 @@ describe('画面共有 controller', () => {
     expect(stopped).toBe(1);
     expect(createRequests).toBe(0);
     expect(publisherStarts).toBe(0);
+  });
+
+  test('開始healthが二度失敗したら画面を保持し、再接続だけでURL表示へ進む', async () => {
+    const page = fakeScreenSharePage();
+    let healthChecks = 0;
+    let mediaSelections = 0;
+    let stopped = 0;
+    const third = publisherStub();
+    const second = publisherStub(async () => third);
+    const first = publisherStub(async () => second);
+    const track = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
+    const media = {
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+      getAudioTracks: () => [],
+    } as unknown as MediaStream;
+    const dependencies: ScreenShareDependencies = {
+      requestJson: (async (path: string) => (
+        path === '/api/streams/' ? createResponse() : null
+      )) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => first,
+      waitForStreamReady: async () => {
+        healthChecks += 1;
+        return healthChecks === 3;
+      },
+      getDisplayMedia: async () => {
+        mediaSelections += 1;
+        return media;
+      },
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: () => undefined,
+    };
+    new ScreenShareController(page.root, dependencies).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('error').hidden);
+    expect(page.button('[data-screen-retry]').textContent).toBe('reconnect');
+    expect(stopped).toBe(0);
+
+    page.button('[data-screen-retry]').click();
+    await waitFor(() => !page.step('url').hidden);
+    expect(mediaSelections).toBe(1);
+    expect(healthChecks).toBe(3);
+    expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
   });
 });
 
@@ -353,8 +404,10 @@ function fakeScreenSharePage(): {
     dataset: {
       labelStart: 'start', labelSelecting: 'selecting', labelCopy: 'copy', labelCopied: 'copied',
       labelExtend: 'extend', labelExtending: 'extending', labelStop: 'stop', labelStopping: 'stopping',
+      labelRetry: 'retry', labelReconnect: 'reconnect', labelReconnecting: 'reconnecting',
       msgGeneric: 'error', msgH264: 'h264', msgWhip: 'whip', msgDisplayDenied: 'denied',
-      msgStreamAlreadyLive: 'already-live', msgRateLimited: 'rate-limited', msgStreamEnded: 'ended',
+      msgStreamAlreadyLive: 'already-live', msgStreamCapacity: 'capacity', msgRateLimited: 'rate-limited',
+      msgStreamEnded: 'ended', msgStreamUnhealthy: 'unhealthy',
       msgAudioIncluded: 'audio-included', msgVideoOnly: 'video-only',
     },
     querySelector: (selector: string) => elements.get(selector) ?? null,
@@ -423,4 +476,16 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function publisherStub(republish: () => Promise<WhipPublisher> = async () => {
+  throw new Error('not used');
+}): WhipPublisher {
+  return {
+    close: () => undefined,
+    deleteResource: async () => undefined,
+    stop: async () => undefined,
+    republish,
+    setPublishToken: () => undefined,
+  };
 }

@@ -7,10 +7,11 @@ Wants=network-online.target
 Type=simple
 User=webscreen
 Group=webscreen
-EnvironmentFile=/etc/webscreen/streaming/mediamtx.env
 ExecStart=/usr/local/bin/mediamtx /etc/webscreen/streaming/mediamtx-egress.yml
 Restart=on-failure
 RestartSec=3
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 PrivateTmp=true
 

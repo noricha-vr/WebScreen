@@ -5,8 +5,8 @@ readonly STREAM_PATH_PREFIX='live/'
 readonly STREAM_ID_LENGTH=12
 readonly MAX_RETRIES=3
 readonly BASE_BACKOFF_SECONDS=1
-readonly INGRESS_RTSP_ORIGIN='rtsp://127.0.0.1:8554'
-readonly EGRESS_RTSP_ORIGIN='rtsp://127.0.0.1:554'
+readonly INGRESS_RTSP_ORIGIN="${INGRESS_RTSP_ORIGIN:-rtsp://127.0.0.1:8554}"
+readonly EGRESS_RTSP_ORIGIN="${EGRESS_RTSP_ORIGIN:-rtsp://127.0.0.1:554}"
 readonly FFMPEG_BIN="${FFMPEG_BIN:-ffmpeg}"
 
 child_pid=''
