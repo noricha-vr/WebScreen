@@ -1,5 +1,5 @@
 ---
-import UseCaseArticle from '../../components/UseCaseArticle.astro';
+import ScreenSharePage from '../../components/ScreenSharePage.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { useTranslations } from '../../i18n';
 import { useCasePath } from '../../lib/use-cases';
@@ -11,9 +11,9 @@ const t = useTranslations(lang);
 
 <BaseLayout
   lang={lang}
-  title={t.useCases[page].title}
-  description={t.useCases[page].description}
+  title={t.screenSharePage.title}
+  description={t.screenSharePage.description}
   breadcrumb={[{ name: t.useCases[page].navLabel, path: useCasePath(lang, page) }]}
 >
-  <UseCaseArticle lang={lang} page={page} />
+  <ScreenSharePage lang={lang} />
 </BaseLayout>
