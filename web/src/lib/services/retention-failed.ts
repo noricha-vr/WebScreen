@@ -1,6 +1,6 @@
 /** failed アップロードのR2早期回収と24時間後の行削除を扱う。 */
 
-import { movieKey } from '../contracts/r2key';
+import { movieKey, temporaryUploadKey } from '../contracts/r2key';
 import { PRESIGN_EXPIRY_GRACE_MS } from '../infra/r2presign';
 
 /** failed 行を残す期間（原因調査のための猶予）。 */
@@ -57,7 +57,7 @@ export async function deleteFailedMovies(
 
   const shortIds = results.map((row) => row.short_id);
   try {
-    await bucket.delete(shortIds.map(movieKey));
+    await bucket.delete(objectKeys(shortIds));
   } catch {
     // R2 が落ちている間に行だけ消すと実体が孤児になるため、この実行では行を残す。
     return { deleted: 0, deferred: shortIds.length, purged: [], capped };
@@ -95,7 +95,7 @@ export async function sweepFailedObjects(
   try {
     // 存在しないキーの delete も成功するため head は不要。行を残し、
     // 削除後に遅延 PUT が完了しても次回 cron で再回収する。
-    await bucket.delete(shortIds.map(movieKey));
+    await bucket.delete(objectKeys(shortIds));
   } catch {
     return { swept: 0, deferred: shortIds.length, purged: [], capped };
   }
@@ -142,4 +142,8 @@ function chunksOf(shortIds: string[]): string[][] {
     chunks.push(shortIds.slice(index, index + MAX_IDS_PER_MUTATION));
   }
   return chunks;
+}
+
+function objectKeys(shortIds: string[]): string[] {
+  return shortIds.flatMap((shortId) => [movieKey(shortId), temporaryUploadKey(shortId)]);
 }

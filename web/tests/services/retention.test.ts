@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { movieKey } from '../../src/lib/contracts/r2key';
+import { movieKey, temporaryUploadKey } from '../../src/lib/contracts/r2key';
 import { PRESIGN_TTL_MS } from '../../src/lib/infra/r2presign';
 import {
   MAX_EXPIRED_DELETIONS_PER_RUN,
@@ -28,7 +28,10 @@ describe('runRetention: 期限切れ動画', () => {
     const summary = await run(database, bucket);
 
     expect(summary.deletedMovies).toBe(1);
-    expect(bucket.deleted).toEqual([movieKey('expiredAAAAA')]);
+    expect(bucket.deleted).toEqual([
+      movieKey('expiredAAAAA'),
+      temporaryUploadKey('expiredAAAAA'),
+    ]);
     expect(database.movies.has('expiredAAAAA')).toBe(false);
   });
 
@@ -41,7 +44,10 @@ describe('runRetention: 期限切れ動画', () => {
     const summary = await run(database, bucket);
 
     expect(summary.deletedMovies).toBe(1);
-    expect(bucket.deleted).toEqual([movieKey('pinnedAAAAAA')]);
+    expect(bucket.deleted).toEqual([
+      movieKey('pinnedAAAAAA'),
+      temporaryUploadKey('pinnedAAAAAA'),
+    ]);
     expect(database.movies.has('pinnedAAAAAA')).toBe(false);
   });
 

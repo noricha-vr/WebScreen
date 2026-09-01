@@ -262,6 +262,16 @@ Meta Quest 単体の VRChat で `rtspt://stream.web-screen.net/live/qtest`（本
 - HLS（`https://stream.web-screen.net/live/{id}/index.m3u8`・Caddy TLS 終端）はサーバー側の生成・配信まで
   確認済みだが、Quest 実機での再生は rtspt が通ったため**未検証のまま打ち切り**（必要になったら再開する）
 
+### I13: 新ドメイン webscreen.tv で PC / Quest とも再生できる（実機・2026-09-01）
+
+配信ホストを専用ドメイン `webscreen.tv`（apex・A レコードで Indigo 直指し・Cloudflare プロキシ OFF）へ
+切り替え、`rtspt://webscreen.tv/live/qtest` を **PC / Quest の両実機で再生確認**した。
+体感遅延は PC < Quest（PC = Use Low Latency ON の 0.08 秒水準、Quest = ExoPlayer バッファで 2〜3 秒。I7 / I12 と整合）。
+
+- 移行理由: Quest では URL を手打ちするしかなく、ホストが 21 文字 → 12 文字・ハイフン 2 個 → 0 個になる
+- DNS のみで完結（RTSP はホスト名を見ないため、サーバー側の設定変更は不要だった）
+- 旧 `stream.web-screen.net` の A レコードは検証用に残すが、案内はすべて webscreen.tv に統一（requirements.md の凍結を更新済み）
+
 ### I5: 動画素材の画面共有は 600 kbps では成立しない（VRChat 実機・2026-08-31）
 
 VRChat PC 実機（ProTV）で `getDisplayMedia` の実画面（YouTube 再生中のタブ・1916x1060）を配信して観測した。

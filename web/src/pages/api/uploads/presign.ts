@@ -2,9 +2,13 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES, type ErrorResponse, validatePresignRequest } from '../../../lib/contracts/api';
-import { logWorkerFailure } from '../../../lib/infra/worker-log';
 import { importSigningKey } from '../../../lib/contracts/session';
 import { requireUser, type AuthDatabase } from '../../../lib/services/auth';
+import { logPresignInternalFailure } from '../../../lib/services/presign-errors';
+import {
+  enforcePresignRateLimit,
+  type PresignRateLimiter,
+} from '../../../lib/services/presign-rate-limit';
 import {
   createPendingUpload,
   createR2UploadUrlGenerator,
@@ -24,6 +28,7 @@ interface UploadBindings {
   R2_PUBLIC_BASE_URL: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
+  PRESIGN_LIMITER?: PresignRateLimiter;
 }
 
 /** pending movie を予約し、R2 への直接 PUT URL を払い出す。 */
@@ -33,10 +38,14 @@ export const POST: APIRoute = async ({ request }) => {
   const authenticated = await requireUser(request, { db: bindings.DB, signingKey });
   if (!authenticated.ok) return json(authenticated.error, authenticated.status);
 
-  const validation = validatePresignRequest(await readJson(request));
-  if (!validation.ok) return json(validation.error, 400);
-
   try {
+    // pending 件数上限とは別に、署名発行の時間当たりコストを本文処理前に抑える。
+    const limited = await enforcePresignRateLimit(bindings.PRESIGN_LIMITER, authenticated.user.id);
+    if (limited) return limited;
+
+    const validation = validatePresignRequest(await readJson(request));
+    if (!validation.ok) return json(validation.error, 400);
+
     const response = await createPendingUpload({
       database: bindings.DB,
       userId: authenticated.user.id,
@@ -65,7 +74,7 @@ async function readJson(request: Request): Promise<unknown> {
 
 function uploadErrorResponse(error: unknown): Response {
   if (error instanceof UploadError) return errorResponse(error.status, error.errorCode, error.message);
-  logWorkerFailure({ event: 'upload_presign_failed', errorCode: ERROR_CODES.internalError, status: 500 });
+  logPresignInternalFailure();
   return errorResponse(500, ERROR_CODES.internalError, 'アップロードURLの発行に失敗しました');
 }
 

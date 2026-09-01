@@ -72,6 +72,7 @@ export const ERROR_CODES = {
   expired: 'EXPIRED',
   payloadTooLarge: 'PAYLOAD_TOO_LARGE',
   tooManyPendingUploads: 'TOO_MANY_PENDING_UPLOADS',
+  tooManyPresignRequests: 'TOO_MANY_PRESIGN_REQUESTS',
   streamAlreadyLive: 'STREAM_ALREADY_LIVE',
   streamCreateRateLimited: 'STREAM_CREATE_RATE_LIMITED',
   streamEnded: 'STREAM_ENDED',

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
+import { temporaryUploadKey } from '../../src/lib/contracts/r2key';
 import type { PurgeFetcher } from '../../src/lib/infra/cloudflare-purge';
 import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
 import {
@@ -61,8 +62,8 @@ class FakeMoviesDatabase implements MoviesDatabase {
 class FakeMovieBucket implements MovieBucket {
   readonly deletedKeys: string[] = [];
 
-  async delete(key: string): Promise<void> {
-    this.deletedKeys.push(key);
+  async delete(keys: string | string[]): Promise<void> {
+    this.deletedKeys.push(...(Array.isArray(keys) ? keys : [keys]));
   }
 }
 
@@ -130,7 +131,7 @@ describe('deleteMovie', () => {
     });
 
     // 実体だけが消え、ready の行が残る（プレビューが再生不能になる）状態。
-    expect(bucket.deletedKeys).toEqual([MOVIE_KEY]);
+    expect(bucket.deletedKeys).toEqual([MOVIE_KEY, temporaryUploadKey(SHORT_ID)]);
     expect(events).toEqual(['movie_delete_row_stranded']);
   });
 
@@ -150,7 +151,7 @@ describe('deleteMovie', () => {
 
     expect(events).toEqual([]);
     expect(database.deletedRows).toBe(1);
-    expect(bucket.deletedKeys).toEqual([MOVIE_KEY]);
+    expect(bucket.deletedKeys).toEqual([MOVIE_KEY, temporaryUploadKey(SHORT_ID)]);
   });
 
   it('公開 URL のキャッシュ purge を 1 回投げる', async () => {
@@ -186,7 +187,7 @@ describe('deleteMovie', () => {
       });
     });
 
-    expect(bucket.deletedKeys).toEqual([MOVIE_KEY]);
+    expect(bucket.deletedKeys).toEqual([MOVIE_KEY, temporaryUploadKey(SHORT_ID)]);
     expect(database.deletedRows).toBe(1);
   });
 

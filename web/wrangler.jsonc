@@ -67,6 +67,13 @@
       "name": "CLIENT_ERROR_LIMITER",
       "namespace_id": "1001",
       "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      // pending 10 件上限とは別に、署名 URL 発行の時間当たりコストをユーザー単位で抑える。
+      // limit / period は services/presign-rate-limit.ts の応答定数と必ず同期する。
+      "name": "PRESIGN_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 }
     }
   ],
   // Astro のセッション機能が既定で要求する KV。初回 deploy で wrangler が
