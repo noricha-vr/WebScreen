@@ -239,6 +239,29 @@ RTSP の既定ポート 554 が補われている。
   allowlist 登録済みワールドへの影響はない（VRChat の Allowed Domains はホスト名だけを見る）
 - 効果: `rtspt://stream.web-screen.net/live/{id}` となり、TopazChat（`rtspt://topaz.chat/live/{key}`）と同程度の長さになる
 
+### I12: Quest は PC と同一の rtspt URL で再生できる。HLS は不要（Quest 実機・2026-09-01）
+
+Meta Quest 単体の VRChat で `rtspt://stream.web-screen.net/live/qtest`（本番形そのもの。ホスト名 + ポート省略 554）を
+貼って再生できた。**PC と Quest で URL を分ける必要がなく、Quest 向け HLS 配信も不要**。
+
+| 確認 | 結果 |
+|---|---|
+| 映像 | 再生 OK（RTSP over TCP。サーバーログに `with TCP, 2 tracks (H264, MPEG-4 Audio)`） |
+| 音声 | **AAC が Quest で鳴る**（R3 の実機裏取り） |
+| 体感遅延 | **2〜3 秒**（PC の Use Low Latency ON = 0.08 秒より大きい。ExoPlayer 側のバッファ） |
+| 安定性 | 80 秒前後のセッションを複数回、切断なし |
+| `rtsp://`（8554 明示） | 再生 OK |
+
+- **`rtmp://` は使えない**: Quest のプレイヤーは rtmp スキームの URL でも RTSP プロトコルで接続し、
+  リクエスト URI のスキームを rtmp のまま送る。MediaMTX はスキーム検査で
+  `invalid URL (rtmp://...)` として弾く（3 回再現）。TopazChat が「Quest は rtmp://」と案内して
+  動くのは、同社サーバーがスキームを検査しないためと推測される。**WebScreen は rtmp を案内しない**
+- 「2026-07 の VRChat アップデートで Quest の rtsp:// が動かなくなった」という TopazChat 開発者の報告
+  （[X 2026-07-03](https://x.com/TyounanMOTI/status/2073100093818044578)）は、**本構成（MediaMTX v1.20.1 +
+  rtspt/rtsp・TCP）では再現しなかった**
+- HLS（`https://stream.web-screen.net/live/{id}/index.m3u8`・Caddy TLS 終端）はサーバー側の生成・配信まで
+  確認済みだが、Quest 実機での再生は rtspt が通ったため**未検証のまま打ち切り**（必要になったら再開する）
+
 ### I5: 動画素材の画面共有は 600 kbps では成立しない（VRChat 実機・2026-08-31）
 
 VRChat PC 実機（ProTV）で `getDisplayMedia` の実画面（YouTube 再生中のタブ・1916x1060）を配信して観測した。
