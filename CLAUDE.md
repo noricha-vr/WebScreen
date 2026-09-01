@@ -47,6 +47,8 @@ bunx playwright test # E2E（wrangler dev を立てて実行）
 
 `web/.dev.vars` にローカル用の環境変数が要る（`.dev.vars.example` を参照）。
 
+- dev サーバーは常駐型。多重起動の警告が出たら `bunx astro dev stop`。ページが vite の deps_ssr エラーを返す時は `rm -rf node_modules/.vite` してから再起動
+
 ## デプロイ
 
 main への push で GitHub Actions が本番へ反映する（`.github/workflows/deploy.yml`）。
@@ -69,7 +71,8 @@ main への push で GitHub Actions が本番へ反映する（`.github/workflow
 | 動画のエンコード条件（VRChat 互換） | [docs/encode-contract.md](docs/encode-contract.md) |
 | R2 の配信とキャッシュ | [docs/r2-delivery.md](docs/r2-delivery.md) |
 | 表示文言 | `web/src/i18n/ja.json` / `en.json` |
-| ライブ配信の設計・検証（**未実装**） | [docs/streaming/](docs/streaming/) |
+| ライブ配信の設計・検証 | [docs/streaming/](docs/streaming/) |
+| 配信サーバーの本番構成・運用（サーバー実体・secrets・移設・cron 検証） | [docs/streaming/operations.md](docs/streaming/operations.md) |
 
 ## 気をつけること
 
