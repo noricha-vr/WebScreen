@@ -297,7 +297,7 @@ describe('runRetention: 1 回の実行の上限', () => {
 });
 
 describe('runRetention: サマリ', () => {
-  it('補完と 4 種類の削除件数をまとめて返す', async () => {
+  it('補完・pending 回収・各削除件数をまとめて返す', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'expiredBBBBB', expiresAt: iso(-HOUR_MS) }),
       movie({ shortId: 'orphanBBBBBB', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
@@ -313,13 +313,13 @@ describe('runRetention: サマリ', () => {
       backfilledPinned: 0,
       deletedMovies: 1,
       strandedMovies: 0,
-      deletedOrphans: 1,
+      recoveredPendingUploads: 1,
       deletedFailed: 1,
-      sweptFailedObjects: 0,
+      sweptFailedObjects: 1,
       deferredObjectDeletions: 0,
       skippedRows: 0,
       sweepCapped: false,
-      // 期限切れ・孤児・failed の 3 経路がそれぞれ 1 回ずつ purge を投げる。
+      // 期限切れ・既存failedの削除・今回failed化したpending実体の3経路で purge する。
       cachePurgeRequests: 3,
       cachePurgeFailures: 0,
       deletedCaptures: 1,
@@ -327,7 +327,7 @@ describe('runRetention: サマリ', () => {
       missingObjectRows: 0,
       auditErrors: 0,
     });
-    expect(database.movies.size).toBe(0);
+    expect(database.movies.get('orphanBBBBBB')?.status).toBe('failed');
   });
 
   it('created_at が SQLite 既定の表記でも ISO の閾値と比較できる', async () => {

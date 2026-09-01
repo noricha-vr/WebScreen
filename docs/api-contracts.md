@@ -23,13 +23,13 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `GET /api/auth/callback/` | OAuth コールバック（state 検証 → users upsert → セッション Cookie 発行） | 不要 | `session.ts` |
 | `POST /api/auth/logout/` | セッション Cookie の破棄（form の `lang` のトップへ 303 リダイレクト。不正・欠落は `ja`） | 本人 | — |
 | `GET /api/me/` | ログイン中のユーザー情報 | 本人 | 未ログインは 401。応答の `name` は表示用。**Chrome 拡張（web-screen-extension）が host_permissions 経由の Cookie 付き fetch でログイン判定と表示名に使う**ため、401 の意味と `name` の形を変える時は拡張側も追随が要る |
-| `POST /api/uploads/presign/` | R2 へのアップロード先を払い出し、movies に `pending` 行を作る | 本人 | `PresignRequest` / `PresignResponse` |
-| `POST /api/uploads/commit/` | アップロード完了を確定し `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse` |
+| `POST /api/uploads/presign/` | R2 へのアップロード先を払い出し、movies に `pending` 行を原子的に容量予約して作る | 本人 | `PresignRequest` / `PresignResponse`。予約後の合計が容量上限を超える場合は 413 `PAYLOAD_TOO_LARGE`、同時 pending が 10 件なら 429 `TOO_MANY_PENDING_UPLOADS` |
+| `POST /api/uploads/commit/` | R2 の実測サイズで容量を原子的に再判定し、アップロード完了を `ready` にする | 本人（当該 movie の所有者） | `CommitRequest` / `CommitResponse`。実測サイズで容量上限を超える場合は 413 `PAYLOAD_TOO_LARGE` |
 | `POST /api/uploads/abandon/` | 所有する `pending` アップロードを `failed` にし、署名 URL 失効後の保持期間バッチへ回収を委ねる | 本人（当該 movie の所有者） | `AbandonUploadRequest`。JSON 本文は 4 KiB 上限（超過は 413 `PAYLOAD_TOO_LARGE`）。対象が `pending` 以外・不存在・他人所有でも状態を漏らさず 204 |
 | `GET /api/history/` | 自分の動画一覧 | 本人 | `HistoryResponse` |
 | `POST /api/movies/{shortId}/pin/` | pin の切り替え（保管期限を 1 年後まで延ばす。期限切れは 410 `EXPIRED`） | 本人（所有者） | `PinResponse` |
 | `PATCH /api/movies/{shortId}/` | ファイル名の変更 | 本人（所有者） | `RenameMovieRequest` / `RenameMovieResponse` |
-| `DELETE /api/movies/{shortId}/` | 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | — |
+| `DELETE /api/movies/{shortId}/` | `ready` 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | `pending` / `failed` は 409 `INVALID_REQUEST`。`pending` の破棄は abandon を使う |
 | `POST /api/client-error/` | クライアント側の失敗報告（識別子だけを受けて `client_error` として構造化ログに残す。応答は 204） | 任意（Cookie があれば `userId` を添える） | `ClientErrorReport` |
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
@@ -96,7 +96,7 @@ Worker 自身のタイムアウト（上流への 150 秒 abort）も `CAPTURE_T
 | キャプチャ画像（`captures/{uuid}/{index}.{png\|jpg}`） | 公開 | 同上。動画生成の中間物。拡張子は web-capture の設定で決まる（撮影を速くするため JPEG へ移行中）。WebScreen 側は `CaptureResponse.images` の URL をそのまま取得して復号するため、どちらでも扱いは変わらない |
 | 履歴 `GET /api/history/` | 本人のみ | セッション Cookie の uid で絞る |
 | pin `POST /api/movies/{shortId}/pin/` | 本人のみ | 所有者チェック必須 |
-| 削除 `DELETE /api/movies/{shortId}/` | 本人のみ | 所有者チェック必須。他人の shortId は 404（存在を漏らさない） |
+| 削除 `DELETE /api/movies/{shortId}/` | 本人のみ | 所有者チェック必須。他人の shortId は 404（存在を漏らさない）。`ready` のみ削除でき、`pending` は署名 URL の遅延 PUT を追跡するため abandon で `failed` へ移す |
 | プレビュー `GET /{shortId}/` | **公開**（認証なし） | 動画 URL と同じ扱い。`ready` 以外は 404。pin / 削除の操作 UI は所有者にだけ出す |
 | commit `POST /api/uploads/commit/` | 本人のみ | 所有者チェック必須。他人の pending を確定できてはならない |
 | abandon `POST /api/uploads/abandon/` | 本人のみ | 所有者条件付きで `pending` のみ `failed` にする。JSON 本文は 4 KiB 上限。`failed` / `ready` / 不存在 / 他人所有は状態を漏らさず 204。R2 は即時削除しない |

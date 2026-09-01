@@ -1,13 +1,13 @@
 /** failed アップロードのR2早期回収と24時間後の行削除を扱う。 */
 
 import { movieKey } from '../contracts/r2key';
-import { PRESIGN_TTL_MS } from '../infra/r2presign';
+import { PRESIGN_EXPIRY_GRACE_MS } from '../infra/r2presign';
 
 /** failed 行を残す期間（原因調査のための猶予）。 */
 const FAILED_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /** 署名失効後に遅延 PUT の実体を早期回収するまでの安全余裕。 */
-const FAILED_OBJECT_CLEANUP_GRACE_MS = PRESIGN_TTL_MS + 60 * 1000;
+const FAILED_OBJECT_CLEANUP_GRACE_MS = PRESIGN_EXPIRY_GRACE_MS;
 
 /** 1 文の UPDATE / DELETE に載せるID数。D1のバインド変数上限に収める。 */
 const MAX_IDS_PER_MUTATION = 50;
@@ -71,7 +71,8 @@ export async function deleteFailedMovies(
 export async function sweepFailedObjects(
   database: FailedRetentionDatabase,
   bucket: FailedRetentionBucket,
-  now: Date
+  now: Date,
+  recoveredShortIds: string[] = []
 ): Promise<FailedSweepResult & { swept: number }> {
   const retainedAfter = new Date(now.getTime() - FAILED_RETENTION_MS).toISOString();
   const expiredBefore = new Date(now.getTime() - FAILED_OBJECT_CLEANUP_GRACE_MS).toISOString();
@@ -85,10 +86,12 @@ export async function sweepFailedObjects(
     .bind(retainedAfter, expiredBefore, sweptAt, MAX_FAILED_DELETIONS_PER_RUN)
     .all<ShortIdRow>();
 
-  const capped = results.length === MAX_FAILED_DELETIONS_PER_RUN;
-  if (results.length === 0) return { swept: 0, deferred: 0, purged: [], capped };
-
-  const shortIds = results.map((row) => row.short_id);
+  // 今回 pending から確保した ID は既に failed と確認済みなので、SQL の IN 句へ再投入せず
+  // 通常候補とメモリ上で合流する。最大150件を bind すると D1 の100変数上限を超えるため。
+  const candidates = new Set([...recoveredShortIds, ...results.map((row) => row.short_id)]);
+  const shortIds = [...candidates].slice(0, MAX_FAILED_DELETIONS_PER_RUN);
+  const capped = results.length === MAX_FAILED_DELETIONS_PER_RUN || candidates.size > shortIds.length;
+  if (shortIds.length === 0) return { swept: 0, deferred: 0, purged: [], capped };
   try {
     // 存在しないキーの delete も成功するため head は不要。行を残し、
     // 削除後に遅延 PUT が完了しても次回 cron で再回収する。

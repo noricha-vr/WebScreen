@@ -45,6 +45,16 @@ bunx wrangler r2 bucket cors list webscreen-beta   # 確認
 
 `X-Robots-Tag` は、プレビューページの `noindex` メタタグだけでは防げない「動画ファイル本体がクローラに直接収集される」経路を塞ぐためのもの（HTML の noindex はその HTML を検索結果から外すだけで、`<video src>` の先には効かない）。
 
+### 未確定 PUT の回収
+
+PUT の署名 URL は 5 分有効。ブラウザから `Content-Length` を固定できず、R2 が署名した長さを
+実体サイズの上限として検証する保証もないため、申告サイズだけで PUT 自体を制限しない。
+署名失効 + 60 秒後も `pending` の行は `failed` へ移し、保持期間バッチが R2 を毎時反復削除する。
+`failed` 行は 24 時間残すので、失効直前に開始した PUT が最初の削除後に完了しても次回に回収できる。
+バッチは既存の 24 時間超 `failed` 行を削除してから `pending` を `failed` へ移し、その実体を
+同じ実行の failed object sweep で R2 から削除する。24 時間超の backlog も D1 行はその場で消さず、
+最低 1 サイクル追跡してから次回以降の failed 行削除へ渡す。
+
 ## captures/ の掃除主体
 
 `captures/{uuid}/{index}.{png|jpg}`（web-capture が置く動画化の中間物。拡張子は web-capture の設定で決まる。撮影を速くするため JPEG へ移行中で、掃除も取り込みも拡張子を見ないので混在しても問題ない）を消すのは **WebScreen の cron だけ**（`web/cron/` の Worker が `web/src/lib/services/retention-captures.ts` を毎時 17 分に実行し、アップロードから 24 時間経過したものを 1 回あたり最大 1000 件・list 10 ページまで削除する。残りは次の実行が拾う）。**R2 の lifecycle rule は使っていない**（作成もしていない）。掃除を別の場所へ移す時は、この節と `retention-captures.ts` の両方を同時に直すこと。
@@ -59,8 +69,8 @@ mp4 は Cloudflare の[既定キャッシュ対象](https://developers.cloudflar
 
 | 経路 | 実装 |
 |---|---|
-| 所有者の削除（`DELETE /api/movies/{shortId}/`） | `web/src/lib/services/movies.ts` の `deleteMovie` |
-| 保持期間バッチ（期限切れ・pending 孤児・failed の掃除） | `web/src/lib/services/retention.ts` の各経路 |
+| 所有者の削除（`DELETE /api/movies/{shortId}/`、`ready` のみ） | `web/src/lib/services/movies.ts` の `deleteMovie` |
+| 保持期間バッチ（期限切れ・署名失効後の pending・failed の掃除） | `web/src/lib/services/retention.ts`、`retention-pending.ts`、`retention-failed.ts` |
 
 `captures/` の掃除（`retention-captures.ts`）は purge しない。中間 PNG は変換が終われば誰も参照せず、キャッシュに残っても動画の削除の意図に反しないため。
 

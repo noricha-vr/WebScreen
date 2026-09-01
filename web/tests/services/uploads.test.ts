@@ -2,18 +2,13 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   MAX_UPLOAD_BYTES,
-  validateAbandonUploadRequest,
-  validatePresignRequest,
-  type PresignRequest,
 } from '../../src/lib/contracts/api';
 import {
-  USER_STORAGE_QUOTA_BYTES,
   getUserStorageUsage,
 } from '../../src/lib/services/quota';
 import {
   abandonUpload,
   commitUpload,
-  createPendingUpload,
   type UploadBucket,
   type UploadDatabase,
 } from '../../src/lib/services/uploads';
@@ -68,29 +63,27 @@ class FakeUploadDatabase implements UploadDatabase {
   }
 
   private run(query: string, values: unknown[]): number {
-    if (query.startsWith('INSERT INTO movies')) {
-      const [shortId, userId, filename, sizeBytes, expiresAt] = values as [
-        string,
-        number,
-        string,
-        number,
-        string,
-      ];
-      this.movies.set(shortId, {
-        shortId,
-        userId,
-        filename,
-        sizeBytes,
-        status: 'pending',
-        expiresAt,
-      });
-      return 1;
-    }
-
     if (query.includes("status = 'ready'")) {
-      const [sizeBytes, shortId, userId] = values as [number, string, number];
+      const [sizeBytes, shortId, userId, quotaUserId, excludedShortId, actualSize, quotaBytes] = values as [
+        number,
+        string,
+        number,
+        number,
+        string,
+        number,
+        number,
+      ];
       const movie = this.movies.get(shortId);
       if (!movie || movie.userId !== userId || movie.status !== 'pending') return 0;
+      const usedBytes = [...this.movies.values()]
+        .filter(
+          (candidate) =>
+            candidate.userId === quotaUserId &&
+            candidate.shortId !== excludedShortId &&
+            ['pending', 'ready', 'failed'].includes(candidate.status)
+        )
+        .reduce((total, candidate) => total + candidate.sizeBytes, 0);
+      if (usedBytes + actualSize > quotaBytes) return 0;
       movie.status = 'ready';
       movie.sizeBytes = sizeBytes;
       return 1;
@@ -166,74 +159,6 @@ function movie(overrides: Partial<TestMovie> = {}): TestMovie {
     ...overrides,
   };
 }
-
-function validPresignRequest(sizeBytes = 100): PresignRequest {
-  return { filename: 'movie.mp4', sizeBytes, kind: 'pdf' };
-}
-
-describe('アップロードのクォータと検証', () => {
-  it('500 MiB ちょうどまで、pending 分を含めて予約できる', async () => {
-    const existingPending = movie({ sizeBytes: USER_STORAGE_QUOTA_BYTES - 100 });
-    const database = new FakeUploadDatabase([existingPending]);
-
-    await expect(
-      createPendingUpload({
-        database,
-        userId: USER_ID,
-        request: validPresignRequest(100),
-        publicBaseUrl: PUBLIC_URL,
-        createUploadUrl: async () => 'https://upload.example',
-        generateId: () => 'ZyXwVu987654',
-      })
-    ).resolves.toMatchObject({ shortId: 'ZyXwVu987654' });
-
-    expect(await getUserStorageUsage(database, USER_ID)).toBe(USER_STORAGE_QUOTA_BYTES);
-  });
-
-  it('500 MiB を超える予約を 413 で拒否する', async () => {
-    const database = new FakeUploadDatabase([movie({ sizeBytes: USER_STORAGE_QUOTA_BYTES })]);
-
-    await expect(
-      createPendingUpload({
-        database,
-        userId: USER_ID,
-        request: validPresignRequest(1),
-        publicBaseUrl: PUBLIC_URL,
-        createUploadUrl: async () => 'https://upload.example',
-      })
-    ).rejects.toMatchObject({ status: 413 });
-  });
-
-  it('署名 URL の発行に失敗したら pending 行を残さない', async () => {
-    const database = new FakeUploadDatabase();
-
-    await expect(
-      createPendingUpload({
-        database,
-        userId: USER_ID,
-        request: validPresignRequest(100),
-        publicBaseUrl: PUBLIC_URL,
-        createUploadUrl: async () => {
-          throw new Error('signing failed');
-        },
-      })
-    ).rejects.toThrow('signing failed');
-
-    // 行が残ると 24 時間の孤児掃除まで保存容量を食い続ける。
-    expect(database.movies.size).toBe(0);
-    expect(await getUserStorageUsage(database, USER_ID)).toBe(0);
-  });
-
-  it('51 MiB と未定義の kind を presign 前に拒否する', () => {
-    expect(validatePresignRequest({ ...validPresignRequest(MAX_UPLOAD_BYTES + 1) }).ok).toBe(false);
-    expect(validatePresignRequest({ ...validPresignRequest(), kind: 'audio' }).ok).toBe(false);
-  });
-
-  it('failed を含め、短い ID の abandon リクエストは拒否する', () => {
-    expect(validateAbandonUploadRequest({ shortId: SHORT_ID }).ok).toBe(true);
-    expect(validateAbandonUploadRequest({ shortId: 'short' }).ok).toBe(false);
-  });
-});
 
 describe('abandonUpload', () => {
   it('所有者の pending だけを failed にし、予約サイズを保持する', async () => {

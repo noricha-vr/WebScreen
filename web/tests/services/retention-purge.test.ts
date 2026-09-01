@@ -35,7 +35,7 @@ describe('runRetention: キャッシュ purge', () => {
     expect(summary.cachePurgeFailures).toBe(0);
   });
 
-  it('孤児と failed の掃除で消した動画も purge する', async () => {
+  it('回収した pending の実体と既存 failed の削除をどちらも purge する', async () => {
     const database = new FakeRetentionDatabase([
       movie({ shortId: 'orphanAAAAAA', status: 'pending', createdAt: iso(-2 * DAY_MS) }),
       movie({ shortId: 'failedAAAAAA', status: 'failed', createdAt: iso(-2 * DAY_MS) }),
@@ -44,14 +44,16 @@ describe('runRetention: キャッシュ purge', () => {
 
     const summary = await run(database, new FakeRetentionBucket(), api);
 
-    expect(summary.deletedOrphans).toBe(1);
+    expect(summary.recoveredPendingUploads).toBe(1);
     expect(summary.deletedFailed).toBe(1);
+    expect(summary.sweptFailedObjects).toBe(1);
     expect(purgedUrls(api).sort()).toEqual(
       [
         movieUrl(PUBLIC_BASE_URL, 'orphanAAAAAA'),
         movieUrl(PUBLIC_BASE_URL, 'failedAAAAAA'),
       ].sort()
     );
+    expect(database.movies.get('orphanAAAAAA')?.status).toBe('failed');
   });
 
   it('failed 実体の早期回収でも公開 URL を purge し、D1 行は残す', async () => {

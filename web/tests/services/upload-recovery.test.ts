@@ -2,6 +2,8 @@ import { describe, expect, it } from 'bun:test';
 
 import { movieKey } from '../../src/lib/contracts/r2key';
 import { PRESIGN_TTL_MS } from '../../src/lib/infra/r2presign';
+import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
+import { deleteMovie, type MoviesDatabase } from '../../src/lib/services/movies';
 import { runRetention, type RetentionBucket, type RetentionDatabase } from '../../src/lib/services/retention';
 import { USER_STORAGE_QUOTA_BYTES, type QuotaDatabase } from '../../src/lib/services/quota';
 import {
@@ -24,7 +26,9 @@ interface RecoveryMovie {
   expiresAt: string | null;
 }
 
-class RecoveryDatabase implements UploadDatabase, RetentionDatabase, QuotaDatabase {
+class RecoveryDatabase
+  implements UploadDatabase, RetentionDatabase, QuotaDatabase, MoviesDatabase
+{
   readonly movies = new Map<string, RecoveryMovie>();
 
   constructor(private readonly createdAt: string) {}
@@ -63,6 +67,12 @@ class RecoveryDatabase implements UploadDatabase, RetentionDatabase, QuotaDataba
   }
 
   private all<T>(query: string, values: unknown[]): T[] {
+    if (query.includes("status = 'pending'")) {
+      const cutoff = Date.parse(values[0] as string);
+      return [...this.movies.values()]
+        .filter((movie) => movie.status === 'pending' && Date.parse(movie.createdAt) < cutoff)
+        .map((movie) => ({ short_id: movie.shortId }) as T);
+    }
     if (!query.includes("status = 'failed'")) return [];
     const lowerCutoff = Date.parse(values[0] as string);
     const upperCutoff = query.includes('datetime(created_at) >= datetime(?)')
@@ -88,6 +98,24 @@ class RecoveryDatabase implements UploadDatabase, RetentionDatabase, QuotaDataba
         number,
         string,
       ];
+      if (query.includes('SELECT SUM(size_bytes)')) {
+        const quotaUserId = values[5] as number;
+        const additionalBytes = values[6] as number;
+        const quotaBytes = values[7] as number;
+        const usedBytes = [...this.movies.values()]
+          .filter(
+            (movie) =>
+              movie.userId === quotaUserId && ['pending', 'ready', 'failed'].includes(movie.status)
+          )
+          .reduce((sum, movie) => sum + movie.sizeBytes, 0);
+        if (usedBytes + additionalBytes > quotaBytes) return 0;
+        const pendingUserId = values[8] as number;
+        const maxPendingUploads = values[9] as number;
+        const pendingUploads = [...this.movies.values()].filter(
+          (movie) => movie.userId === pendingUserId && movie.status === 'pending'
+        ).length;
+        if (pendingUploads >= maxPendingUploads) return 0;
+      }
       this.movies.set(shortId, {
         shortId,
         userId,
@@ -118,7 +146,53 @@ class RecoveryDatabase implements UploadDatabase, RetentionDatabase, QuotaDataba
       return ids.length;
     }
 
+    if (query.startsWith('DELETE')) {
+      const movie = this.movies.get(values[0] as string);
+      if (!movie || (query.includes("status = 'failed'") && movie.status !== 'failed')) return 0;
+      this.movies.delete(movie.shortId);
+      return 1;
+    }
+
+    if (query.includes("SET status = 'ready'")) {
+      const [sizeBytes, shortId, userId, quotaUserId, excludedShortId, actualSize, quotaBytes] = values as [
+        number,
+        string,
+        number,
+        number,
+        string,
+        number,
+        number,
+      ];
+      const movie = this.movies.get(shortId);
+      if (!movie || movie.userId !== userId || movie.status !== 'pending') return 0;
+      const usedBytes = [...this.movies.values()]
+        .filter(
+          (candidate) =>
+            candidate.userId === quotaUserId &&
+            candidate.shortId !== excludedShortId &&
+            ['pending', 'ready', 'failed'].includes(candidate.status)
+        )
+        .reduce((total, candidate) => total + candidate.sizeBytes, 0);
+      if (usedBytes + actualSize > quotaBytes) return 0;
+      movie.status = 'ready';
+      movie.sizeBytes = sizeBytes;
+      return 1;
+    }
+
     if (!query.includes("SET status = 'failed'")) return 0;
+    if (query.includes('datetime(created_at) < datetime(?)')) {
+      const [shortId, cutoff] = values as [string, string];
+      const movie = this.movies.get(shortId);
+      if (
+        !movie ||
+        movie.status !== 'pending' ||
+        Date.parse(movie.createdAt) >= Date.parse(cutoff)
+      ) {
+        return 0;
+      }
+      movie.status = 'failed';
+      return 1;
+    }
     const updatesSize = query.includes('size_bytes = ?');
     const [sizeBytes, shortId, userId] = updatesSize
       ? (values as [number, string, number])
@@ -164,6 +238,13 @@ const USER_ID = 7;
 const CREATED_AT = new Date('2026-08-24T12:00:00.000Z');
 const EARLY_RETENTION_TIME = new Date(CREATED_AT.getTime() + PRESIGN_TTL_MS + 60_001);
 const PUBLIC_BASE_URL = 'https://cdn.example';
+const CACHE_PURGE: CachePurgeSettings = {
+  publicBaseUrl: PUBLIC_BASE_URL,
+  zoneId: '2210192b51f9f0eb6761d70341ca09b0',
+  apiToken: 'token',
+  source: 'test',
+  fetcher: async () => new Response(null, { status: 200 }),
+};
 
 async function reserve(database: RecoveryDatabase, shortId: string, sizeBytes: number) {
   return createPendingUpload({
@@ -267,6 +348,51 @@ describe('upload recovery', () => {
     await retain(database, bucket);
     expect(bucket.deleted).toContain(key);
     expect(rowExistedWhenObjectDeleted).toBe(true);
+    expect(database.movies.get(upload.shortId)?.status).toBe('failed');
+  });
+
+  it('申告 1 byte の pending に届いた超過 PUT を署名失効後も追跡して反復回収する', async () => {
+    const database = new RecoveryDatabase(CREATED_AT.toISOString());
+    const bucket = new RecoveryBucket();
+    const upload = await reserve(database, 'PendingLrg01', 1);
+    const key = movieKey(upload.shortId);
+    bucket.objects.set(key, USER_STORAGE_QUOTA_BYTES);
+
+    await retain(database, bucket);
+
+    expect(bucket.objects.has(key)).toBe(false);
+    expect(database.movies.get(upload.shortId)?.status).toBe('failed');
+
+    // 署名失効直前に始まった PUT が初回 delete 後に完了しても、failed 行が残るので
+    // 次の cron が同じキーを再び回収できる。
+    bucket.objects.set(key, USER_STORAGE_QUOTA_BYTES);
+    await retain(database, bucket);
+
+    expect(bucket.objects.has(key)).toBe(false);
+    expect(database.movies.get(upload.shortId)?.status).toBe('failed');
+  });
+
+  it('presign 直後の DELETE を拒否し、遅延 PUT を追跡可能なまま回収する', async () => {
+    const database = new RecoveryDatabase(CREATED_AT.toISOString());
+    const bucket = new RecoveryBucket();
+    const upload = await reserve(database, 'DeleteLate01', 1);
+    const key = movieKey(upload.shortId);
+
+    await expect(
+      deleteMovie({
+        database,
+        bucket,
+        cachePurge: CACHE_PURGE,
+        userId: USER_ID,
+        shortId: upload.shortId,
+      })
+    ).rejects.toMatchObject({ status: 409 });
+    expect(database.movies.get(upload.shortId)?.status).toBe('pending');
+
+    bucket.objects.set(key, USER_STORAGE_QUOTA_BYTES);
+    await retain(database, bucket);
+
+    expect(bucket.objects.has(key)).toBe(false);
     expect(database.movies.get(upload.shortId)?.status).toBe('failed');
   });
 });

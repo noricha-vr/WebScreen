@@ -27,21 +27,12 @@ import {
   PINNED_RETENTION_MS,
   UNPIN_GRACE_MS,
 } from './quota';
+import { toMovieIsoString as toIsoString } from './movie-time';
+
+export { findPublicMovie, type PublicMovie } from './movie-public';
 
 /** 履歴に返す最大件数。ドロップダウンで一覧できる範囲に抑える。 */
 export const HISTORY_LIMIT = 50;
-
-/** プレビューページが描画に使う、公開済み（ready）の 1 件。 */
-export interface PublicMovie {
-  shortId: string;
-  filename: string;
-  publicUrl: string;
-  pinned: boolean;
-  createdAt: string;
-  expiresAt: string | null;
-  /** 所有者判定にだけ使うサーバー内部の値。レスポンスに含めないこと。 */
-  ownerId: number;
-}
 
 /** D1 の最小操作面。サービスを workerd の実装から切り離す。 */
 export interface MoviesDatabase {
@@ -107,7 +98,7 @@ export interface MovieActionInput {
  *
  * ready だけを返すのは、履歴を「共有できる動画の一覧」に揃えるため。pending は
  * presign から commit までの数秒しか続かない一方、アップロードが失敗すると誰も
- * failed へ落とさないまま残り、cron が回収する 24 時間後まで「処理中」と表示され
+ * failed へ落とさないまま残っても、署名失効後に cron が回収するまで「処理中」と表示され
  * 続けていた（進捗は変換パネル側が持っているので履歴に出す必要がない）。
  */
 export async function listHistory(input: ListHistoryInput): Promise<HistoryResponse> {
@@ -286,7 +277,16 @@ export async function renameMovie(
 export async function deleteMovie(
   input: MovieActionInput & { bucket: MovieBucket; cachePurge: CachePurgeSettings }
 ): Promise<void> {
-  await findOwnedMovie(input.database, input.userId, input.shortId);
+  const movie = await findOwnedMovie(input.database, input.userId, input.shortId);
+  if (movie.status !== 'ready') {
+    // pending の署名 URL はまだ有効で、先に行を消すと遅延 PUT が追跡不能な R2 孤児になる。
+    // 未確定アップロードの破棄は pending → failed へ遷移する abandon 経路へ一本化する。
+    throw new MovieActionError(
+      409,
+      ERROR_CODES.invalidRequest,
+      '公開前または失敗した動画は DELETE できません'
+    );
+  }
 
   // R2 → D1 の順にするのは、途中で失敗した時に残る side が検出可能な方だから。
   // D1 を先に消すと、残った実体は行から辿れず誰も気づけない（R2 の孤児になる）。
@@ -318,39 +318,6 @@ export async function deleteMovie(
     });
     throw error;
   }
-}
-
-/**
- * 公開プレビュー用に ready の 1 件を引く。認証しないので status で絞る
- * （pending / failed は URL を知っていても見えない）。
- */
-export async function findPublicMovie(input: {
-  database: MoviesDatabase;
-  shortId: string;
-  publicBaseUrl: string;
-}): Promise<PublicMovie | null> {
-  if (!isShortId(input.shortId)) return null;
-
-  const row = await input.database
-    .prepare(
-      `SELECT short_id, user_id, filename, status, pinned, created_at, expires_at
-       FROM movies
-       WHERE short_id = ? AND status = 'ready'`
-    )
-    .bind(input.shortId)
-    .first<MovieRow>();
-
-  if (!row) return null;
-
-  return {
-    shortId: row.short_id,
-    filename: row.filename,
-    publicUrl: movieUrl(input.publicBaseUrl, row.short_id),
-    pinned: row.pinned !== 0,
-    createdAt: toIsoString(row.created_at),
-    expiresAt: row.expires_at === null ? null : toIsoString(row.expires_at),
-    ownerId: row.user_id,
-  };
 }
 
 /** 所有者の行を引く。形式不正・不在・他人の shortId はすべて 404（存在を漏らさない）。 */
@@ -414,22 +381,4 @@ function toHistoryEntry(row: MovieRow, publicBaseUrl: string): HistoryEntry {
     expiresAt: row.expires_at === null ? null : toIsoString(row.expires_at),
     publicUrl: movieUrl(publicBaseUrl, row.short_id),
   };
-}
-
-const SQLITE_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
-
-/**
- * D1 の日時を ISO8601（UTC）に揃える。
- *
- * created_at の DEFAULT は datetime('now') で "YYYY-MM-DD HH:MM:SS"（UTC）を返すが、
- * この文字列を Date に渡すと実行環境のローカル時刻として解釈され、workerd（UTC）と
- * 開発機（JST）で結果が 9 時間ずれる。境界でタイムゾーンを明示して揃える。
- */
-function toIsoString(value: string): string {
-  const normalized = SQLITE_DATETIME_PATTERN.test(value) ? `${value.replace(' ', 'T')}Z` : value;
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error('movies の日時カラムを解釈できません');
-  }
-  return parsed.toISOString();
 }

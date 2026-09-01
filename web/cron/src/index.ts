@@ -158,7 +158,7 @@ async function runRetentionCron(env: Env, event: ScheduledEvent, cron: string): 
         severity,
         kind: 'event',
         cron,
-        summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), ${summary.deletedOrphans} orphans, ${summary.deletedFailed} failed rows; swept ${summary.sweptFailedObjects} failed object keys; deleted ${summary.deletedCaptures} captures; audited ${summary.checkedReadyRows} ready rows (${summary.missingObjectRows} missing objects).${purge}${deferred}${capped}${skipped}${auditErrors}`,
+        summary: `retention backfilled ${summary.backfilledPinned} pinned expiries, deleted ${summary.deletedMovies} expired movies (${summary.strandedMovies} stranded), recovered ${summary.recoveredPendingUploads} pending uploads, deleted ${summary.deletedFailed} failed rows; swept ${summary.sweptFailedObjects} failed object keys; deleted ${summary.deletedCaptures} captures; audited ${summary.checkedReadyRows} ready rows (${summary.missingObjectRows} missing objects).${purge}${deferred}${capped}${skipped}${auditErrors}`,
         detail: summary,
         durationMs: Date.now() - startedAt,
       })
