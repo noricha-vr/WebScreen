@@ -30,7 +30,7 @@
 | **A9** | Chrome でタブと「タブの音声を共有」を選ぶ | UI が音声ありと表示し、出口が H.264 + AAC になる | audio track、relay の ffmpeg、egress の順に切り分ける |
 | **A10** | ingress または relay を一時的に未到達にして開始する | 同じ画面で 1 回自動再接続し、失敗時だけ再接続ボタンを出す | 一律の「再起動してください」案内へ逃げず、health bytes を確認する |
 | **A11** | actual YouTube を開始して直後のカクつきを観察する | 約 30 秒待って安定すること。継続時は ingress / egress bytes を確認し、relay 未到達の場合だけ再接続する | 到達済みなら再接続を合格手順にしない。無条件の再起動は勧めない |
-| **A12** | MP3 relayを本番候補として昇格判定する | `?stream-profile=mp3-beta` を重複なく指定し、PCとQuestでMP3音声を実聴して各1秒未満を確認する。30分・20 relay・20 reader・codec gateは合格済み。残る実Mac動的映像の30 / 24 fps比較を完了する | 「音声が聞こえた」「めっちゃ速い」は有力な手動観測だが、PC/Questを分けた統制済みA12測定ではない。1項目でも未確認ならAACを維持する |
+| **A12** | MP3 relayを本番候補として昇格判定する | `?stream-profile=mp3-beta` を重複なく指定し、PCとQuestでMP3音声を実聴して各1秒未満を確認する。30分・20 relay・20 reader・codec gate・旧AACへの隔離rollbackは合格済み。残る実Mac動的映像の30 / 24 fps比較を完了する | rollbackはlocal v1.15.5での経路復旧までで、本番cutoverではない。「音声が聞こえた」「めっちゃ速い」はPC/Questを分けた統制済みA12測定ではない。1項目でも未確認ならAACを維持する |
 
 ## 測定の方法
 

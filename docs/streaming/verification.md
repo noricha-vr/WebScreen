@@ -436,6 +436,8 @@ YamaStreamの `Use Low Latency` 実値はログから直接確認できない。
 - Chromeの単純な720p30 / 1.2 Mbps上限では、通常8秒が237 kbps / key 1、500 ms要求が456 kbps / key 16、quality limitationなし。24/30 fpsのsequential合成値は24設定が20.5 fps / 342.834 kbps / key 15、30設定が29.875 fps / 422.682 kbps / key 16。24設定はheadlessでunder-deliveryしたため実Mac比較には使わない。
 - exact one `stream-profile=mp3-beta` のChromeだけ500 ms要求を有効化する。unknown/duplicate/通常アクセスは無効で、任意interval不可。非対応UAでは第2引数が無視されno-op loopになる可能性がある。
 - 手動では初動カクつき後約30秒で安定、音声可、PCモード + Mac配信は安定し、今回は「めっちゃ速い」と観測された。ただしA12のPC/Quest別MP3実聴・1秒未満と実Mac 24/30 fps比較は未完。再起動を常設回避策にしない。
+- rollback rehearsalはlocal Mac arm64 / MediaMTX v1.15.5の隔離高番ポートで実施。同じ1280x720 / 30 fps H.264 + AAC入力を維持し、candidateのH.264 + MP3 48 kHz stereoをcodec gateで確認後、SIGINT停止とpath停止を確認した。pre-PR main `e2369d0` の旧relayへ戻すとH.264 + AAC 48 kHz stereoが復旧し、`ffmpeg -xerror` の10秒decodeも合格した。終了後は4ポート閉鎖・残留processなし。本番Indigo / Workerと製品configは未変更で、検証configだけv1.15.5互換のためIPv6 CIDRを引用し未対応MoQキーを外した。
+- 本番Indigoはread-onlyで確認し、`/opt/webscreen/streaming/relay.sh` のSHA-256がpre-PR main `e2369d0` と一致した。ingress / egressはactive、candidate用`audio-profile.sh`は未配置でlegacy AACを維持し、RTSP 554もlisten中だった。秘密値は取得・出力していない。
 
 ## 検証できていないこと
 
