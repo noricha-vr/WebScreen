@@ -14,7 +14,7 @@
 | プログレッシブ mp4 | ○（現行の WebScreen） | ○ |
 | RTMP / SRT / WebRTC / DASH | **✕** | **✕** |
 
-コーデックは **H.264 + AAC / MP4 が最大公約数**。**Opus 音声は Media Foundation で読み込み失敗**する。
+コーデックは本番の **H.264 + AAC / MP4 が最大公約数**。RTSPTのOpusとG.711はAVProが映像だけを選択した。MP3候補は実Mac動的H.264でH.264 + MPEG-1/2 Audioの2トラックを選択し、PC映像と低遅延を確認したが、音声実聴・Quest・30分は未確認のためAACから昇格しない（2026-09-02実測）。
 VRChat 固有の解像度・ビットレート上限は公式に記載がない。
 
 同一 URL・同一時刻での比較（VRChat feedback, 2025-08）: **PC HLS 35 秒 / Quest HLS 3 秒 / iOS 2 秒 / Android 1 秒**。
@@ -24,8 +24,8 @@ PC だけが桁違いに外れている。
 
 | | 最小遅延 | 経路 | 条件 |
 |---|---|---|---|
-| **PC** | **約 0.08 秒** | `rtspt://` + AVPro `Use Low Latency` **ON** | Indigo 往復の実機実測。ワールド依存 |
-| **Quest** | **体感 2〜3 秒** | PC と同じ `rtspt://` | ExoPlayer 側のバッファ。80 秒前後を複数回、切断なし |
+| **PC** | **RTSPT動画のみ0.059秒 / AAC 1.239秒 / MP3候補0.151秒** | 同じYamaStreamのRTSPT実測 | MP3候補は16標本すべて1秒未満（0.129〜0.416秒、平均0.175秒）。ただし2トラック選択を音声実聴とは扱わず、PC限定の候補値 |
+| **Quest** | **体感 2〜3 秒** | PC と同じ `rtspt://webscreen.tv/live/{id}` | Quest/VRChat 受信経路側に残る現状境界。network 受信後の decode / render / buffer の具体的要因と値は未確認。URL は一本化できるが、サーバー設定だけで 1 秒未満は保証できない |
 
 ## PC の遅延はワールド作者が決める（こちらから制御できない）
 
@@ -34,11 +34,14 @@ PC だけが桁違いに外れている。
 
 | ワールドの設定 | PC の遅延 |
 |---|---|
-| `Use Low Latency` ON | **約 0.08 秒（WebScreen 実測）** |
-| `Use Low Latency` OFF | **+8〜10 秒** |
+| 過去RTMP映像条件 | **約0.08秒**。Quest対応前に同じYamaStreamで測定。RTSPTとの差は未切り分け |
+| YamaStream（RTSPT動画のみ） | **0.026〜0.080秒、6標本の中央値0.059秒**（30 fps録画の分解能約0.033秒）。同じH.264映像・AVPro・ワールドで1秒以下 |
+| YamaStream（RTSPT H.264/AAC） | **17標本・独立12標本とも中央値1.239秒**。独立12標本は1.157〜1.321秒、平均1.237秒。音声付き1秒以下は未合格 |
+| YamaStream（RTSPT H.264/MP3候補） | **16標本すべて1秒未満、中央値0.151秒**。映像と2トラック選択は確認、音声実聴とQuestは未確認 |
+| `Use Low Latency` 実値 | 現行ワールドのログから未確認。設定値や遅延への効果は断定しない |
 
-**製品としての意味**: WebScreen が「超低遅延」を謳っても、**視聴されるワールド次第で 20 倍変わる**。
-訴求できるのは「対応ワールドなら 0.1 秒級」であって「常に 0.1 秒」ではない。対応ワールドの案内をドキュメントに置く必要がある。
+**製品としての意味**: WebScreen が「超低遅延」を謳っても、**視聴されるワールド次第で大きく変わる**。
+YamaStreamの単一実測をPCワールド全般へ一般化しない。AACは中央値1.239秒、MP3候補は中央値0.151秒として分ける。RTMPは現行Media Foundation経路でLoading failedとなり比較不能だった。公開前に対象ワールドと音声条件を個別に測り、Quest実聴前は本番AACを維持する。Windows の設定説明は [AVPro documentation](https://www.renderheads.com/content/docs/AVProVideo/articles/inline-component-media-player-properties-windows.html) を参照。
 
 また、ワールド側は **AVPro の Stream モード**である必要がある（VRChat 公式が Unity 標準 VideoPlayer は "does not support these live streams" と明記）。
 
@@ -54,8 +57,12 @@ VRChat は**ホスト単位**の既定 allowlist（13 サービス: YouTube / Tw
 
 | インスタンス種別 | 必要な条件 |
 |---|---|
-| Private / Friends | 視聴者が `Allow Untrusted URLs` を ON |
-| **Public / Group Public** | 上記 **かつ** **ワールド作者**がワールド設定にドメインを登録（**上限 10・ワイルドカード非対応・既定は空**） |
+| Private | 視聴者が `Allow Untrusted URLs` を ON |
+| Friends | 視聴者が `Allow Untrusted URLs` を ON |
+| Friends+ | 視聴者が `Allow Untrusted URLs` を ON |
+| **Public / Group Public** | 視聴者の同設定が ON **かつ** ワールド作者がワールド設定にドメインを登録（**上限 10・ワイルドカード非対応・既定は空**） |
+
+YamaStream の 2026-09-02 実測では、Public の `urlList` が空で `webscreen.tv` を許可しておらず、AccessDenied のまま MediaMTX egress reader が 0 本だった。これは RTSP 接続前の拒否である。Friends+ では `Allow Untrusted URLs` を有効化して再生できた。Public で使うにはワールド作者が `webscreen.tv` を Allowed Domains へ登録する必要がある。
 
 **重要な切り分け: これはライブ配信で新たに増える制約ではない。**
 `cdn.web-screen.net` の静的 MP4 も既にこの制約下にあり、それで本番稼働している = WebScreen は既にこの摩擦を受け入れている。
@@ -71,4 +78,5 @@ VRCDN / TopazChat が既定 allowlist 入りなのは、技術投資では買え
 | **Quest の HTTP 系 URL は HTTPS 必須** | 静的 MP4 / HLS の HTTP 配信に対する制約。RTSP は `rtspt://webscreen.tv/...` を実機確認済み |
 | URL 投入のレート制限 | ユーザーあたり 5 秒に 1 回のグローバル制限。リトライ設計に効く |
 | **60 秒切断の既知問題** | MediaMTX v1.20.1 + VRChat PC 実機で 7 分以上の単一 RTSP セッションを確認し、再現しなかった。バージョン更新時は [acceptance-test.md](acceptance-test.md) A5 を再実行する |
-| AVPro のバージョン | VRChat の AVPro は **v3.3.6**（Build 1864 / 2026-06-22, VRChat 2026.2.3）。上記の遅延実測値はすべて 2.x 時代のもので、**PC HLS 35 秒が現在も再現するかは未検証** |
+| **開始直後のカクつき** | actual YouTube の既存観測では約 30 秒で自然に安定。まず 30 秒待ち、継続時は ingress / egress bytes を確認する。relay 未到達の場合だけ再接続し、到達済みなら再接続を合格手順にしない。無条件の再起動は案内しない |
+| AVPro のバージョン | RTSPTのAAC / 動画のみ / MP3候補は **AVPro v3.3.6 Media Foundation** で実測。PC HLS 35秒は2.x時代の値で現在も再現するか未検証。RTMPはv3.3.6 Media FoundationでLoading failed |

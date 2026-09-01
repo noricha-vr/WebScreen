@@ -156,25 +156,24 @@ VRChat PC 実機（ProTV の Stream モード）+ Indigo 上の MediaMTX **v1.20
 
 - 同一インスタンスの別プレイヤー（別グローバル IP）のクライアントが同じ path を直接読みに来ることもログで確認
   （視聴者ごとの直接ユニキャストという設計前提のとおり）
-- A3（低遅延）と A7（Quest）は実機確認済み。残る実機項目は A4（`Use Low Latency` OFF の遅延実測 = Issue #95）
+- A3はPCで実測済みだが、AACは音声付き1秒以下に未達、MP3は音声未実聴のため判定保留。A7は現行AACで合格済み。残る実機項目は、`Use Low Latency` の実値を確認できる条件での再測定と、MP3昇格条件A12である
 
-### I7: 遅延の実測 — `Use Low Latency` ON で約 0.08 秒（VRChat 実機・2026-08-31。Issue #95 A3）
+### I7: 遅延の過去実測 — RTMP映像条件で約0.08秒（VRChat PC実機・2026-08-31。Issue #95 A3）
 
 時計描画ページ（poc/whip-publisher.html）を VRChat と同一の Windows マシンで表示し、
 両画面をスマホ動画で撮影してフレームごとの時計差を読んだ（同一時計源のため時計ずれなし）。
-経路は Windows → Indigo → Windows の実ネットワーク往復。ワールドの `Use Low Latency` は **ON**。
+経路はWindows → Indigo → Windowsの実ネットワーク往復で、Quest対応前の同じYamaStreamにおける**RTMP映像条件**である。ワールドの `Use Low Latency` 実値はログから確認できていない。
 
 | 配信設定 | VRChat の表示更新 | 遅延 |
 |---|---|---|
 | maxBitrate 600 kbps | **2.00 秒ごと（キーフレームのみ）** | 0.53〜2.53 秒のノコギリ波（最小 0.53 秒） |
 | maxBitrate 2500 kbps | 毎フレーム | **0.08 秒（5 サンプル全て ±0.01 秒以内）** |
 
-- **パイプライン遅延は実網越しでも約 0.1 秒**。ローカル実測の約 100ms（V10)と整合し、
-  想定レンジ 0.3〜0.5 秒より良い。訴求は「対応ワールドなら 0.1 秒級」まで言える
+- 約0.08秒は**RTMP映像条件の過去値**である。現在のRTSPT動画のみ0.059秒やH.264/AAC 1.239秒との比較は、送出条件・音声条件を揃えていないためプロトコル差の結論には使わない
 - **ビットレート不足は遅延にも化ける**: 600 kbps ではデルタフレームが実質空（I5）のため表示が
   キーフレーム周期でしか進まず、体感遅延が最大 2.5 秒まで揺れる。画質の段設計は帯域だけでなく
   体感遅延の問題でもある
-- A4（`Use Low Latency` OFF のワールド）は未測定
+- `Use Low Latency` の実値を確認できる条件での測定は未実施
 
 ### I8: Indigo 実機の reader あたり CPU は約 0.15%/reader — 律速は CPU ではなく帯域（2026-08-31）
 
@@ -253,7 +252,7 @@ Meta Quest 単体の VRChat で `rtspt://stream.web-screen.net/live/qtest`（本
 |---|---|
 | 映像 | 再生 OK（RTSP over TCP。サーバーログに `with TCP, 2 tracks (H264, MPEG-4 Audio)`） |
 | 音声 | **AAC が Quest で鳴る**（R3 の実機裏取り） |
-| 体感遅延 | **2〜3 秒**（PC の Use Low Latency ON = 0.08 秒より大きい。ExoPlayer 側のバッファ） |
+| 体感遅延 | **2〜3秒**（同じYamaStreamでのRTSPT H.264/AACは中央値1.239秒。Quest/VRChat受信経路側に残る現状境界） |
 | 安定性 | 80 秒前後のセッションを複数回、切断なし |
 | `rtsp://`（8554 明示） | 再生 OK |
 
@@ -271,7 +270,7 @@ Meta Quest 単体の VRChat で `rtspt://stream.web-screen.net/live/qtest`（本
 
 配信ホストを専用ドメイン `webscreen.tv`（apex・A レコードで Indigo 直指し・Cloudflare プロキシ OFF）へ
 切り替え、`rtspt://webscreen.tv/live/qtest` を **PC / Quest の両実機で再生確認**した。
-体感遅延は PC < Quest（PC = Use Low Latency ON の 0.08 秒水準、Quest = ExoPlayer バッファで 2〜3 秒。I7 / I12 と整合）。
+体感遅延はPC < Quest（同じYamaStreamでのRTSPT H.264/AACは中央値1.239秒、Questは2〜3秒。network受信後のdecode / render / bufferの具体的要因と値は未確認）。約0.08秒は同じワールドでQuest対応前に測ったRTMP映像条件の過去値であり、RTSPTや `Use Low Latency` の効果を示すものではない。
 
 - 移行理由: Quest では URL を手打ちするしかなく、ホストが 21 文字 → 12 文字・ハイフン 2 個 → 0 個になる
 - DNS のみで完結（RTSP はホスト名を見ないため、サーバー側の設定変更は不要だった）
@@ -381,6 +380,54 @@ actual YouTube を音声共有ありで本番 relay と VRChat PC 実機へ配�
 
 本番WebScreen UIからactual YouTubeを再確認する最終確認は未実施。I17のactual YouTube観測とこのI18のrelay合格を混同しない。
 
+### I19: 約3秒に見えた RTSPT 遅延を配信経路と受信側に分離（2026-09-01）
+
+RTMP と RTSPT が異なる遅延に見えた観測を、同一 H.264 packet と送信元時計で分けて再測定した。
+結論は、**配信元のオンライン時計から本番 RTSPT 出口までは 1 秒未満**であり、MediaMTX + FFmpeg relay は約 70 ms である。
+
+| 測定 | 方法 | 結果 |
+|---|---|---|
+| ingress → egress | 同一 H.264 packet payload hash を照合（335 packets） | median **69.6 ms** / p95 **132.8 ms** / max **183.9 ms** |
+| 配信元時計 → RTSPT 出口 | 入力にオンライン時計を描画し、出口で `-use_wallclock_as_timestamps 1` + `-copyts` + `-frame_pts 1` を用いて 9 フレームを OCR | **0.097〜0.294 秒**、中央値約 **0.11 秒** |
+| WebRTC 入力の損失（単一時点） | MediaMTX 統計とログを確認 | 197,851 received / 79 lost（約 **0.04%**）、discarded frame 1、write queue full なし |
+
+初期の `strftime` / fps 採取は約 3 秒に見えたが、採取側のバッファを含んでいたため結論に使わない。長時間観測は **24分47秒**で stream 終了まで確認した時点で、28〜29 fps、egress 1.2〜1.3 Mbps だった。30 分の安定性合格は未達である。
+
+relay 設定の A/B では、通常設定から実質的な改善はなかった。
+
+| relay 設定 | median | p95 | max | 判定 |
+|---|---:|---:|---:|---|
+| baseline | 65.0 ms | 122.6 ms | 178.2 ms | 基準 |
+| `nobuffer` + `low_delay` + `flush` | 61.1 ms | 124.7 ms | — | 実質改善なし |
+| 上記 + `max_delay=0` | 61.6 ms | 126.7 ms | — | 実質改善なし |
+
+`-probesize 32 -analyzeduration 0` は H.264 dimensions unspecified / Could not write header で起動不能となり不採用。FFmpeg の低遅延入力オプションは [formats documentation](https://ffmpeg.org/ffmpeg-formats.html) を参照。MediaMTX は reader へ即時送出し、遅延用バッファを持たないという maintainer の説明とも整合する（[discussion #3660](https://github.com/bluenviron/mediamtx/discussions/3660)）。したがって、**本番 relay 設定は変更しない**。約 70 ms の relay を危険な起動不能設定で削っても 3 秒の説明にならず、RTMP を復活させる理由にもならない。
+
+判断境界は Quest/VRChat 受信経路側に残る。
+
+- **PC VRChat（YamaStream）**: 同じワールドで、RTSPTの動画のみは0.026〜0.080秒（6標本の中央値0.059秒）、H.264/AACは文字・音声とも明瞭だが17標本・独立12標本とも中央値1.239秒で音声付き1秒以下未合格だった。独立12標本は1.157〜1.321秒、平均1.237秒で、17標本の1.203〜1.282秒と再現した。Quest対応前のRTMP映像条件で測った約0.08秒は過去値としてだけ残し、RTMP対RTSPTのプロトコル差を示す比較には使わない。NTP時計の大時計自体が補正済みなので、下段の端末ずれを重ねて引かない。ログから `Use Low Latency` の実値は直接確認できない。Public で egress reader が0本なら、RTSP前のAllowed Domains拒否を確認する。Windows 向けの同プロパティは [AVPro documentation](https://www.renderheads.com/content/docs/AVProVideo/articles/inline-component-media-player-properties-windows.html) を参照。
+- **Quest の 2〜3 秒**: 同じ `rtspt://webscreen.tv/live/{id}` で再生できるが、これは Quest/VRChat 受信経路側に残る現状境界である。ネットワーク受信後の decode / render / buffer の具体的要因と値は未確認。Media3 の標準 `DefaultLoadControl` の既定バッファは説明可能性の参考にすぎず、VRChat の具体的な設定値を示さない（[Android reference](https://developer.android.com/reference/androidx/media3/exoplayer/DefaultLoadControl)）。サーバー設定だけで Quest の 1 秒未満を保証することはできない。
+
+未確認のまま残すものは、YamaStream の `Use Low Latency` 実値、RTMP対RTSPTのPCプレイヤーまでのプロトコル差、MP3音声のPC実聴、QuestでのMP3映像・音声・1秒未満、MP3 relayのcapacity、30分の長時間安定性、および実Mac動的映像 + MP3での24 fps比較である。I16の合成素材 + AACによる30 / 24 fps比較は実施済みで、今回の未実施条件とは分ける。
+
+### I20: YamaStream の PC 実機 — Public の許可設定と精密遅延（2026-09-02）
+
+同じYamaStreamで `rtspt://webscreen.tv/live/{id}` のH.264/AACを AVProVideoPlayer に再生した。画面文字はクリアで、ユーザー実画面の体感は約1秒だった。初回のWindowsデスクトップ30 fps同時録画17標本は1.203〜1.282秒、中央値1.239秒だった。実Mac配信の独立再測定12標本は1.157〜1.321秒、中央値1.239秒、平均1.237秒で、音声付き1秒以下の未達を再現した。同じRTSPT映像からAAC音声を除いたA/Bは0.026〜0.080秒、6標本の中央値0.059秒だった。Quest対応前に同じYamaStreamで測った約0.08秒はRTMP映像条件の過去値であり、RTMP対RTSPTのプロトコル差は未切り分けである。時計ページ下段の「端末が遅れ／進み」は補正量の表示であり、大時計はすでに補正済みなので時計差から重ねて引かない。I19の配信元時計から本番RTSPT出口までの中央値約0.11秒とは測定境界が異なり、PCプレイヤーまで含む実測として記録する。
+
+| 段階 | 観測 | 結論 |
+|---|---|---|
+| Public | VRChat ログは `webscreen.tv` が Video Player Allowed Domains に無いとして AccessDenied。VRChat Public API の当該ワールド `urlList` は空、MediaMTX egress readers は 0 | URL は RTSP 接続前に拒否された。relay / codec / 遅延の問題ではない |
+| Friends+ | hidden instance へ移動し `Allow Untrusted URLs` を有効化 | 再生開始 |
+| AVPro 再生 | `MediaFoundation` で open、`MF-MediaEngine-Hardware` で 1280x708 / 30.00 fps。egress reader 1 本が継続し bytesSent が増加 | PC の Media Foundation 経路で映像・音声を継続再生 |
+| AAC音声付き | Windowsデスクトップ同時録画（30 fps、分解能約0.033秒）の17標本と、実Mac配信の独立12標本をNTP補正済み時計で採取 | 17標本 **1.203〜1.282秒**、独立12標本 **1.157〜1.321秒**、両者の中央値 **1.239秒**（後者の平均 **1.237秒**）。音声付き1秒以下未合格を再現 |
+| 動画のみA/B | 同じH.264映像からAAC音声だけ除き、同じAVPro・ワールドで6標本を採取 | **0.026〜0.080秒**、中央値 **0.059秒**。1秒以下合格。約1.18秒の差は音声を含む受信条件で生じる |
+| Opus直通A/B | 一時pathはH.264 + Opusの2トラック。AVPro接続中の6標本は **0.219〜0.356秒**、中央値 **0.255秒** | MediaMTXログでAVPro readerが選択したのはH.264の1トラックだけ。Opus音声は受信しておらず、音声付き合格には使えない |
+| G.711 A/B | 一時pathはH.264 + G.711 | AVPro readerはH.264だけを選択し、音声なし。音声付き合格には使えない |
+| MP3 A/B | 実Mac動的H.264 + MP3 48 kHz stereo 128 kbpsを同じYamaStream / AVPro 3.3.6 Media Foundationで再生し、30 fps同時録画16標本を採取 | AVPro readerはH.264 + MPEG-1/2 Audioの2トラックを選択。**0.129〜0.416秒、中央値0.151秒、平均0.175秒で全件1秒未満**。映像と低遅延は確認したがMP3音声の実聴は未確認 |
+| RTMP A/B | egressを一時有効化し、Mac / WindowsのffprobeでH.264 + AACを取得。VRChat 2026.3.1で同じURLを開く | URL解決後、AVPro Media FoundationのOpeningからLoading failed。AVPro v3のWindows RTMPはDirectShow + LAV経路のため現行YamaStreamでは比較不能。検証後 `rtmp: false` に戻し1935 listenerなし |
+
+YamaStreamの `Use Low Latency` 実値はログから直接確認できない。AACは独立2回とも中央値1.239秒で未合格、MP3候補は映像表示までのPC遅延のみ暫定合格した。MP3 test relayは4分8秒稼働し、元Mac配信EOFでAACと同時終了するまでMP3固有エラーはなかったが、2トラック選択を音声実聴へ一般化しない。QuestのMP3映像・音声、30分、capacityは未確認なのでproduction設定はAACのまま変更しない。昇格条件は [acceptance-test.md](acceptance-test.md) A12に集約し、I16の合成素材 + AACによる24 fps比較を同条件の確認として代用しない。
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |
@@ -395,3 +442,7 @@ actual YouTube を音声共有ありで本番 relay と VRChat PC 実機へ配�
 | 8 | ~~WHIP の UDP を NAT 越しに到達させる実構成~~ | **2026-08-31 解消**（I1。Indigo は NAT なしのグローバル IP 直付けで、`webrtcAdditionalHosts` 不要） |
 | 9 | 本番WebScreen UIからactual YouTubeをループさせる長時間確認 | I18の合成relay QAとは別に、UI経路のfps・freeze・帯域・文字可読性を最終確認する |
 | 10 | Safariでのfull設定の受理・実送出 | full設定拒否時はmaxBitrate-only fallbackで配信を継続するが、文字品質は別途確認する |
+| 11 | YamaStream の `Use Low Latency` 実値とRTMP対RTSPTの差 | RTMPはMedia FoundationでLoading failedとなり現行ワールドではA/B不能。設定値もログから直接確認できない |
+| 12 | Quest でMP3音声付き1秒未満 | MP3候補はPCで全16標本1秒未満だが、Questの映像・音声は未確認。現行AACは体感2〜3秒で、サーバー設定だけでは保証不能 |
+| 13 | 30 分の長時間安定性 | 24分47秒まで 28〜29 fps、egress 1.2〜1.3 Mbps を観測後に stream 終了。合格扱いにしない |
+| 14 | 実Mac動的映像 + MP3の24 fps安定性比較 | 30 fps候補との画質・カクつき・遅延比較は次回実施。I16の合成素材 + AAC比較は実施済みだが条件が異なる |

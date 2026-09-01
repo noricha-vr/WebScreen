@@ -284,7 +284,7 @@
   },
   "screenSharePage": {
     "title": "How to share your screen in VRChat — no OBS, just your browser | WebScreen",
-    "description": "Share your screen in VRChat with no OBS or install. Pick it in your browser and paste the URL. Works on PC and Quest, with about 0.1 seconds of latency.",
+    "description": "Share your screen in VRChat without OBS or installing anything. Pick it in your browser and paste the URL. In a tested PC world, we measured about 0.1 seconds for video only and 1.2 seconds with audio; Quest latency is 2–3 seconds.",
     "heading": "Share your screen in VRChat — browser only, no OBS",
     "lead": "Pick a screen and get a streaming URL you can paste into a VRChat video player.",
     "badges": ["No OBS", "No installation", "PC and Quest"],
@@ -338,7 +338,7 @@
         { "heading": "Paste it into VRChat", "body": "Paste the URL into a video player in a compatible world.", "placeholder": "Pasting into VRChat preview" }
       ]
     },
-    "features": { "heading": "Features", "items": ["No OBS: stream from your browser", "About 0.1 seconds of latency in Use Low Latency compatible worlds", "Quest uses the same URL", "Free to use"] },
+    "features": { "heading": "Features", "items": ["No OBS: stream from your browser", "About 0.1 seconds video-only and 1.2 seconds with audio in a tested PC world", "Same URL on Quest, with about 2–3 seconds of latency", "Free to use"] },
     "faq": {
       "heading": "FAQ",
       "items": [

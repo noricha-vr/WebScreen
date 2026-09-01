@@ -17,7 +17,10 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 | 文字の可読性 | **本番 relay 合成QAは合格**（1280x720を維持し16 / 24pxは明瞭、12pxも判読可）。WebScreen UIからの actual YouTube は未検証 | [stability-audio-verification.md](stability-audio-verification.md) |
 | 同時配信 | **全体 20 本 / 1 ユーザー 1 本** | API の原子的な上限 |
 | 途中参加の待ち | 最大 2 秒（**変更できない**） | 実測 |
+| PC | 同じYamaStreamのRTSPTで、AACは独立2回とも中央値1.239秒、MP3昇格候補は0.129〜0.416秒（16標本、中央値0.151秒、平均0.175秒）で全件1秒未満。MP3は2トラック選択と映像を確認したが、音声の実聴・Quest・30分は未確認 | 実測 |
 | Quest | PC と同じ `rtspt://`。AAC 音声を含め実機確認済み、体感 2〜3 秒 | 実測 |
+
+**おすすめは現行AACを維持すること。** MP3の昇格条件は [acceptance-test.md](acceptance-test.md) A12（PC / Quest実聴、Quest 1秒未満、30分、30 / 24 fps比較、capacity、codec gate）に固定した。これはI16の合成素材 + AACによる30 / 24 fps比較とは別条件である。RTMPは現行YamaStreamのMedia Foundation経路では開けず、検証後に無効へ戻した。
 
 ## 読む順番
 

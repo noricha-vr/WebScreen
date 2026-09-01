@@ -36,7 +36,7 @@ HLS は「連番の静的ファイル」なのでキャッシュでき、視聴�
 |---|---|---|
 | 視聴者数の上限 | 実質なし | **サーバーの帯域と CPU** |
 | 画質と視聴者数の関係 | 無関係 | **画質を上げると人数が減る** |
-| 遅延 | PC で 35 秒 | **約 0.3〜0.5 秒** |
+| 遅延 | PC で 35 秒 | **同じYamaStreamのRTSPTで、AACは中央値1.239秒、MP3昇格候補は中央値0.151秒（全16標本1秒未満）。QuestのMP3音声は未確認のため本番はAACを維持** |
 
 「画質を落として多くの人に配る」という発想が意味を持つのは、この低遅延構成だからこそ。計算は [capacity.md](capacity.md)。
 
@@ -59,7 +59,9 @@ HLS は「連番の静的ファイル」なのでキャッシュでき、視聴�
 ### Quest も PC と同じ RTSP 出口を使う
 
 Quest 実機で `rtspt://webscreen.tv/live/{id}` の映像と AAC 音声を確認済み。PC と URL を分けず、
-HLS は実装しない。Quest の体感遅延は 2〜3 秒、PC の `Use Low Latency` 対応ワールドは約 0.1 秒級。
+HLS は実装しない。配信元時計から本番 RTSPT 出口までは 1 秒未満（I19）だが、Quest の体感遅延は 2〜3 秒である。
+これは Quest/VRChat 受信経路側に残る現状境界であり、network 受信後の decode / render / buffer の具体的要因と値は未確認。
+PCの同じYamaStreamでは、RTSPTの動画のみが中央値0.059秒、H.264/AACが独立2回とも中央値1.239秒だった。実Mac動的H.264 + MP3候補は16標本すべて1秒未満（0.129〜0.416秒、中央値0.151秒、平均0.175秒）で、AVProは映像とMPEG-1/2 Audioの2トラックを選択した。ただしMP3音声の実聴、Quest、30分、capacity、同条件の24 fpsは未確認なので本番AACから昇格しない。RTMPは一時有効化時にH.264/AACを取得できたが、現行YamaStreamのMedia Foundation経路ではLoading failedとなりA/B不能で、検証後に無効へ戻した。`Use Low Latency` の実値も未確認である。
 
 ### ingress / egress を分ける理由
 
