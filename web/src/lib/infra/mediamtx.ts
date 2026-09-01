@@ -16,6 +16,7 @@ export interface MediaMtxPublisher {
 }
 
 export interface MediaMtxClient {
+  getPath(name: string): Promise<MediaPath | undefined>;
   listPaths(): Promise<MediaPath[]>;
   kickPublisher(publisher: MediaMtxPublisher): Promise<void>;
 }
@@ -35,6 +36,21 @@ export function createMediaMtxClient(config: {
   const headers = { Authorization: `Bearer ${config.apiToken}` };
 
   return {
+    async getPath(name: string): Promise<MediaPath | undefined> {
+      const response = await fetchImpl(
+        `${baseUrl}/v3/paths/get/${encodeURIComponent(name)}`,
+        { headers }
+      );
+      if (response.status === 404) return undefined;
+      if (!response.ok) throw new Error(`MediaMTX path get failed with status ${response.status}`);
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        throw new Error('MediaMTX path get returned invalid JSON');
+      }
+      return parsePath(body);
+    },
     async listPaths(): Promise<MediaPath[]> {
       const first = await fetchPage(fetchImpl, baseUrl, headers, 0);
       const paths = first.items.map(parsePath);

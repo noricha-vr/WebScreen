@@ -10,6 +10,9 @@ const SETTINGS = { noViewerTimeoutSeconds: 600, heartbeatTimeoutSeconds: 60 };
 class FakeMediaMtx implements MediaMtxClient {
   kicks: string[] = [];
   constructor(readonly paths: MediaPath[] = [], readonly listFailure?: Error) {}
+  async getPath(name: string): Promise<MediaPath | undefined> {
+    return this.paths.find((path) => path.name === name);
+  }
   async listPaths(): Promise<MediaPath[]> {
     if (this.listFailure) throw this.listFailure;
     return this.paths.map((path) => ({

@@ -87,6 +87,31 @@ describe('MediaMTX Control API adapter', () => {
     expect(requests).toEqual(['https://media.example/v3/rtspsessions/kick/relay-1']);
   });
 
+  it('単一pathをURL path segmentとして取得し、404はpathなしとして返す', async () => {
+    const requests: string[] = [];
+    const client = createMediaMtxClient({
+      apiUrl: 'https://media.example',
+      apiToken: 'test-token',
+      fetchImpl: (async (input: string | URL | Request) => {
+        requests.push(String(input));
+        return new Response(null, { status: 404 });
+      }) as unknown as typeof fetch,
+    });
+
+    await expect(client.getPath('live/AbCdEf123456')).resolves.toBeUndefined();
+    expect(requests).toEqual(['https://media.example/v3/paths/get/live%2FAbCdEf123456']);
+  });
+
+  it('単一path取得の404以外の非2xxは例外にする', async () => {
+    const client = createMediaMtxClient({
+      apiUrl: 'https://media.example',
+      apiToken: 'test-token',
+      fetchImpl: (async () => new Response(null, { status: 503 })) as unknown as typeof fetch,
+    });
+
+    await expect(client.getPath('live/AbCdEf123456')).rejects.toThrow('status 503');
+  });
+
   it('不正なlist応答を例外にして握り潰さない', async () => {
     const client = createMediaMtxClient({
       apiUrl: 'https://media.example',

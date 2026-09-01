@@ -5,6 +5,7 @@ import { createStreamMediaMtxClients } from '../../src/lib/services/stream-media
 
 function fakeClient(): MediaMtxClient {
   return {
+    getPath: async () => undefined,
     listPaths: async () => [],
     kickPublisher: async (_publisher: MediaMtxPublisher) => undefined,
   };

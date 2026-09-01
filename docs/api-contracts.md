@@ -32,7 +32,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `PATCH /api/movies/{shortId}/` | ファイル名の変更 | 本人（所有者） | `RenameMovieRequest` / `RenameMovieResponse` |
 | `DELETE /api/movies/{shortId}/` | `ready` 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | `pending` / `failed` は 409 `INVALID_REQUEST`。`pending` の破棄は abandon を使う |
 | `POST /api/client-error/` | クライアント側の失敗報告（識別子だけを受けて `client_error` として構造化ログに残す。応答は 204） | 任意（Cookie があれば `userId` を添える） | `ClientErrorReport` |
-| `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行 | 本人 | `CreateStreamResponse`。本人の同時配信は 409 `STREAM_ALREADY_LIVE`、全体 20 本到達は 409 `STREAM_CAPACITY_REACHED`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
+| `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行 | 本人 | `CreateStreamResponse`。本人の同時配信は 409 `STREAM_ALREADY_LIVE`、全体 20 本到達は 429 `STREAM_CAPACITY_REACHED`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
 | `POST /api/streams/{id}/extend/` | 延長期限を更新し、同じ期限の新 publish JWT を発行 | 本人（所有者） | `ExtendStreamResponse`。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/heartbeat/` | 配信ブラウザの生存時刻を更新 | 本人（所有者） | 成功は 204。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/stop/` | 配信を `user_stop` で終了し、cron の kick 対象にする | 本人（所有者） | 冪等 204 |
@@ -47,7 +47,8 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 #126 のMediaMTX構築前に、Workerの `STREAM_JWT_PRIVATE_KEY`、Web / cron Worker の
 `MEDIAMTX_INGRESS_API_*` / `MEDIAMTX_EGRESS_API_*`、MediaMTXからのJWKS取得をすべて設定し、
 JWKS取得と ingress / egress の再読込を確認してから配信APIを利用可能にする。単一 MediaMTX から移行する間だけ
-旧 `MEDIAMTX_API_*` を fallback として利用できる。
+旧 `MEDIAMTX_API_*` を fallback として利用できる。fallback が有効なのは split の URL / token を **1 つも設定していない環境だけ**。
+split の 4 値を設定した版は移行完了後の構成であり、旧単一 service へ自動で戻らない。
 
 現在のJWKSは単一鍵で、publish JWTは最大で延長サイクル（初期2時間）有効なため、鍵の即時切替は
 active JWTとの互換を保てない。ローテーションは配信停止メンテナンスとして、secret投入 →

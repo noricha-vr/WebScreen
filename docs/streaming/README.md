@@ -28,6 +28,7 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 | [requirements.md](requirements.md) | **実装の必須要件と確定した設定値** | 実装する時。**これが実装の正本** |
 | [quality-tiers.md](quality-tiers.md) | **画質の段と、それが収容人数に与える影響**（実測） | 画質を決める時 |
 | [stability-audio-verification.md](stability-audio-verification.md) | **現行の 1080p30 / 2 Mbps / 音声 / 再接続の決定と実測** | 配信がカクつく・音が出ない時 |
+| [MediaMTX relay 運用手順](../../web/streaming/README.md) | **versioned server 設定、VPS → Worker の cutover、rollback** | 本番サーバーを更新・復旧する時 |
 | [server-plan.md](server-plan.md) | **サーバーの推奨と段階計画・見積もり** | サーバーを選ぶ時・契約する時 |
 | [capacity.md](capacity.md) | 収容人数の計算式と事業者の一覧 | 数字を自分で計算し直す時 |
 | [vrchat-constraints.md](vrchat-constraints.md) | 受信側（VRChat）の制約。動かせない前提 | 「なぜこの形しか取れないのか」を確認する時 |

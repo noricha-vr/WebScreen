@@ -138,7 +138,6 @@ export class ScreenShareController {
 
   private async createAndPublish(media: MediaStream, generation: number): Promise<StartedStream | null> {
     let created: CreateStreamResponse;
-    let publisher: WhipPublisher | null = null;
     try {
       created = asCreateStream(await this.deps.requestJson('/api/streams/', { method: 'POST' }));
     } catch (error) {
@@ -150,31 +149,37 @@ export class ScreenShareController {
       void this.notifyServerStop(created.id);
       return null;
     }
+    return this.publishAndVerify(media, created, generation);
+  }
+
+  private async publishAndVerify(
+    media: MediaStream,
+    created: CreateStreamResponse,
+    generation: number
+  ): Promise<StartedStream | null> {
+    let publisher: WhipPublisher | null = null;
+    let stream: LiveStream | null = null;
     try {
       publisher = await this.deps.startWhipPublisher({
         stream: media,
         streamId: created.id,
         publishToken: created.publishToken,
       });
-      const stream = { ...created, publisher, media };
+      stream = { ...created, publisher, media };
       if (!this.isActiveStart(generation)) {
         releaseScreenShare(stream, () => this.clearTimers());
         void this.notifyRemoteStop(stream);
         return null;
       }
-      if (await this.deps.waitForStreamReady(created.id)) return { live: stream, ready: true };
-      publisher = await publisher.republish();
-      stream.publisher = publisher;
-      if (!this.isActiveStart(generation)) {
-        releaseScreenShare(stream, () => this.clearTimers());
-        void this.notifyRemoteStop(stream);
-        return null;
-      }
-      return { live: stream, ready: await this.deps.waitForStreamReady(created.id) };
+      this.live = stream;
+      return await this.verifyInitialStream(stream, generation);
     } catch (error) {
-      if (publisher) {
-        publisher.close();
-        void publisher.deleteResource().catch((deleteError) => {
+      if (stream && !this.isActiveLive(stream)) return null;
+      if (stream) this.live = null;
+      const failedPublisher = stream?.publisher ?? publisher;
+      if (failedPublisher) {
+        failedPublisher.close();
+        void failedPublisher.deleteResource().catch((deleteError) => {
           console.warn('Failed to delete WHIP resource after start failure', deleteError);
         });
       }
@@ -182,6 +187,21 @@ export class ScreenShareController {
       void this.notifyServerStop(created.id);
       throw error;
     }
+  }
+
+  private async verifyInitialStream(stream: LiveStream, generation: number): Promise<StartedStream | null> {
+    const ready = await this.deps.waitForStreamReady(stream.id);
+    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) return null;
+    if (ready) return { live: stream, ready: true };
+    const replacement = await stream.publisher.republish();
+    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) {
+      await this.releasePublisher(replacement);
+      return null;
+    }
+    stream.publisher = replacement;
+    const retryReady = await this.deps.waitForStreamReady(stream.id);
+    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) return null;
+    return { live: stream, ready: retryReady };
   }
 
   private async copyUrl(): Promise<void> {
@@ -199,15 +219,22 @@ export class ScreenShareController {
     }
     this.setBusy('[data-screen-retry]', true, 'labelReconnecting');
     try {
-      live.publisher = await live.publisher.republish();
-      if (this.live !== live || this.stopping) return;
-      if (await this.deps.waitForStreamReady(live.id)) {
+      const publisher = await live.publisher.republish();
+      if (!this.isActiveLive(live)) {
+        await this.releasePublisher(publisher);
+        return;
+      }
+      live.publisher = publisher;
+      const ready = await this.deps.waitForStreamReady(live.id);
+      if (!this.isActiveLive(live)) return;
+      if (ready) {
         this.setUrl(live.streamUrl);
         this.show('url');
       } else {
         this.showError(new StreamHealthError());
       }
     } catch (error) {
+      if (!this.isActiveLive(live)) return;
       const stopped = this.finishLocally('error', error);
       if (stopped) await this.notifyRemoteStop(stopped);
     } finally {
@@ -322,8 +349,19 @@ export class ScreenShareController {
     });
   }
 
+  private async releasePublisher(publisher: WhipPublisher): Promise<void> {
+    publisher.close();
+    await publisher.deleteResource().catch((error) => {
+      console.warn('Failed to delete WHIP resource', error);
+    });
+  }
+
   private isActiveStart(generation: number): boolean {
     return !this.stopping && this.startGeneration === generation;
+  }
+
+  private isActiveLive(live: LiveStream): boolean {
+    return !this.stopping && this.live === live;
   }
 
   private showError(error: unknown): void {

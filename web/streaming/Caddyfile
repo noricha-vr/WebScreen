@@ -2,10 +2,12 @@
 stream.web-screen.net {
 	@ingress header Authorization "Bearer {env.MEDIAMTX_API_TOKEN}"
 	handle @ingress {
+		header X-WebScreen-MediaMTX-Role ingress
 		reverse_proxy 127.0.0.1:9997
 	}
 	@egress header Authorization "Bearer {env.MEDIAMTX_EGRESS_API_TOKEN}"
 	handle @egress {
+		header X-WebScreen-MediaMTX-Role egress
 		reverse_proxy 127.0.0.1:9998
 	}
 	handle {

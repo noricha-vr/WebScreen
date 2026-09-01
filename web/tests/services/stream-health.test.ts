@@ -5,8 +5,16 @@ import { getStreamHealth } from '../../src/lib/services/stream-health';
 import { createStreamDatabase } from './helpers/stream-db';
 
 class FakeMediaMtx implements MediaMtxClient {
+  calls: string[] = [];
+  listCalls = 0;
+
   constructor(private readonly paths: MediaPath[]) {}
+  async getPath(name: string): Promise<MediaPath | undefined> {
+    this.calls.push(name);
+    return this.paths.find((path) => path.name === name);
+  }
   async listPaths(): Promise<MediaPath[]> {
+    this.listCalls += 1;
     return this.paths;
   }
   async kickPublisher(_publisher: MediaMtxPublisher): Promise<void> {}
@@ -68,5 +76,19 @@ describe('stream health', () => {
     await expect(
       getStreamHealth({ database, userId: 20, id: 'AbCdEf123456', ingress, egress })
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('ingress/egressの単一pathを各1回だけ取得し、list全走査を行わない', async () => {
+    const database = await insertStream();
+    const ingress = new FakeMediaMtx([
+      { name: 'live/AbCdEf123456', publisherId: 'publisher', rtspReaders: 0, bytesReceived: 32 },
+    ]);
+    const egress = new FakeMediaMtx([]);
+
+    await getStreamHealth({ database, userId: 10, id: 'AbCdEf123456', ingress, egress });
+
+    expect(ingress.calls).toEqual(['live/AbCdEf123456']);
+    expect(egress.calls).toEqual(['live/AbCdEf123456']);
+    expect(ingress.listCalls + egress.listCalls).toBe(0);
   });
 });

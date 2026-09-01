@@ -156,7 +156,7 @@ VRChat PC 実機（ProTV の Stream モード）+ Indigo 上の MediaMTX **v1.20
 
 - 同一インスタンスの別プレイヤー（別グローバル IP）のクライアントが同じ path を直接読みに来ることもログで確認
   （視聴者ごとの直接ユニキャストという設計前提のとおり）
-- 残る実機項目は A3 / A4（遅延の実測 = Issue #95）と A7（Quest = Issue #96）
+- A3（低遅延）と A7（Quest）は実機確認済み。残る実機項目は A4（`Use Low Latency` OFF の遅延実測 = Issue #95）
 
 ### I7: 遅延の実測 — `Use Low Latency` ON で約 0.08 秒（VRChat 実機・2026-08-31。Issue #95 A3）
 

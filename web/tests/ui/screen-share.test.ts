@@ -196,42 +196,43 @@ describe('画面共有 controller', () => {
     expect(start.labelSpan.textContent).toBe('start');
   });
 
-  test('pagehide では空 body の sendBeacon で停止を通知する', async () => {
+  test.each(['resolve', 'reject'] as const)(
+    '初回health待機中のpagehideで即停止し、遅延%s後も復活しない', async (settlement) => {
     const page = fakeScreenSharePage();
+    const pendingHealth = deferred<boolean>();
     const beaconUrls: string[] = [];
-    let pageHide: (() => void) | undefined;
-    let stopped = 0;
+    let pageHide: (() => void) | undefined, healthStarted = false;
+    const calls = { stopped: 0, closed: 0, deleted: 0, republished: 0 };
     const publisher: WhipPublisher = {
-      close: () => undefined,
-      deleteResource: async () => undefined,
+      close: () => { calls.closed += 1; },
+      deleteResource: async () => { calls.deleted += 1; },
       stop: async () => undefined,
-      republish: async () => { throw new Error('not used'); },
+      republish: async () => { calls.republished += 1; return publisher; },
       setPublishToken: () => undefined,
     };
-    const videoTrack = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
-    const media = {
-      getTracks: () => [videoTrack],
-      getVideoTracks: () => [videoTrack],
-      getAudioTracks: () => [],
-    } as unknown as MediaStream;
+    const videoTrack = { addEventListener: () => undefined, stop: () => { calls.stopped += 1; } };
+    const media = { getTracks: () => [videoTrack], getVideoTracks: () => [videoTrack], getAudioTracks: () => [] } as unknown as MediaStream;
     const dependencies: ScreenShareDependencies = {
       requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
       startWhipPublisher: async () => publisher,
-      waitForStreamReady: async () => true,
+      waitForStreamReady: () => { healthStarted = true; return pendingHealth.promise; },
       getDisplayMedia: async () => media,
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: (url) => { beaconUrls.push(url); return true; },
       onPageHide: (handler) => { pageHide = handler; },
     };
     new ScreenShareController(page.root, dependencies).mount();
-
     page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('url').hidden);
-    expect(page.button('[data-screen-audio-status]').textContent).toBe('video-only');
+    await waitFor(() => healthStarted);
     pageHide?.();
-
     expect(beaconUrls).toEqual(['/api/streams/Ab12Cd34Ef56/stop/']);
-    expect(stopped).toBe(1);
+    expect(calls).toEqual({ stopped: 1, closed: 1, deleted: 1, republished: 0 });
+    if (settlement === 'resolve') pendingHealth.resolve(true); else pendingHealth.reject(new Error('late failure'));
+    await flushMicrotasks();
+    expect(calls).toEqual({ stopped: 1, closed: 1, deleted: 1, republished: 0 });
+    expect(page.step('idle').hidden).toBe(false);
+    expect(page.step('url').hidden).toBe(true);
+    expect(page.step('error').hidden).toBe(true);
   });
 
   test('停止後に遅延した延長失敗が届いても error カードへ戻さない', async () => {
@@ -362,6 +363,78 @@ describe('画面共有 controller', () => {
     expect(mediaSelections).toBe(1);
     expect(healthChecks).toBe(3);
     expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
+  });
+
+  test('再接続中にpagehideしたら新publisherだけを解放し、error表示へ戻さない', async () => {
+    const page = fakeScreenSharePage();
+    const pendingPublisher = deferred<WhipPublisher>();
+    let pageHide: (() => void) | undefined;
+    const counters = { mediaStops: 0, activeClosed: 0, activeDeleted: 0, replacementClosed: 0, replacementDeleted: 0 };
+    const replacement = Object.assign(publisherStub(), { close: () => { counters.replacementClosed += 1; }, deleteResource: async () => { counters.replacementDeleted += 1; } });
+    const active = Object.assign(publisherStub(() => pendingPublisher.promise), {
+      close: () => { counters.activeClosed += 1; }, deleteResource: async () => { counters.activeDeleted += 1; },
+    });
+    const initial = publisherStub(async () => active);
+    const track = { addEventListener: () => undefined, stop: () => { counters.mediaStops += 1; } };
+    const media = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
+    const dependencies: ScreenShareDependencies = {
+      requestJson: (async (path: string) => (
+        path === '/api/streams/' ? createResponse() : null
+      )) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => initial,
+      waitForStreamReady: async () => false,
+      getDisplayMedia: async () => media,
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: (handler) => { pageHide = handler; },
+    };
+    new ScreenShareController(page.root, dependencies).mount();
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('error').hidden);
+    page.button('[data-screen-retry]').click();
+    await flushMicrotasks();
+    pageHide?.();
+    pendingPublisher.resolve(replacement);
+    await waitFor(() => counters.replacementDeleted === 1);
+    expect(page.step('idle').hidden).toBe(false);
+    expect(page.step('error').hidden).toBe(true);
+    expect(counters).toMatchObject({ activeClosed: 1, activeDeleted: 1, replacementClosed: 1, replacementDeleted: 1, mediaStops: 1 });
+  });
+
+  test('health待機中に停止してもURL/error表示を復活させない', async () => {
+    const page = fakeScreenSharePage();
+    const pendingHealth = deferred<boolean>();
+    let healthChecks = 0;
+    const counters = { mediaStops: 0, replacementClosed: 0, replacementDeleted: 0 };
+    const replacement = Object.assign(publisherStub(), { close: () => { counters.replacementClosed += 1; }, deleteResource: async () => { counters.replacementDeleted += 1; } });
+    const active = publisherStub(async () => replacement);
+    const initial = publisherStub(async () => active);
+    const track = { addEventListener: () => undefined, stop: () => { counters.mediaStops += 1; } };
+    const media = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
+    new ScreenShareController(page.root, {
+      requestJson: (async (path: string) => (
+        path === '/api/streams/' ? createResponse() : null
+      )) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => initial,
+      waitForStreamReady: async () => {
+        healthChecks += 1;
+        return healthChecks === 3 ? pendingHealth.promise : false;
+      },
+      getDisplayMedia: async () => media,
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: () => undefined,
+    }).mount();
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('error').hidden);
+    page.button('[data-screen-retry]').click();
+    await waitFor(() => healthChecks === 3);
+    page.button('[data-screen-stop]').click();
+    pendingHealth.resolve(false);
+    await flushMicrotasks();
+    expect(page.step('idle').hidden).toBe(false);
+    expect(page.step('error').hidden).toBe(true);
+    expect(counters).toMatchObject({ replacementClosed: 1, replacementDeleted: 1, mediaStops: 1 });
   });
 });
 
