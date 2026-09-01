@@ -49,6 +49,8 @@ export class FakeRetentionDatabase implements RetentionDatabase {
   readonly movies = new Map<string, TestMovie>();
   /** 行を SELECT した直後に走らせるフック（pin の割り込みを再現する）。 */
   onSelect: ((rows: TestMovie[]) => void) | undefined;
+  /** failed の最終 early sweep 時刻の記録を失敗させる。 */
+  failSweepUpdate = false;
 
   constructor(movies: TestMovie[]) {
     for (const movie of movies) this.movies.set(movie.shortId, { ...movie });
@@ -95,14 +97,43 @@ export class FakeRetentionDatabase implements RetentionDatabase {
     const matched = [...this.movies.values()].filter((movie) => {
       if (query.includes("status = 'ready'")) return movie.status === 'ready' && isExpired(movie, threshold);
       const status = query.includes("status = 'failed'") ? 'failed' : 'pending';
+      if (query.includes('datetime(created_at) >= datetime(?)')) {
+        const upperThreshold = parseSqliteTime(values[1] as string);
+        const createdAt = parseSqliteTime(movie.createdAt);
+        return (
+          movie.status === status &&
+          createdAt >= threshold &&
+          createdAt < upperThreshold
+        );
+      }
       return movie.status === status && parseSqliteTime(movie.createdAt) < threshold;
     });
-    const rows = query.includes('LIMIT ?') ? matched.slice(0, values[1] as number) : matched;
+    if (query.includes('ORDER BY CASE')) {
+      const sweepNow = parseSqliteTime(values[2] as string);
+      matched.sort((left, right) => compareFailedSweepOrder(left, right, sweepNow));
+    }
+    const limitIndex = query.includes('ORDER BY CASE')
+      ? 3
+      : query.includes('datetime(created_at) >= datetime(?)')
+        ? 2
+        : 1;
+    const rows = query.includes('LIMIT ?') ? matched.slice(0, values[limitIndex] as number) : matched;
     this.onSelect?.(rows);
     return rows.map((movie) => ({ short_id: movie.shortId }));
   }
 
   private delete(query: string, values: unknown[]): number {
+    // failed の最終 early sweep 時刻を巡回カーソルとして記録する。
+    if (query.startsWith('UPDATE') && query.includes('short_id IN (')) {
+      if (this.failSweepUpdate) throw new Error('D1 sweep timestamp update failed');
+      const [sweptAt, ...shortIds] = values as [string, ...string[]];
+      const targets = shortIds
+        .map((shortId) => this.movies.get(shortId))
+        .filter((movie) => movie?.status === 'failed');
+      for (const movie of targets) movie!.expiresAt = sweptAt;
+      return targets.length;
+    }
+
     // backfill の UPDATE も run() を通る。pin 済みで期限を持たない行だけを埋める。
     if (query.startsWith('UPDATE') && query.includes('expires_at = ?')) {
       const targets = [...this.movies.values()].filter(
@@ -142,6 +173,20 @@ export class FakeRetentionDatabase implements RetentionDatabase {
   }
 }
 
+function compareFailedSweepOrder(left: TestMovie, right: TestMovie, now: number): number {
+  const leftTime = left.expiresAt === null ? null : parseSqliteTime(left.expiresAt);
+  const rightTime = right.expiresAt === null ? null : parseSqliteTime(right.expiresAt);
+  const leftSwept = leftTime !== null && leftTime <= now;
+  const rightSwept = rightTime !== null && rightTime <= now;
+  if (leftSwept !== rightSwept) return leftSwept ? 1 : -1;
+  if (leftTime === null || rightTime === null) {
+    if (leftTime !== rightTime) return leftTime === null ? -1 : 1;
+  } else if (leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  return left.shortId.localeCompare(right.shortId);
+}
+
 export class FakeRetentionBucket implements RetentionBucket {
   readonly deleted: string[] = [];
   readonly listCalls: (string | undefined)[] = [];
@@ -162,6 +207,7 @@ export class FakeRetentionBucket implements RetentionBucket {
     for (const key of list) {
       if (this.failingKeys.has(key)) throw new Error(`R2 delete failed: ${key}`);
     }
+    for (const key of list) this.objects.delete(key);
     this.deleted.push(...list);
   }
 
@@ -213,12 +259,13 @@ export class FakeCachePurgeApi {
 export async function run(
   database: FakeRetentionDatabase,
   bucket: FakeRetentionBucket,
-  purgeApi: FakeCachePurgeApi = new FakeCachePurgeApi()
+  purgeApi: FakeCachePurgeApi = new FakeCachePurgeApi(),
+  now: Date = NOW
 ) {
   return runRetention({
     database,
     bucket,
-    now: NOW,
+    now,
     cachePurge: {
       publicBaseUrl: PUBLIC_BASE_URL,
       zoneId: '2210192b51f9f0eb6761d70341ca09b0',

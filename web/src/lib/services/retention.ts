@@ -27,12 +27,16 @@ import { purgeMovieCache, type CachePurgeSettings } from './cache-purge';
 import { PINNED_RETENTION_MS } from './quota';
 import { auditReadyObjects } from './retention-audit';
 import { deleteStaleCaptures, type CaptureBucket } from './retention-captures';
+import {
+  deleteFailedMovies,
+  recordFailedObjectSweep,
+  sweepFailedObjects,
+} from './retention-failed';
+
+export { MAX_FAILED_DELETIONS_PER_RUN } from './retention-failed';
 
 /** pending のまま放置された予約を孤児とみなすまでの猶予。 */
 const PENDING_ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
-
-/** failed 行を残す期間（原因調査のための猶予）。 */
-const FAILED_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /**
  * 1 回の実行で処理する期限切れ動画の行数の上限。1 行あたり最大 4 subrequest
@@ -46,21 +50,11 @@ export const MAX_EXPIRED_DELETIONS_PER_RUN = 50;
  *
  * 各フェーズの最悪ケースの合計を Workers の上限（1 回の実行で 1000 subrequest）より
  * 下に保つ: 期限の補完 1、期限切れ 1 + 50 × 4 = 201、pending 1 + 150 × 3 = 451、
- * failed 1 + 1 + 10 = 12、captures 10 ページ × 2 = 20、監査 2 + 50 + 50 = 102、
- * キャッシュ purge は経路ごとに 30 URL で 1 回なので ceil(50/30) + ceil(150/30) +
- * ceil(500/30) = 2 + 5 + 17 = 24。合計 811。
+ * failed 1 + 1 + 10 = 12、failed 実体の早期回収 1 + 1 + 10 = 12、captures 10 ページ × 2 = 20、
+ * 監査 2 + 50 + 50 = 102、キャッシュ purge は経路ごとに 30 URL で 1 回なので
+ * ceil(50/30) + ceil(150/30) + ceil(500/30) × 2 = 2 + 5 + 34 = 41。合計 840。
  */
 export const MAX_PENDING_CLAIMS_PER_RUN = 150;
-
-/**
- * 1 回の実行で削除する failed の行数の上限。failed は容量計算の対象外なので行数は
- * 利用者側から無制限に増やせる。実体の削除はキー配列で 1 回、行の削除は 50 件ずつの
- * まとめ DELETE なので 500 行でも subrequest は十数回に収まる。残りは次回が拾う。
- */
-export const MAX_FAILED_DELETIONS_PER_RUN = 500;
-
-/** 1 文の DELETE に載せる short_id の数。D1 のバインド変数の上限（100）に収める。 */
-const MAX_IDS_PER_DELETE = 50;
 
 /** D1 の最小操作面。バッチが必要とするのは all / run だけ。 */
 export interface RetentionDatabase {
@@ -85,6 +79,8 @@ export interface RetentionSummary {
   strandedMovies: number;
   deletedOrphans: number;
   deletedFailed: number;
+  /** R2 の早期回収対象にした failed のキー数。行を残すため次回以降も対象。 */
+  sweptFailedObjects: number;
   /** R2 の削除に失敗して次回の実行へ持ち越した件数。行は残るので取り残しにはならない。 */
   deferredObjectDeletions: number;
   /**
@@ -141,6 +137,10 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   // ここで拾い直せる（猶予はどちらも 24 時間）。取りこぼしても次回の実行が同じ条件で拾う。
   const failed = await deleteFailedMovies(database, bucket, now);
   const failedPurge = await purgeMovieCache(failed.purged, cachePurge);
+  const failedObjects = await sweepFailedObjects(database, bucket, now);
+  const failedObjectsPurge = await purgeMovieCache(failedObjects.purged, cachePurge);
+  // purge の成否にかかわらず試行後に記録する。R2 delete 失敗時は purged が空なので更新しない。
+  await recordFailedObjectSweep(database, failedObjects.purged, now);
   const captures = await deleteStaleCaptures(bucket, now);
   // 掃除の後に見る（この実行で消した行を実体なしと数えないため）。何も削除しない。
   const audit = await auditReadyObjects(database, bucket);
@@ -151,13 +151,23 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
     strandedMovies: expired.stranded,
     deletedOrphans: orphans.deleted,
     deletedFailed: failed.deleted,
+    sweptFailedObjects: failedObjects.swept,
     // 孤児の確保で R2 の削除に失敗した行は failed として残り、同じ実行の failed の
     // 掃除が数え直す。ここで足すと 1 行を 2 回数えることになるので足さない。
-    deferredObjectDeletions: expired.deferred + failed.deferred,
+    deferredObjectDeletions: expired.deferred + failed.deferred + failedObjects.deferred,
     skippedRows: expired.skipped + orphans.skipped,
-    sweepCapped: expired.capped || orphans.capped || failed.capped || captures.capped,
-    cachePurgeRequests: expiredPurge.requests + orphansPurge.requests + failedPurge.requests,
-    cachePurgeFailures: expiredPurge.failures + orphansPurge.failures + failedPurge.failures,
+    sweepCapped:
+      expired.capped || orphans.capped || failed.capped || failedObjects.capped || captures.capped,
+    cachePurgeRequests:
+      expiredPurge.requests +
+      orphansPurge.requests +
+      failedPurge.requests +
+      failedObjectsPurge.requests,
+    cachePurgeFailures:
+      expiredPurge.failures +
+      orphansPurge.failures +
+      failedPurge.failures +
+      failedObjectsPurge.failures,
     deletedCaptures: captures.deleted,
     checkedReadyRows: audit.checkedReadyRows,
     missingObjectRows: audit.missingObjectRows,
@@ -346,50 +356,4 @@ async function deleteMovieObject(bucket: RetentionBucket, shortId: string): Prom
   } catch {
     return false;
   }
-}
-
-/**
- * 一定期間を過ぎた failed 行を削除する。
- *
- * 通常の failed（commit の上限超過）は実体が削除済みだが、pending の確保で R2 の削除に
- * 失敗した行もここへ来る。存在しないキーの delete は成功するので head で確認せず、
- * まとめて delete してから行を消す（R2 → D1 の順は維持する）。R2 が落ちていれば
- * 行を残したまま次回へ持ち越す。
- */
-async function deleteFailedMovies(
-  database: RetentionDatabase,
-  bucket: RetentionBucket,
-  now: Date
-): Promise<{ deleted: number; deferred: number; purged: string[]; capped: boolean }> {
-  const threshold = new Date(now.getTime() - FAILED_RETENTION_MS).toISOString();
-  const { results } = await database
-    .prepare(
-      "SELECT short_id FROM movies WHERE status = 'failed' AND datetime(created_at) < datetime(?) LIMIT ?"
-    )
-    .bind(threshold, MAX_FAILED_DELETIONS_PER_RUN)
-    .all<ShortIdRow>();
-
-  const capped = results.length === MAX_FAILED_DELETIONS_PER_RUN;
-  if (results.length === 0) return { deleted: 0, deferred: 0, purged: [], capped };
-
-  const shortIds = results.map((row) => row.short_id);
-  try {
-    await bucket.delete(shortIds.map(movieKey));
-  } catch {
-    // R2 が落ちている間に行だけ消すと実体が孤児になるため、この実行では行を残す。
-    return { deleted: 0, deferred: shortIds.length, purged: [], capped };
-  }
-
-  let deleted = 0;
-  for (let index = 0; index < shortIds.length; index += MAX_IDS_PER_DELETE) {
-    const chunk = shortIds.slice(index, index + MAX_IDS_PER_DELETE);
-    const placeholders = chunk.map(() => '?').join(', ');
-    const result = await database
-      .prepare(`DELETE FROM movies WHERE status = 'failed' AND short_id IN (${placeholders})`)
-      .bind(...chunk)
-      .run();
-    deleted += result.meta.changes;
-  }
-
-  return { deleted, deferred: 0, purged: shortIds, capped };
 }

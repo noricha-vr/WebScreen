@@ -14,6 +14,9 @@ import { isShortId } from './r2key';
 /** 1 ファイルあたりのアップロード上限（50 MiB）。R2 の単発 PUT で扱える範囲に収める。 */
 export const MAX_UPLOAD_BYTES = 52_428_800;
 
+/** abandon の JSON 本文上限。shortId 1 件に対し十分な余裕を持たせる。 */
+export const MAX_ABANDON_UPLOAD_BODY_BYTES = 4 * 1024;
+
 /** アップロード元の種別。ローカル入力は PDF / 画像、URL 変換は web に限定する。 */
 export const UPLOAD_KINDS = ['pdf', 'image', 'web'] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
@@ -133,6 +136,15 @@ export interface CommitResponse {
   sizeBytes: number;
   /** ISO8601。pin すると 1 年後まで延びる。null は期限を持たない古い行だけ。 */
   expiresAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/uploads/abandon/ — 未確定アップロードを failed にする
+// ---------------------------------------------------------------------------
+
+/** failed 掃除へ引き渡す未確定アップロードを指定する。 */
+export interface AbandonUploadRequest {
+  shortId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +287,19 @@ export function validatePresignRequest(input: unknown): ValidationResult<Presign
 }
 
 export function validateCommitRequest(input: unknown): ValidationResult<CommitRequest> {
+  const body = asRecord(input);
+  if (!body) return invalid('リクエストボディは JSON オブジェクトである必要があります');
+
+  const { shortId } = body;
+  if (typeof shortId !== 'string' || !isShortId(shortId)) {
+    return invalid('shortId が不正です');
+  }
+
+  return { ok: true, value: { shortId } };
+}
+
+/** 未確定アップロードの放棄リクエストを検証する。 */
+export function validateAbandonUploadRequest(input: unknown): ValidationResult<AbandonUploadRequest> {
   const body = asRecord(input);
   if (!body) return invalid('リクエストボディは JSON オブジェクトである必要があります');
 

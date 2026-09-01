@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   MAX_UPLOAD_BYTES,
+  validateAbandonUploadRequest,
   validatePresignRequest,
   type PresignRequest,
 } from '../../src/lib/contracts/api';
@@ -10,6 +11,7 @@ import {
   getUserStorageUsage,
 } from '../../src/lib/services/quota';
 import {
+  abandonUpload,
   commitUpload,
   createPendingUpload,
   type UploadBucket,
@@ -45,9 +47,10 @@ class FakeUploadDatabase implements UploadDatabase {
 
   private first<T>(query: string, values: unknown[]): T | null {
     if (query.startsWith('SELECT COALESCE')) {
-      const userId = values[0] as number;
+      const [userId] = values as [number];
+      const statuses = parseUsageStatuses(query);
       const total = [...this.movies.values()]
-        .filter((movie) => movie.userId === userId && (movie.status === 'pending' || movie.status === 'ready'))
+        .filter((movie) => movie.userId === userId && statuses.has(movie.status))
         .reduce((sum, movie) => sum + movie.sizeBytes, 0);
       return { total } as T;
     }
@@ -94,15 +97,25 @@ class FakeUploadDatabase implements UploadDatabase {
     }
 
     if (query.includes("status = 'failed'")) {
-      const [shortId, userId] = values as [string, number];
+      const updatesSize = query.includes("size_bytes = ?");
+      const [sizeBytes, shortId, userId] = updatesSize
+        ? (values as [number, string, number])
+        : ([undefined, ...values] as [undefined, string, number]);
       const movie = this.movies.get(shortId);
       if (!movie || movie.userId !== userId || movie.status !== 'pending') return 0;
       movie.status = 'failed';
+      if (sizeBytes !== undefined) movie.sizeBytes = sizeBytes;
       return 1;
     }
 
     return 0;
   }
+}
+
+function parseUsageStatuses(query: string): Set<MovieStatus> {
+  const clause = query.match(/status\s+IN\s*\(([^)]+)\)/i)?.[1];
+  if (!clause) throw new Error(`quota query must filter statuses: ${query}`);
+  return new Set([...clause.matchAll(/'([^']+)'/g)].map((match) => match[1] as MovieStatus));
 }
 
 class FakeUploadBucket implements UploadBucket {
@@ -214,6 +227,31 @@ describe('アップロードのクォータと検証', () => {
   it('51 MiB と未定義の kind を presign 前に拒否する', () => {
     expect(validatePresignRequest({ ...validPresignRequest(MAX_UPLOAD_BYTES + 1) }).ok).toBe(false);
     expect(validatePresignRequest({ ...validPresignRequest(), kind: 'audio' }).ok).toBe(false);
+  });
+
+  it('failed を含め、短い ID の abandon リクエストは拒否する', () => {
+    expect(validateAbandonUploadRequest({ shortId: SHORT_ID }).ok).toBe(true);
+    expect(validateAbandonUploadRequest({ shortId: 'short' }).ok).toBe(false);
+  });
+});
+
+describe('abandonUpload', () => {
+  it('所有者の pending だけを failed にし、予約サイズを保持する', async () => {
+    const database = new FakeUploadDatabase([
+      movie(),
+      movie({ shortId: 'OtherUser001', userId: USER_ID + 1 }),
+      movie({ shortId: 'readyMovie001', status: 'ready' }),
+    ]);
+
+    await abandonUpload({ database, userId: USER_ID, shortId: SHORT_ID });
+    await abandonUpload({ database, userId: USER_ID, shortId: SHORT_ID });
+    await abandonUpload({ database, userId: USER_ID, shortId: 'OtherUser001' });
+    await abandonUpload({ database, userId: USER_ID, shortId: 'readyMovie001' });
+
+    expect(database.movies.get(SHORT_ID)).toMatchObject({ status: 'failed', sizeBytes: 100 });
+    expect(database.movies.get('OtherUser001')?.status).toBe('pending');
+    expect(database.movies.get('readyMovie001')?.status).toBe('ready');
+    expect(await getUserStorageUsage(database, USER_ID)).toBe(200);
   });
 });
 
@@ -328,7 +366,7 @@ describe('commitUpload', () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
-  it('実測サイズ超過時は R2 を削除して failed にする', async () => {
+  it('実測サイズ超過時は実体を残して failed にし、実測サイズを容量へ計上する', async () => {
     const database = new FakeUploadDatabase([movie()]);
     const bucket = new FakeUploadBucket(MAX_UPLOAD_BYTES + 1);
 
@@ -341,11 +379,15 @@ describe('commitUpload', () => {
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 413 });
-    expect(bucket.deletedKeys).toEqual([`movies/${SHORT_ID}.mp4`]);
+    // 署名 URL はまだ有効なので、この時点で実体を消すと遅延した再 PUT が孤児になる。
+    // failed 行を残し、保持期間バッチが R2 → D1 の順に回収する。
+    expect(bucket.deletedKeys).toEqual([]);
     expect(database.movies.get(SHORT_ID)?.status).toBe('failed');
+    expect(database.movies.get(SHORT_ID)?.sizeBytes).toBe(MAX_UPLOAD_BYTES + 1);
+    expect(await getUserStorageUsage(database, USER_ID)).toBe(MAX_UPLOAD_BYTES + 1);
   });
 
-  it('実測サイズが申告の2倍を超えると R2 を削除して failed にする', async () => {
+  it('実測サイズが申告の2倍を超えても、掃除までは R2 を削除しない', async () => {
     const database = new FakeUploadDatabase([movie({ sizeBytes: 100 })]);
     const bucket = new FakeUploadBucket(201);
 
@@ -358,29 +400,26 @@ describe('commitUpload', () => {
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 413 });
-    expect(bucket.deletedKeys).toEqual([`movies/${SHORT_ID}.mp4`]);
+    expect(bucket.deletedKeys).toEqual([]);
     expect(database.movies.get(SHORT_ID)?.status).toBe('failed');
   });
 
-  it('上限超過で R2 の削除に失敗しても 413 を返し、failed の行とログを残す', async () => {
+  it('上限超過でも R2 操作をせず、failed の行だけを残す', async () => {
     const database = new FakeUploadDatabase([movie()]);
     const bucket = new FakeUploadBucket(MAX_UPLOAD_BYTES + 1);
     bucket.failDelete = true;
 
-    const events = await captureWarnEvents(async () => {
-      await expect(
-        commitUpload({
-          database,
-          bucket,
-          userId: USER_ID,
-          shortId: SHORT_ID,
-          publicBaseUrl: PUBLIC_URL,
-        })
-      ).rejects.toMatchObject({ status: 413 });
-    });
+    await expect(
+      commitUpload({
+        database,
+        bucket,
+        userId: USER_ID,
+        shortId: SHORT_ID,
+        publicBaseUrl: PUBLIC_URL,
+      })
+    ).rejects.toMatchObject({ status: 413 });
 
-    // R2 の障害を 500 に化けさせない。行は failed で残るので、実体は failed の掃除が回収する。
-    expect(events).toEqual(['upload_commit_oversize_object_delete_failed']);
+    expect(bucket.deletedKeys).toEqual([]);
     expect(database.movies.get(SHORT_ID)?.status).toBe('failed');
   });
 

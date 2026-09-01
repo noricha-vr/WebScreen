@@ -82,6 +82,7 @@ interface CronLogEntry {
     checkedReadyRows: number;
     skippedRows: number;
     auditErrors: number;
+    sweptFailedObjects: number;
   };
 }
 
@@ -147,8 +148,10 @@ describe('保持期間バッチの cron ログ', () => {
     expect(level).toBe('log');
     expect(entry.severity).toBe('info');
     expect(entry.summary).toContain('audited 0 ready rows (0 missing objects)');
+    expect(entry.summary).toContain('swept 0 failed object keys');
     expect(entry.summary).not.toContain('rows skipped');
     expect(entry.detail.skippedRows).toBe(0);
+    expect(entry.detail.sweptFailedObjects).toBe(0);
   });
 
   it('成功したら最終成功時刻と直近の件数を cron_runs に残す', async () => {
