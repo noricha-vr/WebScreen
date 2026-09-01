@@ -13,8 +13,8 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 | | 値 | 出所 |
 |---|---|---|
 | パイプライン遅延 | 約 100 ms（+ 実網の RTT と AVPro のバッファ） | 実測 |
-| 送出上限 | **映像 2 Mbps + 音声 AAC 128 kbps**（1080p / 最大 30 fps） | [stability-audio-verification.md](stability-audio-verification.md) |
-| 文字の可読性 | 12px の日本語まで判読可 | 実測 |
+| 送出上限 | **映像 1.2 Mbps + 音声 AAC 128 kbps**（入力 720p / 最大 30 fps、公称合計 1.328 Mbps） | [stability-audio-verification.md](stability-audio-verification.md) |
+| 文字の可読性 | **現行設定では未再検証**（代表測定の実送出は960x540。旧1080p測定では12pxまで判読可） | [stability-audio-verification.md](stability-audio-verification.md) |
 | 同時配信 | **全体 20 本 / 1 ユーザー 1 本** | API の原子的な上限 |
 | 途中参加の待ち | 最大 2 秒（**変更できない**） | 実測 |
 | Quest | PC と同じ `rtspt://`。AAC 音声を含め実機確認済み、体感 2〜3 秒 | 実測 |
@@ -27,7 +27,7 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 | [operations.md](operations.md) | **本番実構成・secrets・移設の運用正本** | 本番を触る時・障害調査の時 |
 | [requirements.md](requirements.md) | **実装の必須要件と確定した設定値** | 実装する時。**これが実装の正本** |
 | [quality-tiers.md](quality-tiers.md) | **画質の段と、それが収容人数に与える影響**（実測） | 画質を決める時 |
-| [stability-audio-verification.md](stability-audio-verification.md) | **現行の 1080p30 / 2 Mbps / 音声 / 再接続の決定と実測** | 配信がカクつく・音が出ない時 |
+| [stability-audio-verification.md](stability-audio-verification.md) | **現行の 720p入力 / 30 fps / 映像1.2 Mbps / 音声 / 再接続の決定と実測** | 配信がカクつく・音が出ない時 |
 | [MediaMTX relay 運用手順](../../web/streaming/README.md) | **リポジトリ同梱の versioned 設定と具体的な cutover / rollback 手順** | `operations.md` に沿って更新・復旧する時 |
 | [server-plan.md](server-plan.md) | **サーバーの推奨と段階計画・見積もり** | サーバーを選ぶ時・契約する時 |
 | [capacity.md](capacity.md) | 収容人数の計算式と事業者の一覧 | 数字を自分で計算し直す時 |
@@ -43,5 +43,5 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
   UDP 疎通・持続帯域・A1 契約・A2（映る）・A5（5 分以上切断なし）・A6（途中参加 2 秒以内）に合格し、
   **MediaMTX v1.20.1 を採用で確定**（A8）
 - A3（低遅延）、A7（Quest RTSP）、動画素材のビットレート比較、音声 AAC は実機確認済み。
-- 現行の安定性対策は 1080p30 / 2 Mbps、出口 bytes の到達確認、1 回の自動再接続。設定値と最新の計測は
+- 現行の安定性対策は 720p入力 / 30 fps / 映像1.2 Mbps、出口 bytes の到達確認、1 回の自動再接続。設定値と最新の計測は
   [stability-audio-verification.md](stability-audio-verification.md) を正本とする。

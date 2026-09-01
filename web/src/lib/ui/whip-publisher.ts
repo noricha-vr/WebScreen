@@ -5,10 +5,10 @@ export type WhipPublishErrorCode = 'H264_UNAVAILABLE' | 'WHIP_REQUEST_FAILED' | 
 
 /** ブラウザ配信で映像取得と WebRTC 送出に共通して使う暫定設定。 */
 export const SCREEN_SHARE_VIDEO_SETTINGS = {
-  width: 1920,
-  height: 1080,
+  width: 1280,
+  height: 720,
   frameRate: 30,
-  maxBitrate: 2_000_000,
+  maxBitrate: 1_200_000,
   contentHint: 'motion',
   degradationPreference: 'maintain-framerate',
 } as const;

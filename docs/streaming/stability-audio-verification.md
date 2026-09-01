@@ -10,11 +10,11 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 
 | 項目 | 記事の OBS 設定 | WebScreen の採用値 | 判断 |
 |---|---|---|---|
-| 解像度 | 1920x1080 | **1920x1080** | 同じ。VRChat 内で文字を読める解像度を維持する |
-| フレームレート | 60 fps | **30 fps** | 1 Mbps / 60 fps は 1 フレーム当たりの予算が小さすぎる。画面共有では 30 fps を上限にする |
+| 解像度 | 1920x1080 | **入力 1280x720** | 1.5 Mbps 以下でフレームレートを保つため入力画素数を抑える |
+| フレームレート | 60 fps | **30 fps** | 24 fps も比較したが RTSP 出口が 23 fps 未満になったため採らない |
 | 映像 | NVIDIA NVENC H.264 | **ブラウザ WebRTC の H.264** | 実装は違うが、VRChat 互換の H.264 を優先固定する目的は同じ |
-| レート制御 | CBR | **`maxBitrate = 2_000_000`** | WebRTC は内容と回線に応じて変動する。2 Mbps は CBR ではなく送出上限 |
-| ビットレート | 1000 kbps | **2000 kbps** | 1.5 Mbps 相当で動画がカクついた観測を受け、30 fps の余裕を確保する |
+| レート制御 | CBR | **`maxBitrate = 1_200_000`** | WebRTC は内容と回線に応じて変動する。1.2 Mbps は CBR ではなく映像送出上限 |
+| ビットレート | 1000 kbps | **映像 1200 kbps + 音声 128 kbps（公称合計 1328 kbps）** | 実測出口 1.385 Mbps で、1.5 Mbps 上限から 115 kbps の余裕を確保した |
 | 劣化方針 | OBS プリセット P7 / 高品質 | **`contentHint = 'motion'` + `maintain-framerate`** | 動画の更新頻度を優先する。文字だけの旧設定より動画再生に向く |
 | キーフレーム | 0 秒（自動） | **MediaMTX の PLI により約 2 秒** | ブラウザから固定できないため、受信側の途中参加待ちとして受け入れる |
 | 音声 | FFmpeg AAC、音声トラック 1 | **タブ音声 → WebRTC 音声 → AAC-LC 48 kHz / stereo / 128 kbps** | Chrome で「タブの音声を共有」をオンにした時だけ音声を付ける |
@@ -23,27 +23,35 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 
 ## 実測条件
 
-- 配信元: 実 Google Chrome 152.0.7977.65 内の 1920x1080 canvas
-- 動き: グラデーション、移動矩形、フレーム番号を 30 fps で連続描画
+- 配信元: 実 Google Chrome 152.0.7977.65 内の 1280x720 canvas
+- 動き: Wikipedia 富士山ページの実スクリーンショットを 240 px/秒で往復スクロール
+- 音声: 440 Hz テスト音。30 fps / 24 fps の各候補で同じ素材を使用
 - 経路: ブラウザ → WebRTC / WHIP → Indigo ingress → ffmpeg relay → Indigo egress → RTSP/TCP
-- 測定: ingress / egress の `bytesReceived` 差分を 20 秒窓で取得し、出口を ffprobe で確認
-- 比較のため映像素材と解像度・fps は固定する
+- 測定: browser outbound stats、ingress / egress の `bytesReceived` 差分、RTSP 出口 fps、freeze、ffprobe、5秒音声を確認
+- **実際の YouTube タブではなく代表素材による比較**。過去の YouTube 実機観測とは区別する
 
 ## 実測結果
 
-| 条件 | ingress 実効 | egress 実効 | 出口 | 音声 | 判定 |
-|---|---:|---:|---|---|---|
-| 旧設定（上限 1.5 Mbps、2026-09-01 本番） | **1.394 Mbps** | **1.391 Mbps** | H.264 / 1920x1080 / 30 fps | なし | 比較基準。ユーザー観測では YouTube 再生時にカクつき、再起動後は滑らかになった |
-| 新設定（上限 2.0 Mbps、2026-09-01 本番） | **1.891 Mbps** | **1.984 Mbps** | H.264 Baseline / 1920x1080 / 30 fps | AAC-LC / 48 kHz / stereo | **合格**。映像・音声とも45秒間送出し、20.067秒窓で測定 |
+| fps / 映像上限 | browser fps | RTSP fps | freeze | ingress | total egress | 判定 |
+|---|---:|---:|---:|---:|---:|---|
+| 30 / 1.1 Mbps | 30.02 | 27.75 | 0 | 1.183 Mbps | 1.279 Mbps | 最低合格 |
+| **30 / 1.2 Mbps** | **30.01** | **29.96** | **0** | **1.291 Mbps** | **1.385 Mbps** | **採用。1.5 Mbps から 115 kbps の余裕** |
+| 30 / 1.3 Mbps | 30.01 | 27.67 | 0 | 1.396 Mbps | 1.501 Mbps | 上限超過 |
+| 24 / 1.1 Mbps | 24.01 | 22.49 | 0 | 1.168 Mbps | 1.260 Mbps | 不採用 |
+| 24 / 1.2 Mbps | 24.00 | 22.12 | 0 | 1.292 Mbps | 1.389 Mbps | 不採用 |
+| 24 / 1.3 Mbps | 24.02 | 22.97 | 0 | 1.401 Mbps | 1.491 Mbps | 23 fps 未満かつ余裕不足 |
 
-新設定はブラウザ送出で H.264 Baseline / 1920x1080 / 30 fps、relay 出口で AAC-LC / 48 kHz / stereo を確認し、
-`verify-codecs.sh` も通過した。ブラウザの音声入力は Opus、relay 後は設定どおり AAC へ変換されている。
-旧設定も ingress / egress の両方で bytes が増え、コーデック検証は通っていた。つまり「カクついたら必ず接続不良」ではなく、
-映像内容に対するビットレート不足と、一時的な WHIP / relay 未到達を分けて扱う必要がある。
+全候補で H.264 Baseline / yuv420p / B フレーム 0 と AAC-LC / 48 kHz / stereo を確認した。5秒音声は
+mean 約 -27.5 dB、max 約 -24 dB、RMS 約 -27.45 dB で非無音だった。入力 canvas は 1280x720 だが、
+Chrome の `maintain-framerate` 帯域適応により今回の実送出と RTSP 出口は **960x540**。入力要求値を実送出解像度として扱わない。
+
+過去の本番では上限 1.5 Mbps / 1920x1080 / 30 fps の YouTube 再生がカクつき、ストリーミング再起動後に
+滑らかになった観測がある。また、その後の 2 Mbps / 1920x1080 / 30 fps・音声付き測定では total egress 1.984 Mbps で
+コーデック検証を通過した。どちらも判断履歴であり、今回の代表素材による比較を actual YouTube の再検証とはみなさない。
 
 本番のログイン済みタブを安全に自動操作できなかったため、測定時だけランダムな1 path を JWT 検証の除外対象にし、製品と同じ
-WHIP / H.264優先 / 2 Mbps上限 / relay経路へ直接 publish した。測定後は除外設定を元の `read` / `api` のみに戻し、
-設定ファイルのchecksumが不変であることと、ingress / egressからテストpathが消えたことを確認した。
+WHIP / H.264優先 / 候補ごとの上限 / relay経路へ直接 publish した。測定後は除外設定を元に戻し、設定ファイルの
+checksum が不変、ingress / egress のテスト path が 404、remote の一時ファイルが削除済みであることを確認した。
 
 ## 再起動の案内方針
 
