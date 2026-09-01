@@ -14,14 +14,15 @@ describe('WHIP publisher', () => {
     expect(buildWhipUrl('Ab12Cd34Ef56')).toBe(`${STREAM_WHIP_BASE_URL}/Ab12Cd34Ef56/whip`);
   });
 
-  test('画面共有の映像設定を実測済みの上限へ固定する', () => {
+  test('画面共有の映像設定を採用設定へ固定する', () => {
     expect(SCREEN_SHARE_VIDEO_SETTINGS).toEqual({
       width: 1280,
       height: 720,
       frameRate: 30,
       maxBitrate: 1_200_000,
-      contentHint: 'motion',
-      degradationPreference: 'maintain-framerate',
+      contentHint: 'detail',
+      degradationPreference: 'maintain-resolution',
+      scaleResolutionDownBy: 1,
     });
   });
 
@@ -53,7 +54,7 @@ describe('WHIP publisher', () => {
     const previousConnection = globalThis.RTCPeerConnection;
     const requests: RequestInit[] = [];
     let codecPreferences: RTCRtpCodec[] | undefined;
-    let senderParameters: RTCRtpSendParameters | undefined;
+    const senderParameters: RTCRtpSendParameters[] = [];
     const addedAudioTracks: MediaStreamTrack[] = [];
     let delayedDelete: ReturnType<typeof deferred<Response>> | null = null;
     let closed = 0;
@@ -76,7 +77,7 @@ describe('WHIP publisher', () => {
           setCodecPreferences: (codecs: RTCRtpCodec[]) => { codecPreferences = codecs; },
           sender: {
             getParameters: () => ({}),
-            setParameters: async (parameters: RTCRtpSendParameters) => { senderParameters = parameters; },
+            setParameters: async (parameters: RTCRtpSendParameters) => { senderParameters.push(parameters); },
           },
         } as unknown as RTCRtpTransceiver;
       }
@@ -148,10 +149,13 @@ describe('WHIP publisher', () => {
         'video/VP8',
         'video/rtx',
       ]);
-      expect(senderParameters).toMatchObject({
-        encodings: [{ maxBitrate: SCREEN_SHARE_VIDEO_SETTINGS.maxBitrate }],
+      expect(senderParameters.map(({ encodings, degradationPreference }) => ({ encodings, degradationPreference }))).toEqual(Array.from({ length: 3 }, () => ({
+        encodings: [{
+          maxBitrate: SCREEN_SHARE_VIDEO_SETTINGS.maxBitrate,
+          scaleResolutionDownBy: SCREEN_SHARE_VIDEO_SETTINGS.scaleResolutionDownBy,
+        }],
         degradationPreference: SCREEN_SHARE_VIDEO_SETTINGS.degradationPreference,
-      });
+      })));
       expect(videoTrack.contentHint).toBe(SCREEN_SHARE_VIDEO_SETTINGS.contentHint);
       expect(addedAudioTracks).toEqual([...audioTracks, ...audioTracks]);
       expect(requests[0]?.headers).toMatchObject({ Authorization: 'Bearer first-token' });
@@ -165,7 +169,132 @@ describe('WHIP publisher', () => {
       Object.defineProperty(globalThis, 'RTCPeerConnection', { configurable: true, value: previousConnection });
     }
   });
+
+  test('full設定が拒否されたらfresh parametersでmaxBitrate-only fallbackを1回だけ試す', async () => {
+    const restore = installWebRtcMocks((parameters, attempt) => {
+      if (attempt === 1) throw new Error('full settings rejected');
+      return parameters;
+    }, [
+      { encodings: [{}] },
+      { encodings: [{ scaleResolutionDownBy: 2 }], degradationPreference: 'maintain-framerate' },
+    ]);
+    try {
+      const publisher = await startWhipPublisher(testPublisherInput(() => { restore.postCalls += 1; }));
+      publisher.close();
+
+      expect(restore.parameters).toEqual([
+        { maxBitrate: 1_200_000, scaleResolutionDownBy: 1, degradationPreference: 'maintain-resolution' },
+        { maxBitrate: 1_200_000, scaleResolutionDownBy: undefined, degradationPreference: undefined },
+      ]);
+      expect(restore.getParametersCalls).toBe(2);
+      expect(restore.postCalls).toBe(1);
+    } finally {
+      restore.globals();
+    }
+  });
+
+  test('full設定とfallbackがともに拒否されたらPOSTせず接続を閉じてfallback例外を返す', async () => {
+    const fallbackError = new Error('fallback rejected');
+    const restore = installWebRtcMocks((_parameters, attempt) => {
+      throw attempt === 1 ? new Error('full settings rejected') : fallbackError;
+    });
+    try {
+      await expect(startWhipPublisher(testPublisherInput())).rejects.toBe(fallbackError);
+
+      expect(restore.parameters).toEqual([
+        { maxBitrate: 1_200_000, scaleResolutionDownBy: 1, degradationPreference: 'maintain-resolution' },
+        { maxBitrate: 1_200_000, scaleResolutionDownBy: undefined, degradationPreference: undefined },
+      ]);
+      expect(restore.postCalls).toBe(0);
+      expect(restore.closed).toBe(1);
+    } finally {
+      restore.globals();
+    }
+  });
 });
+
+interface WebRtcMockState {
+  parameters: Array<{
+    maxBitrate: number | undefined;
+    scaleResolutionDownBy: number | undefined;
+    degradationPreference: RTCDegradationPreference | undefined;
+  }>;
+  getParametersCalls: number;
+  postCalls: number;
+  closed: number;
+  globals: () => void;
+}
+
+function installWebRtcMocks(
+  setParameters: (parameters: RTCRtpSendParameters, attempt: number) => void,
+  parameterSnapshots: Partial<RTCRtpSendParameters>[] = [{}, {}]
+): WebRtcMockState {
+  const previousSender = globalThis.RTCRtpSender;
+  const previousConnection = globalThis.RTCPeerConnection;
+  const state: WebRtcMockState = {
+    parameters: [],
+    getParametersCalls: 0,
+    postCalls: 0,
+    closed: 0,
+    globals: () => {
+      Object.defineProperty(globalThis, 'RTCRtpSender', { configurable: true, value: previousSender });
+      Object.defineProperty(globalThis, 'RTCPeerConnection', { configurable: true, value: previousConnection });
+    },
+  };
+  class Sender {
+    static getCapabilities() {
+      return { codecs: [{ mimeType: 'video/H264' }] };
+    }
+  }
+  class Connection {
+    iceGatheringState: RTCIceGatheringState = 'complete';
+    localDescription = { sdp: 'offer', type: 'offer' } as RTCSessionDescription;
+    addTransceiver() {
+      return {
+        setCodecPreferences() {},
+        sender: {
+          getParameters: () => (parameterSnapshots[state.getParametersCalls++] ?? {}) as RTCRtpSendParameters,
+          setParameters: async (parameters: RTCRtpSendParameters) => {
+            state.parameters.push({
+              maxBitrate: parameters.encodings?.[0]?.maxBitrate,
+              scaleResolutionDownBy: parameters.encodings?.[0]?.scaleResolutionDownBy,
+              degradationPreference: parameters.degradationPreference,
+            });
+            setParameters(parameters, state.parameters.length);
+          },
+        },
+      } as unknown as RTCRtpTransceiver;
+    }
+    addTrack() { return {} as RTCRtpSender; }
+    async createOffer() { return { sdp: 'offer', type: 'offer' } as RTCSessionDescriptionInit; }
+    async setLocalDescription() {}
+    async setRemoteDescription() {}
+    close() { state.closed += 1; }
+    addEventListener() {}
+    removeEventListener() {}
+  }
+  Object.defineProperty(globalThis, 'RTCRtpSender', { configurable: true, value: Sender });
+  Object.defineProperty(globalThis, 'RTCPeerConnection', { configurable: true, value: Connection });
+  return state;
+}
+
+function testPublisherInput(onPost: () => void = () => {}): Parameters<typeof startWhipPublisher>[0] {
+  return {
+    stream: {
+      getVideoTracks: () => [{ contentHint: '', stop() {} }],
+      getAudioTracks: () => [],
+    } as unknown as MediaStream,
+    streamId: 'Ab12Cd34Ef56',
+    publishToken: 'token',
+    fetchImpl: (async (_url, options) => {
+      if (options?.method === 'POST') {
+        onPost();
+        return new Response('answer', { status: 201, headers: { Location: '/live/Ab12Cd34Ef56/whip/resource' } });
+      }
+      return new Response(null, { status: 204 });
+    }) as typeof fetch,
+  };
+}
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;

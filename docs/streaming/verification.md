@@ -320,15 +320,15 @@ PR #151 の本番反映後、実 Google Chrome 152.0.7977.65 から 1920x1080 ca
 測定後は除外を `read` / `api` のみに復元し、永続設定ファイルのchecksum不変、ingress / egress両方のpath消滅を確認した。
 この検証は media経路と設定値を対象とし、Workerのセッション発行とhealth gateは I14・自動テスト・deploy preflightで別に担保する。
 
-### I16: 30 / 24 fps・1.1〜1.3 Mbps の本番比較（2026-09-01）
+### I16: 30 / 24 fps・1.1〜1.3 Mbps の本番比較（旧劣化方針・2026-09-01）
 
 実 Google Chrome 152.0.7977.65 で、Wikipedia 富士山ページの実スクリーンショットを 240 px/秒で往復スクロールし、
-440 Hz 音声とともに本番 relay へ送った。これは actual YouTube ではなく、候補間を同条件で比べる代表素材である。
+440 Hz 音声とともに本番 relay へ送った。これは actual YouTube ではなく、`motion` / `maintain-framerate` の候補間を同条件で比べる代表素材である。
 
 | fps / 映像上限 | browser fps | RTSP fps | freeze | ingress | total egress | 判定 |
 |---|---:|---:|---:|---:|---:|---|
 | 30 / 1.1 Mbps | 30.02 | 27.75 | 0 | 1.183 Mbps | 1.279 Mbps | 最低合格 |
-| **30 / 1.2 Mbps** | **30.01** | **29.96** | **0** | **1.291 Mbps** | **1.385 Mbps** | **採用。1.5 Mbps から 115 kbps の余裕** |
+| **30 / 1.2 Mbps** | **30.01** | **29.96** | **0** | **1.291 Mbps** | **1.385 Mbps** | **既存比較の候補。1.5 Mbps から 115 kbps の余裕** |
 | 30 / 1.3 Mbps | 30.01 | 27.67 | 0 | 1.396 Mbps | 1.501 Mbps | 上限超過 |
 | 24 / 1.1 Mbps | 24.01 | 22.49 | 0 | 1.168 Mbps | 1.260 Mbps | 不採用 |
 | 24 / 1.2 Mbps | 24.00 | 22.12 | 0 | 1.292 Mbps | 1.389 Mbps | 不採用 |
@@ -342,6 +342,45 @@ PR #151 の本番反映後、実 Google Chrome 152.0.7977.65 から 1920x1080 ca
 30 fps / 1.2 Mbps は出口 fps が入力に追従し、freeze 0 のまま total egress を 1.5 Mbps 未満に収めた。
 24 fps は帯域をほぼ減らさず出口が全候補で 23 fps 未満のため、余裕を増やす手段として採用しない。
 
+### I17: actual YouTube は音声・接続継続を確認、動画像の長時間定量測定は保留（2026-09-01）
+
+actual YouTube を音声共有ありで本番 relay と VRChat PC 実機へ配信した。これは I16 の代表素材比較とは別の実機観測である。
+
+| 確認 | 結果 |
+|---|---|
+| ユーザー実機 | **音声付きで安定**。開始直後は少しカクついたが、約30秒で自然に安定 |
+| 本番の接続継続 | 配信 path が計 **14分25秒以上 active**。途中切断なし |
+| RTSP codec | H.264 Constrained Baseline / yuv420p / B フレーム 0、AAC-LC / 48 kHz / stereo |
+| 音声 | mean **-19.9 dB**、max **-7.6 dB**。非無音 |
+
+10分06秒の全体集計は ingress 0.582 Mbps、total egress 0.611 Mbps、12.16 fps、480x270、freeze 25回 / 333.657秒だった。
+しかし Big Buck Bunny が測定中に終了し、後半の静止画が混入した。動画終了時刻別の帯域・fps・freeze 時系列を保存していないため、
+動画像区間だけの値は復元不能である。よって、この全体集計を **1.0〜1.5 Mbps 条件の合否や映像安定性の判定に使わない**。
+
+文字が不可読だった観測では 274x148、1.78 fps、total egress 0.064 Mbps だった。動画像終了後の静止画では低い実効ビットレートは正常なため、
+この低実効値だけを合否に使わない。
+
+証明済みなのは、本番で AAC 音声が聞こえること、14分超の接続継続、開始後約30秒でユーザー体感が安定すること。
+`detail` / `maintain-resolution` / scale 1 の候補で actual YouTube の動画像をループさせた長時間の fps・freeze・帯域と文字可読性は未証明であり、再測定が必要である。開始直後のカクつきは自然回復したため、
+一律の「カクついたら再起動」は案内せず、relay 未到達時だけ再接続する方針を維持する。
+
+### I18: 採用設定の本番 relay 合成QAは合格（2026-09-01）
+
+1280x720 / 30 fps / maxBitrate 1.2 Mbps / `detail` / `maintain-resolution` / scale 1 / H.264優先 / 48 kHz stereo で、本番 relay を測定した。
+
+| phase | RTSP | freeze | video | total egress |
+|---|---|---:|---:|---:|
+| A motion（120秒） | 1280x720 / 30.00 fps | 0 | 0.899 Mbps | 1.037 Mbps |
+| B static（60秒） | 1280x720 / 30.00 fps | 59.999秒（意図した静止） | 0.264 Mbps | 0.397 Mbps |
+| C motion（120秒） | 1280x720 / 30.06 fps | 0 | 0.896 Mbps | 1.035 Mbps |
+
+- H.264 Baseline / yuv420p / B フレーム 0、AAC-LC / 48 kHz / stereo、音声 mean -25.0 dB の非無音を確認
+- 16 / 24 px文字は明瞭、12 pxも判読可能。Cでは解像度・fpsが回復
+- rawのA freeze 1.000秒とB 58.999秒は、RTSP接続がsource phaseより約1秒遅れた境界差。source phase補正後のA/Cはfreeze 0
+- 1.25 Mbpsは不要と判断し未試験。cleanupではchecksum不変、認証除外の復元、両pathの404、remote一時ファイル0を確認
+
+本番WebScreen UIからactual YouTubeを再確認する最終確認は未実施。I17のactual YouTube観測とこのI18のrelay合格を混同しない。
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |
@@ -354,3 +393,5 @@ PR #151 の本番反映後、実 Google Chrome 152.0.7977.65 から 1920x1080 ca
 | 6 | Firefox の対応可否 | 本機で起動できず。切る判断が出せない |
 | 7 | `getDisplayMedia` の解像度決定則 | 1920x1080 要求に対し実送出 1602x1032 になる理由 |
 | 8 | ~~WHIP の UDP を NAT 越しに到達させる実構成~~ | **2026-08-31 解消**（I1。Indigo は NAT なしのグローバル IP 直付けで、`webrtcAdditionalHosts` 不要） |
+| 9 | 本番WebScreen UIからactual YouTubeをループさせる長時間確認 | I18の合成relay QAとは別に、UI経路のfps・freeze・帯域・文字可読性を最終確認する |
+| 10 | Safariでのfull設定の受理・実送出 | full設定拒否時はmaxBitrate-only fallbackで配信を継続するが、文字品質は別途確認する |

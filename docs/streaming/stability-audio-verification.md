@@ -1,6 +1,6 @@
 # 配信安定性・音声の設定と実測（2026-09-01）
 
-Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、WebScreen のブラウザ配信で採る値を実測で決めた記録。
+Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、WebScreen のブラウザ配信で採用した値と既存実測を記録する。
 記事の画像は OBS / RTMP / NVENC 向けなので、そのまま WebRTC / WHIP へ移植せず、目的が同じ項目だけ対応づける。
 
 参照: [超簡単にTopazChatの使い方（VRchatでみんなに自分のPC画面を観てもらう方法）](https://qiita.com/masahanami002/items/229730be0be0e4b5bacc)
@@ -15,11 +15,13 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 | 映像 | NVIDIA NVENC H.264 | **ブラウザ WebRTC の H.264** | 実装は違うが、VRChat 互換の H.264 を優先固定する目的は同じ |
 | レート制御 | CBR | **`maxBitrate = 1_200_000`** | WebRTC は内容と回線に応じて変動する。1.2 Mbps は CBR ではなく映像送出上限 |
 | ビットレート | 1000 kbps | **映像 1200 kbps + 音声 128 kbps（公称合計 1328 kbps）** | 実測出口 1.385 Mbps で、1.5 Mbps 上限から 115 kbps の余裕を確保した |
-| 劣化方針 | OBS プリセット P7 / 高品質 | **`contentHint = 'motion'` + `maintain-framerate`** | 動画の更新頻度を優先する。文字だけの旧設定より動画再生に向く |
+| 劣化方針 | OBS プリセット P7 / 高品質 | **`contentHint = 'detail'` + `maintain-resolution`** | I18 の本番 relay 合成QAで、文字可読性と動画安定性が合格 |
+| スケール | — | **`scaleResolutionDownBy = 1`** | I18 で動画像区間の送出解像度を1280x720に維持 |
 | キーフレーム | 0 秒（自動） | **MediaMTX の PLI により約 2 秒** | ブラウザから固定できないため、受信側の途中参加待ちとして受け入れる |
 | 音声 | FFmpeg AAC、音声トラック 1 | **タブ音声 → WebRTC 音声 → AAC-LC 48 kHz / stereo / 128 kbps** | Chrome で「タブの音声を共有」をオンにした時だけ音声を付ける |
 
-推奨値の正本は `web/src/lib/ui/whip-publisher.ts`。画質モードの選択 UI は設けず、全配信で同じ値を使う。
+採用実装の正本は `web/src/lib/ui/whip-publisher.ts`。本番 relay の合成 motion/static QA は合格したが、WebScreen UI からの actual YouTube 最終確認は未実施。
+full設定がブラウザに拒否された時はfresh parametersからmaxBitrate-only fallbackを1回だけ試す。これは配信継続の互換策であり、文字品質を保証しない。
 
 ## 実測条件
 
@@ -30,12 +32,14 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 - 測定: browser outbound stats、ingress / egress の `bytesReceived` 差分、RTSP 出口 fps、freeze、ffprobe、5秒音声を確認
 - **実際の YouTube タブではなく代表素材による比較**。過去の YouTube 実機観測とは区別する
 
-## 実測結果
+## 既存の代表素材比較
+
+次の数値は `motion` / `maintain-framerate` で測った既存比較であり、現行設定の合否には使わない。
 
 | fps / 映像上限 | browser fps | RTSP fps | freeze | ingress | total egress | 判定 |
 |---|---:|---:|---:|---:|---:|---|
 | 30 / 1.1 Mbps | 30.02 | 27.75 | 0 | 1.183 Mbps | 1.279 Mbps | 最低合格 |
-| **30 / 1.2 Mbps** | **30.01** | **29.96** | **0** | **1.291 Mbps** | **1.385 Mbps** | **採用。1.5 Mbps から 115 kbps の余裕** |
+| **30 / 1.2 Mbps** | **30.01** | **29.96** | **0** | **1.291 Mbps** | **1.385 Mbps** | **既存比較の候補。1.5 Mbps から 115 kbps の余裕** |
 | 30 / 1.3 Mbps | 30.01 | 27.67 | 0 | 1.396 Mbps | 1.501 Mbps | 上限超過 |
 | 24 / 1.1 Mbps | 24.01 | 22.49 | 0 | 1.168 Mbps | 1.260 Mbps | 不採用 |
 | 24 / 1.2 Mbps | 24.00 | 22.12 | 0 | 1.292 Mbps | 1.389 Mbps | 不採用 |
@@ -45,9 +49,42 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 mean 約 -27.5 dB、max 約 -24 dB、RMS 約 -27.45 dB で非無音だった。入力 canvas は 1280x720 だが、
 Chrome の `maintain-framerate` 帯域適応により今回の実送出と RTSP 出口は **960x540**。入力要求値を実送出解像度として扱わない。
 
-過去の本番では上限 1.5 Mbps / 1920x1080 / 30 fps の YouTube 再生がカクつき、ストリーミング再起動後に
-滑らかになった観測がある。また、その後の 2 Mbps / 1920x1080 / 30 fps・音声付き測定では total egress 1.984 Mbps で
-コーデック検証を通過した。どちらも判断履歴であり、今回の代表素材による比較を actual YouTube の再検証とはみなさない。
+## 採用設定の本番 relay 合成QA（I18・2026-09-01）
+
+1280x720 / 30 fps / maxBitrate 1.2 Mbps / `detail` / `maintain-resolution` / scale 1 / H.264優先 / 48 kHz stereo で測定した。
+
+| phase | RTSP | freeze | video | total egress |
+|---|---|---:|---:|---:|
+| A motion（120秒） | 1280x720 / 30.00 fps | 0 | 0.899 Mbps | 1.037 Mbps |
+| B static（60秒） | 1280x720 / 30.00 fps | 59.999秒（意図した静止） | 0.264 Mbps | 0.397 Mbps |
+| C motion（120秒） | 1280x720 / 30.06 fps | 0 | 0.896 Mbps | 1.035 Mbps |
+
+H.264 Baseline / yuv420p / B フレーム 0、AAC-LC / 48 kHz / stereo、音声 mean -25.0 dB の非無音を確認した。16 / 24 px文字は明瞭、12 pxも判読可能。
+raw の A freeze 1.000秒とB 58.999秒はRTSP接続がsource phaseより約1秒遅れた境界差であり、source phase補正後のA/Cはfreeze 0。Cで解像度・fpsは回復した。
+1.25 Mbps は不要と判断し未試験。cleanupではchecksum不変、認証除外の復元、両pathの404、remote一時ファイル0を確認した。
+
+## actual YouTube 実機確認（2026-09-01）
+
+代表素材の候補比較とは別に、actual YouTube を音声共有ありで本番 relay と VRChat PC 実機へ配信して確認した記録。
+
+### 合格・証明済み
+
+- ユーザー実機では**音声付きで安定**。開始直後には少しカクついたが、約30秒で自然に安定した。
+- 本番サーバーでは配信 path が計 **14分25秒以上 active** で、途中切断はなかった。
+- RTSP 出口は H.264 Constrained Baseline / yuv420p / B フレーム 0、音声は AAC-LC / 48 kHz / stereo。
+- 音声は mean **-19.9 dB**、max **-7.6 dB** で非無音。したがって、本番で AAC 音声が聞こえることを確認済み。
+
+### 保留・再測定が必要なこと
+
+10分06秒の全体集計は ingress 0.582 Mbps、total egress 0.611 Mbps、12.16 fps、freeze 25回 / 333.657秒、480x270 だった。
+ただし測定中に Big Buck Bunny が終了し、後半の静止画が集計へ混入している。動画終了時刻ごとの帯域・fps・freeze の時系列は保存しておらず、
+動画像区間だけの数値を復元できない。この全体集計は **1.0〜1.5 Mbps 条件の合否や映像安定性の判定に使わない**。
+
+文字が不可読だった観測では 274x148、1.78 fps、total egress 0.064 Mbps だった。動画像終了後の静止画では低い実効ビットレートは正常なため、
+この低実効値だけを合否に使わない。
+
+残る最終確認は、採用設定を本番WebScreen UIから actual YouTube へ適用し、動画像区間に限定した fps・freeze・帯域と文字可読性を確認すること。
+開始直後のカクつきは自然回復したため、一律の「カクついたら再起動」注記は追加しない。relay 未到達時だけ再接続する現行方針を維持する。
 
 本番のログイン済みタブを安全に自動操作できなかったため、測定時だけランダムな1 path を JWT 検証の除外対象にし、製品と同じ
 WHIP / H.264優先 / 候補ごとの上限 / relay経路へ直接 publish した。測定後は除外設定を元に戻し、設定ファイルの
