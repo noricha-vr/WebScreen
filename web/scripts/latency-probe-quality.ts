@@ -185,6 +185,10 @@ const SENDER_CSV_HEADER = 'timestamp_utc,elapsed_s,frames_per_second,frames_enco
 
 async function readSenderSample(page: import('@playwright/test').Page): Promise<SenderSample> {
   const result = await page.evaluate(async () => {
+    // page.evaluate はシリアライズした関数だけをページへ送るため、module scope の helper は参照できない。同名で閉包内に定義する
+    const stringValue = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
+    const numberValue = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+    const recordValue = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === 'object' ? value as Record<string, unknown> : undefined);
     const connections = (window as PagePeerConnectionWindow).__webscreenHarnessPeerConnections ?? [];
     const rows: SenderStatsRow[] = [];
     for (const connection of connections) {
@@ -205,10 +209,14 @@ async function readSenderSample(page: import('@playwright/test').Page): Promise<
 }
 
 async function measureOutletQualityWindow(rtspUrl: string, seconds: number): Promise<{ durationSeconds: number; frames: number | null; receivedBytes: number; width: number | null; height: number | null; resolutionEvents: string[]; freezes: number; freezeSeconds: number; log: string }> {
-  const child = Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'info', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-i', rtspUrl, '-t', seconds.toFixed(3), '-map', '0:v:0', '-an', '-vf', 'freezedetect=n=-60dB:d=0.4,showinfo', '-f', 'null', '-', '-map', '0:v:0', '-c:v', 'copy', '-f', 'mpegts', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
+  // `-t` は直後の出力にしか効かない。2 本目（byte 計数用 mpegts）にも付けないと ffmpeg が終わらず run 全体が固まる
+  const duration = seconds.toFixed(3);
+  const child = Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'info', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-i', rtspUrl, '-t', duration, '-map', '0:v:0', '-an', '-vf', 'freezedetect=n=-60dB:d=0.4,showinfo', '-f', 'null', '-', '-t', duration, '-map', '0:v:0', '-c:v', 'copy', '-f', 'mpegts', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
   const stdout = child.stdout;
   if (!stdout || typeof stdout === 'number' || !child.stderr || typeof child.stderr === 'number') throw new Error('outlet quality ffmpeg pipes are unavailable');
-  const [receivedBytes, log, exit] = await Promise.all([countBytes(stdout), new Response(child.stderr).text(), child.exited]);
+  // 出口が止まって ffmpeg が入力待ちのまま終わらない場合の上限（窓長 + 接続猶予）
+  const watchdog = setTimeout(() => child.kill(), (seconds + 20) * 1_000);
+  const [receivedBytes, log, exit] = await Promise.all([countBytes(stdout), new Response(child.stderr).text(), child.exited]).finally(() => clearTimeout(watchdog));
   if (exit !== 0) throw new Error(`ffmpeg exit=${exit}: ${log.slice(-800)}`);
   const durationSeconds = Math.max(0.001, seconds);
   const frames = lastNumber(log, /frame=\s*(\d+)/g);
