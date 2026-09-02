@@ -14,6 +14,9 @@ describe('他の配信を終了して開始', () => {
 
     expect(liveError.button('[data-screen-stop-others]').hidden).toBe(false);
     expect(otherError.button('[data-screen-stop-others]').hidden).toBe(true);
+    // 同じ失敗を繰り返す再試行は、終了ボタンを出す時だけ隠す
+    expect(liveError.button('[data-screen-retry]').hidden).toBe(true);
+    expect(otherError.button('[data-screen-retry]').hidden).toBe(false);
   });
 
   test('画面選択後に停止、待機、配信開始の順で URL 表示まで進む', async () => {
@@ -43,7 +46,7 @@ describe('他の配信を終了して開始', () => {
     await waitFor(() => !page.step('error').hidden);
     events.length = 0;
     page.button('[data-screen-stop-others]').click();
-    await waitFor(() => !page.step('url').hidden);
+    await waitFor(() => !page.step('live').hidden);
 
     expect(events).toEqual(['media', 'stop-live', 'delay:3000', 'create']);
   });
@@ -225,7 +228,7 @@ describe('他の配信を終了して開始', () => {
     expect(stopCount).toBe(1);
     expect(publisherStarts).toBe(0);
     expect(page.step('idle').hidden).toBe(false);
-    expect(page.step('url').hidden).toBe(true);
+    expect(page.step('live').hidden).toBe(true);
     expect(page.step('error').hidden).toBe(true);
   });
 
@@ -269,7 +272,7 @@ describe('他の配信を終了して開始', () => {
 
     expect(calls).toEqual({ stopped: 1, closed: 1, deleted: 1, serverStops: 1, healthChecks: 0 });
     expect(page.step('idle').hidden).toBe(false);
-    expect(page.step('url').hidden).toBe(true);
+    expect(page.step('live').hidden).toBe(true);
     expect(page.step('error').hidden).toBe(true);
   });
 
@@ -289,7 +292,7 @@ describe('他の配信を終了して開始', () => {
     })).mount();
 
     page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('url').hidden);
+    await waitFor(() => !page.step('live').hidden);
     page.button('[data-screen-extend]').click();
     await waitFor(() => extendSignal !== undefined);
     page.button('[data-screen-stop]').click();
@@ -392,20 +395,24 @@ function fakePage(): {
     '[data-screen-start]', '[data-screen-stop-others]', '[data-screen-retry]',
     '[data-screen-extend]', '[data-screen-stop]',
     '[data-screen-error-message]', '[data-screen-url]', '[data-screen-audio-status]',
-    '[data-screen-preview]', '[data-screen-expiry-warning]', '[data-screen-indicators]',
+    '[data-screen-preview]', '[data-screen-expiry-warning]',
+    '[data-screen-flow-item]', '[data-screen-preview-toggle]', '[data-screen-preview-body]',
+    '[data-screen-switch-track]', '[data-screen-switch-knob]', '[data-screen-expires-bar]',
+    '[data-screen-audio-chip]', '[data-screen-audio-icon]', '[data-screen-audio-label]',
+    '[data-screen-mode]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'url', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;
   });
   const root = {
     dataset: {
-      labelStart: 'start', labelSelecting: 'selecting', labelRetry: 'retry', labelReconnect: 'reconnect',
+      labelStart: 'start', labelSelecting: 'selecting', labelStarting: 'starting', labelRetry: 'retry', labelReconnect: 'reconnect',
       labelStopOthers: 'stop-others', labelStoppingOthers: 'stopping', msgStreamAlreadyLive: 'already-live',
       msgGeneric: 'error', msgH264: 'h264', msgWhip: 'whip', msgDisplayDenied: 'denied',
       msgStreamCapacity: 'capacity', msgRateLimited: 'rate-limited', msgStreamEnded: 'ended',
-      msgStreamUnhealthy: 'unhealthy', msgAudioIncluded: 'audio', msgVideoOnly: 'video',
+      msgStreamUnhealthy: 'unhealthy', msgAudioIncluded: 'audio', msgVideoOnly: 'video', audioOn: 'audio-on', audioOff: 'audio-off',
     },
     querySelector: (selector: string) => elements.get(selector) ?? null,
     querySelectorAll: (selector: string) => selector === '[data-screen-step]' ? steps : [],
@@ -417,12 +424,20 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  paused = false;
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   textContent = '';
   value = '';
+  className = '';
+  style = { width: '' };
   srcObject: MediaStream | null = null;
+  private readonly attributes = new Map<string, string>();
   private readonly listeners: Array<() => void> = [];
 
   querySelector(): null { return null; }
+  setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
+  getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
   addEventListener(event: string, listener: () => void): void { if (event === 'click') this.listeners.push(listener); }
   click(): void { for (const listener of this.listeners) listener(); }
 }

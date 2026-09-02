@@ -4,7 +4,7 @@ import { ScreenShareController, type ScreenShareDependencies } from '../../src/l
 import type { WhipPublisher } from '../../src/lib/ui/whip-publisher';
 
 describe('画面共有の再接続', () => {
-  test('初回healthが二度失敗しても画面を保持し、再接続だけでURL表示へ進む', async () => {
+  test('初回healthが二度失敗しても画面を保持し、再接続だけで配信表示へ進む', async () => {
     const page = fakePage();
     let healthChecks = 0;
     let selections = 0;
@@ -25,7 +25,7 @@ describe('画面共有の再接続', () => {
     expect(stopped).toBe(0);
 
     page.button('[data-screen-retry]').click();
-    await waitFor(() => !page.step('url').hidden);
+    await waitFor(() => !page.step('live').hidden);
     expect(selections).toBe(1);
     expect(healthChecks).toBe(3);
     expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
@@ -138,12 +138,12 @@ function publisher(republish: () => Promise<WhipPublisher> = async () => {
 function fakePage(): { root: HTMLElement; button: (selector: string) => FakeElement; step: (phase: string) => FakeElement; url: FakeElement } {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
-    '[data-screen-start]', '[data-screen-copy]', '[data-screen-show-live]', '[data-screen-extend]',
+    '[data-screen-start]', '[data-screen-copy]', '[data-screen-extend]',
     '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]', '[data-screen-preview]',
-    '[data-screen-expiry-warning]', '[data-screen-error-message]', '[data-screen-indicators]',
+    '[data-screen-expiry-warning]', '[data-screen-error-message]',
     '[data-screen-audio-status]', '[data-screen-stop-others]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'url', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
     const step = new FakeElement(); step.dataset.screenStep = phase; return step;
   });
   const root = {
@@ -162,6 +162,9 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  paused = false;
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   textContent = '';
   value = '';
   srcObject: MediaStream | null = null;

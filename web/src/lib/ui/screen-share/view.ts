@@ -2,14 +2,9 @@ import { ERROR_CODES } from '../../contracts/api';
 import { JsonRequestError } from '../request-json';
 import { WhipPublishError } from '../whip-publisher';
 
-export type ScreenSharePhase = 'idle' | 'login' | 'url' | 'live' | 'error';
+export type ScreenSharePhase = 'idle' | 'login' | 'live' | 'error';
 
 export class StreamHealthError extends Error {}
-
-/** 配信 URL 確認カードの次に進める段階を返す。 */
-export function nextStreamStep(phase: 'url' | 'live'): 'live' | null {
-  return phase === 'url' ? 'live' : null;
-}
 
 /** 実装例外を i18n data key へ限定して変換する。 */
 export function messageKeyForError(error: unknown): string {
@@ -42,27 +37,37 @@ export class ScreenShareView {
     this.button(selector)?.addEventListener('click', listener);
   }
 
+  onModeClick(listener: (mode: HTMLElement) => void): void {
+    for (const mode of this.root.querySelectorAll<HTMLElement>('[data-screen-mode]')) {
+      mode.addEventListener('click', () => listener(mode));
+    }
+  }
+
   show(phase: ScreenSharePhase): void {
     for (const step of this.root.querySelectorAll<HTMLElement>('[data-screen-step]')) {
       step.hidden = step.dataset['screenStep'] !== phase;
     }
-    const active = phase === 'url' ? '1' : phase === 'live' ? '2' : null;
-    const indicators = this.root.querySelector<HTMLElement>('[data-screen-indicators]');
-    if (indicators) indicators.hidden = active === null;
-    for (const indicator of this.root.querySelectorAll<HTMLElement>('[data-screen-indicator]')) {
-      indicator.dataset['active'] = indicator.dataset['screenIndicator'] === active ? 'true' : 'false';
+    for (const item of this.root.querySelectorAll<HTMLElement>('[data-screen-flow-item]')) {
+      const position = item.dataset['screenFlowItem'];
+      item.dataset['state'] = phase === 'live'
+        ? position === '1' ? 'done' : position === '2' ? 'current' : 'todo'
+        : position === '1' ? 'current' : 'todo';
     }
+    if (phase === 'live') this.setPreviewOpen(true);
   }
 
-  showError(messageKey: string, hasLive: boolean, showStopOthers: boolean): void {
+  showError(messageKey: string, hasLive: boolean, canStopOthers: boolean): void {
     this.text('[data-screen-error-message]', this.message(messageKey));
     this.setButtonLabel('[data-screen-retry]', hasLive ? 'labelReconnect' : 'labelRetry');
     const stopOthers = this.button('[data-screen-stop-others]');
     if (stopOthers) {
-      stopOthers.hidden = !showStopOthers;
+      stopOthers.hidden = !canStopOthers;
       stopOthers.disabled = false;
       this.setButtonLabel('[data-screen-stop-others]', 'labelStopOthers');
     }
+    // 他配信の停止が唯一の正しい操作の時は、同じ失敗を繰り返す再試行を出さない。
+    const retry = this.button('[data-screen-retry]');
+    if (retry) retry.hidden = canStopOthers;
     this.show('error');
   }
 
@@ -77,6 +82,22 @@ export class ScreenShareView {
     if (video) video.srcObject = media;
   }
 
+  togglePreview(): void {
+    const toggle = this.button('[data-screen-preview-toggle]');
+    if (!toggle) return;
+    this.setPreviewOpen(toggle.getAttribute('aria-expanded') !== 'true');
+  }
+
+  selectMode(selected: HTMLElement): void {
+    // 表示のみ。実際の配信設定への反映は Issue #177 の検証結果を待つ。
+    for (const mode of this.root.querySelectorAll<HTMLElement>('[data-screen-mode]')) {
+      const checked = mode === selected;
+      mode.dataset['checked'] = String(checked);
+      const input = mode.querySelector<HTMLInputElement>('input');
+      if (input) input.checked = checked;
+    }
+  }
+
   setUrl(url: string): void {
     const input = this.root.querySelector<HTMLInputElement>('[data-screen-url]');
     if (input) input.value = url;
@@ -87,15 +108,35 @@ export class ScreenShareView {
   }
 
   setAudioStatus(media: MediaStream): void {
-    const key = media.getAudioTracks().length > 0 ? 'msgAudioIncluded' : 'msgVideoOnly';
+    const hasAudio = media.getAudioTracks().length > 0;
+    const key = hasAudio ? 'msgAudioIncluded' : 'msgVideoOnly';
     this.text('[data-screen-audio-status]', this.message(key));
+    const chip = this.root.querySelector<HTMLElement>('[data-screen-audio-chip]');
+    if (chip) chip.dataset['audio'] = hasAudio ? 'on' : 'off';
+    const icon = this.root.querySelector<HTMLElement>('[data-screen-audio-icon]');
+    if (icon) icon.className = hasAudio ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
+    this.text('[data-screen-audio-label]', this.message(hasAudio ? 'audioOn' : 'audioOff'));
   }
 
-  updateClock(startedAt: string, now: number, remaining: number, expiryWarning: boolean): void {
+  updateClock(
+    startedAt: string,
+    now: number,
+    remaining: number,
+    expiryWarning: boolean,
+    expiresBarTotalSeconds = 0
+  ): void {
     this.text('[data-screen-elapsed]', formatDuration((now - Date.parse(startedAt)) / 1000));
     this.text('[data-screen-expires]', formatDuration(remaining));
     const warning = this.root.querySelector<HTMLElement>('[data-screen-expiry-warning]');
     if (warning) warning.hidden = !expiryWarning;
+    const expiresBar = this.root.querySelector<HTMLElement>('[data-screen-expires-bar]');
+    if (expiresBar) {
+      const width = expiresBarTotalSeconds === 0
+        ? 0
+        : Math.min(100, (remaining / expiresBarTotalSeconds) * 100);
+      expiresBar.style.width = `${width}%`;
+      expiresBar.dataset['warning'] = String(expiryWarning);
+    }
   }
 
   setBusy(selector: string, busy: boolean, label: string): void {
@@ -126,6 +167,26 @@ export class ScreenShareView {
 
   private button(selector: string): HTMLButtonElement | null {
     return this.root.querySelector<HTMLButtonElement>(selector);
+  }
+
+  private setPreviewOpen(open: boolean): void {
+    const value = String(open);
+    const toggle = this.button('[data-screen-preview-toggle]');
+    if (toggle) toggle.setAttribute('aria-expanded', value);
+    for (const selector of [
+      '[data-screen-preview-body]',
+      '[data-screen-switch-track]',
+      '[data-screen-switch-knob]',
+    ]) {
+      const element = this.root.querySelector<HTMLElement>(selector);
+      if (element) element.dataset['open'] = value;
+    }
+    // 閉じている間はデコードと描画を止めて PC の負荷を下げる。MediaStream と WHIP には触れない。
+    const video = this.root.querySelector<HTMLVideoElement>('[data-screen-preview]');
+    if (video) {
+      if (open) void video.play();
+      else video.pause();
+    }
   }
 }
 

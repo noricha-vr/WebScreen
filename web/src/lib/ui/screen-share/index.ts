@@ -12,7 +12,6 @@ export {
   releaseScreenShare,
   secondsUntil,
 } from './session';
-export { nextStreamStep } from './view';
 export { SCREEN_SHARE_VIDEO_SETTINGS } from './video-profile';
 
 const BROWSER_DEPENDENCIES: ScreenShareDependencies = {

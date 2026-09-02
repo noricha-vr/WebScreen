@@ -4,7 +4,6 @@ import {
   EXPIRY_WARNING_SECONDS,
   HEARTBEAT_INTERVAL_MS,
   isExpiryWarning,
-  nextStreamStep,
   releaseScreenShare,
   ScreenShareController,
   secondsUntil,
@@ -18,13 +17,11 @@ describe('画面共有の表示契約', () => {
     expect(() => new ScreenShareController(fakePage().root)).not.toThrow();
   });
 
-  test('URL確認後だけライブ画面へ進み、heartbeatと期限警告の境界を固定する', () => {
+  test('heartbeatと期限警告の境界を固定する', () => {
     const now = Date.parse('2026-09-01T00:00:00.000Z');
     const warningAt = new Date(now + EXPIRY_WARNING_SECONDS * 1000).toISOString();
     const later = new Date(now + (EXPIRY_WARNING_SECONDS + 1) * 1000).toISOString();
 
-    expect(nextStreamStep('url')).toBe('live');
-    expect(nextStreamStep('live')).toBeNull();
     expect(HEARTBEAT_INTERVAL_MS).toBe(25_000);
     expect(HEARTBEAT_INTERVAL_MS).toBeLessThan(60_000);
     expect(secondsUntil(warningAt, now)).toBe(EXPIRY_WARNING_SECONDS);
@@ -74,7 +71,7 @@ describe('画面共有の表示契約', () => {
     expect(warning.hidden).toBe(true);
   });
 
-  test('開始からURL・配信中を経て停止し、固定capture/sender設定を渡す', async () => {
+  test('開始から配信表示へ直行し、固定capture/sender設定を渡す', async () => {
     const page = fakePage();
     const calls: string[] = [];
     const counters = { stopped: 0, closed: 0, deleted: 0 };
@@ -116,9 +113,12 @@ describe('画面共有の表示契約', () => {
     new ScreenShareController(page.root, dependencies).mount();
 
     page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('url').hidden);
+    await waitFor(() => !page.step('live').hidden);
     expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
     expect(page.button('[data-screen-audio-status]').textContent).toBe('audio-included');
+    expect(page.button('[data-screen-audio-chip]').dataset.audio).toBe('on');
+    expect(page.button('[data-screen-audio-label]').textContent).toBe('audio-on');
+    expect(page.button('[data-screen-audio-icon]').className).toBe('fa-solid fa-volume-high');
     expect(requestedConstraints).toEqual({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       video: {
@@ -136,8 +136,6 @@ describe('画面共有の表示契約', () => {
     });
     expect(audioTrack.contentHint).toBe('music');
 
-    page.button('[data-screen-show-live]').click();
-    expect(page.step('live').hidden).toBe(false);
     page.button('[data-screen-stop]').click();
     page.button('[data-screen-stop]').click();
 
@@ -181,13 +179,14 @@ function fakePage(): {
 } {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
-    '[data-screen-start]', '[data-screen-copy]', '[data-screen-show-live]',
+    '[data-screen-start]', '[data-screen-copy]',
     '[data-screen-extend]', '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
     '[data-screen-preview]', '[data-screen-elapsed]', '[data-screen-expires]',
-    '[data-screen-expiry-warning]', '[data-screen-error-message]', '[data-screen-indicators]',
-    '[data-screen-audio-status]', '[data-screen-stop-others]',
+    '[data-screen-expiry-warning]', '[data-screen-error-message]',
+    '[data-screen-audio-status]', '[data-screen-stop-others]', '[data-screen-audio-chip]',
+    '[data-screen-audio-icon]', '[data-screen-audio-label]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'url', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;
@@ -198,6 +197,7 @@ function fakePage(): {
       labelExtend: 'extend', labelExtending: 'extending', labelRetry: 'retry',
       labelReconnect: 'reconnect', labelReconnecting: 'reconnecting', labelStopOthers: 'stop-others',
       msgGeneric: 'error', msgAudioIncluded: 'audio-included', msgVideoOnly: 'video-only',
+      audioOn: 'audio-on', audioOff: 'audio-off',
     },
     querySelector: (selector: string) => elements.get(selector) ?? null,
     querySelectorAll: (selector: string) => selector === '[data-screen-step]' ? steps : [],
@@ -214,9 +214,13 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  paused = false;
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   srcObject: MediaStream | null = null;
   textContent = '';
   value = '';
+  className = '';
   private readonly listeners: Array<() => void> = [];
   querySelector(): null { return null; }
   addEventListener(event: string, listener: () => void): void {

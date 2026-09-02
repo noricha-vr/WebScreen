@@ -5,7 +5,7 @@ import type { ScreenShareDependencies } from '../../src/lib/ui/screen-share';
 import type { WhipPublisher } from '../../src/lib/ui/whip-publisher';
 
 describe('画面共有 controller', () => {
-  test('ステップドットは開始前に隠れ、URL 表示で 1 つ目が点灯する', async () => {
+  test('フローは常時表示され、開始後は配信ステップを現在地にする', async () => {
     const page = fakeScreenSharePage();
     const track = { addEventListener: () => undefined, stop: () => undefined };
     const media = {
@@ -23,17 +23,12 @@ describe('画面共有 controller', () => {
       onPageHide: () => undefined,
     }).mount();
 
-    expect(page.indicators.hidden).toBe(true);
-    expect(page.activeIndicators()).toEqual([]);
+    expect(page.currentFlowItems()).toEqual(['1']);
 
     page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('url').hidden);
+    await waitFor(() => !page.step('live').hidden);
 
-    expect(page.indicators.hidden).toBe(false);
-    expect(page.activeIndicators()).toEqual(['1']);
-
-    page.button('[data-screen-show-live]').click();
-    expect(page.activeIndicators()).toEqual(['2']);
+    expect(page.currentFlowItems()).toEqual(['2']);
   });
 
   test('ピッカー選択中は開始・再試行を無効化し、ラベルは span だけ差し替えてアイコンを保つ', async () => {
@@ -101,7 +96,7 @@ describe('画面共有 controller', () => {
     await flushMicrotasks();
     expect(calls).toEqual({ stopped: 1, closed: 1, deleted: 1, republished: 0 });
     expect(page.step('idle').hidden).toBe(false);
-    expect(page.step('url').hidden).toBe(true);
+    expect(page.step('live').hidden).toBe(true);
     expect(page.step('error').hidden).toBe(true);
   });
 
@@ -138,8 +133,7 @@ describe('画面共有 controller', () => {
     const controller = new ScreenShareController(page.root, dependencies);
     controller.mount();
     page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('url').hidden);
-    page.button('[data-screen-show-live]').click();
+    await waitFor(() => !page.step('live').hidden);
     page.button('[data-screen-extend]').click();
     await waitFor(() => calls.some((path) => path.endsWith('/extend/')));
 
@@ -206,26 +200,25 @@ function fakeScreenSharePage(): {
   button: (selector: string) => FakeElement;
   step: (phase: string) => FakeElement;
   url: FakeElement;
-  indicators: FakeElement;
-  activeIndicators: () => string[];
+  currentFlowItems: () => string[];
 } {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
-    '[data-screen-start]', '[data-screen-copy]', '[data-screen-show-live]',
+    '[data-screen-start]', '[data-screen-copy]',
     '[data-screen-extend]', '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
     '[data-screen-preview]', '[data-screen-elapsed]', '[data-screen-expires]',
-    '[data-screen-expiry-warning]', '[data-screen-error-message]', '[data-screen-indicators]',
+    '[data-screen-expiry-warning]', '[data-screen-error-message]',
     '[data-screen-audio-status]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'url', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;
   });
-  const indicators = ['1', '2'].map((value) => {
-    const indicator = new FakeElement();
-    indicator.dataset.screenIndicator = value;
-    return indicator;
+  const flowItems = ['1', '2', '3'].map((position) => {
+    const item = new FakeElement();
+    item.dataset.screenFlowItem = position;
+    return item;
   });
   const root = {
     dataset: {
@@ -240,7 +233,7 @@ function fakeScreenSharePage(): {
     querySelector: (selector: string) => elements.get(selector) ?? null,
     querySelectorAll: (selector: string) => {
       if (selector === '[data-screen-step]') return steps;
-      if (selector === '[data-screen-indicator]') return indicators;
+      if (selector === '[data-screen-flow-item]') return flowItems;
       return [];
     },
   } as unknown as HTMLElement;
@@ -249,9 +242,8 @@ function fakeScreenSharePage(): {
     button: (selector) => elements.get(selector)!,
     step: (phase) => steps.find((step) => step.dataset.screenStep === phase)!,
     url: elements.get('[data-screen-url]')!,
-    indicators: elements.get('[data-screen-indicators]')!,
-    activeIndicators: () => indicators.filter((indicator) => indicator.dataset.active === 'true')
-      .map((indicator) => indicator.dataset.screenIndicator!),
+    currentFlowItems: () => flowItems.filter((item) => item.dataset.state === 'current')
+      .map((item) => item.dataset.screenFlowItem!),
   };
 }
 
@@ -259,6 +251,9 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  paused = false;
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   srcObject: MediaProvider | null = null;
   textContent = '';
   value = '';

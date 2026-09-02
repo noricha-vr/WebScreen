@@ -285,24 +285,36 @@
   "screenSharePage": {
     "title": "How to share your screen in VRChat — no OBS, just your browser | WebScreen",
     "description": "Share your screen in VRChat without OBS or installs. Pick what to share and paste the RTSP URL. PC latency was 0.1s video-only and 1.2s with audio.",
-    "heading": "Share your screen in VRChat — browser only, no OBS",
-    "lead": "Pick a screen and get a streaming URL you can paste into a VRChat video player.",
-    "badges": ["No OBS", "No installation", "PC and Quest"],
+    "heading": "Screen sharing for VRChat",
+    "subheading": "Share your screen to a VRChat world — no OBS, no install",
+    "lead": "Create a streaming URL you can paste into a VRChat video player. Share a tab, a window, or your whole desktop. Start sharing your screen in VRChat without OBS.",
+    "badges": ["No OBS", "No installation", "PC, phone and Quest"],
     "wizard": {
+      "flow": ["Pick a screen", "Get a URL", "Paste it in VRChat"],
       "start": "Start screen sharing",
-      "startHint": "This opens your browser's screen picker. Choose the tab, window, or screen you want to show.",
-      "selectAudioHint": "To include audio in Chrome, choose a tab and turn on Share tab audio.",
+      "starting": "Starting the stream…",
+      "startHint": { "lead": "Pressing the button opens ", "emphasis": "your browser's screen picker", "tail": ". Choose the tab, window, or screen you want to show." },
+      "selectAudioHint": { "lead": "To stream audio in Chrome, choose a tab and turn on ", "emphasis": "Share tab audio", "tail": "." },
       "selecting": "Choosing a screen…",
       "loginHeading": "Sign in with Discord to start",
-      "loginBody": "You need to sign in before creating a streaming URL. There is no password to create.",
+      "loginBody": ["You need to sign in to share your screen.", "There is no password to create."],
       "login": "Sign in with Discord",
-      "urlHeading": "Paste this streaming URL into VRChat",
+      "loginHint": "You can start sharing right after you sign in.",
+      "modeGroupLabel": "Viewing environment",
+      "modes": {
+        "quest": { "label": "Quality mode", "body": "Prioritises image quality (2–3 s delay)" },
+        "pc": { "label": "Real-time mode", "body": "Minimises delay (best for viewing on PC)" }
+      },
       "urlBody": "Paste it into a VRChat video player to show the screen you chose. On Quest, enter this URL manually.",
       "copy": "Copy URL",
       "copied": "Copied",
-      "showLive": "View the live stream",
-      "liveHeading": "Live now",
+      "liveHeading": "Live — paste this URL into VRChat",
       "preview": "Preview of the shared screen",
+      "previewToggle": "Show the screen being shared",
+      "previewTooltipLabel": "Why can I hide this?",
+      "previewTooltip": "Closing the preview does not stop the stream. Turn it off to reduce the load on your PC.",
+      "audioOn": "Audio on",
+      "audioOff": "No audio",
       "audioIncluded": "Streaming with audio.",
       "videoOnly": "No audio track was selected, so this stream is video only.",
       "elapsed": "Elapsed time",
@@ -338,18 +350,20 @@
         { "heading": "Paste it into VRChat", "body": "Paste the URL into a video player in a compatible world.", "placeholder": "Pasting into VRChat preview" }
       ]
     },
-    "features": { "heading": "Features", "items": ["No OBS: stream from your browser", "About 0.1 seconds video-only and 1.2 seconds with audio in a tested PC world", "Same URL on Quest, with about 2–3 seconds of latency", "Free to use"] },
+    "features": { "heading": "Features", "items": ["No OBS: stream from your browser", "About 1 second of latency in worlds with Use Low Latency", "Same URL on Quest, with about 2–3 seconds of latency", "Free to use"] },
     "faq": {
       "heading": "FAQ",
       "items": [
-        { "question": "Which worlds work?", "answer": "Worlds with an AVPro video player that supports Stream mode." },
+        { "question": "Which worlds work?", "answer": "Worlds with a video player that supports AVPro's Stream mode. ProTV, VideoTXL, Yamadev's non-synced players and other AVPro-capable players all work. If you are not sure which player a world uses, paste the URL and see whether it plays." },
         { "question": "Does it work on Quest?", "answer": "Yes. Paste the same URL. Expect about 2–3 seconds of latency." },
         { "question": "Is there audio?", "answer": "Yes. In Chrome, share a tab and turn on Share tab audio. Audio output was confirmed during verification." },
         { "question": "Is it free?", "answer": "Yes. Press Extend every two hours to keep streaming." },
-        { "question": "What if I forget to stop?", "answer": "The stream ends automatically unless you extend it." }
+        { "question": "What if I forget to stop?", "answer": "The stream ends automatically unless you extend it." },
+        { "question": "What if I want to record VRChat or my screen?", "answer": "This page is for live screen sharing. To show a video you have already recorded, convert it into a URL with the converter on the home page. What used to be on the recording page is covered here now." },
+        { "question": "How does this relate to Discord?", "answer": "You sign in with a Discord account. You cannot mirror a Discord screen share directly into VRChat, but pasting the URL issued here into a world's video player achieves the same thing." }
       ]
     },
-    "explainer": { "heading": "How screen sharing works in VRChat", "body": "VRChat has no built-in screen sharing. This page turns your screen into a streaming URL that a video player in a world can play." },
+    "explainer": { "heading": "How screen sharing works in VRChat", "body": ["VRChat has no built-in screen sharing. This page turns your screen into a streaming URL that a video player in a world can play. You can share a browser tab, an application window, or your whole desktop.", "With OBS you have to install it, configure a streaming server and stream key, and tune resolution and bitrate yourself. WebScreen reaches the same result from the browser's screen picker alone, so it fits when you want to share your screen in VRChat without OBS, or show something to a friend on the spot."] },
     "convert": { "heading": "Showing a recording instead?", "body": "If you only need to paste a recorded video, slides, or images, use the conversion tools to keep a URL you can play again later.", "home": "Convert from the home page", "web": "Convert a web page" }
   },
   "useCases": {

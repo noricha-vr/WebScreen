@@ -102,7 +102,7 @@ describe('画面共有runの競合拒否', () => {
     })).mount();
 
     page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('url').hidden);
+    await waitFor(() => !page.step('live').hidden);
     pageHide?.();
     await flushMicrotasks();
 
@@ -149,7 +149,7 @@ describe('画面共有runの競合拒否', () => {
     expect(createSignal).toBeUndefined();
     expect(calls).toEqual({ trackStops: 1, publisherStarts: 0, serverStops: 1 });
     expect(page.step('idle').hidden).toBe(false);
-    expect(page.step('url').hidden).toBe(true);
+    expect(page.step('live').hidden).toBe(true);
     expect(page.step('error').hidden).toBe(true);
   });
 
@@ -182,7 +182,7 @@ describe('画面共有runの競合拒否', () => {
 
     expect(calls).toEqual({ mediaSelections: 1, creates: 0, publisherStarts: 0 });
     pendingMedia.resolve(media(() => undefined));
-    await waitFor(() => !page.step('url').hidden);
+    await waitFor(() => !page.step('live').hidden);
     expect(calls).toEqual({ mediaSelections: 1, creates: 1, publisherStarts: 1 });
   });
 
@@ -205,7 +205,7 @@ describe('画面共有runの競合拒否', () => {
     page.button('[data-screen-start]').click();
     await waitFor(() => !page.step('error').hidden);
     page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('url').hidden);
+    await waitFor(() => !page.step('live').hidden);
 
     expect(selections).toBe(2);
     expect(creates).toBe(1);
@@ -292,7 +292,7 @@ describe('画面共有runの競合拒否', () => {
 
       expect(calls).toEqual(released);
       expect(page.step('idle').hidden).toBe(false);
-      expect(page.step('url').hidden).toBe(true);
+      expect(page.step('live').hidden).toBe(true);
       expect(page.step('error').hidden).toBe(true);
     }
   );
@@ -356,9 +356,12 @@ function fakePage(): {
   for (const selector of [
     '[data-screen-start]', '[data-screen-stop-others]', '[data-screen-retry]', '[data-screen-url]',
     '[data-screen-preview]', '[data-screen-audio-status]', '[data-screen-expiry-warning]',
-    '[data-screen-indicators]', '[data-screen-error-message]',
+    '[data-screen-error-message]', '[data-screen-flow-item]', '[data-screen-preview-toggle]',
+    '[data-screen-preview-body]', '[data-screen-switch-track]', '[data-screen-switch-knob]',
+    '[data-screen-expires-bar]', '[data-screen-audio-chip]', '[data-screen-audio-icon]',
+    '[data-screen-audio-label]', '[data-screen-mode]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'url', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;
@@ -366,7 +369,7 @@ function fakePage(): {
   const root = {
     dataset: {
       labelStart: 'start',
-      labelSelecting: 'selecting',
+      labelSelecting: 'selecting', labelStarting: 'starting', audioOn: 'audio-on', audioOff: 'audio-off',
       labelStopOthers: 'stop-others',
       msgVideoOnly: 'video',
       msgDisplayDenied: 'denied',
@@ -386,12 +389,20 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  paused = false;
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   textContent = '';
   value = '';
+  className = '';
+  style = { width: '' };
   srcObject: MediaStream | null = null;
+  private readonly attributes = new Map<string, string>();
   private readonly listeners: Array<() => void> = [];
 
   querySelector(): null { return null; }
+  setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
+  getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
   addEventListener(event: string, listener: () => void): void {
     if (event === 'click') this.listeners.push(listener);
   }
