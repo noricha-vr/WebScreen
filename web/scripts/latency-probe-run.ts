@@ -49,11 +49,12 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
   const measurementAbort = new AbortController();
   try {
     browser = await startChrome(options.profileDir);
-    await browser.addInitScript(peerConnectionTrackerInitScript());
     const sourcePage = browser.pages()[0] ?? await browser.newPage();
     state.sourcePage = sourcePage;
     await sourcePage.goto(sourceServer.url.href, { waitUntil: 'domcontentloaded' });
     const sharingPage = await browser.newPage();
+    // 共有ページだけに限定する（context 全体に掛けると計測対象外のページの RTCPeerConnection まで置換される）
+    await sharingPage.addInitScript(peerConnectionTrackerInitScript());
     attachBrowserLog(sharingPage);
     await sharingPage.goto(screenShareUrl(options), { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const streamId = await startScreenShare(sharingPage, options.profileDir);
@@ -246,7 +247,13 @@ async function stopSharingBeforeClose(browser: import('@playwright/test').Browse
     await page.waitForFunction(() => { const live = document.querySelector<HTMLElement>('[data-screen-step="live"]'); return !live || live.hidden; }, undefined, { timeout: 5_000 }).catch(() => undefined);
   }
 }
-function resolveSourceUrl(value: string, sourceServer: URL): string { const parsed = new URL(value); if (parsed.hostname === '127.0.0.1' && parsed.port === '0') parsed.port = sourceServer.port; return parsed.href; }
+function resolveSourceUrl(value: string, sourceServer: URL): string {
+  const parsed = new URL(value);
+  // controller 経由（/source）でも CLI と同じ制約を掛ける。http(s) 以外と資格情報付きは拒否
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || parsed.username || parsed.password) throw new Error('source url must be http(s) without credentials');
+  if (parsed.hostname === '127.0.0.1' && parsed.port === '0') parsed.port = sourceServer.port;
+  return parsed.href;
+}
 function screenShareUrl(options: RunOptions): string {
   if (options.videoProfile === 'quality') return 'https://web-screen.net/ja/screen-share/';
   const url = new URL('https://web-screen.net/ja/screen-share/');

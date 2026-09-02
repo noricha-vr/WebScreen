@@ -172,6 +172,13 @@ describe('latency probe CLI contract', () => {
     expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--video-profile', 'realtime', '--max-bitrate', '1500000', '--scroll', '240'])).toMatchObject({ command: 'run', options: { videoProfile: 'realtime', maxBitrate: 1_500_000, scrollPixelsPerSecond: 240 } });
   });
 
+  test('共有タブへ渡す URL は http(s) かつ資格情報なしに限る', () => {
+    for (const url of ['file:///etc/hosts', 'data:text/html,hi', 'https://user:pw@example.test/']) {
+      expect(() => parseLatencyProbeArgs(['run', '--minutes', '1', '--source', url])).toThrow();
+      expect(() => parseLatencyProbeArgs(['source', '--url', url])).toThrow();
+    }
+  });
+
   test('runの必須引数とplayer値をfail-closedする', () => {
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2'])).toThrow('--source is required');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--player', 'other'])).toThrow('win2022');

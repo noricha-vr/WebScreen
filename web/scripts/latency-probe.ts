@@ -145,7 +145,12 @@ function rejectUnknown(values: Record<string, string | undefined>, names: readon
 
 function requiredUrl(value: string | undefined, option: string): string {
   if (!value) throw new Error(`${option} is required`);
-  try { return new URL(value).href; } catch { throw new Error(`${option} must be an absolute URL`); }
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { throw new Error(`${option} must be an absolute URL`); }
+  // 共有タブに file: / data: 等を表示させない。資格情報付き URL も配信映像へ漏れるため拒否する
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error(`${option} must use http or https`);
+  if (parsed.username || parsed.password) throw new Error(`${option} must not contain credentials`);
+  return parsed.href;
 }
 
 function parseScroll(value: string | undefined): number {

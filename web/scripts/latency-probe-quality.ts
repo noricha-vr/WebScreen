@@ -35,8 +35,8 @@ export function peerConnectionTrackerInitScript(): () => void {
     if (!Original || tracked.__webscreenHarnessPeerConnections) return;
     const instances: RTCPeerConnection[] = [];
     // Proxyはnative constructorのstatic propertyを保つため、ページ側のfeature detectionを変えない。
-    globalThis.RTCPeerConnection = new Proxy(Original, { construct(target, args) {
-      const connection = Reflect.construct(target, args) as RTCPeerConnection;
+    globalThis.RTCPeerConnection = new Proxy(Original, { construct(target, args, newTarget) {
+      const connection = Reflect.construct(target, args, newTarget) as RTCPeerConnection;
       instances.push(connection);
       return connection;
     } });
