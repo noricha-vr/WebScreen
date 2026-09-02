@@ -79,6 +79,9 @@ describe('他の配信を終了して開始', () => {
     page.button('[data-screen-stop-others]').click();
     await waitFor(() => resolveDelay !== undefined);
     expect(page.button('[data-screen-retry]').disabled).toBe(true);
+    expect(page.button('[data-screen-stop-others]').disabled).toBe(true);
+    expect(page.button('[data-screen-stop-others]').textContent).toBe('stopping');
+    expect(page.button('[data-screen-error-message]').textContent).toBe('stopping');
     pageHide?.();
     resolveDelay?.();
     await flushMicrotasks();
@@ -147,7 +150,8 @@ describe('他の配信を終了して開始', () => {
     let selections = 0;
     new ScreenShareController(page.root, dependencies({
       requestJson: async (path) => {
-        if (path !== '/api/streams/') return { stopped: 1, retryAfterSeconds: 0 };
+        if (path === '/api/streams/stop-live/') return { stopped: 1, retryAfterSeconds: 0 };
+        if (path !== '/api/streams/') return null;
         creates += 1;
         if (creates === 1) throw new JsonRequestError(409, ERROR_CODES.streamAlreadyLive);
         throw new Error('create failed');
@@ -174,7 +178,8 @@ describe('他の配信を終了して開始', () => {
     let selections = 0;
     new ScreenShareController(page.root, dependencies({
       requestJson: async (path) => {
-        if (path !== '/api/streams/') return { stopped: 1, retryAfterSeconds: 0 };
+        if (path === '/api/streams/stop-live/') return { stopped: 1, retryAfterSeconds: 0 };
+        if (path !== '/api/streams/') return null;
         creates += 1;
         if (creates === 1) throw new JsonRequestError(409, ERROR_CODES.streamAlreadyLive);
         return createResponse();

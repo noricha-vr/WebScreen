@@ -3,12 +3,12 @@ import { describe, expect, test } from 'bun:test';
 import { STREAM_WHIP_BASE_URL } from '../../src/lib/contracts/streams';
 import { withRawAudioOpusParameters } from '../../src/lib/ui/audio-profile';
 import {
-  SCREEN_SHARE_VIDEO_SETTINGS,
   buildWhipUrl,
   prioritizeH264,
   resolveWhipResourceUrl,
   startWhipPublisher,
 } from '../../src/lib/ui/whip-publisher';
+import { SCREEN_SHARE_VIDEO_SETTINGS } from '../../src/lib/ui/screen-share/video-profile';
 
 describe('WHIP publisher', () => {
   test('固定済みの配信オリジンから stream ID ごとの WHIP URL を作る', () => {
@@ -158,6 +158,7 @@ describe('WHIP publisher', () => {
         publishToken: 'first-token',
         // 再 publish と停止だけを見るケースなので、audio sender へ触らない legacy で固定する。
         audioProfile: 'legacy',
+        videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,
         fetchImpl: (async (_url, options) => {
           requests.push(options ?? {});
           if (options?.method === 'POST') {
@@ -190,6 +191,7 @@ describe('WHIP publisher', () => {
         streamId: 'Ab12Cd34Ef56',
         publishToken: 'video-only-token',
         audioProfile: 'raw',
+        videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,
         fetchImpl: (async () => new Response('answer', {
           status: 201,
           headers: { Location: '/live/Ab12Cd34Ef56/whip/video-only' },
@@ -422,6 +424,7 @@ function testPublisherInput(onPost: () => void = () => {}): Parameters<typeof st
     streamId: 'Ab12Cd34Ef56',
     publishToken: 'token',
     audioProfile: 'raw',
+    videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,
     fetchImpl: (async (_url, options) => {
       if (options?.method === 'POST') {
         onPost();

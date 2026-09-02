@@ -4,7 +4,7 @@ import {
   STREAM_HEALTH_MAX_ATTEMPTS,
   STREAM_HEALTH_POLL_INTERVAL_MS,
   waitForStreamReady,
-} from '../../src/lib/ui/stream-health';
+} from '../../src/lib/ui/screen-share/stream-api';
 import type { ScreenShareDependencies } from '../../src/lib/ui/screen-share';
 
 describe('配信開始のhealth判定', () => {

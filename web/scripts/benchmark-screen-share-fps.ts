@@ -4,10 +4,8 @@ import { arch as osArch, platform as osPlatform, release as osRelease, tmpdir } 
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import {
-  MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS,
-  SCREEN_SHARE_VIDEO_SETTINGS,
-} from '../src/lib/ui/whip-publisher';
+import { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from '../src/lib/ui/whip-publisher';
+import { SCREEN_SHARE_VIDEO_SETTINGS } from '../src/lib/ui/screen-share';
 import {
   installControllerPage,
   installSourcePage,

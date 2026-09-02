@@ -5,6 +5,7 @@ import {
   startWhipPublisher,
   type WhipPublisher,
 } from '../../src/lib/ui/whip-publisher';
+import { SCREEN_SHARE_VIDEO_SETTINGS } from '../../src/lib/ui/screen-share/video-profile';
 
 const TIMER_MARGIN_MS = 50;
 
@@ -183,6 +184,7 @@ function publisherInput(
     streamId: 'Ab12Cd34Ef56',
     publishToken: 'token',
     audioProfile: 'raw',
+    videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,
     fetchImpl: (async (_url, options) => {
       if (options?.method === 'POST') {
         return new Response('answer', { status: 201, headers: { Location: '/live/Ab12Cd34Ef56/whip/resource' } });

@@ -58,10 +58,19 @@ paths = ["web/cron/src"]
 may_depend_on = ["services", "contracts"]
 max_file_loc = 200
 
+# 画面共有 feature。内部は index（composition root）から controller →
+# view/capture/session/stream-api/video-profile へだけ配線する。
+# audio-profile / stream-profile / request-json / whip-publisher 等の共有 UI utility は
+# 現段階では未登録モジュールとして扱い、feature への逆 import をレビューで禁止する。
+[modules.screen_share]
+paths = ["web/src/lib/ui/screen-share"]
+may_depend_on = ["contracts"]
+max_file_loc = 400
+
 # テストは検査対象を直接 import する層。cron を含めるのは、保持期間バッチの
 # 構造化ログ（件数の出し方）を workerd 無しで検証するため。
 [modules.tests]
 paths = ["web/tests", "web/e2e"]
-may_depend_on = ["contracts", "infra", "services", "entrypoints", "cron"]
+may_depend_on = ["contracts", "infra", "services", "entrypoints", "cron", "screen_share"]
 max_file_loc = 500
 max_public_symbols = 0
