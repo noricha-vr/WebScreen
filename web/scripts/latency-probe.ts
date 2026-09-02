@@ -3,14 +3,17 @@ import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { analyzeDirectory, runLatencyProbe, switchSource, type RunOptions } from './latency-probe-run';
+import { analyzeDirectory, loginProfile, runLatencyProbe, switchSource, type RunOptions } from './latency-probe-run';
+import { checkWindowsRecording } from './latency-probe-player';
 
 const HELP = `Usage: bun scripts/latency-probe.ts <subcommand> [options]
 
 WebScreen配信を実Mac Chromeから開始し、RTSPT出口と任意のWindowsプレイヤーを時系列計測します。
 
 Subcommands:
-  run --minutes N --source URL [--player win2022] [--profile-dir PATH] [--out DIR]
+  login [--profile-dir PATH]
+  player-check [--seconds N] [--out DIR]
+  run --minutes N --source URL [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
   source --url URL
   analyze DIR
 
@@ -21,13 +24,18 @@ run options:
   --player win2022   Windows側のベストエフォート録画を有効化
   --profile-dir PATH Chrome永続プロファイル（既定: ~/.webscreen-harness/chrome-profile）
   --out DIR          出力先（既定: docs/tmp/latency/<UTC timestamp>）
+  --server-snap HOST 配信サーバーへ SSH し、run 中に ingress / egress のフレームを撮って relay 前後の遅延を server-snap.md に出す
+  --notify-discord CHANNEL_ID
+                     配信 URL を Discord の指定チャンネルへ投稿する（VRChat 側の PC で貼るため）
 
-sourceは実行中runの共有タブを切り替えます。analyzeは保存済みCSVからsummary.mdを再生成します。`;
+loginはハーネスが開くChromeで一度だけ人がログインするための待機です。player-checkは配信なしでWindows録画だけを試し、実測前に録画経路を確認します。sourceは実行中runの共有タブを切り替えます。analyzeは保存済みCSVからsummary.mdを再生成します。`;
 
 /** CLI契約を検証して実行可能な引数へ変換する。 */
 export function parseLatencyProbeArgs(argv: readonly string[]):
   | { command: 'help' }
   | { command: 'run'; options: RunOptions }
+  | { command: 'login'; profileDir: string }
+  | { command: 'player-check'; seconds: number; outDir: string }
   | { command: 'source'; url: string }
   | { command: 'analyze'; directory: string } {
   const [command, ...rest] = argv;
@@ -37,12 +45,25 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     return { command, directory: rest[0]! };
   }
   const values = parseOptions(rest);
+  if (command === 'player-check') {
+    rejectUnknown(values, ['seconds', 'out']);
+    const seconds = values.seconds === undefined ? 15 : Number(values.seconds);
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 300) throw new Error('--seconds must be an integer between 5 and 300');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return { command, seconds, outDir: values.out ?? resolve('..', 'docs', 'tmp', 'latency', `player-check-${stamp}`) };
+  }
+  if (command === 'login') {
+    rejectUnknown(values, ['profile-dir']);
+    return { command, profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile') };
+  }
   if (command === 'source') {
     rejectUnknown(values, ['url']);
     return { command, url: requiredUrl(values.url, '--url') };
   }
   if (command !== 'run') throw new Error(`unknown subcommand: ${command}`);
-  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out']);
+  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap']);
+  if (values['server-snap'] !== undefined && !isValidSshHost(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
+  if (values['notify-discord'] !== undefined && !/^\d{15,25}$/.test(values['notify-discord'])) throw new Error('--notify-discord must be a Discord channel id');
   const minutes = Number(values.minutes);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) throw new Error('--minutes must be an integer between 1 and 120');
   if (values.player !== undefined && values.player !== 'win2022') throw new Error('--player must be win2022');
@@ -51,9 +72,16 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     command, options: {
       minutes, source: requiredUrl(values.source, '--source'), player: values.player === 'win2022' ? 'win2022' : null,
       profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile'),
+      notifyDiscordChannelId: values['notify-discord'] ?? null,
+      serverSnapHost: values['server-snap'] ?? null,
       outDir: values.out ?? resolve('..', 'docs', 'tmp', 'latency', timestamp),
     },
   };
+}
+
+/** SSHホスト名をlabelごとに検証し、オプションとして解釈される値を拒否する。 */
+export function isValidSshHost(value: string): boolean {
+  return value.length <= 253 && value.split('.').every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label));
 }
 
 async function main(): Promise<void> {
@@ -65,6 +93,14 @@ async function main(): Promise<void> {
       await mkdir(parsed.options.outDir, { recursive: true });
       console.log(`出力先: ${parsed.options.outDir}`);
       await runLatencyProbe(parsed.options);
+    } else if (parsed.command === 'player-check') {
+      await mkdir(parsed.outDir, { recursive: true });
+      const check = await checkWindowsRecording(parsed.outDir, parsed.seconds);
+      console.log(`Windows録画チェック: ${check.ok ? 'OK' : 'NG'} 録画長=${check.durationSeconds ?? '-'}秒（指定 ${parsed.seconds} 秒） 出力=${parsed.outDir}`);
+      if (check.warning) console.log(check.warning);
+      if (!check.ok) { console.log(check.diagnostics.slice(0, 4000)); process.exitCode = 1; }
+    } else if (parsed.command === 'login') {
+      await loginProfile(parsed.profileDir);
     } else if (parsed.command === 'source') {
       await switchSource(parsed.url);
     } else {

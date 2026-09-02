@@ -10,6 +10,8 @@
 <script>
   const canvas = document.querySelector('#clock');
   const context = canvas.getContext('2d', { alpha: false });
+  // 更新間隔（ms）。全セルが反転する絵は H.264 に不利で、50 ms だと 1.2 Mbps 上限で送出キューが数秒溜まる（2026-09-02 実測）
+  const tickMs = Math.min(1000, Math.max(20, Number(new URLSearchParams(location.search).get('tick')) || 250));
   const GRID = 16;
   const RESERVED = new Set(['1,1', '14,1', '1,14', '14,14']);
 
@@ -41,7 +43,6 @@
     return cells;
   }
   function draw() {
-    requestAnimationFrame(draw);
     const ratio = Math.min(devicePixelRatio || 1, 2);
     if (canvas.width !== innerWidth * ratio || canvas.height !== innerHeight * ratio) {
       canvas.width = innerWidth * ratio; canvas.height = innerHeight * ratio;
@@ -61,13 +62,18 @@
   function audio() {
     const audioContext = new AudioContext();
     const gain = audioContext.createGain(); gain.gain.value = 0.1; gain.connect(audioContext.destination);
+    const wallClockOffsetMs = Date.now() - audioContext.currentTime * 1000;
     const scheduleBeep = () => {
-      const now = audioContext.currentTime;
-      let next = Math.ceil(now);
-      if (next - now < 0.05) next += 1;
-      const oscillator = audioContext.createOscillator(); oscillator.frequency.value = 1000;
-      oscillator.connect(gain); oscillator.start(next); oscillator.stop(next + 0.05);
-      setTimeout(scheduleBeep, Math.max(100, (next + 1 - audioContext.currentTime) * 1000));
+      const nextBoundaryMs = (Math.floor((audioContext.currentTime * 1000 + wallClockOffsetMs) / 1000) + 1) * 1000;
+      const startAt = (nextBoundaryMs - wallClockOffsetMs) / 1000;
+      const leadMs = 100;
+      setTimeout(() => {
+        if (audioContext.currentTime >= startAt) { scheduleBeep(); return; }
+        // 秒の 8 秒剰余を周波数に符号化する。受信側は 8 帯域を照合し、映像近接標本と組み合わせて絶対遅延を復元する。
+        const oscillator = audioContext.createOscillator(); oscillator.frequency.value = 600 + 100 * ((nextBoundaryMs / 1000) % 8);
+        oscillator.connect(gain); oscillator.start(startAt); oscillator.stop(startAt + 0.05);
+        scheduleBeep();
+      }, Math.max(0, (startAt - audioContext.currentTime) * 1000 - leadMs));
     };
     if (new URLSearchParams(location.search).get('tones') === '1') {
       for (const [frequency, pan] of [[440, -1], [880, 1]]) {
@@ -77,6 +83,6 @@
     }
     scheduleBeep();
   }
-  audio(); draw();
+  audio(); draw(); setInterval(draw, tickMs);
 </script>
 </html>

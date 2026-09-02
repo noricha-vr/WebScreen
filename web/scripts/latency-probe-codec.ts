@@ -3,6 +3,13 @@ export const BLOCK_GRID_SIZE = 16;
 const PAYLOAD_BITS = 56;
 const RESERVED = new Set(['1,1', '14,1', '1,14', '14,14']);
 
+/** フレームの復号結果と、失敗時に記録する診断理由。 */
+export interface BlockCodeFrameDecodeResult {
+  timestampMs: number | null;
+  reason: 'sync-pattern-not-found' | 'checksum-mismatch' | null;
+  placement?: BlockCodePlacement | null;
+}
+
 /** ミリ秒時刻を48 bit + checksumへ符号化した白黒セル格子を返す。 */
 export function encodeBlockCode(timestampMs: number): boolean[][] {
   if (!Number.isSafeInteger(timestampMs) || timestampMs < 0 || timestampMs >= 2 ** 48) {
@@ -50,36 +57,179 @@ export function decodeBlockCode(grid: readonly (readonly boolean[])[]): number |
 export function decodeBlockCodeFrame(
   rgb: Uint8Array, width: number, height: number
 ): number | null {
-  if (rgb.length !== width * height * 3 || width < BLOCK_GRID_SIZE || height < BLOCK_GRID_SIZE) return null;
+  return decodeBlockCodeFrameWithReason(rgb, width, height).timestampMs;
+}
+
+/** RGB24フレームを復号し、失敗原因を診断用に返す。 */
+export interface BlockCodePlacement { x: number; y: number; cell: number }
+
+export function decodeBlockCodeFrameWithReason(
+  rgb: Uint8Array, width: number, height: number, hint?: BlockCodePlacement | null
+): BlockCodeFrameDecodeResult {
+  if (rgb.length !== width * height * 3 || width < BLOCK_GRID_SIZE || height < BLOCK_GRID_SIZE) {
+    return { timestampMs: null, reason: 'sync-pattern-not-found' };
+  }
+  // 前フレームで見つかった位置・セルサイズを先に試す。全探索は 1150x720 で 1 フレーム数百 ms かかり
+  // 5 fps に追いつかずパイプに滞留して遅延が過大に見える（2026-09-02 実測）ため、定常時はここで返す
+  if (hint && hint.x + hint.cell * BLOCK_GRID_SIZE <= width && hint.y + hint.cell * BLOCK_GRID_SIZE <= height
+    && matchesSyncSamples(rgb, width, hint.x, hint.y, hint.cell)) {
+    const timestamp = decodeBlockCode(sampleGrid(rgb, width, hint.x, hint.y, hint.cell));
+    if (timestamp !== null) return { timestampMs: timestamp, reason: null, placement: hint };
+  }
   const maxCell = Math.floor(Math.min(width, height) / BLOCK_GRID_SIZE);
+  let foundSyncPattern = false;
   // 格子の辺を半セル刻みで走査し、見つかった候補だけを詳細復号する。
   for (let cell = 8; cell <= maxCell; cell += 2) {
     const stride = Math.max(2, Math.floor(cell / 2));
     for (let y = 0; y + cell * BLOCK_GRID_SIZE <= height; y += stride) {
       for (let x = 0; x + cell * BLOCK_GRID_SIZE <= width; x += stride) {
         if (!matchesSyncSamples(rgb, width, x, y, cell)) continue;
+        foundSyncPattern = true;
         const grid = sampleGrid(rgb, width, x, y, cell);
         const timestamp = decodeBlockCode(grid);
-        if (timestamp !== null) return timestamp;
+        if (timestamp !== null) return { timestampMs: timestamp, reason: null, placement: { x, y, cell } };
       }
     }
   }
-  return null;
+  return { timestampMs: null, reason: foundSyncPattern ? 'checksum-mismatch' : 'sync-pattern-not-found' };
 }
 
-/** PCMから1 kHzビープの立ち上がりsample indexを検出する。 */
+/** 1 kHz近傍だけを通す二次バンドパスフィルタを適用する。 */
+export function bandPassOneKilohertz(samples: Float32Array, sampleRate: number): Float32Array {
+  if (!Number.isFinite(sampleRate) || sampleRate < 4_000) throw new Error('sampleRate must be at least 4000');
+  const centerHz = 1_000;
+  const quality = 5;
+  const omega = (2 * Math.PI * centerHz) / sampleRate;
+  const alpha = Math.sin(omega) / (2 * quality);
+  const a0 = 1 + alpha;
+  const b0 = alpha / a0;
+  const b2 = -b0;
+  const a1 = (-2 * Math.cos(omega)) / a0;
+  const a2 = (1 - alpha) / a0;
+  const filtered = new Float32Array(samples.length);
+  let input1 = samples[0] ?? 0;
+  let input2 = samples[0] ?? 0;
+  let output1 = 0;
+  let output2 = 0;
+  for (let index = 0; index < samples.length; index += 1) {
+    const output = b0 * samples[index]! + b2 * input2 - a1 * output1 - a2 * output2;
+    filtered[index] = output;
+    input2 = input1;
+    input1 = samples[index]!;
+    output2 = output1;
+    output1 = output;
+  }
+  return filtered;
+}
+
+/** PCMからノイズフロア基準で1 kHzビープの立ち上がりsample indexを検出する。 */
 export function detectBeepOnsets(samples: Float32Array, sampleRate: number): number[] {
   const window = Math.max(32, Math.round(sampleRate * 0.02));
   const hop = Math.max(1, Math.round(sampleRate * 0.01));
+  const filtered = bandPassOneKilohertz(samples, sampleRate);
+  const energies: Array<{ start: number; energy: number }> = [];
+  for (let start = 0; start + window <= filtered.length; start += hop) {
+    energies.push({ start, energy: meanSquare(filtered, start, window) });
+  }
+  if (energies.length === 0) return [];
+  const sorted = energies.map((item) => item.energy).sort((left, right) => left - right);
+  const noiseFloor = sorted[Math.floor((sorted.length - 1) * 0.2)]!;
+  const threshold = Math.max(noiseFloor * 8, noiseFloor + 0.000_001);
   const onsets: number[] = [];
   let active = false;
-  for (let start = 0; start + window <= samples.length; start += hop) {
-    const level = goertzelPower(samples, start, window, sampleRate, 1_000);
-    const isTone = level > 0.008;
-    if (isTone && !active) onsets.push(start);
+  for (const { start, energy } of energies) {
+    const isTone = energy > threshold;
+    // エネルギー窓の中央を立ち上がり時刻として扱い、窓の先読み分を補正する。
+    if (isTone && !active) onsets.push(start + Math.floor(window / 2));
     active = isTone;
   }
   return onsets;
+}
+
+/** 秒識別ビープの検出結果。secondMod8 は送出UTC秒の 8 秒剰余である。 */
+export interface IdentifiedBeep { onset: number; secondMod8: number }
+
+/** 600〜1300 Hz の8帯域から、到着した秒識別ビープを復元する。 */
+export function detectIdentifiedBeeps(samples: Float32Array, sampleRate: number): IdentifiedBeep[] {
+  if (!Number.isFinite(sampleRate) || sampleRate < 4_000) throw new Error('sampleRate must be at least 4000');
+  const window = Math.max(32, Math.round(sampleRate * 0.05));
+  const hop = Math.max(1, Math.round(sampleRate * 0.01));
+  const energies: Array<{ start: number; bands: number[]; energy: number }> = [];
+  for (let start = 0; start + window <= samples.length; start += hop) {
+    const bands = Array.from({ length: 8 }, (_, secondMod8) => toneEnergy(samples, start, window, sampleRate, 600 + 100 * secondMod8));
+    energies.push({ start, bands, energy: Math.max(...bands) });
+  }
+  if (energies.length === 0) return [];
+  const sorted = energies.map((item) => item.energy).sort((left, right) => left - right);
+  const noiseFloor = sorted[Math.floor((sorted.length - 1) * 0.2)]!;
+  const threshold = Math.max(noiseFloor * 8, noiseFloor + 0.000_001);
+  const result: IdentifiedBeep[] = [];
+  let active = false;
+  for (const item of energies) {
+    const secondMod8 = strongestBand(item.bands);
+    const isTone = item.energy > threshold;
+    if (isTone && !active && secondMod8 !== null) result.push({ onset: item.start + Math.floor(window / 2), secondMod8 });
+    active = isTone;
+  }
+  return result;
+}
+
+/** Float32モノラルPCMを標準の16 bit WAVへ変換する。 */
+export function encodeMonoWav(samples: Float32Array, sampleRate: number): Uint8Array {
+  if (!Number.isInteger(sampleRate) || sampleRate <= 0) throw new Error('sampleRate must be a positive integer');
+  const output = new Uint8Array(44 + samples.length * 2);
+  const view = new DataView(output.buffer);
+  writeAscii(output, 0, 'RIFF');
+  view.setUint32(4, output.length - 8, true);
+  writeAscii(output, 8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(output, 36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[index]!));
+    view.setInt16(44 + index * 2, Math.round(sample * 32_767), true);
+  }
+  return output;
+}
+
+/** 標準の16 bitモノラルWAVをビープ解析用PCMへ変換する。 */
+export function decodeMonoWav(wav: Uint8Array): { samples: Float32Array; sampleRate: number } {
+  if (wav.length < 44 || readAscii(wav, 0, 4) !== 'RIFF' || readAscii(wav, 8, 4) !== 'WAVE') {
+    throw new Error('invalid WAV header');
+  }
+  const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+  let offset = 12;
+  let sampleRate: number | null = null;
+  let dataOffset: number | null = null;
+  let dataLength: number | null = null;
+  while (offset + 8 <= wav.length) {
+    const id = readAscii(wav, offset, 4);
+    const length = view.getUint32(offset + 4, true);
+    const body = offset + 8;
+    if (body + length > wav.length) throw new Error('truncated WAV chunk');
+    if (id === 'fmt ') {
+      if (length < 16 || view.getUint16(body, true) !== 1 || view.getUint16(body + 2, true) !== 1 || view.getUint16(body + 14, true) !== 16) {
+        throw new Error('WAV must be 16 bit mono PCM');
+      }
+      sampleRate = view.getUint32(body + 4, true);
+    }
+    if (id === 'data') {
+      dataOffset = body;
+      dataLength = length;
+      break;
+    }
+    offset = body + length + (length % 2);
+  }
+  if (!sampleRate || dataOffset === null || dataLength === null || dataLength % 2 !== 0) throw new Error('WAV data chunk is missing');
+  const samples = new Float32Array(dataLength / 2);
+  for (let index = 0; index < samples.length; index += 1) samples[index] = view.getInt16(dataOffset + index * 2, true) / 32_768;
+  return { samples, sampleRate };
 }
 
 /** 端末時計の差を引き、Windowsで観測した時刻をMac時計へ揃える。 */
@@ -130,14 +280,37 @@ function pixelIsWhite(rgb: Uint8Array, width: number, x: number, y: number): boo
   return (rgb[offset]! + rgb[offset + 1]! + rgb[offset + 2]!) / 3 >= 128;
 }
 
-function goertzelPower(samples: Float32Array, start: number, length: number, sampleRate: number, frequency: number): number {
-  const coefficient = 2 * Math.cos((2 * Math.PI * frequency) / sampleRate);
-  let previous = 0;
-  let previousPrevious = 0;
-  for (let index = start; index < start + length; index += 1) {
-    const current = samples[index]! + coefficient * previous - previousPrevious;
-    previousPrevious = previous;
-    previous = current;
+function meanSquare(samples: Float32Array, start: number, length: number): number {
+  let total = 0;
+  for (let index = start; index < start + length; index += 1) total += samples[index]! ** 2;
+  return total / length;
+}
+
+function strongestBand(bands: readonly number[]): number | null {
+  let strongest = -1;
+  let energy = Number.NEGATIVE_INFINITY;
+  for (const [index, candidate] of bands.entries()) {
+    if (candidate > energy) { strongest = index; energy = candidate; }
   }
-  return (previous * previous + previousPrevious * previousPrevious - coefficient * previous * previousPrevious) / (length * length);
+  return strongest < 0 ? null : strongest;
+}
+
+function toneEnergy(samples: Float32Array, start: number, length: number, sampleRate: number, frequencyHz: number): number {
+  const step = (2 * Math.PI * frequencyHz) / sampleRate;
+  let cosine = 0;
+  let sine = 0;
+  for (let index = 0; index < length; index += 1) {
+    const value = samples[start + index]!;
+    cosine += value * Math.cos(step * index);
+    sine += value * Math.sin(step * index);
+  }
+  return (cosine * cosine + sine * sine) / (length * length);
+}
+
+function writeAscii(target: Uint8Array, offset: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) target[offset + index] = value.charCodeAt(index);
+}
+
+function readAscii(source: Uint8Array, offset: number, length: number): string {
+  return String.fromCharCode(...source.slice(offset, offset + length));
 }
