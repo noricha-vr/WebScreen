@@ -15,26 +15,31 @@ const MAX_RECORDING_BYTES = 2 * 1024 * 1024 * 1024;
 export async function recordWindowsPlayer(outDir: string, until: number): Promise<PlayerResult> {
   const seconds = Math.max(1, Math.ceil((until - Date.now()) / 1_000));
   const runId = new Date().toISOString().replace(/[:.]/g, '-');
-  const remoteDir = `$env:TEMP\\webscreen-latency-${runId}`;
-  const remote = `${remoteDir}\\recording.mp4`;
-  const log = `${remoteDir}\\ffmpeg.log`;
-  const started = `${remoteDir}\\started.txt`;
-  const done = `${remoteDir}\\done.txt`;
+  // PowerShell に渡す式（二重引用符付き）。単一引用符だと $env:TEMP が展開されない
+  const remoteDir = `"$env:TEMP\\webscreen-latency-${runId}"`;
+  const remote = `"$env:TEMP\\webscreen-latency-${runId}\\recording.mp4"`;
+  const log = `"$env:TEMP\\webscreen-latency-${runId}\\ffmpeg.log"`;
+  const started = `"$env:TEMP\\webscreen-latency-${runId}\\started.txt"`;
+  const done = `"$env:TEMP\\webscreen-latency-${runId}\\done.txt"`;
   const ffmpeg = 'C:\\Users\\win\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1.1-full_build\\bin\\ffmpeg.exe';
   let diagnostics = '';
   try {
-    const command = `$ErrorActionPreference='Stop'; $ff='${ffmpeg}'; $root=${remoteDir}; $out='${remote}'; $log='${log}'; $startedPath='${started}'; $donePath='${done}'; $task='WebScreenLatencyHarness'; Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path $root -Force | Out-Null; $taskScript="\`$recorded=[DateTime]::UtcNow; Set-Content -LiteralPath '$started' -Value \`$recorded.ToString('o') -NoNewline; & '$ff' -y -f gdigrab -framerate 30 -i desktop -t ${seconds} '$remote' 2>&1 | Set-Content -LiteralPath '$log'; \`$code=\`$LASTEXITCODE; Set-Content -LiteralPath '$done' -Value \`$code -NoNewline; exit \`$code"; $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskScript)); $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -EncodedCommand $encoded"; $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null; try { Start-ScheduledTask -TaskName $task; $deadline=[DateTime]::UtcNow.AddSeconds(${seconds + 15}); do { Start-Sleep -Seconds 1 } while(-not (Test-Path -LiteralPath $donePath) -and [DateTime]::UtcNow -lt $deadline); $ended=[DateTime]::UtcNow; if(-not (Test-Path -LiteralPath $donePath)){ Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; throw 'Scheduled Task recording timed out (done marker not written; task stopped)' }; if(-not(Test-Path -LiteralPath $startedPath)){ throw 'Scheduled Task did not write recording start time' }; $exitCode=(Get-Content -Raw -LiteralPath $donePath).Trim(); if($exitCode -notmatch '^-?\\d+$' -or [int]$exitCode -ne 0){ throw ('ffmpeg exited with code ' + $exitCode) }; $recorded=(Get-Content -Raw -LiteralPath $startedPath).Trim(); Write-Output ('recording_started_utc=' + $recorded); Write-Output ('recording_ended_utc=' + $ended.ToString('o')); Write-Output 'ffmpeg_log_begin'; if(Test-Path -LiteralPath $log){ Get-Content -Raw -LiteralPath $log }; Write-Output 'ffmpeg_log_end' } finally { Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue }`;
+    const command = `$ErrorActionPreference='Stop'; $ff='${ffmpeg}'; $root=${remoteDir}; $out=${remote}; $log=${log}; $startedPath=${started}; $donePath=${done}; $task='WebScreenLatencyHarness'; Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path $root -Force | Out-Null; $taskScript="\`$recorded=[DateTime]::UtcNow; Set-Content -LiteralPath '$startedPath' -Value \`$recorded.ToString('o') -NoNewline; & '$ff' -y -f gdigrab -framerate 30 -i desktop -t ${seconds} '$out' 2>&1 | Set-Content -LiteralPath '$log'; \`$code=\`$LASTEXITCODE; Set-Content -LiteralPath '$donePath' -Value \`$code -NoNewline; exit \`$code"; $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskScript)); $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -EncodedCommand $encoded"; $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null; try { Start-ScheduledTask -TaskName $task; $deadline=[DateTime]::UtcNow.AddSeconds(${seconds + 15}); do { Start-Sleep -Seconds 1 } while(-not (Test-Path -LiteralPath $donePath) -and [DateTime]::UtcNow -lt $deadline); $ended=[DateTime]::UtcNow; if(-not (Test-Path -LiteralPath $donePath)){ Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; throw 'Scheduled Task recording timed out (done marker not written; task stopped)' }; if(-not(Test-Path -LiteralPath $startedPath)){ throw 'Scheduled Task did not write recording start time' }; $exitCode=(Get-Content -Raw -LiteralPath $donePath).Trim(); if($exitCode -notmatch '^-?\\d+$' -or [int]$exitCode -ne 0){ throw ('ffmpeg exited with code ' + $exitCode) }; $recorded=(Get-Content -Raw -LiteralPath $startedPath).Trim(); Write-Output ('recording_started_utc=' + $recorded); Write-Output ('recording_ended_utc=' + $ended.ToString('o')); Write-Output 'ffmpeg_log_begin'; if(Test-Path -LiteralPath $log){ Get-Content -Raw -LiteralPath $log }; Write-Output 'ffmpeg_log_end' } finally { Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue }`;
+    console.info(`[player] 録画コマンド送信（${seconds} 秒、期限 ${seconds + 60} 秒）`);
     const recording = await runTextProcess(sshPowerShell(command), (seconds + 60) * 1_000);
+    console.info(`[player] 録画コマンド完了 exit=${recording.exitCode} stdout=${recording.stdout.trim().slice(0, 200)}`);
     diagnostics = formatProcessDiagnostics('Windows Scheduled Task 録画', recording);
     if (recording.exitCode !== 0) return { samples: [], warning: 'Windows録画は失敗しました。Scheduled TaskのSSH/ffmpeg出力をplayer-error.mdで確認してください。', diagnostics };
     const startedAt = parseUtcMarker(recording.stdout, 'recording_started_utc');
     if (startedAt === null) return { samples: [], warning: 'Windows録画の実開始UTC時刻を取得できませんでした。', diagnostics };
     const endedAt = parseUtcMarker(recording.stdout, 'recording_ended_utc') ?? Date.now();
-    const local = join(outDir, basename(remote));
+    const local = join(outDir, 'recording.mp4');
     const size = await remoteFileSize(remote);
+    console.info(`[player] リモートサイズ ${size} bytes。回収開始`);
     diagnostics += `\n## 録画開始・終了（UTC）\n\n- 開始: ${new Date(startedAt).toISOString()}\n- 終了: ${new Date(endedAt).toISOString()}\n- 回収前サイズ: ${size} bytes\n`;
     if (size <= 0 || size > MAX_RECORDING_BYTES) return { samples: [], warning: `Windows録画の回収を中止しました（サイズ ${size} bytes、上限 2 GB）。`, diagnostics };
     const copied = await copyRemoteFile(remote, local);
+    console.info(`[player] 回収完了 ok=${copied.ok}`);
     diagnostics += `\n## 回収 stderr\n\n${copied.stderr}\n`;
     if (!copied.ok) return { samples: [], warning: 'Windows録画は完了しましたが、Macへの回収に失敗しました。', diagnostics };
     const duration = await mediaDurationSeconds(local);
@@ -52,25 +57,23 @@ export async function recordWindowsPlayer(outDir: string, until: number): Promis
 }
 
 async function remoteFileSize(path: string): Promise<number> {
-  const result = await runTextProcess(sshPowerShell(`(Get-Item -LiteralPath '${path}').Length`), 10 * 60_000);
+  const result = await runTextProcess(sshPowerShell(`(Get-Item -LiteralPath ${path}).Length`), 10 * 60_000);
   const size = Number(result.stdout.trim());
   if (result.exitCode !== 0 || !Number.isSafeInteger(size)) throw new Error(`Windows録画サイズを取得できませんでした: ${result.stderr.trim()}`);
   return size;
 }
 
 async function copyRemoteFile(remote: string, local: string): Promise<{ ok: boolean; stderr: string }> {
-  const child = Bun.spawn(sshPowerShell(`$stream=[Console]::OpenStandardOutput(); $input=[IO.File]::OpenRead('${remote}'); try { $input.CopyTo($stream) } finally { $input.Dispose() }`), { stdout: 'pipe', stderr: 'pipe' });
-  const stderrPromise = readPipeText(requirePipe(child.stderr, 'Windows recording copy stderr'));
-  try {
-    await Bun.write(Bun.file(local), new Response(requirePipe(child.stdout, 'Windows recording')));
-    await chmod(local, 0o600);
-    const exitCode = await waitForProcess(child, 10 * 60_000);
-    const stderr = await stderrPromise;
-    return { ok: exitCode === 0 && (await stat(local)).size > 0, stderr };
-  } catch (error) {
-    child.kill(); await child.exited.catch(() => undefined);
-    return { ok: false, stderr: `${await stderrPromise.catch(() => '')}\n${String(error)}` };
-  }
+  // stdout ストリーミング転送は ssh 終了後も Bun 側が待ち続けて固まったため（2026-09-02 実測）、scp で回収する。
+  // remote は PowerShell 式（"$env:TEMP\..."）なので、先に Windows 側で実パスへ解決する
+  const resolved = await runTextProcess(sshPowerShell(`Write-Output ${remote}`), 30_000);
+  const remotePath = resolved.stdout.trim().split(/\r?\n/).pop() ?? '';
+  if (resolved.exitCode !== 0 || !/^[A-Za-z]:\\/.test(remotePath)) return { ok: false, stderr: `リモートパスを解決できません: ${resolved.stderr.trim()}` };
+  // Windows OpenSSH には SFTP サブシステムが無く既定の scp（SFTP 方式）は失敗するため、旧プロトコル -O を使う
+  const scp = await runTextProcess(['scp', '-O', ...SSH_OPTIONS, '--', `win2022:${remotePath.replace(/\\/g, '/')}`, local], 10 * 60_000);
+  if (scp.exitCode !== 0) return { ok: false, stderr: scp.stderr };
+  await chmod(local, 0o600);
+  return { ok: (await stat(local)).size > 0, stderr: scp.stderr };
 }
 
 async function mediaDurationSeconds(file: string): Promise<number | null> {
@@ -112,3 +115,15 @@ function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayB
 
 /** PowerShell の -EncodedCommand 用に UTF-16LE の base64 へ変換する。 */
 export function encodePowerShell(script: string): string { return Buffer.from(script, 'utf16le').toString('base64'); }
+
+/** 実測の前に Windows 録画だけを短時間試し、録画長・サイズ・診断を返す（配信は不要）。 */
+export async function checkWindowsRecording(outDir: string, seconds: number): Promise<{ ok: boolean; durationSeconds: number | null; diagnostics: string; warning: string | null }> {
+  const result = await recordWindowsPlayer(outDir, Date.now() + seconds * 1_000);
+  const file = join(outDir, 'recording.mp4');
+  let durationSeconds: number | null = null;
+  try {
+    const probe = await runTextProcess(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], 30_000);
+    durationSeconds = probe.exitCode === 0 ? Number(probe.stdout.trim()) : null;
+  } catch { durationSeconds = null; }
+  return { ok: result.warning === null && durationSeconds !== null && durationSeconds >= seconds * 0.8, durationSeconds, diagnostics: result.diagnostics, warning: result.warning };
+}
