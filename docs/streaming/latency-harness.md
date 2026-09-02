@@ -34,3 +34,10 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - `--server-snap HOST` は run 中にサーバーへ SSH し、ingress（8554）と egress（554）を**並列起動**で単発取得して `server-snap.md` に出す。ingress の値が「配信元 → ingress」、egress との差が relay の寄与
 - 実測（2026-09-02、計測ページ 1150x720 / 250 ms 更新）: ingress 約 0.55 秒、egress 約 0.80 秒（上限値）、Mac からの出口単発取得 約 0.78 秒。開始直後から安定し、出口に「数秒 → 1 秒未満」の収束は無い
 - `--notify-discord CHANNEL_ID` で配信 URL を Discord に投稿する（VRChat を動かす別 PC で貼るため）。`--player win2022` の録画は Scheduled Task 経由で、MacType 導入機では互換性ダイアログが出るが録画は継続する
+
+## 実測前の確認手順（2026-09-02 追記）
+
+1. `bun scripts/latency-probe.ts login`（初回のみ。ハーネスが開く Chrome でログイン）
+2. `bun scripts/latency-probe.ts player-check --seconds 8`（配信なしで Windows 録画・回収だけを試す。録画長が指定の 80% 以上で OK。フレームに PowerShell コンソールや MacType 警告が写らないこと）
+3. `make latency-probe MIN=4 SOURCE=... PLAYER=win2022 NOTIFY_DISCORD=<channel> SERVER_SNAP=<host>`
+4. Discord の URL を VRChat に貼り、**プレイヤーを正面に近い視点で**映し続ける（斜めになると復号できない）
