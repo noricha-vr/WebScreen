@@ -33,6 +33,23 @@ forbidden_imports = [
   "^cloudflare:",
 ]
 
+# 構造化ログ。外部依存を持たず（console へ 1 行 JSON を書くだけ）、失敗を記録する層から
+# 直接呼べる横断的関心事なので infra から出してある。infra に置くと entrypoints から
+# ログを出せず、かといって entrypoints → infra を開けると D1 / R2 の直叩きまで通るため。
+# 現在の呼び出し元は services / entrypoints / tests。infra・cron・screen_share から
+# 呼びたくなったら、その層の may_depend_on に足す（今は参照がないので開けていない）。
+[modules.observability]
+paths = ["web/src/lib/observability"]
+may_depend_on = ["contracts"]
+forbidden_imports = [
+  # 外部依存を持たないことを機械で守る。ここに cloudflare:workers や外部 logger が
+  # 入ると「どの層からでも呼べる」前提が崩れ、entrypoints から機密へ到達できてしまう。
+  "^node:",
+  "^astro",
+  "^@astrojs/",
+  "^cloudflare:",
+]
+
 # 外部依存の隔離層（D1 / R2 / Discord API / web-capture の呼び出し）。
 [modules.infra]
 paths = ["web/src/lib/infra"]
@@ -41,13 +58,14 @@ may_depend_on = ["contracts"]
 # ドメインロジック。infra 越しにしか外部へ触らない。
 [modules.services]
 paths = ["web/src/lib/services"]
-may_depend_on = ["infra", "contracts"]
+may_depend_on = ["infra", "contracts", "observability"]
 
 # エントリポイント。HTTP と services の間の I/O 変換だけを担い、ロジックを持たない。
-# infra を直接叩くのは禁止（services を経由させる）。
+# infra を直接叩くのは禁止（services を経由させる）。observability だけは、
+# entrypoints の catch-all でしか捕まえられない失敗を記録するために直接使ってよい。
 [modules.entrypoints]
 paths = ["web/src/pages", "web/src/middleware.ts"]
-may_depend_on = ["services", "contracts"]
+may_depend_on = ["services", "contracts", "observability"]
 max_file_loc = 200
 
 # cron トリガー専用の独立 Worker（web/cron/wrangler.jsonc で単体デプロイする）。
@@ -71,6 +89,6 @@ max_file_loc = 400
 # 構造化ログ（件数の出し方）を workerd 無しで検証するため。
 [modules.tests]
 paths = ["web/tests", "web/e2e"]
-may_depend_on = ["contracts", "infra", "services", "entrypoints", "cron", "screen_share"]
+may_depend_on = ["contracts", "observability", "infra", "services", "entrypoints", "cron", "screen_share"]
 max_file_loc = 500
 max_public_symbols = 0

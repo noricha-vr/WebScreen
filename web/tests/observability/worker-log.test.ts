@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { logWorkerFailure } from '../../src/lib/infra/worker-log';
+import { logWorkerFailure } from '../../src/lib/observability/worker-log';
 
 const originalError = console.error;
 const originalWarn = console.warn;

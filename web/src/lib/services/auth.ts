@@ -12,7 +12,7 @@ import {
   signSession,
   verifySession,
 } from '../contracts/session';
-import { logWorkerFailure } from '../infra/worker-log';
+import { logWorkerFailure } from '../observability/worker-log';
 import {
   DiscordApiError,
   createDiscordAuthorizeUrl,

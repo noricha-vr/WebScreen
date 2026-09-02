@@ -12,7 +12,7 @@ import {
   validateClientErrorReport,
 } from '../contracts/client-error';
 import { SESSION_COOKIE_NAME, readCookie, verifySession } from '../contracts/session';
-import { logClientError, logClientErrorLimiterMissing } from '../infra/worker-log';
+import { logClientError, logClientErrorLimiterMissing } from '../observability/worker-log';
 
 /** Workers の Rate Limiting binding のうち、ここで使う分だけを型にする。 */
 export interface ClientErrorRateLimiter {

@@ -1,5 +1,5 @@
 import { movieKey, temporaryUploadKey } from '../contracts/r2key';
-import { logUploadCleanupFailure } from '../infra/worker-log';
+import { logUploadCleanupFailure } from '../observability/worker-log';
 
 /** R2 の一時オブジェクト。body はバッファ化せず公開キーへの PUT に渡す。 */
 export interface TemporaryUploadObject {

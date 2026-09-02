@@ -133,7 +133,7 @@ web-capture は撮影を始める前にページ全体の高さを 1 回測り�
 Worker 自身のタイムアウト（上流への 150 秒 abort）も `CAPTURE_TIMEOUT` / 504 で返す。
 上の表の組み合わせに一致しないもの（未知コード、JSON でない応答、401 / 429 / その他の 5xx）は
 すべて `CAPTURE_FAILED` として扱う。
-これらの変換は Worker の構造化ログ（`lib/infra/worker-log.ts`）に 1 件だけ記録する。
+これらの変換は Worker の構造化ログ（`lib/observability/worker-log.ts`）に 1 件だけ記録する。
 
 ## 公開範囲の契約
 
