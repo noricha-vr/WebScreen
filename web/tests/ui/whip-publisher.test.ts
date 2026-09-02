@@ -280,6 +280,32 @@ describe('WHIP publisher', () => {
     }
   });
 
+  test('realtime 候補の full設定が拒否されたら maxBitrate-only fallback で倍率も劣化方針も残さない', async () => {
+    const restore = installWebRtcMocks((parameters, attempt) => {
+      if (attempt === 1) throw new Error('full settings rejected');
+      return parameters;
+    }, [
+      { encodings: [{}] },
+      { encodings: [{ scaleResolutionDownBy: 2 }], degradationPreference: 'maintain-resolution' },
+    ]);
+    try {
+      const publisher = await startWhipPublisher({
+        ...testPublisherInput(() => { restore.postCalls += 1; }),
+        videoSettings: REALTIME_SCREEN_SHARE_VIDEO_SETTINGS,
+      });
+      publisher.close();
+
+      expect(restore.parameters).toEqual([
+        { maxBitrate: 1_500_000, scaleResolutionDownBy: undefined, degradationPreference: 'maintain-framerate' },
+        { maxBitrate: 1_500_000, scaleResolutionDownBy: undefined, degradationPreference: undefined },
+      ]);
+      expect(restore.getParametersCalls).toBe(2);
+      expect(restore.postCalls).toBe(1);
+    } finally {
+      restore.globals();
+    }
+  });
+
   test('full設定とfallbackがともに拒否されたらPOSTせず接続を閉じてfallback例外を返す', async () => {
     const fallbackError = new Error('fallback rejected');
     const restore = installWebRtcMocks((_parameters, attempt) => {

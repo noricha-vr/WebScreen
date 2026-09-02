@@ -42,10 +42,15 @@ describe('検証用リアルタイム映像プロファイル', () => {
     expect(resolveScreenShareVideoSettingsForSearch('')).toEqual(SCREEN_SHARE_VIDEO_SETTINGS);
   });
 
-  test('video-profile=realtimeでは未指定bitrateを暫定値にして解像度固定を外す', () => {
-    expect(resolveScreenShareVideoSettingsForSearch('?video-profile=realtime')).toEqual(
+  test('video-profile=realtime と明示 bitrate の組で解像度固定を外した候補を返す', () => {
+    expect(resolveScreenShareVideoSettingsForSearch('?video-profile=realtime&video-max-bitrate=1500000')).toEqual(
       REALTIME_SCREEN_SHARE_VIDEO_SETTINGS
     );
+    expect(REALTIME_SCREEN_SHARE_VIDEO_SETTINGS).not.toHaveProperty('scaleResolutionDownBy');
+  });
+
+  test('bitrate 未指定の realtime は既定設定へ戻す', () => {
+    expect(resolveScreenShareVideoSettingsForSearch('?video-profile=realtime')).toEqual(SCREEN_SHARE_VIDEO_SETTINGS);
   });
 
   test('許可された realtime bitrate だけを送出設定へ反映する', () => {
