@@ -17,10 +17,10 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 | 文字の可読性 | **本番 relay 合成QAは合格**（1280x720を維持し16 / 24pxは明瞭、12pxも判読可）。WebScreen UIからの actual YouTube は未検証 | [stability-audio-verification.md](stability-audio-verification.md) |
 | 同時配信 | **全体 20 本 / 1 ユーザー 1 本** | API の原子的な上限 |
 | 途中参加の待ち | 通常は最大 2 秒。Chrome のMP3 betaだけ次キーフレームを500 ms周期で要求（初回IDRは保証しない） | 実測 |
-| PC | 同じYamaStreamのRTSPTで、AACは独立2回とも中央値1.239秒、MP3昇格候補は0.129〜0.416秒（16標本、中央値0.151秒、平均0.175秒）で全件1秒未満。音声は聞こえたとの手動観測があるが、A12の統制条件では未確認 | 実測 |
+| PC | 同じYamaStreamのRTSPTで、AACは独立2回とも中央値1.239秒、MP3昇格候補は0.129〜0.416秒（16標本、中央値0.151秒、平均0.175秒）で全件1秒未満。ただしMP3音声はPC実機で無音のため昇格不可（[verification.md](verification.md) I23） | 実測 |
 | Quest | PC と同じ `rtspt://`。AAC 音声を含め実機確認済み、体感 2〜3 秒 | 実測 |
 
-**おすすめは現行AACを維持すること。** `stream-profile=mp3-beta` が重複なく1個だけあるChrome配信では、500 ms周期のキーフレーム要求を試せる。通常アクセス・unknown・重複値は従来の2秒GOPのままで、任意周期は指定できない。MP3 relayの30分・capacity・codec gateと実Macの30 / 24 fps比較は合格し、30 fpsを維持する。PC / Questの統制済み実聴とQuest 1秒未満はA12に残る。
+**おすすめは現行AACを維持すること。** `stream-profile=mp3-beta` が重複なく1個だけあるChrome配信では、500 ms周期のキーフレーム要求を試せる。通常アクセス・unknown・重複値は従来の2秒GOPのままで、任意周期は指定できない。MP3 relayの30分・capacity・codec gateと実Macの30 / 24 fps比較は合格し、30 fpsを維持する。PC実聴はMP3音声が無音で不合格（I23）のため、MP3候補は本番へ投入しない。
 
 ## 読む順番
 

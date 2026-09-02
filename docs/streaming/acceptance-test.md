@@ -21,7 +21,7 @@
 |---|---|---|---|
 | **A1** | ブラウザから WHIP publish し、`ffprobe` で RTSP を取得 | `codec_name=h264` / `profile=Baseline` / `pix_fmt=yuv420p` / `has_b_frames=0` | ローカルと同じなので通るはず。通らなければ NAT / ポートを疑う |
 | **A2** | Private / Friends / Friends+ / Public で `rtspt://webscreen.tv/live/{id}` を貼る | Private / Friends / Friends+ は視聴者の `Allow Untrusted URLs` が ON。Public は**視聴者の同設定が ON**かつ**ワールド作者が Allowed Domains に `webscreen.tv` を登録済み**なら映像が出る | reader が 0 本なら RTSP 前の許可設定を確認する。relay / codec を先に疑わない |
-| **A3** | 個別のPCワールドで遅延を実測 | **音声付きで1秒以下**。同じYamaStreamのRTSPT H.264/MP3候補は16標本すべて1秒未満（中央値0.151秒）。音声が聞こえた手動観測はあるが、同じ統制測定内の実聴ではないため判定保留。AACは独立2回とも中央値1.239秒で未合格 | NTP補正済み時計を使い、映像のみ／音声付きの条件を分ける。Quest確認前に本番昇格しない |
+| **A3** | 個別のPCワールドで遅延を実測 | **音声付きで1秒以下**。同じYamaStreamのRTSPT H.264/MP3候補は16標本すべて1秒未満（中央値0.151秒）。I23の本番一時投入（非統制）ではMP3音声が無音で、AACへ戻すと聞こえた（[verification.md](verification.md) I23）。統制測定内のMP3実聴は未実施。AACは独立2回とも中央値1.239秒で未合格 | NTP補正済み時計を使い、映像のみ／音声付きの条件を分ける。Quest確認前に本番昇格しない |
 | **A4** | `Use Low Latency` の実値を確認できるワールドで遅延を実測 | 設定値と映像のみ／音声付きの遅延を記録する（現行の合格値は未設定） | RTMPは現行YamaStreamのMedia Foundation経路でLoading failedとなりA/B不能。過去値との差をプロトコル差と断定しない |
 | **A5** | **5 分以上再生を維持** | **60 秒で切断しないか** | 切れる場合、視聴者数ぶんの再接続が毎分走りスケールに直撃する。バージョンを変えて再試行 |
 | **A6** | 途中から URL を貼り直す | 通常は2秒以内。MP3 betaは次キーフレームまで500 ms以内を目標とし、初期non-K後の復旧も確認する | first packetのIDRは要求しない。MediaMTXにGOP cacheはない |
@@ -30,7 +30,7 @@
 | **A9** | Chrome でタブと「タブの音声を共有」を選ぶ | UI が音声ありと表示し、出口が H.264 + AAC になる | audio track、relay の ffmpeg、egress の順に切り分ける |
 | **A10** | ingress または relay を一時的に未到達にして開始する | 同じ画面で 1 回自動再接続し、失敗時だけ再接続ボタンを出す | 一律の「再起動してください」案内へ逃げず、health bytes を確認する |
 | **A11** | actual YouTube を開始して直後のカクつきを観察する | 約 30 秒待って安定すること。継続時は ingress / egress bytes を確認し、relay 未到達の場合だけ再接続する | 到達済みなら再接続を合格手順にしない。無条件の再起動は勧めない |
-| **A12** | MP3 relayを本番候補として昇格判定する | `?stream-profile=mp3-beta` を重複なく指定し、PCとQuestでMP3音声を実聴して各1秒未満を確認する。30分・20 relay・20 reader・codec gate・旧AACへの隔離rollback・実Macの30 / 24 fps比較は合格済み。実Mac比較では30 fpsを採用する | rollbackはlocal v1.15.5での経路復旧までで、本番cutoverではない。「音声が聞こえた」「めっちゃ速い」はPC/Questを分けた統制済みA12測定ではない。1項目でも未確認ならAACを維持する |
+| **A12** | MP3 relayを本番候補として昇格判定する | `?stream-profile=mp3-beta` を重複なく指定し、PCとQuestでMP3音声を実聴して各1秒未満を確認する。30分・20 relay・20 reader・codec gate・旧AACへの隔離rollback・実Macの30 / 24 fps比較は合格済み。実Mac比較では30 fpsを採用する | rollbackはlocal v1.15.5での経路復旧までで、本番cutoverではない。I23の本番一時投入ではPC実機（非統制）でMP3音声が無音だった。「めっちゃ速い」はPC/Questを分けた統制済みA12測定ではない。1項目でも未確認ならAACを維持する |
 
 ## 測定の方法
 
