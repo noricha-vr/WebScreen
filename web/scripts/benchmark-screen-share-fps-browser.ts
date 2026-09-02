@@ -1,9 +1,7 @@
 import type { Page } from '@playwright/test';
 
-import {
-  MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS,
-  SCREEN_SHARE_VIDEO_SETTINGS,
-} from '../src/lib/ui/whip-publisher';
+import { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from '../src/lib/ui/whip-publisher';
+import { SCREEN_SHARE_VIDEO_SETTINGS } from '../src/lib/ui/screen-share';
 import type { BenchmarkOptions, StatsRow } from './benchmark-screen-share-fps-core';
 import type { BrowserRunRaw } from './benchmark-screen-share-fps-run';
 

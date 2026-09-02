@@ -56,6 +56,21 @@ describe('画面共有リデザインの状態', () => {
     expect(retry.textContent).toBe('');
   });
 
+  test('画面選択後は配信準備中ラベルへ切り替える', async () => {
+    const page = fakePage();
+    const pendingCreate = deferred<Record<string, unknown>>();
+    new ScreenShareController(page.root, dependencies({
+      requestJson: async () => pendingCreate.promise,
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => page.button('[data-screen-start]').textContent === 'starting');
+
+    expect(page.button('[data-screen-start]').disabled).toBe(true);
+    pendingCreate.resolve(createResponse());
+    await waitFor(() => !page.step('live').hidden);
+  });
+
   test('プレビューを閉じても配信中の video を外さず、開閉状態を同期する', async () => {
     const page = fakePage();
     const track = { addEventListener: () => undefined, stop: () => undefined };
@@ -171,6 +186,12 @@ function publisher(): WhipPublisher {
     republish: async () => publisher(),
     setPublishToken: () => undefined,
   };
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
 }
 
 function fakePage(): {
