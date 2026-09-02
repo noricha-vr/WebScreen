@@ -34,6 +34,10 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - `frames/` の最初/最後の復号フレームと直近の失敗フレームで、配信映像を目視確認できる。
 - `outlet-audio.wav` と `outlet-audio.json` は `analyze` 時に再検出され、`outlet-audio.csv` と既存の映像行を結合して `summary.md` を再生成する。毎秒ビープは `600 + 100 * (UTC秒 mod 8)` Hz の8種類で、絶対遅延を映像近接標本から復元できない時は `audio_latency_phase_ms`（1秒位相）のみを残す。
 - Windows録画は対話セッションのScheduled Taskを使う。失敗時は `player-error.md`、成功時の時刻・`w32tm`補正は `player-recording.md` を見る。
+- run 終了時は共有ページの停止ボタンを押してから Chrome を閉じる。`browser.close()` だけでは停止ビーコンが届かず配信がサーバーに残り、次の run が「既存の配信を終了」経路に入って不安定になる（2026-09-02 に連続 8 run 中 3 run が失敗）。Playwright がクラッシュして Chrome が残った時も同じ状態になるので、`pgrep -f webscreen-harness/chrome-profile` で残留を確認してから始める
+- `page.evaluate` に渡す関数はシリアライズされるため module scope の helper を参照できない（`ReferenceError` になり 1 秒標本が 0 件になる）。閉包内に定義する
+- ffmpeg の `-t` は直後の出力にしか効かない。出力を 2 本持つ画質計測では両方に付けないと終わらず run 全体が固まる
+- `?load=heavy` は色ノイズのモザイクをパンする **最悪ケース**で、A（1.2 Mbps / maintain-resolution）では出口 1 fps・freeze 15 秒/20 秒まで落ちる。実ページ相当の負荷は Wikipedia の `--scroll 240` で測り、heavy は帯域飢餓時の挙動比較にだけ使う（2026-09-02 実測）
 
 ## 出口の測り方と既知のアーティファクト（2026-09-02）
 
