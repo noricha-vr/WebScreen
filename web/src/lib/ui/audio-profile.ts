@@ -18,13 +18,17 @@ export function displayAudioConstraintForRawProfile(rawAudioProfile: boolean): b
   return rawAudioProfile ? { ...RAW_AUDIO_CONSTRAINTS } : true;
 }
 
-/** raw 音声プロファイル向けに、取得済み音声トラックを診断可能な状態へ整える。 */
-export function configureRawAudioTracks(media: MediaStream): void {
+/**
+ * 取得済み音声トラックの設定を既定・raw の両方でログに残し（A/B で並べて比較するため）、
+ * raw の時だけ contentHint を 'music' にして音声向けの処理を避ける。
+ */
+export function configureCaptureAudioTracks(media: MediaStream, rawAudioProfile: boolean): void {
   for (const track of media.getAudioTracks()) {
-    track.contentHint = 'music';
+    if (rawAudioProfile) track.contentHint = 'music';
     const settings = track.getSettings();
-    console.info('raw_audio_capture_settings', {
-      event: 'raw_audio_capture_settings',
+    console.info('audio_capture_settings', {
+      event: 'audio_capture_settings',
+      profile: rawAudioProfile ? 'raw' : 'default',
       channelCount: settings.channelCount,
       echoCancellation: settings.echoCancellation,
       noiseSuppression: settings.noiseSuppression,

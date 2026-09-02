@@ -114,6 +114,7 @@ MP3 48 kHz stereo 128 kbpsは30分・非無音・A/V 7〜15 msまで自動確認
 - 選択結果に音声トラックがあれば「音声を含めて配信しています」、なければ「映像のみ」と表示する。
 - relay 出口は現行でH.264 + AAC、MP3 beta候補でH.264 + MP3を `verify-codecs.sh` で検証する。
 - 表示文言は **「検証時に音声が出ることを確認済み」** とし、PoC という表現は使わない。
-- `?audio-profile=raw` は、Chromeの音声処理がモノラル化・高域減衰の一因かもしれないという仮説を比較する候補（既定では無効）。
-- A/Bでは同じ共有元で既定とrawを各5秒測り、`ffmpeg -rtsp_transport tcp -i rtsp://webscreen.tv/live/{id} -t 5 -vn -af "pan=mono|c0=0.5*c0-0.5*c1,volumedetect" -f null -` を実行する。
-- L−R差分が -91 dB ならモノラル。取得側ログのchannelCountと音声処理設定も併せて比較する。
+- `?audio-profile=raw` は、Chromeの音声処理（EC / NS / AGC）がモノラル化・高域減衰の一因かもしれないという仮説を比較する候補（既定では無効。ブラウザ取得側の設定で、relay の `audio-profile.sh` とは別物）。
+- A/Bでは同じ共有元で既定とrawを各5秒測り、`ffmpeg -rtsp_transport tcp -i rtsp://webscreen.tv/live/{id} -t 5 -vn -af "pan=mono|c0=0.5*c0-0.5*c1,volumedetect" -f null -` を実行する。L−R差分が本体（`volumedetect` 単独）より 40 dB 以上低ければモノラルとみなす（2026-09-02 の実測は本体 −21 dB に対し L−R −91 dB）。
+- 測定境界: 出口は relay が `-ac 2 -b:a 128k` で再エンコードした後なので、判定できるのは**モノラルかどうか**まで。Opus の `maxaveragebitrate` や高域の差は出口に届かないため、高域比較は ingress（`rtsp://127.0.0.1:8554`、サーバー内）で測る。
+- 取得側の `audio_capture_settings` ログ（channelCount / EC / NS / AGC）は既定・rawの両方で出るので、A/Bではこれも並べて比較する。raw で `raw_audio_sender_bitrate_failed` が出た時は 128 kbps 未適用として記録する。

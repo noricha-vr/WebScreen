@@ -269,6 +269,31 @@ describe('WHIP publisher', () => {
     }
   });
 
+  test('既定経路では Opus を含む answer を加工せず audio sender の上限も変更しない', async () => {
+    const restore = installWebRtcMocks(() => undefined);
+    const audioTrack = { stop() {} } as unknown as MediaStreamTrack;
+    const answerSdp = ['a=rtpmap:111 opus/48000/2', 'a=fmtp:111 minptime=10;useinbandfec=1'].join('\r\n');
+    try {
+      const publisher = await startWhipPublisher({
+        ...testPublisherInput(),
+        stream: {
+          getVideoTracks: () => [{ contentHint: '', stop() {} }],
+          getAudioTracks: () => [audioTrack],
+        } as unknown as MediaStream,
+        fetchImpl: (async () => new Response(answerSdp, {
+          status: 201,
+          headers: { Location: '/live/Ab12Cd34Ef56/whip/resource' },
+        })) as unknown as typeof fetch,
+      });
+      publisher.close();
+
+      expect(restore.audioParameters).toEqual([]);
+      expect(restore.remoteDescriptions).toEqual([{ type: 'answer', sdp: answerSdp }]);
+    } finally {
+      restore.globals();
+    }
+  });
+
   test('raw 音声プロファイルだけが Opus answer と audio sender の上限を変更する', async () => {
     const restore = installWebRtcMocks(() => undefined);
     const audioTrack = { stop() {} } as unknown as MediaStreamTrack;

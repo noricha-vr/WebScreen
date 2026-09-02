@@ -8,7 +8,7 @@ import { copyToClipboard } from './clipboard';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
 import { waitForStreamReady } from './stream-health';
 import {
-  configureRawAudioTracks,
+  configureCaptureAudioTracks,
   displayAudioConstraintForRawProfile,
   isRawAudioProfileForSearch,
 } from './audio-profile';
@@ -119,7 +119,7 @@ export class ScreenShareController {
     try {
       const rawAudioProfile = hasRawAudioProfile();
       const media = await this.deps.getDisplayMedia(displayMediaConstraints(rawAudioProfile));
-      if (rawAudioProfile) configureRawAudioTracks(media);
+      configureCaptureAudioTracks(media, rawAudioProfile);
       if (!this.isActiveStart(generation)) {
         stopMedia(media);
         return;
@@ -143,7 +143,7 @@ export class ScreenShareController {
     try {
       const rawAudioProfile = hasRawAudioProfile();
       media = await this.deps.getDisplayMedia(displayMediaConstraints(rawAudioProfile));
-      if (rawAudioProfile) configureRawAudioTracks(media);
+      configureCaptureAudioTracks(media, rawAudioProfile);
       if (!this.isActiveStart(generation)) {
         stopMedia(media);
         return;
