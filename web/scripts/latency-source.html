@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebScreen Latency Source</title>
+<style>
+  html,body,canvas{width:100%;height:100%;margin:0;overflow:hidden;background:#101827}
+</style>
+<canvas id="clock" aria-label="遅延計測用時刻"></canvas>
+<script>
+  const canvas = document.querySelector('#clock');
+  const context = canvas.getContext('2d', { alpha: false });
+  const GRID = 16;
+  const RESERVED = new Set(['1,1', '14,1', '1,14', '14,14']);
+
+  function checksum(timestamp) {
+    let value = BigInt(timestamp), sum = 0xa7;
+    for (let i = 0; i < 6; i += 1) {
+      sum ^= Number(value & 0xffn);
+      sum = ((sum << 1) | (sum >>> 7)) & 0xff;
+      value >>= 8n;
+    }
+    return sum;
+  }
+  function code(timestamp) {
+    const cells = Array.from({ length: GRID }, () => Array(GRID).fill(false));
+    for (let i = 0; i < GRID; i += 1) {
+      cells[0][i] = i % 2 === 0;
+      cells[GRID - 1][i] = i % 2 !== 0;
+    }
+    for (let i = 1; i < GRID - 1; i += 1) {
+      cells[i][0] = i % 3 !== 0;
+      cells[i][GRID - 1] = i % 3 === 0;
+    }
+    let value = (BigInt(timestamp) << 8n) | BigInt(checksum(timestamp)), bit = 0;
+    for (let y = 1; y < GRID - 1 && bit < 56; y += 1) for (let x = 1; x < GRID - 1 && bit < 56; x += 1) {
+      if (RESERVED.has(`${x},${y}`)) continue;
+      cells[y][x] = (value & (1n << BigInt(55 - bit))) !== 0n;
+      bit += 1;
+    }
+    return cells;
+  }
+  function draw() {
+    requestAnimationFrame(draw);
+    const ratio = Math.min(devicePixelRatio || 1, 2);
+    if (canvas.width !== innerWidth * ratio || canvas.height !== innerHeight * ratio) {
+      canvas.width = innerWidth * ratio; canvas.height = innerHeight * ratio;
+    }
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    const now = Date.now(), cell = Math.max(24, Math.floor(Math.min(innerWidth, innerHeight) * 0.038));
+    const size = cell * GRID, x = Math.round((innerWidth - size) / 2), y = Math.round((innerHeight - size) / 2 + 42);
+    context.fillStyle = '#101827'; context.fillRect(0, 0, innerWidth, innerHeight);
+    context.fillStyle = '#ffffff'; context.font = `700 ${Math.max(46, cell * 1.45)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    context.textAlign = 'center'; context.fillText(String(now), innerWidth / 2, y - cell * 0.7);
+    const cells = code(now);
+    for (let row = 0; row < GRID; row += 1) for (let column = 0; column < GRID; column += 1) {
+      context.fillStyle = cells[row][column] ? '#fff' : '#000';
+      context.fillRect(x + column * cell, y + row * cell, cell, cell);
+    }
+  }
+  function audio() {
+    const audioContext = new AudioContext();
+    const gain = audioContext.createGain(); gain.gain.value = 0.1; gain.connect(audioContext.destination);
+    const scheduleBeep = () => {
+      const now = audioContext.currentTime;
+      let next = Math.ceil(now);
+      if (next - now < 0.05) next += 1;
+      const oscillator = audioContext.createOscillator(); oscillator.frequency.value = 1000;
+      oscillator.connect(gain); oscillator.start(next); oscillator.stop(next + 0.05);
+      setTimeout(scheduleBeep, Math.max(100, (next + 1 - audioContext.currentTime) * 1000));
+    };
+    if (new URLSearchParams(location.search).get('tones') === '1') {
+      for (const [frequency, pan] of [[440, -1], [880, 1]]) {
+        const oscillator = audioContext.createOscillator(), stereo = audioContext.createStereoPanner();
+        oscillator.frequency.value = frequency; stereo.pan.value = pan; oscillator.connect(stereo).connect(gain); oscillator.start();
+      }
+    }
+    scheduleBeep();
+  }
+  audio(); draw();
+</script>
+</html>
