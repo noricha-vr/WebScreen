@@ -221,9 +221,9 @@ export class ScreenShareController {
   private async createAndPublish(run: StartRun): Promise<StartedStream | null> {
     let created: CreateStreamResponse;
     try {
+      // 応答前に離脱しても作成済みIDを回収し、直後にserver stopできるようPOST自体はabortしない。
       created = asCreateStream(await this.deps.requestJson('/api/streams/', {
         method: 'POST',
-        signal: run.abortController.signal,
       }));
     } catch (error) {
       this.cancelStart(run);

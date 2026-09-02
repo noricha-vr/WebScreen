@@ -4,6 +4,49 @@ import { ScreenShareController, type ScreenShareDependencies } from '../../src/l
 import type { WhipPublisher } from '../../src/lib/ui/whip-publisher';
 
 describe('画面共有runの競合拒否', () => {
+  test('create待機中のpagehideでPOSTをabortせず、回収したIDを即stopする', async () => {
+    const page = fakePage();
+    const pendingCreate = deferred<Record<string, unknown>>();
+    let pageHide: (() => void) | undefined;
+    let createRequested = false;
+    let createSignal: AbortSignal | undefined;
+    const calls = { trackStops: 0, publisherStarts: 0, serverStops: 0 };
+    new ScreenShareController(page.root, dependencies({
+      requestJson: async (path, init) => {
+        if (path === '/api/streams/') {
+          createRequested = true;
+          createSignal = init.signal as AbortSignal | undefined;
+          createSignal?.addEventListener(
+            'abort',
+            () => pendingCreate.reject(new DOMException('aborted', 'AbortError')),
+            { once: true }
+          );
+          return pendingCreate.promise;
+        }
+        if (path.endsWith('/stop/')) calls.serverStops += 1;
+        return null;
+      },
+      startWhipPublisher: async () => {
+        calls.publisherStarts += 1;
+        return publisher(() => undefined, () => undefined);
+      },
+      getDisplayMedia: async () => media(() => { calls.trackStops += 1; }),
+      onPageHide: (handler) => { pageHide = handler; },
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => createRequested);
+    pageHide?.();
+    pendingCreate.resolve(createResponse());
+    await waitFor(() => calls.serverStops === 1);
+
+    expect(createSignal).toBeUndefined();
+    expect(calls).toEqual({ trackStops: 1, publisherStarts: 0, serverStops: 1 });
+    expect(page.step('idle').hidden).toBe(false);
+    expect(page.step('url').hidden).toBe(true);
+    expect(page.step('error').hidden).toBe(true);
+  });
+
   test('picker未解決中はstartとstop-othersの重複入口を拒否する', async () => {
     const page = fakePage();
     const pendingMedia = deferred<MediaStream>();
