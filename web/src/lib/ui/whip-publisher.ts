@@ -1,4 +1,8 @@
 import { STREAM_WHIP_BASE_URL } from '../contracts/streams';
+import { configureRawAudioSender, withRawAudioOpusParameters } from './audio-profile';
+import { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from './stream-profile';
+
+export { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from './stream-profile';
 
 /** WHIP publish 時にユーザーへ意味のある対処を示すための失敗種別。 */
 export type WhipPublishErrorCode = 'H264_UNAVAILABLE' | 'WHIP_REQUEST_FAILED' | 'WHIP_RESPONSE_INVALID';
@@ -13,9 +17,6 @@ export const SCREEN_SHARE_VIDEO_SETTINGS = {
   degradationPreference: 'maintain-resolution',
   scaleResolutionDownBy: 1,
 } as const;
-
-/** MP3 beta 配信だけで許可するkeyframe要求の固定間隔。 */
-export const MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS = 500;
 
 /** WHIP publish が開始できなかった理由を保持する。 */
 export class WhipPublishError extends Error {
@@ -66,6 +67,7 @@ interface StartWhipPublisherInput {
   streamId: string;
   publishToken: string;
   keyframeRequestIntervalMs?: typeof MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS;
+  rawAudioProfile?: boolean;
   fetchImpl?: typeof fetch;
 }
 
@@ -100,13 +102,19 @@ export async function startWhipPublisher(input: StartWhipPublisherInput): Promis
     transceiver.setCodecPreferences(preferredCodecs);
     await configureVideoSender(transceiver.sender);
     track.contentHint = SCREEN_SHARE_VIDEO_SETTINGS.contentHint;
-    for (const audioTrack of input.stream.getAudioTracks()) peerConnection.addTrack(audioTrack, input.stream);
+    for (const audioTrack of input.stream.getAudioTracks()) {
+      const audioSender = peerConnection.addTrack(audioTrack, input.stream);
+      if (input.rawAudioProfile) await configureRawAudioSender(audioSender);
+    }
 
     await peerConnection.setLocalDescription(await peerConnection.createOffer());
     await waitForIceGathering(peerConnection);
     const response = await publishOffer(peerConnection, input, input.fetchImpl ?? fetch);
     resourceUrl = response.resourceUrl;
-    await peerConnection.setRemoteDescription({ type: 'answer', sdp: response.answerSdp });
+    await peerConnection.setRemoteDescription({
+      type: 'answer',
+      sdp: input.rawAudioProfile ? withRawAudioOpusParameters(response.answerSdp) : response.answerSdp,
+    });
     const keyframeRequester = input.keyframeRequestIntervalMs === MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS
       ? createKeyframeRequester(transceiver.sender)
       : undefined;

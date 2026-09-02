@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { STREAM_WHIP_BASE_URL } from '../../src/lib/contracts/streams';
+import { withRawAudioOpusParameters } from '../../src/lib/ui/audio-profile';
 import {
   SCREEN_SHARE_VIDEO_SETTINGS,
   buildWhipUrl,
@@ -49,6 +50,51 @@ describe('WHIP publisher', () => {
     expect(resolveWhipResourceUrl('/live/other/whip/resource', 'Ab12Cd34Ef56')).toBeNull();
   });
 
+  test('raw 音声用に既存の Opus fmtp へ不足パラメータだけを補完する', () => {
+    const answer = [
+      'v=0',
+      'a=rtpmap:111 opus/48000/2',
+      'a=fmtp:111 minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1',
+    ].join('\r\n');
+
+    expect(withRawAudioOpusParameters(answer)).toBe([
+      'v=0',
+      'a=rtpmap:111 opus/48000/2',
+      'a=fmtp:111 minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000',
+    ].join('\r\n'));
+  });
+
+  test('raw 音声用に fmtp がない Opus だけへ fmtp 行を追加する', () => {
+    const answer = [
+      'a=rtpmap:111 opus/48000/2',
+      'a=rtpmap:0 PCMU/8000',
+      'a=fmtp:0 useinbandfec=1',
+    ].join('\n');
+
+    expect(withRawAudioOpusParameters(answer)).toBe([
+      'a=rtpmap:111 opus/48000/2',
+      'a=fmtp:111 stereo=1;sprop-stereo=1;maxaveragebitrate=128000',
+      'a=rtpmap:0 PCMU/8000',
+      'a=fmtp:0 useinbandfec=1',
+    ].join('\n'));
+  });
+
+  test('raw 音声用の Opus fmtp は重複を正規化し、Opus 以外を変更しない', () => {
+    const answer = [
+      'a=rtpmap:111 opus/48000/2',
+      'a=fmtp:111 stereo=0;stereo=1;maxaveragebitrate=64000;useinbandfec=1',
+      'a=rtpmap:96 H264/90000',
+      'a=fmtp:96 profile-level-id=42e01f',
+    ].join('\n');
+
+    expect(withRawAudioOpusParameters(answer)).toBe([
+      'a=rtpmap:111 opus/48000/2',
+      'a=fmtp:111 useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000',
+      'a=rtpmap:96 H264/90000',
+      'a=fmtp:96 profile-level-id=42e01f',
+    ].join('\n'));
+  });
+
   test('H.264 映像とすべての音声 track を送出し、同じ入力で一度だけ再 publish できる', async () => {
     const previousSender = globalThis.RTCRtpSender;
     const previousConnection = globalThis.RTCPeerConnection;
@@ -57,6 +103,7 @@ describe('WHIP publisher', () => {
     const senderParameters: RTCRtpSendParameters[] = [];
     let keyframeRequests = 0;
     const addedAudioTracks: MediaStreamTrack[] = [];
+    const remoteDescriptions: RTCSessionDescriptionInit[] = [];
     let delayedDelete: ReturnType<typeof deferred<Response>> | null = null;
     let closed = 0;
     class Sender {
@@ -91,7 +138,7 @@ describe('WHIP publisher', () => {
       }
       async createOffer() { return { sdp: 'offer', type: 'offer' } as RTCSessionDescriptionInit; }
       async setLocalDescription() {}
-      async setRemoteDescription() {}
+      async setRemoteDescription(description: RTCSessionDescriptionInit) { remoteDescriptions.push(description); }
       close() { closed += 1; }
       addEventListener() {}
       removeEventListener() {}
@@ -162,6 +209,11 @@ describe('WHIP publisher', () => {
       })));
       expect(videoTrack.contentHint).toBe(SCREEN_SHARE_VIDEO_SETTINGS.contentHint);
       expect(addedAudioTracks).toEqual([...audioTracks, ...audioTracks]);
+      expect(remoteDescriptions).toEqual([
+        { type: 'answer', sdp: 'answer' },
+        { type: 'answer', sdp: 'answer' },
+        { type: 'answer', sdp: 'answer' },
+      ]);
       expect(requests[0]?.headers).toMatchObject({ Authorization: 'Bearer first-token' });
       expect(requests[1]?.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
       expect(requests[2]?.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
@@ -217,6 +269,40 @@ describe('WHIP publisher', () => {
     }
   });
 
+  test('raw 音声プロファイルだけが Opus answer と audio sender の上限を変更する', async () => {
+    const restore = installWebRtcMocks(() => undefined);
+    const audioTrack = { stop() {} } as unknown as MediaStreamTrack;
+    try {
+      const publisher = await startWhipPublisher({
+        ...testPublisherInput(),
+        stream: {
+          getVideoTracks: () => [{ contentHint: '', stop() {} }],
+          getAudioTracks: () => [audioTrack],
+        } as unknown as MediaStream,
+        rawAudioProfile: true,
+        fetchImpl: (async () => new Response([
+          'a=rtpmap:111 opus/48000/2',
+          'a=fmtp:111 minptime=10',
+        ].join('\r\n'), {
+          status: 201,
+          headers: { Location: '/live/Ab12Cd34Ef56/whip/resource' },
+        })) as unknown as typeof fetch,
+      });
+      publisher.close();
+
+      expect(restore.audioParameters).toEqual([128_000]);
+      expect(restore.remoteDescriptions).toEqual([{
+        type: 'answer',
+        sdp: [
+          'a=rtpmap:111 opus/48000/2',
+          'a=fmtp:111 minptime=10;stereo=1;sprop-stereo=1;maxaveragebitrate=128000',
+        ].join('\r\n'),
+      }]);
+    } finally {
+      restore.globals();
+    }
+  });
+
 });
 
 interface WebRtcMockState {
@@ -228,6 +314,8 @@ interface WebRtcMockState {
   getParametersCalls: number;
   postCalls: number;
   closed: number;
+  audioParameters: Array<number | undefined>;
+  remoteDescriptions: RTCSessionDescriptionInit[];
   globals: () => void;
 }
 
@@ -242,6 +330,8 @@ function installWebRtcMocks(
     getParametersCalls: 0,
     postCalls: 0,
     closed: 0,
+    audioParameters: [],
+    remoteDescriptions: [],
     globals: () => {
       Object.defineProperty(globalThis, 'RTCRtpSender', { configurable: true, value: previousSender });
       Object.defineProperty(globalThis, 'RTCPeerConnection', { configurable: true, value: previousConnection });
@@ -272,10 +362,19 @@ function installWebRtcMocks(
         },
       } as unknown as RTCRtpTransceiver;
     }
-    addTrack() { return {} as RTCRtpSender; }
+    addTrack() {
+      return {
+        getParameters: () => ({}),
+        setParameters: async (parameters: RTCRtpSendParameters) => {
+          state.audioParameters.push(parameters.encodings?.[0]?.maxBitrate);
+        },
+      } as unknown as RTCRtpSender;
+    }
     async createOffer() { return { sdp: 'offer', type: 'offer' } as RTCSessionDescriptionInit; }
     async setLocalDescription() {}
-    async setRemoteDescription() {}
+    async setRemoteDescription(description: RTCSessionDescriptionInit) {
+      state.remoteDescriptions.push(description);
+    }
     close() { state.closed += 1; }
     addEventListener() {}
     removeEventListener() {}

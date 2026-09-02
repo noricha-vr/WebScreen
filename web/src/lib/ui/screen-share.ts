@@ -7,6 +7,11 @@ import {
 import { copyToClipboard } from './clipboard';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
 import { waitForStreamReady } from './stream-health';
+import {
+  configureRawAudioTracks,
+  displayAudioConstraintForRawProfile,
+  isRawAudioProfileForSearch,
+} from './audio-profile';
 import { keyframeRequestIntervalForSearch } from './stream-profile';
 import {
   SCREEN_SHARE_VIDEO_SETTINGS,
@@ -112,7 +117,9 @@ export class ScreenShareController {
     const retry = this.button('[data-screen-retry]');
     if (retry) retry.disabled = true;
     try {
-      const media = await this.deps.getDisplayMedia(displayMediaConstraints());
+      const rawAudioProfile = hasRawAudioProfile();
+      const media = await this.deps.getDisplayMedia(displayMediaConstraints(rawAudioProfile));
+      if (rawAudioProfile) configureRawAudioTracks(media);
       if (!this.isActiveStart(generation)) {
         stopMedia(media);
         return;
@@ -134,7 +141,9 @@ export class ScreenShareController {
     const retry = this.button('[data-screen-retry]');
     if (retry) retry.disabled = true;
     try {
-      media = await this.deps.getDisplayMedia(displayMediaConstraints());
+      const rawAudioProfile = hasRawAudioProfile();
+      media = await this.deps.getDisplayMedia(displayMediaConstraints(rawAudioProfile));
+      if (rawAudioProfile) configureRawAudioTracks(media);
       if (!this.isActiveStart(generation)) {
         stopMedia(media);
         return;
@@ -212,6 +221,7 @@ export class ScreenShareController {
         streamId: created.id,
         publishToken: created.publishToken,
         keyframeRequestIntervalMs: keyframeRequestIntervalForSearch(globalThis.window?.location?.search ?? ''),
+        rawAudioProfile: hasRawAudioProfile(),
       });
       stream = { ...created, publisher, media };
       if (!this.isActiveStart(generation)) {
@@ -504,7 +514,7 @@ export class ScreenShareController {
   }
 }
 
-function displayMediaConstraints(): MediaStreamConstraints {
+function displayMediaConstraints(rawAudioProfile: boolean): MediaStreamConstraints {
   return {
     // ピッカーは既定のまま（画面全体・ウィンドウ・タブから選ばせる）。検証時の
     // preferCurrentTab は macOS 権限回避用で、自タブ共有は製品では意味がない。
@@ -514,8 +524,12 @@ function displayMediaConstraints(): MediaStreamConstraints {
       height: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.height },
       frameRate: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.frameRate, max: SCREEN_SHARE_VIDEO_SETTINGS.frameRate },
     },
-    audio: true,
+    audio: displayAudioConstraintForRawProfile(rawAudioProfile),
   };
+}
+
+function hasRawAudioProfile(): boolean {
+  return isRawAudioProfileForSearch(globalThis.window?.location?.search ?? '');
 }
 
 function asCreateStream(value: unknown): CreateStreamResponse {

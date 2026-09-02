@@ -114,3 +114,6 @@ MP3 48 kHz stereo 128 kbpsは30分・非無音・A/V 7〜15 msまで自動確認
 - 選択結果に音声トラックがあれば「音声を含めて配信しています」、なければ「映像のみ」と表示する。
 - relay 出口は現行でH.264 + AAC、MP3 beta候補でH.264 + MP3を `verify-codecs.sh` で検証する。
 - 表示文言は **「検証時に音声が出ることを確認済み」** とし、PoC という表現は使わない。
+- `?audio-profile=raw` は、Chromeの音声処理がモノラル化・高域減衰の一因かもしれないという仮説を比較する候補（既定では無効）。
+- A/Bでは同じ共有元で既定とrawを各5秒測り、`ffmpeg -rtsp_transport tcp -i rtsp://webscreen.tv/live/{id} -t 5 -vn -af "pan=mono|c0=0.5*c0-0.5*c1,volumedetect" -f null -` を実行する。
+- L−R差分が -91 dB ならモノラル。取得側ログのchannelCountと音声処理設定も併せて比較する。
