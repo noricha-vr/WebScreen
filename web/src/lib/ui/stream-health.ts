@@ -8,13 +8,16 @@ export const STREAM_HEALTH_MAX_ATTEMPTS = 10;
 export async function waitForStreamReady(
   streamId: string,
   request: typeof requestJson,
-  wait: (milliseconds: number) => Promise<void> = delay
+  wait: (milliseconds: number) => Promise<void> = delay,
+  signal?: AbortSignal
 ): Promise<boolean> {
   let previous: StreamHealthResponse | null = null;
   for (let attempt = 0; attempt < STREAM_HEALTH_MAX_ATTEMPTS; attempt += 1) {
+    if (signal?.aborted) return false;
     const current = asStreamHealth(
-      await request(`/api/streams/${encodeURIComponent(streamId)}/health/`, {})
+      await request(`/api/streams/${encodeURIComponent(streamId)}/health/`, { signal })
     );
+    if (signal?.aborted) return false;
     if (
       previous &&
       current.state === 'ready' &&
@@ -26,6 +29,7 @@ export async function waitForStreamReady(
     previous = current;
     if (attempt + 1 < STREAM_HEALTH_MAX_ATTEMPTS) {
       await wait(STREAM_HEALTH_POLL_INTERVAL_MS);
+      if (signal?.aborted) return false;
     }
   }
   return false;

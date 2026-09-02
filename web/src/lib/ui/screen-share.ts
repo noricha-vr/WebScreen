@@ -25,7 +25,27 @@ export const HEARTBEAT_INTERVAL_MS = 25_000;
 export const EXPIRY_WARNING_SECONDS = 5 * 60;
 
 type ScreenSharePhase = 'idle' | 'login' | 'url' | 'live' | 'error';
-type LiveStream = CreateStreamResponse & { publisher: WhipPublisher; media: MediaStream };
+type CaptureHandle = {
+  readonly media: MediaStream;
+  dispose: () => void;
+};
+type StartRun = {
+  readonly generation: number;
+  readonly capture: CaptureHandle;
+  readonly abortController: AbortController;
+};
+type LiveStreamLifecycle = {
+  localReleased: boolean;
+  serverStopRequested: boolean;
+  whipDeleteRequested: boolean;
+};
+type LiveStream = CreateStreamResponse & {
+  publisher: WhipPublisher;
+  media: MediaStream;
+  capture: CaptureHandle;
+  abortController: AbortController;
+  lifecycle: LiveStreamLifecycle;
+};
 type StartedStream = { live: LiveStream; ready: boolean };
 
 class StreamHealthError extends Error {}
@@ -34,7 +54,7 @@ class StreamHealthError extends Error {}
 export interface ScreenShareDependencies {
   requestJson: typeof requestJson;
   startWhipPublisher: typeof startWhipPublisher;
-  waitForStreamReady: (streamId: string) => Promise<boolean>;
+  waitForStreamReady: (streamId: string, signal?: AbortSignal) => Promise<boolean>;
   getDisplayMedia: typeof navigator.mediaDevices.getDisplayMedia;
   delay?: (ms: number) => Promise<void>;
   now: () => number;
@@ -45,7 +65,7 @@ export interface ScreenShareDependencies {
 const DEFAULT_DEPENDENCIES: ScreenShareDependencies = {
   requestJson,
   startWhipPublisher,
-  waitForStreamReady: (streamId) => waitForStreamReady(streamId, requestJson),
+  waitForStreamReady: (streamId, signal) => waitForStreamReady(streamId, requestJson, undefined, signal),
   getDisplayMedia: (constraints) => navigator.mediaDevices.getDisplayMedia(constraints),
   delay: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
   now: () => Date.now(),
@@ -59,7 +79,7 @@ export function releaseScreenShare(
   clearTimers: () => void
 ): void {
   clearTimers();
-  stopMedia(live.media);
+  createCaptureHandle(live.media).dispose();
   live.publisher.close();
 }
 
@@ -90,6 +110,8 @@ export class ScreenShareController {
   private phase: ScreenSharePhase = 'idle';
   private stopping = false;
   private startGeneration = 0;
+  private startReservation: number | null = null;
+  private activeStart: StartRun | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -110,8 +132,9 @@ export class ScreenShareController {
   }
 
   private async selectScreen(): Promise<void> {
-    const generation = ++this.startGeneration;
-    this.stopping = false;
+    const generation = this.reserveStart();
+    if (generation === null) return;
+    let run: StartRun | null = null;
     this.setBusy('[data-screen-start]', true, 'labelSelecting');
     // 再試行ボタンからも入るため連打でピッカーが競合しないよう無効化する
     // （span なし構造なのでラベルは触らずアイコンを保つ）
@@ -120,146 +143,164 @@ export class ScreenShareController {
     try {
       const profile = currentAudioProfile();
       const media = await this.deps.getDisplayMedia(displayMediaConstraints(profile));
+      run = this.registerStart(media, generation);
+      if (!run) return;
       configureCaptureAudioTracks(media, profile);
-      if (!this.isActiveStart(generation)) {
-        stopMedia(media);
-        return;
-      }
-      await this.continueStart(media, generation);
+      await this.continueStart(run);
     } catch (error) {
+      if (run) this.cancelStart(run);
       if (this.isActiveStart(generation)) this.handleStartError(error);
     } finally {
+      if (run && this.activeStart === run) this.activeStart = null;
+      this.releaseStartReservation(generation);
       this.setBusy('[data-screen-start]', false, 'labelStart');
       if (retry) retry.disabled = false;
     }
   }
 
   private async stopOthersAndStart(): Promise<void> {
-    const generation = ++this.startGeneration;
-    let media: MediaStream | null = null;
-    this.stopping = false;
+    const generation = this.reserveStart();
+    if (generation === null) return;
+    let run: StartRun | null = null;
     this.setBusy('[data-screen-stop-others]', true, 'labelStopOthers');
     const retry = this.button('[data-screen-retry]');
     if (retry) retry.disabled = true;
     try {
       const profile = currentAudioProfile();
-      media = await this.deps.getDisplayMedia(displayMediaConstraints(profile));
-      configureCaptureAudioTracks(media, profile);
-      if (!this.isActiveStart(generation)) {
-        stopMedia(media);
-        return;
-      }
+      const media = await this.deps.getDisplayMedia(displayMediaConstraints(profile));
+      run = this.registerStart(media, generation);
+      if (!run) return;
+      configureCaptureAudioTracks(run.capture.media, profile);
       const stopped = asStopLiveStreams(
-        await this.deps.requestJson('/api/streams/stop-live/', { method: 'POST' })
+        await this.deps.requestJson('/api/streams/stop-live/', {
+          method: 'POST',
+          signal: run.abortController.signal,
+        })
       );
-      if (!this.isActiveStart(generation)) {
-        stopMedia(media);
+      if (!this.isActiveRun(run)) {
+        this.cancelStart(run);
         return;
       }
       this.text('[data-screen-error-message]', this.message('labelStoppingOthers'));
       this.setButtonLabel('[data-screen-stop-others]', 'labelStoppingOthers');
       await (this.deps.delay ?? delay)(Math.max(stopped.retryAfterSeconds, 3) * 1000);
-      if (!this.isActiveStart(generation)) {
-        stopMedia(media);
+      if (!this.isActiveRun(run)) {
+        this.cancelStart(run);
         return;
       }
-      await this.continueStart(media, generation);
-      media = null;
+      await this.continueStart(run);
     } catch (error) {
-      if (media) stopMedia(media);
+      if (run) this.cancelStart(run);
       if (this.isActiveStart(generation)) this.handleStartError(error);
     } finally {
+      if (run && this.activeStart === run) this.activeStart = null;
+      this.releaseStartReservation(generation);
       this.setBusy('[data-screen-stop-others]', false, 'labelStopOthers');
       if (retry) retry.disabled = false;
     }
   }
 
-  private async continueStart(media: MediaStream, generation: number): Promise<void> {
-    const started = await this.createAndPublish(media, generation);
+  private async continueStart(run: StartRun): Promise<void> {
+    const started = await this.createAndPublish(run);
     if (!started) return;
     const stream = started.live;
-    if (!this.isActiveStart(generation)) {
-      releaseScreenShare(stream, () => this.clearTimers());
-      void this.notifyRemoteStop(stream);
+    if (!this.isActiveRun(run)) {
+      this.discardInactiveRun(stream, run);
       return;
     }
     this.live = stream;
     this.setUrl(stream.streamUrl);
-    this.setAudioStatus(stream.media);
-    this.preview(stream.media);
+    this.setAudioStatus(stream.capture.media);
+    this.preview(stream.capture.media);
     this.startTimers();
-    stream.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
+    stream.capture.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
     if (started.ready) this.show('url');
     else this.showError(new StreamHealthError());
   }
 
-  private async createAndPublish(media: MediaStream, generation: number): Promise<StartedStream | null> {
+  private async createAndPublish(run: StartRun): Promise<StartedStream | null> {
     let created: CreateStreamResponse;
     try {
-      created = asCreateStream(await this.deps.requestJson('/api/streams/', { method: 'POST' }));
+      created = asCreateStream(await this.deps.requestJson('/api/streams/', {
+        method: 'POST',
+        signal: run.abortController.signal,
+      }));
     } catch (error) {
-      stopMedia(media);
+      this.cancelStart(run);
       throw error;
     }
-    if (!this.isActiveStart(generation)) {
-      stopMedia(media);
+    if (!this.isActiveRun(run)) {
+      this.cancelStart(run);
       void this.notifyServerStop(created.id);
       return null;
     }
-    return this.publishAndVerify(media, created, generation);
+    return this.publishAndVerify(run, created);
   }
 
   private async publishAndVerify(
-    media: MediaStream,
-    created: CreateStreamResponse,
-    generation: number
+    run: StartRun,
+    created: CreateStreamResponse
   ): Promise<StartedStream | null> {
     let publisher: WhipPublisher | null = null;
     let stream: LiveStream | null = null;
     try {
       publisher = await this.deps.startWhipPublisher({
-        stream: media,
+        stream: run.capture.media,
         streamId: created.id,
         publishToken: created.publishToken,
         keyframeRequestIntervalMs: keyframeRequestIntervalForSearch(globalThis.window?.location?.search ?? ''),
         audioProfile: currentAudioProfile(),
       });
-      stream = { ...created, publisher, media };
-      if (!this.isActiveStart(generation)) {
-        releaseScreenShare(stream, () => this.clearTimers());
-        void this.notifyRemoteStop(stream);
+      stream = {
+        ...created,
+        publisher,
+        media: run.capture.media,
+        capture: run.capture,
+        abortController: run.abortController,
+        lifecycle: {
+          localReleased: false,
+          serverStopRequested: false,
+          whipDeleteRequested: false,
+        },
+      };
+      if (!this.isActiveRun(run)) {
+        this.discardInactiveRun(stream, run);
         return null;
       }
       this.live = stream;
-      return await this.verifyInitialStream(stream, generation);
+      return await this.verifyInitialStream(stream, run);
     } catch (error) {
-      if (stream && !this.isActiveLive(stream)) return null;
-      if (stream) this.live = null;
-      const failedPublisher = stream?.publisher ?? publisher;
-      if (failedPublisher) {
-        failedPublisher.close();
-        void failedPublisher.deleteResource().catch((deleteError) => {
-          console.warn('Failed to delete WHIP resource after start failure', deleteError);
-        });
+      if (stream) {
+        const stale = !this.isActiveRun(run) || !this.isActiveLive(stream);
+        this.discardInactiveRun(stream, run);
+        if (stale) return null;
+        throw error;
       }
-      stopMedia(media);
+      this.cancelStart(run);
       void this.notifyServerStop(created.id);
       throw error;
     }
   }
 
-  private async verifyInitialStream(stream: LiveStream, generation: number): Promise<StartedStream | null> {
-    const ready = await this.deps.waitForStreamReady(stream.id);
-    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) return null;
+  private async verifyInitialStream(stream: LiveStream, run: StartRun): Promise<StartedStream | null> {
+    const ready = await this.deps.waitForStreamReady(stream.id, run.abortController.signal);
+    if (!this.isActiveRun(run) || !this.isActiveLive(stream)) {
+      this.discardInactiveRun(stream, run);
+      return null;
+    }
     if (ready) return { live: stream, ready: true };
     const replacement = await stream.publisher.republish();
-    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) {
+    if (!this.isActiveRun(run) || !this.isActiveLive(stream)) {
       await this.releasePublisher(replacement);
+      this.discardInactiveRun(stream, run);
       return null;
     }
     stream.publisher = replacement;
-    const retryReady = await this.deps.waitForStreamReady(stream.id);
-    if (!this.isActiveStart(generation) || !this.isActiveLive(stream)) return null;
+    const retryReady = await this.deps.waitForStreamReady(stream.id, run.abortController.signal);
+    if (!this.isActiveRun(run) || !this.isActiveLive(stream)) {
+      this.discardInactiveRun(stream, run);
+      return null;
+    }
     return { live: stream, ready: retryReady };
   }
 
@@ -284,7 +325,7 @@ export class ScreenShareController {
         return;
       }
       live.publisher = publisher;
-      const ready = await this.deps.waitForStreamReady(live.id);
+      const ready = await this.deps.waitForStreamReady(live.id, live.abortController.signal);
       if (!this.isActiveLive(live)) return;
       if (ready) {
         this.setUrl(live.streamUrl);
@@ -307,7 +348,10 @@ export class ScreenShareController {
     this.setBusy('[data-screen-extend]', true, 'labelExtending');
     try {
       const response = asExtendStream(
-        await this.deps.requestJson(`/api/streams/${encodeURIComponent(live.id)}/extend/`, { method: 'POST' })
+        await this.deps.requestJson(`/api/streams/${encodeURIComponent(live.id)}/extend/`, {
+          method: 'POST',
+          signal: live.abortController.signal,
+        })
       );
       if (this.stopping || this.live !== live) return;
       live.extendExpiresAt = response.extendExpiresAt;
@@ -337,7 +381,10 @@ export class ScreenShareController {
     const live = this.live;
     if (!live || this.stopping) return;
     try {
-      await this.deps.requestJson(`/api/streams/${encodeURIComponent(live.id)}/heartbeat/`, { method: 'POST' });
+      await this.deps.requestJson(`/api/streams/${encodeURIComponent(live.id)}/heartbeat/`, {
+        method: 'POST',
+        signal: live.abortController.signal,
+      });
     } catch (error) {
       if (!this.stopping && this.live === live) this.handleRuntimeError(error);
     }
@@ -364,12 +411,17 @@ export class ScreenShareController {
   }
 
   private finishLocally(phase: 'idle' | 'error', error?: unknown): LiveStream | null {
-    if (this.stopping || !this.live) return null;
+    if (this.stopping) return null;
     this.stopping = true;
     this.startGeneration += 1;
+    const run = this.activeStart;
+    this.activeStart = null;
+    run?.abortController.abort();
     const live = this.live;
+    live?.abortController.abort();
+    if (live) this.releaseLiveLocally(live, true);
+    else run?.capture.dispose();
     this.live = null;
-    releaseScreenShare(live, () => this.clearTimers());
     if (phase === 'error') this.showError(error);
     else this.show('idle');
     return live;
@@ -377,21 +429,26 @@ export class ScreenShareController {
 
   private stopForPageHide(): void {
     const live = this.finishLocally('idle');
-    this.startGeneration += 1;
-    this.stopping = true;
     if (!live) return;
-    const stopUrl = streamStopUrl(live.id);
-    try {
-      if (!this.deps.sendBeacon(stopUrl)) void this.notifyServerStop(live.id);
-    } catch (error) {
-      console.warn('Failed to queue stream stop beacon', error);
-      void this.notifyServerStop(live.id);
-    }
+    void this.notifyLiveServerStop(live, true);
     void this.notifyWhipDeletion(live);
   }
 
   private async notifyRemoteStop(live: LiveStream): Promise<void> {
-    await Promise.all([this.notifyServerStop(live.id), this.notifyWhipDeletion(live)]);
+    await Promise.all([this.notifyLiveServerStop(live), this.notifyWhipDeletion(live)]);
+  }
+
+  private async notifyLiveServerStop(live: LiveStream, preferBeacon = false): Promise<void> {
+    if (live.lifecycle.serverStopRequested) return;
+    live.lifecycle.serverStopRequested = true;
+    if (preferBeacon) {
+      try {
+        if (this.deps.sendBeacon(streamStopUrl(live.id))) return;
+      } catch (error) {
+        console.warn('Failed to queue stream stop beacon', error);
+      }
+    }
+    await this.notifyServerStop(live.id);
   }
 
   private async notifyServerStop(id: string): Promise<void> {
@@ -403,6 +460,8 @@ export class ScreenShareController {
   }
 
   private async notifyWhipDeletion(live: LiveStream): Promise<void> {
+    if (live.lifecycle.whipDeleteRequested) return;
+    live.lifecycle.whipDeleteRequested = true;
     await live.publisher.deleteResource().catch((error) => {
       console.warn('Failed to delete WHIP resource', error);
     });
@@ -417,6 +476,64 @@ export class ScreenShareController {
 
   private isActiveStart(generation: number): boolean {
     return !this.stopping && this.startGeneration === generation;
+  }
+
+  private isActiveRun(run: StartRun): boolean {
+    return (
+      this.activeStart === run &&
+      this.isActiveStart(run.generation) &&
+      !run.abortController.signal.aborted
+    );
+  }
+
+  private reserveStart(): number | null {
+    if (this.startReservation !== null || this.activeStart || this.live) return null;
+    this.stopping = false;
+    const generation = ++this.startGeneration;
+    this.startReservation = generation;
+    return generation;
+  }
+
+  private releaseStartReservation(generation: number): void {
+    if (this.startReservation === generation) this.startReservation = null;
+  }
+
+  private registerStart(media: MediaStream, generation: number): StartRun | null {
+    const run: StartRun = {
+      generation,
+      capture: createCaptureHandle(media),
+      abortController: new AbortController(),
+    };
+    if (this.startReservation !== generation || !this.isActiveStart(generation)) {
+      this.cancelStart(run);
+      return null;
+    }
+    if (this.activeStart || this.live) {
+      this.cancelStart(run);
+      return null;
+    }
+    this.activeStart = run;
+    return run;
+  }
+
+  private cancelStart(run: StartRun): void {
+    run.abortController.abort();
+    run.capture.dispose();
+    if (this.activeStart === run) this.activeStart = null;
+  }
+
+  private discardInactiveRun(stream: LiveStream, run: StartRun): void {
+    this.cancelStart(run);
+    const wasCurrent = this.live === stream;
+    if (wasCurrent) this.live = null;
+    this.releaseLiveLocally(stream, wasCurrent);
+    void this.notifyRemoteStop(stream);
+  }
+
+  private releaseLiveLocally(stream: LiveStream, clearCurrentTimers: boolean): void {
+    if (stream.lifecycle.localReleased) return;
+    stream.lifecycle.localReleased = true;
+    releaseScreenShare(stream, clearCurrentTimers ? () => this.clearTimers() : () => undefined);
   }
 
   private isActiveLive(live: LiveStream): boolean {
@@ -574,8 +691,22 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function stopMedia(media: MediaStream): void {
-  for (const track of media.getTracks()) track.stop();
+const CAPTURE_HANDLES = new WeakMap<MediaStream, CaptureHandle>();
+
+function createCaptureHandle(media: MediaStream): CaptureHandle {
+  const existing = CAPTURE_HANDLES.get(media);
+  if (existing) return existing;
+  let disposed = false;
+  const capture = {
+    media,
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      for (const track of media.getTracks()) track.stop();
+    },
+  };
+  CAPTURE_HANDLES.set(media, capture);
+  return capture;
 }
 
 function streamStopUrl(id: string): string {
