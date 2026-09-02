@@ -45,13 +45,9 @@ cron Worker --別 Bearer client--> ingress（publisher kick）/ egress（viewer�
 
 ## 動作確認コマンド（外形）
 
-```bash
-curl -si https://stream.web-screen.net/v3/paths/list                                    # 401 = 共通 Bearer ガード生存
-curl -s -X POST -H "Content-Type: application/sdp" --data "v=0" \
-  -o /dev/null -w "%{http_code}" https://webscreen.tv/live/x/whip                        # 401 = publish JWT 必須
-ffprobe -rtsp_transport tcp rtsp://webscreen.tv/live/nonexistent000                      # 404 = 匿名 read 可・path なし
-curl -s https://web-screen.net/api/streams/jwks/ | head -c 100                           # keys が返る = 秘密鍵投入済み
-```
+リポジトリ直下で `make stream-health` を実行する。Control API の 401、WHIP の 401、存在しない RTSP path の 404、JWKS の返却を順に確認する。
+
+配信中の出口 codec・音量・L-R 差分は `make stream-probe ID=<12文字>`、両 MediaMTX の path / bytes は `make stream-paths`、journald は `make stream-logs MIN=15` を使う。
 
 トークン付き確認はサーバー内で行い、別 token・期待する `X-WebScreen-MediaMTX-Role`・正しい token の 200・wrong token の 401 を両経路で確認する。値は端末へ出さない。
 versioned 設定、VPS → Worker の cutover、Worker / VPS 一体 rollback は [MediaMTX relay 運用手順](../../web/streaming/README.md) を正本とする。

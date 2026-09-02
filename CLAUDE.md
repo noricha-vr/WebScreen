@@ -37,12 +37,10 @@ Web ページ・画像・PDF を、VRChat のビデオプレイヤーで再生�
 ## 開発
 
 ```bash
-cd web
-bun install
-bun run dev          # http://localhost:4321
-bun run typecheck
-bun test             # ユニット
-bunx playwright test # E2E（wrangler dev を立てて実行）
+make help
+make check
+make e2e
+make stream-probe ID=AbCdEf123456
 ```
 
 `web/.dev.vars` にローカル用の環境変数が要る（`.dev.vars.example` を参照）。
