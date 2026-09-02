@@ -22,6 +22,15 @@ interface ControllerState { sourcePage: import('@playwright/test').Page | null; 
 interface PlayerResult { samples: LatencySample[]; warning: string | null }
 
 /** 実Chromeの画面共有、出口プローブ、出力保存を同じcleanup境界で実行する。 */
+
+const browserLog: string[] = [];
+function pushBrowserLog(line: string): void {
+  browserLog.push(`${new Date().toISOString()} ${line}`);
+  if (browserLog.length > 80) browserLog.shift();
+}
+function browserLogTail(): string {
+  return browserLog.length ? `\nbrowser console:\n${browserLog.slice(-30).join('\n')}` : '';
+}
 export async function runLatencyProbe(options: RunOptions): Promise<void> {
   requireCommands(options.player);
   await mkdir(options.outDir, { recursive: true });
@@ -43,6 +52,16 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     state.sourcePage = sourcePage;
     await sourcePage.goto(sourceServer.url.href, { waitUntil: 'domcontentloaded' });
     const sharingPage = await browser.newPage();
+    // 失敗時の原因切り分け用にブラウザ側のログを保持する（配信開始は製品 UI 経由なので、ここでしか見えない）
+    sharingPage.on('console', (message) => pushBrowserLog(`[${message.type()}] ${message.text()}`));
+    sharingPage.on('pageerror', (error) => pushBrowserLog(`[pageerror] ${error.message}`));
+    sharingPage.on('response', (response) => {
+      const url = response.url();
+      if (response.status() >= 400 || url.includes('/api/streams') || url.includes('/whip')) {
+        pushBrowserLog(`[http ${response.status()}] ${response.request().method()} ${url}`);
+      }
+    });
+    sharingPage.on('requestfailed', (request) => pushBrowserLog(`[requestfailed] ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ''}`));
     await sharingPage.goto('https://web-screen.net/ja/screen-share/', { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const streamId = await startScreenShare(sharingPage, options.profileDir);
     const target = resolveSourceUrl(options.source, sourceServer.url);
@@ -72,6 +91,34 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
 }
 
 /** 動作中のハーネスへ、共有済みタブの遷移先を渡す。 */
+/**
+ * ハーネスが起動する Chrome の中で人に一度ログインしてもらい、Cookie をプロファイルへ残す。
+ * Playwright 起動の Chrome（mock keychain）は手動 Chrome が Keychain で暗号化した Cookie を読めないため、
+ * 手動 Chrome でのログインは流用できない。ログイン自体は自動化しない（Discord OAuth）。
+ */
+export async function loginProfile(profileDir: string, timeoutMs = 8 * 60_000): Promise<void> {
+  await mkdir(profileDir, { recursive: true });
+  const browser = await startChrome(profileDir);
+  try {
+    const page = browser.pages()[0] ?? await browser.newPage();
+    await page.goto('https://web-screen.net/ja/screen-share/', { waitUntil: 'domcontentloaded' });
+    console.info(`開いた Chrome で WebScreen にログインしてください（最大 ${Math.round(timeoutMs / 60_000)} 分待ちます）`);
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const cookies = await browser.cookies('https://web-screen.net');
+      if (cookies.some((cookie) => cookie.name === 'ws_session')) {
+        console.info('ログインを確認しました。Cookie をプロファイルに保存して閉じます');
+        await page.waitForTimeout(1_500);
+        return;
+      }
+      await page.waitForTimeout(2_000);
+    }
+    throw new Error('ログインを確認できないまま待機時間を超えました');
+  } finally {
+    await browser.close();
+  }
+}
+
 export async function switchSource(url: string): Promise<void> {
   const active = JSON.parse(await readFile(ACTIVE_FILE, 'utf8')) as ActiveController;
   const response = await fetch(new URL('/source', active.endpoint), {
@@ -135,13 +182,39 @@ async function startChrome(profileDir: string): Promise<import('@playwright/test
 
 async function startScreenShare(page: import('@playwright/test').Page, profileDir: string): Promise<string> {
   await page.locator('[data-screen-start]').click({ timeout: 15_000 });
-  await page.waitForFunction(() => {
+  const isSettled = () => {
     const url = document.querySelector<HTMLInputElement>('[data-screen-url]')?.value;
     const login = document.querySelector<HTMLElement>('[data-screen-step="login"]');
-    return Boolean(url) || Boolean(login && !login.hidden);
-  }, undefined, { timeout: 30_000 });
+    const stopOthers = document.querySelector<HTMLElement>('[data-screen-stop-others]');
+    const stopOthersVisible = Boolean(stopOthers && !stopOthers.hidden && stopOthers.offsetParent !== null);
+    return Boolean(url) || Boolean(login && !login.hidden) || stopOthersVisible;
+  };
+  await page.waitForFunction(isSettled, undefined, { timeout: 30_000 });
+  // 同時配信上限（既定 1）に当たった時は、製品 UI の「他の配信を終了して開始」経路で既存配信を終えて始める。
+  // 計測用に既存配信を奪う挙動なので、run の起動前にリードが利用者の了承を得ている前提
+  const stopOthers = page.locator('[data-screen-stop-others]');
+  if (await stopOthers.isVisible().catch(() => false)) {
+    console.info('既存の配信を終了して開始します（同時配信上限）');
+    await stopOthers.click({ timeout: 15_000 });
+    await page.waitForFunction(() => {
+      const url = document.querySelector<HTMLInputElement>('[data-screen-url]')?.value;
+      const login = document.querySelector<HTMLElement>('[data-screen-step="login"]');
+      return Boolean(url) || Boolean(login && !login.hidden);
+    }, undefined, { timeout: 45_000 }).catch(async (error: unknown) => {
+      const shot = `${profileDir}/last-stop-others-failure.png`;
+      await page.screenshot({ path: shot, fullPage: true }).catch(() => undefined);
+      const texts = await page.locator('[data-screen-error], [role="alert"], [data-screen-status]').allInnerTexts().catch(() => []);
+      throw new Error(`既存配信の終了後に配信 URL が表示されませんでした: ${error instanceof Error ? error.message : String(error)} / 画面: ${shot} / 表示: ${texts.join(' | ')}${browserLogTail()}`);
+    });
+  }
   const url = await page.locator('[data-screen-url]').inputValue().catch(() => '');
-  if (!url) throw new Error(`このプロファイルで一度ログインしてください: ${profileDir}`);
+  if (!url) {
+    // 原因切り分け用に画面を残す（ログイン未済 / 上限エラー / その他の表示を区別する）
+    const shot = `${profileDir}/last-start-failure.png`;
+    await page.screenshot({ path: shot, fullPage: true }).catch(() => undefined);
+    const visibleText = await page.locator('[data-screen-error], [role="alert"]').allInnerTexts().catch(() => []);
+    throw new Error(`配信を開始できませんでした（ログイン未済か配信上限）。画面: ${shot}${visibleText.length ? ` / 表示: ${visibleText.join(' | ')}` : ''}。未ログインならこのプロファイルで一度ログインしてください: ${profileDir}${browserLogTail()}`);
+  }
   const streamId = /\/live\/([A-Za-z0-9_-]+)/.exec(url)?.[1];
   if (!streamId) throw new Error(`画面共有URLからstream idを取得できません: ${url}`);
   return streamId;

@@ -3,13 +3,14 @@ import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { analyzeDirectory, runLatencyProbe, switchSource, type RunOptions } from './latency-probe-run';
+import { analyzeDirectory, loginProfile, runLatencyProbe, switchSource, type RunOptions } from './latency-probe-run';
 
 const HELP = `Usage: bun scripts/latency-probe.ts <subcommand> [options]
 
 WebScreen配信を実Mac Chromeから開始し、RTSPT出口と任意のWindowsプレイヤーを時系列計測します。
 
 Subcommands:
+  login [--profile-dir PATH]
   run --minutes N --source URL [--player win2022] [--profile-dir PATH] [--out DIR]
   source --url URL
   analyze DIR
@@ -22,12 +23,13 @@ run options:
   --profile-dir PATH Chrome永続プロファイル（既定: ~/.webscreen-harness/chrome-profile）
   --out DIR          出力先（既定: docs/tmp/latency/<UTC timestamp>）
 
-sourceは実行中runの共有タブを切り替えます。analyzeは保存済みCSVからsummary.mdを再生成します。`;
+loginはハーネスが開くChromeで一度だけ人がログインするための待機です。sourceは実行中runの共有タブを切り替えます。analyzeは保存済みCSVからsummary.mdを再生成します。`;
 
 /** CLI契約を検証して実行可能な引数へ変換する。 */
 export function parseLatencyProbeArgs(argv: readonly string[]):
   | { command: 'help' }
   | { command: 'run'; options: RunOptions }
+  | { command: 'login'; profileDir: string }
   | { command: 'source'; url: string }
   | { command: 'analyze'; directory: string } {
   const [command, ...rest] = argv;
@@ -37,6 +39,10 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     return { command, directory: rest[0]! };
   }
   const values = parseOptions(rest);
+  if (command === 'login') {
+    rejectUnknown(values, ['profile-dir']);
+    return { command, profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile') };
+  }
   if (command === 'source') {
     rejectUnknown(values, ['url']);
     return { command, url: requiredUrl(values.url, '--url') };
@@ -65,6 +71,8 @@ async function main(): Promise<void> {
       await mkdir(parsed.options.outDir, { recursive: true });
       console.log(`出力先: ${parsed.options.outDir}`);
       await runLatencyProbe(parsed.options);
+    } else if (parsed.command === 'login') {
+      await loginProfile(parsed.profileDir);
     } else if (parsed.command === 'source') {
       await switchSource(parsed.url);
     } else {
