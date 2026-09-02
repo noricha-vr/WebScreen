@@ -7,17 +7,6 @@ export { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from './stream-profile';
 /** WHIP publish 時にユーザーへ意味のある対処を示すための失敗種別。 */
 export type WhipPublishErrorCode = 'H264_UNAVAILABLE' | 'WHIP_REQUEST_FAILED' | 'WHIP_RESPONSE_INVALID';
 
-/** ブラウザ配信で映像取得と WebRTC 送出に共通して使う暫定設定。 */
-export const SCREEN_SHARE_VIDEO_SETTINGS = {
-  width: 1280,
-  height: 720,
-  frameRate: 30,
-  maxBitrate: 1_200_000,
-  contentHint: 'detail',
-  degradationPreference: 'maintain-resolution',
-  scaleResolutionDownBy: 1,
-} as const;
-
 /** WHIP publish が開始できなかった理由を保持する。 */
 export class WhipPublishError extends Error {
   constructor(readonly code: WhipPublishErrorCode) {
@@ -62,6 +51,14 @@ export interface WhipPublisher {
   setPublishToken(publishToken: string): void;
 }
 
+/** feature 側が決定し WHIP sender へ注入する映像設定。 */
+export interface WhipVideoSettings {
+  maxBitrate: number;
+  contentHint: string;
+  degradationPreference: RTCDegradationPreference;
+  scaleResolutionDownBy: number;
+}
+
 interface StartWhipPublisherInput {
   stream: MediaStream;
   streamId: string;
@@ -69,6 +66,7 @@ interface StartWhipPublisherInput {
   keyframeRequestIntervalMs?: typeof MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS;
   /** 呼び出し元が URL query から決めた音声プロファイル（既定は raw だが、省略は許さず明示させる）。 */
   audioProfile: AudioProfile;
+  videoSettings: WhipVideoSettings;
   fetchImpl?: typeof fetch;
 }
 
@@ -101,8 +99,8 @@ export async function startWhipPublisher(input: StartWhipPublisherInput): Promis
   try {
     const transceiver = peerConnection.addTransceiver(track, { direction: 'sendonly' });
     transceiver.setCodecPreferences(preferredCodecs);
-    await configureVideoSender(transceiver.sender);
-    track.contentHint = SCREEN_SHARE_VIDEO_SETTINGS.contentHint;
+    await configureVideoSender(transceiver.sender, input.videoSettings);
+    track.contentHint = input.videoSettings.contentHint;
     for (const audioTrack of input.stream.getAudioTracks()) {
       const audioSender = peerConnection.addTrack(audioTrack, input.stream);
       if (input.audioProfile === 'raw') await configureRawAudioSender(audioSender);
@@ -141,18 +139,18 @@ function videoCodecPreferences(): RTCRtpCodec[] | null {
   return prioritizeH264(RTCRtpSender.getCapabilities('video')?.codecs ?? []);
 }
 
-async function configureVideoSender(sender: RTCRtpSender): Promise<void> {
+async function configureVideoSender(sender: RTCRtpSender, settings: WhipVideoSettings): Promise<void> {
   const parameters = sender.getParameters();
   parameters.encodings = parameters.encodings?.length ? parameters.encodings : [{}];
-  parameters.encodings[0]!.maxBitrate = SCREEN_SHARE_VIDEO_SETTINGS.maxBitrate;
-  parameters.encodings[0]!.scaleResolutionDownBy = SCREEN_SHARE_VIDEO_SETTINGS.scaleResolutionDownBy;
-  parameters.degradationPreference = SCREEN_SHARE_VIDEO_SETTINGS.degradationPreference;
+  parameters.encodings[0]!.maxBitrate = settings.maxBitrate;
+  parameters.encodings[0]!.scaleResolutionDownBy = settings.scaleResolutionDownBy;
+  parameters.degradationPreference = settings.degradationPreference;
   try {
     await sender.setParameters(parameters);
   } catch {
     const fallback = sender.getParameters();
     fallback.encodings = fallback.encodings?.length ? fallback.encodings : [{}];
-    fallback.encodings[0]!.maxBitrate = SCREEN_SHARE_VIDEO_SETTINGS.maxBitrate;
+    fallback.encodings[0]!.maxBitrate = settings.maxBitrate;
     delete fallback.encodings[0]!.scaleResolutionDownBy;
     delete fallback.degradationPreference;
     await sender.setParameters(fallback);

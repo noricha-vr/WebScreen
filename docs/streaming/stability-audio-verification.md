@@ -20,7 +20,7 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 | キーフレーム | 0 秒（自動） | **通常はMediaMTXのPLIにより約2秒** | MP3 betaのChromeだけ500 ms周期で次キーフレームを要求。first-packet IDRは保証しない |
 | 音声 | FFmpeg AAC、音声トラック 1 | **タブ音声 → WebRTC 音声 → AAC-LC 48 kHz / stereo / 128 kbps。Chrome の音声処理は切る（EC/NS/AGC=false, contentHint 'music'）** | Chrome で「タブの音声を共有」をオンにした時だけ音声を付ける |
 
-採用実装の正本は `web/src/lib/ui/whip-publisher.ts`。本番 relay の合成 motion/static QA は合格したが、WebScreen UI からの actual YouTube 最終確認は未実施。
+採用設定値の正本は `web/src/lib/ui/screen-share/video-profile.ts`、送出への適用は `web/src/lib/ui/whip-publisher.ts`。本番 relay の合成 motion/static QA は合格したが、WebScreen UI からの actual YouTube 最終確認は未実施。
 full設定がブラウザに拒否された時はfresh parametersからmaxBitrate-only fallbackを1回だけ試す。これは配信継続の互換策であり、文字品質を保証しない。
 
 ## 実測条件
