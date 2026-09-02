@@ -33,12 +33,22 @@ forbidden_imports = [
   "^cloudflare:",
 ]
 
-# 構造化ログ。外部依存を持たず（console へ 1 行 JSON を書くだけ）、どの層からでも呼べる
-# 横断的関心事なので infra から出してある。infra に置くと entrypoints からログを出せず、
-# かといって entrypoints → infra を開けると D1 / R2 の直叩きまで通ってしまうため。
+# 構造化ログ。外部依存を持たず（console へ 1 行 JSON を書くだけ）、失敗を記録する層から
+# 直接呼べる横断的関心事なので infra から出してある。infra に置くと entrypoints から
+# ログを出せず、かといって entrypoints → infra を開けると D1 / R2 の直叩きまで通るため。
+# 現在の呼び出し元は services / entrypoints / tests。infra・cron・screen_share から
+# 呼びたくなったら、その層の may_depend_on に足す（今は参照がないので開けていない）。
 [modules.observability]
 paths = ["web/src/lib/observability"]
 may_depend_on = ["contracts"]
+forbidden_imports = [
+  # 外部依存を持たないことを機械で守る。ここに cloudflare:workers や外部 logger が
+  # 入ると「どの層からでも呼べる」前提が崩れ、entrypoints から機密へ到達できてしまう。
+  "^node:",
+  "^astro",
+  "^@astrojs/",
+  "^cloudflare:",
+]
 
 # 外部依存の隔離層（D1 / R2 / Discord API / web-capture の呼び出し）。
 [modules.infra]
