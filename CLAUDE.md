@@ -37,6 +37,7 @@ Web ページ・画像・PDF を、VRChat のビデオプレイヤーで再生�
 ## 開発
 
 ```bash
+make install         # 初回のみ（web/ の依存を lockfile 固定で入れる）
 make help
 make check
 make e2e

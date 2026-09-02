@@ -61,7 +61,8 @@ smoke: ## 本番公開 URL の HTTP ステータスを確認（SMOKE_URLS=... �
 stream-health: ## 配信の外形4点（Control API・WHIP・RTSP・JWKS）を確認
 	@curl -si "$(STREAM_CONTROL_URL)/v3/paths/list"
 	@curl -s -X POST -H 'Content-Type: application/sdp' --data 'v=0' -o /dev/null -w '%{http_code}\n' "$(STREAM_PUBLIC_URL)/live/x/whip"
-	@ffprobe -rtsp_transport tcp "rtsp://webscreen.tv/live/nonexistent000" || true
+	@# 匿名 read の経路（path は live/[A-Za-z0-9]{12} に限定）を通した 404 を確認するため、未使用の 12 文字 ID を使う
+	@ffprobe -rtsp_transport tcp "rtsp://webscreen.tv/live/nonexistent0" || true
 	@curl -s "https://web-screen.net/api/streams/jwks/" | head -c 100; printf '\n'
 
 stream-probe: ## 出口の codec・音量・L-R 差分を確認（ID=12文字）
