@@ -26,5 +26,6 @@ describe('配信 lifecycle cron の振り分け', () => {
 
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({ event: 'stream_lifecycle_completed', severity: 'info' });
+    expect(logs[0]?.['summary']).toMatchObject({ deletedStartCancellations: 0 });
   });
 });

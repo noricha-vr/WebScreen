@@ -8,16 +8,17 @@ import {
   type StreamStatusResponse,
 } from '../contracts/api';
 import { generateShortId } from '../contracts/r2key';
+import { existingStreamStartStatus } from './stream-start';
 // 配信ホスト名は allowlist に焼き込まれるため凍結（2026-09-01 webscreen.tv に確定。docs/streaming/requirements.md）
 const STREAM_BASE_URL = 'rtspt://webscreen.tv/live';
 const DEFAULT_CREATE_RETRIES = 4;
 export interface StreamDatabase {
-  prepare(query: string): {
-    bind(...values: unknown[]): {
-      first<T>(): Promise<T | null>;
-      run(): Promise<{ meta: { changes: number } }>;
-    };
-  };
+  prepare(query: string): { bind(...values: unknown[]): StreamDatabaseStatement };
+  batch(statements: StreamDatabaseStatement[]): Promise<Array<{ meta: { changes: number } }>>;
+}
+export interface StreamDatabaseStatement {
+  first<T>(): Promise<T | null>;
+  run(): Promise<{ meta: { changes: number } }>;
 }
 export interface StreamSettings {
   extensionCycleSeconds: number;
@@ -57,6 +58,7 @@ export interface StreamServiceInput {
   signPublishToken: StreamJwtSigner;
   now?: Date;
   generateId?: () => string;
+  startToken?: string | null;
 }
 /** 新しい path ID を予約し、延長期限と同じ exp の publish JWT を返す。 */
 export async function createStream(input: StreamServiceInput): Promise<CreateStreamResponse> {
@@ -76,9 +78,18 @@ export async function createStream(input: StreamServiceInput): Promise<CreateStr
       if (inserted) return createResponse(id, now, expiresAt, publishToken);
     } catch (error) {
       if (await streamIdExists(input.database, id)) continue;
+      if (input.startToken) {
+        await throwIfExistingStartToken(input.database, input.userId, input.startToken);
+      }
       throw error;
     }
-    await throwCreateRejection(input.database, input.userId, rateThreshold, input.settings);
+    await throwCreateRejection(
+      input.database,
+      input.userId,
+      rateThreshold,
+      input.settings,
+      input.startToken
+    );
   }
   throw new Error('Unable to allocate a unique stream path ID');
 }
@@ -204,14 +215,18 @@ async function insertStream(
     .prepare(
       `INSERT INTO stream_sessions (
          id, user_id, status, started_at, extend_expires_at,
-         last_heartbeat_at, last_viewer_at, kick_pending
+         last_heartbeat_at, last_viewer_at, kick_pending, start_token
        )
-       SELECT ?, ?, 'live', ?, ?, ?, ?, 0
+       SELECT ?, ?, 'live', ?, ?, ?, ?, 0, ?
        WHERE (SELECT COUNT(*) FROM stream_sessions WHERE status = 'live') < ?
        AND (SELECT COUNT(*) FROM stream_sessions WHERE user_id = ? AND status = 'live') < ?
        AND NOT EXISTS (
          SELECT 1 FROM stream_sessions WHERE user_id = ? AND started_at > ?
-       )`
+       )
+       AND (? IS NULL OR NOT EXISTS (
+         SELECT 1 FROM stream_start_cancellations
+         WHERE user_id = ? AND start_token = ?
+       ))`
     )
     .bind(
       id,
@@ -220,11 +235,15 @@ async function insertStream(
       expiresAt.toISOString(),
       iso,
       iso,
+      input.startToken ?? null,
       input.settings.maxLiveStreams,
       input.userId,
       input.settings.maxLiveStreamsPerUser,
       input.userId,
-      rateThreshold
+      rateThreshold,
+      input.startToken ?? null,
+      input.userId,
+      input.startToken ?? null
     )
     .run();
   return result.meta.changes > 0;
@@ -234,8 +253,21 @@ async function throwCreateRejection(
   database: StreamDatabase,
   userId: number,
   rateThreshold: string,
-  settings: StreamSettings
+  settings: StreamSettings,
+  startToken?: string | null
 ): Promise<never> {
+  if (startToken) {
+    const cancellation = await database
+      .prepare(
+        'SELECT start_token FROM stream_start_cancellations WHERE user_id = ? AND start_token = ?'
+      )
+      .bind(userId, startToken)
+      .first<{ start_token: string }>();
+    if (cancellation) {
+      throw new StreamError(409, ERROR_CODES.streamStartCancelled, '取り消された配信開始操作です');
+    }
+    await throwIfExistingStartToken(database, userId, startToken);
+  }
   const active = await database
     .prepare("SELECT COUNT(*) AS count FROM stream_sessions WHERE user_id = ? AND status = 'live'")
     .bind(userId)
@@ -258,6 +290,18 @@ async function throwCreateRejection(
     throw new StreamError(429, ERROR_CODES.streamCreateRateLimited, '配信の再作成が速すぎます');
   }
   throw new Error('Stream reservation was rejected unexpectedly');
+}
+
+async function throwIfExistingStartToken(
+  database: StreamDatabase,
+  userId: number,
+  startToken: string
+): Promise<void> {
+  const status = await existingStreamStartStatus(database, userId, startToken);
+  if (status === 'live') {
+    throw new StreamError(409, ERROR_CODES.streamAlreadyLive, '既に配信中です');
+  }
+  if (status === 'ended') throw endedError();
 }
 
 async function streamIdExists(database: StreamDatabase, id: string): Promise<boolean> {

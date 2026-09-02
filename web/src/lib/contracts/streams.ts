@@ -5,6 +5,20 @@ export type StreamSessionStatus = (typeof STREAM_SESSION_STATUSES)[number];
 /** WHIP publisher が接続する、allowlist 固定済みの配信オリジン。 */
 export const STREAM_WHIP_BASE_URL = 'https://webscreen.tv/live';
 
+/** 配信開始操作を pagehide 後も同定する任意ヘッダー。 */
+export const STREAM_START_TOKEN_HEADER = 'X-WebScreen-Start-Token';
+
+/** 配信開始キャンセル本文の上限。UUID 1 件だけを受け取る。 */
+export const MAX_CANCEL_STREAM_START_BODY_BYTES = 1024;
+
+/** crypto.randomUUID() が返す RFC 4122 UUID v4 だけを受理する。 */
+export function isStreamStartToken(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
 /** 配信が終了した理由。D1 の CHECK 制約と一致させる。 */
 export const STREAM_END_REASONS = [
   'extend_timeout',
@@ -45,6 +59,19 @@ export interface ExtendStreamResponse {
 export interface StopLiveStreamsResponse {
   stopped: number;
   retryAfterSeconds: number;
+}
+
+/** `POST /api/streams/cancel-start/` の本文。 */
+export interface CancelStreamStartRequest {
+  startToken: string;
+}
+
+/** 余分なフィールドを許可せず、配信開始キャンセル本文を検証する。 */
+export function parseCancelStreamStartRequest(input: unknown): CancelStreamStartRequest | null {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;
+  const body = input as Record<string, unknown>;
+  if (Object.keys(body).length !== 1 || !isStreamStartToken(body.startToken)) return null;
+  return { startToken: body.startToken };
 }
 
 /** `GET /api/streams/{id}/health/` の relay 到達状態。 */
