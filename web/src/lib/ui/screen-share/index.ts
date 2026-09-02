@@ -12,7 +12,11 @@ export {
   releaseScreenShare,
   secondsUntil,
 } from './session';
-export { SCREEN_SHARE_VIDEO_SETTINGS } from './video-profile';
+export {
+  REALTIME_SCREEN_SHARE_VIDEO_SETTINGS,
+  resolveScreenShareVideoSettingsForSearch,
+  SCREEN_SHARE_VIDEO_SETTINGS,
+} from './video-profile';
 
 const BROWSER_DEPENDENCIES: ScreenShareDependencies = {
   requestJson,
