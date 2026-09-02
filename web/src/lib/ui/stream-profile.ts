@@ -25,6 +25,8 @@ export function keyframeRequestIntervalForSearch(
 /** URL query が検証用リアルタイム映像プロファイルを完全一致で要求した時だけ bitrate を返す。 */
 export function realtimeVideoMaxBitrateForSearch(search: string): RealtimeVideoMaxBitrate | undefined {
   if (!hasSingleExactQueryValue(search, 'video-profile', 'realtime')) return undefined;
+  // mp3-beta の 500 ms キーフレーム要求との併用は未検証の最大負荷条件になるため、組み合わせごと拒否する。
+  if (new URLSearchParams(search).has('stream-profile')) return undefined;
 
   // bitrate は暗黙の既定を持たせず明示必須にする（未指定・不正・重複はいずれも候補ごと無効化して
   // 既定プロファイルへ fail-closed する）。検証結果の解釈で「どの上限で測ったか」を曖昧にしないため。

@@ -71,6 +71,7 @@ describe('検証用リアルタイム映像プロファイル', () => {
       '?video-profile=realtime&video-max-bitrate=1200000&video-max-bitrate=2000000',
       '?video-profile=REALTIME',
       '?video-profile=realtime&video-profile=realtime',
+      '?video-profile=realtime&video-max-bitrate=2000000&stream-profile=mp3-beta',
     ]) {
       expect(resolveScreenShareVideoSettingsForSearch(search)).toEqual(SCREEN_SHARE_VIDEO_SETTINGS);
     }
