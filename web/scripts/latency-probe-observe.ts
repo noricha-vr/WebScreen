@@ -15,7 +15,7 @@ export interface VideoDiagnostics {
 }
 
 /** 出口プローブがffmpegに縮小させるフレーム幅。復号コストを 5 fps に収めるため（原寸だと滞留する）。 */
-export const PROBE_FRAME_WIDTH = 640;
+export const PROBE_FRAME_WIDTH = 320;
 
 /** ffmpeg の `scale=640:-2` と同じ丸めで、縮小後のフレーム寸法を返す。 */
 export function scaledProbeDimensions(source: { width: number; height: number }): { width: number; height: number } {
@@ -53,12 +53,14 @@ export async function probeDimensionsFor(input: string): Promise<{ width: number
 
 /** RTSPT出口の映像プローブを起動する。 */
 export function startVideoProbe(rtspUrl: string): Bun.Subprocess {
-  return Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-use_wallclock_as_timestamps', '1', '-i', rtspUrl, '-an', '-vf', `fps=5,scale=${PROBE_FRAME_WIDTH}:-2`, '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
+  return Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', // fps フィルタは起動時の PTS ギャップを複製フレームで埋め、以後も古さを引きずる（2026-09-02 実測: 実遅延 0.8 秒が 6 秒に見えた）。
+    // 間引きも行わず全フレームを小さく受け取り、Bun 側で全部復号する（復号は 1 フレーム 0 ms 台）。プローブ時間も短くする
+    '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '500000', '-i', rtspUrl, '-an', '-vf', `scale=${PROBE_FRAME_WIDTH}:-2`, '-fps_mode', 'passthrough', '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
 }
 
 /** RTSPT出口のモノラル48kHz音声プローブを起動する。 */
 export function startAudioProbe(rtspUrl: string): Bun.Subprocess {
-  return Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-use_wallclock_as_timestamps', '1', '-i', rtspUrl, '-vn', '-map', '0:a:0?', '-ac', '1', '-ar', '48000', '-f', 'f32le', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
+  return Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '500000', '-i', rtspUrl, '-vn', '-map', '0:a:0?', '-ac', '1', '-ar', '48000', '-f', 'f32le', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
 }
 
 /** 指定時刻まで映像を読み、復号標本と失敗診断を蓄積する。 */
@@ -186,3 +188,50 @@ async function readWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promi
 async function sleepUntil(until: number): Promise<void> { const remaining = until - Date.now(); if (remaining > 0) await Bun.sleep(remaining); }
 function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> { const merged = new Uint8Array(left.length + right.length); merged.set(left); merged.set(right, left.length); return merged; }
 function joinFloat32Chunks(chunks: readonly Float32Array[]): Float32Array { const result = new Float32Array(chunks.reduce((total, chunk) => total + chunk.length, 0)); let offset = 0; for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length; } return result; }
+
+/**
+ * 出口の映像遅延を「単発取得」で測る。連続 ffmpeg は起動時の PTS ギャップや内部バッファで古さを引きずり
+ * 実遅延 0.8 秒が 2〜6 秒に見えた（2026-09-02 実測）ため、1 フレームずつ取得して
+ * 「取得完了時刻 − フレーム内時刻」を上限値、「取得開始時刻 − フレーム内時刻」を下限値として記録する。
+ */
+export async function collectOutletGrabs(rtspUrl: string, until: number, output: LatencySample[], diagnostics: VideoDiagnostics, framesDir: string, intervalMs = 4_000): Promise<void> {
+  await mkdir(framesDir, { recursive: true });
+  let index = 0;
+  while (Date.now() < until) {
+    const beforeMs = Date.now();
+    const pngPath = join(framesDir, `grab-${index}.png`);
+    const child = Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '500000', '-i', rtspUrl, '-an', '-frames:v', '1', '-pix_fmt', 'rgb24', '-y', pngPath], { stdout: 'ignore', stderr: 'pipe' });
+    const stderr = await readPipeText(requirePipe(child.stderr, 'grab stderr'));
+    const exit = await child.exited;
+    const afterMs = Date.now();
+    if (exit !== 0) {
+      logDecodeFailure(diagnostics, `単発取得失敗 ${stderr.trim().slice(0, 120)}`, false);
+    } else {
+      const decodeStartedAt = performance.now();
+      const decoded = await decodePngFrame(pngPath);
+      noteDecodeDuration(diagnostics, performance.now() - decodeStartedAt);
+      if (decoded.timestampMs !== null) {
+        output.push({ observedAtMs: afterMs, videoLatencyMs: afterMs - decoded.timestampMs, audioLatencyMs: null });
+        diagnostics.decodeLog.push(`${new Date(afterMs).toISOString()} grab=${index} lower=${beforeMs - decoded.timestampMs} upper=${afterMs - decoded.timestampMs} grab_ms=${afterMs - beforeMs}`);
+      } else {
+        logDecodeFailure(diagnostics, decoded.reason === 'checksum-mismatch' ? 'チェックサム不一致' : '同期パターン未検出', false);
+      }
+    }
+    index += 1;
+    const waitMs = intervalMs - (Date.now() - afterMs);
+    if (waitMs > 0 && Date.now() + waitMs < until) await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+}
+
+/** PNG を rawvideo に展開してブロックコードを復号する。 */
+export async function decodePngFrame(path: string): Promise<{ timestampMs: number | null; reason: string | null }> {
+  const probe = Bun.spawn(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', path], { stdout: 'pipe', stderr: 'pipe' });
+  const [width, height] = (await readPipeText(requirePipe(probe.stdout, 'png dims'))).trim().split(',').map(Number);
+  await probe.exited;
+  if (!width || !height) return { timestampMs: null, reason: 'png-dimensions' };
+  const child = Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', path, '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
+  const rgb = new Uint8Array(await new Response(requirePipe(child.stdout, 'png rawvideo')).arrayBuffer());
+  await child.exited;
+  const decoded = decodeBlockCodeFrameWithReason(rgb, width, height);
+  return { timestampMs: decoded.timestampMs, reason: decoded.reason };
+}

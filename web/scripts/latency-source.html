@@ -10,6 +10,8 @@
 <script>
   const canvas = document.querySelector('#clock');
   const context = canvas.getContext('2d', { alpha: false });
+  // 更新間隔（ms）。全セルが反転する絵は H.264 に不利で、50 ms だと 1.2 Mbps 上限で送出キューが数秒溜まる（2026-09-02 実測）
+  const tickMs = Math.min(1000, Math.max(20, Number(new URLSearchParams(location.search).get('tick')) || 250));
   const GRID = 16;
   const RESERVED = new Set(['1,1', '14,1', '1,14', '14,14']);
 
@@ -80,6 +82,6 @@
     }
     scheduleBeep();
   }
-  audio(); draw(); setInterval(draw, 50);
+  audio(); draw(); setInterval(draw, tickMs);
 </script>
 </html>

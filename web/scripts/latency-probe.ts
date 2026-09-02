@@ -11,7 +11,7 @@ WebScreen配信を実Mac Chromeから開始し、RTSPT出口と任意のWindows�
 
 Subcommands:
   login [--profile-dir PATH]
-  run --minutes N --source URL [--player win2022] [--profile-dir PATH] [--out DIR]
+  run --minutes N --source URL [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
   source --url URL
   analyze DIR
 
@@ -22,6 +22,9 @@ run options:
   --player win2022   Windows側のベストエフォート録画を有効化
   --profile-dir PATH Chrome永続プロファイル（既定: ~/.webscreen-harness/chrome-profile）
   --out DIR          出力先（既定: docs/tmp/latency/<UTC timestamp>）
+  --server-snap HOST 配信サーバーへ SSH し、run 中に ingress / egress のフレームを撮って relay 前後の遅延を server-snap.md に出す
+  --notify-discord CHANNEL_ID
+                     配信 URL を Discord の指定チャンネルへ投稿する（VRChat 側の PC で貼るため）
 
 loginはハーネスが開くChromeで一度だけ人がログインするための待機です。sourceは実行中runの共有タブを切り替えます。analyzeは保存済みCSVからsummary.mdを再生成します。`;
 
@@ -48,7 +51,9 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     return { command, url: requiredUrl(values.url, '--url') };
   }
   if (command !== 'run') throw new Error(`unknown subcommand: ${command}`);
-  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out']);
+  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap']);
+  if (values['server-snap'] !== undefined && !/^[A-Za-z0-9.-]+$/.test(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
+  if (values['notify-discord'] !== undefined && !/^\d{15,25}$/.test(values['notify-discord'])) throw new Error('--notify-discord must be a Discord channel id');
   const minutes = Number(values.minutes);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) throw new Error('--minutes must be an integer between 1 and 120');
   if (values.player !== undefined && values.player !== 'win2022') throw new Error('--player must be win2022');
@@ -57,6 +62,8 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     command, options: {
       minutes, source: requiredUrl(values.source, '--source'), player: values.player === 'win2022' ? 'win2022' : null,
       profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile'),
+      notifyDiscordChannelId: values['notify-discord'] ?? null,
+      serverSnapHost: values['server-snap'] ?? null,
       outDir: values.out ?? resolve('..', 'docs', 'tmp', 'latency', timestamp),
     },
   };

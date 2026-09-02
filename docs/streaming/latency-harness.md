@@ -24,3 +24,11 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - `frames/` の最初/最後の復号フレームと直近の失敗フレームで、配信映像を目視確認できる。
 - `outlet-audio.wav` と `outlet-audio.json` は `analyze` 時に再検出され、`outlet-audio.csv` を再生成する。
 - Windows録画は対話セッションのScheduled Taskを使う。失敗時は `player-error.md`、成功時の時刻・`w32tm`補正は `player-recording.md` を見る。
+
+## 出口の測り方と既知のアーティファクト（2026-09-02）
+
+- 出口の映像遅延は **単発取得**（`ffmpeg -frames:v 1` を約 4 秒間隔で繰り返し、取得完了時刻 − フレーム内時刻を上限値、取得開始時刻 − フレーム内時刻を下限値）で測る。`outlet-decode.log` の `grab=N lower=… upper=…` が生値
+- 連続 ffmpeg（`-vf fps=5` や `-use_wallclock_as_timestamps`）は起動時の PTS ギャップと内部バッファで古さを引きずり、実遅延 0.8 秒が 2〜6 秒に見えた。映像の連続取得は使わない（音声は連続取得で WAV に保存し `analyze` で検出）
+- `--server-snap HOST` は run 中にサーバーへ SSH し、ingress（8554）と egress（554）を同時刻に単発取得して `server-snap.md` に出す。ingress の値が「配信元 → ingress」、egress との差が relay の寄与
+- 実測（2026-09-02、計測ページ 1150x720 / 250 ms 更新）: ingress 約 0.55 秒、egress 約 0.80 秒（上限値）、Mac からの出口単発取得 約 0.78 秒。開始直後から安定し、出口に「数秒 → 1 秒未満」の収束は無い
+- `--notify-discord CHANNEL_ID` で配信 URL を Discord に投稿する（VRChat を動かす別 PC で貼るため）。`--player win2022` の録画は Scheduled Task 経由で、MacType 導入機では互換性ダイアログが出るが録画は継続する

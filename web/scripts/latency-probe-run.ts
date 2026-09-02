@@ -1,10 +1,12 @@
+import { homedir } from 'node:os';
+import { captureServerSnapshots } from './latency-probe-server-snap';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import { formatLatencyCsv, formatSummary, type LatencySample } from './latency-probe-analysis';
 import {
   analyzeSavedOutletAudio, audioSamplesFromCapture, collectAudio, collectVideo, persistOutletArtifacts,
-  decodeDurationSummary, probeDimensionsFor, readPipeText, requirePipe, scaledProbeDimensions, startAudioProbe, startVideoProbe, type VideoDiagnostics,
+  collectOutletGrabs, decodeDurationSummary, probeDimensionsFor, readPipeText, requirePipe, scaledProbeDimensions, startAudioProbe, type VideoDiagnostics,
 } from './latency-probe-observe';
 import { recordWindowsPlayer, type PlayerResult } from './latency-probe-player';
 
@@ -13,7 +15,10 @@ const ACTIVE_FILE = resolve('..', 'docs', 'tmp', 'latency', '.active.json');
 const SOURCE_FILE = Bun.file(new URL('./latency-source.html', import.meta.url));
 
 /** 実行時に固定する遅延ハーネスの引数。 */
-export interface RunOptions { minutes: number; source: string; player: 'win2022' | null; profileDir: string; outDir: string }
+export interface RunOptions { minutes: number; source: string; player: 'win2022' | null; profileDir: string; outDir: string
+  notifyDiscordChannelId: string | null;
+  serverSnapHost: string | null;
+}
 interface ActiveController { endpoint: string; sourceUrl: string }
 interface ControllerState { sourcePage: import('@playwright/test').Page | null; sourceUrl: string; sourceServerUrl: string }
 
@@ -33,7 +38,6 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
   let startedAtMs = 0;
   const outlet: LatencySample[] = [];
   let browser: import('@playwright/test').BrowserContext | null = null;
-  let video: Bun.Subprocess | null = null;
   let audio: Bun.Subprocess | null = null;
   try {
     browser = await startChrome(options.profileDir);
@@ -59,37 +63,38 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
       pbcopy.stdin.end();
       await pbcopy.exited;
     }
+    if (options.notifyDiscordChannelId) await notifyDiscord(options.notifyDiscordChannelId, viewerUrl, options.minutes);
     const dimensions = scaledProbeDimensions(await probeDimensionsFor(rtspUrl));
-    video = startVideoProbe(rtspUrl);
     audio = startAudioProbe(rtspUrl);
-    const videoLog = readPipeText(requirePipe(video.stderr, 'video stderr'));
+    const videoLog = Promise.resolve('(映像は単発取得方式のため連続 ffmpeg なし)');
     const audioLog = readPipeText(requirePipe(audio.stderr, 'audio stderr'));
     state.sourceUrl = target;
     startedAtMs = Date.now();
     const until = startedAtMs + options.minutes * 60_000;
     const diagnostics: VideoDiagnostics = { firstDecoded: null, lastDecoded: null, lastFailure: null, decodeLog: [], lastLoggedFailureAtMs: null, decodeCount: 0, decodeMsTotal: 0, decodeMsMax: 0 };
+    const serverSnap = options.serverSnapHost
+      ? captureServerSnapshots(options.serverSnapHost, streamId, options.outDir, startedAtMs, [20, 50, 80]).catch((error) => { console.warn(`サーバー内スナップショットに失敗しました: ${String(error)}`); return []; })
+      : Promise.resolve([]);
     const playerPump = options.player ? recordWindowsPlayer(options.outDir, until).catch((error) => ({ samples: [], warning: `Windows計測は失敗しました: ${String(error)}`, diagnostics: String(error) } satisfies PlayerResult)) : Promise.resolve(null);
     const [, capturedAudio, player] = await Promise.all([
-      collectVideo(requirePipe(video.stdout, 'video'), dimensions.width, dimensions.height, until, outlet, diagnostics, video),
+      collectOutletGrabs(rtspUrl, until, outlet, diagnostics, join(options.outDir, 'frames')),
       collectAudio(requirePipe(audio.stdout, 'audio'), until), playerPump,
     ]);
     outlet.push(...audioSamplesFromCapture(capturedAudio));
-    const videoExitBeforeStop = video.exitCode;
     const audioExitBeforeStop = audio.exitCode;
-    if (videoExitBeforeStop === null) video.kill();
     if (audioExitBeforeStop === null) audio.kill();
-    await Promise.all([video.exited, audio.exited]);
+    await serverSnap;
+    await audio.exited;
     const [videoStderr, audioStderr] = await Promise.all([videoLog, audioLog]);
     diagnostics.decodeLog.push(`${new Date().toISOString()} ${decodeDurationSummary(diagnostics)}`);
     await persistOutletArtifacts(options.outDir, startedAtMs, capturedAudio, dimensions, diagnostics, videoStderr, audioStderr);
     const failures = [
-      videoExitBeforeStop !== null && videoExitBeforeStop !== 0 ? `video ffmpeg exit=${videoExitBeforeStop}\n${videoStderr}` : null,
       audioExitBeforeStop !== null && audioExitBeforeStop !== 0 ? `audio ffmpeg exit=${audioExitBeforeStop}\n${audioStderr}` : null,
     ].filter((failure): failure is string => failure !== null);
     if (failures.length) throw new Error(`出口ffmpegが計測終了前に失敗しました。outlet-ffmpeg.logを保存しました。\n${failures.join('\n')}`);
     await persistResults(options.outDir, outlet, startedAtMs, player);
   } finally {
-    video?.kill(); audio?.kill();
+    audio?.kill();
     await browser?.close();
     controllerServer.stop(true); sourceServer.stop(true);
     await rm(ACTIVE_FILE, { force: true });
@@ -207,3 +212,14 @@ async function startScreenShare(page: import('@playwright/test').Page, profileDi
 
 function resolveSourceUrl(value: string, sourceServer: URL): string { const parsed = new URL(value); if (parsed.hostname === '127.0.0.1' && parsed.port === '0') parsed.port = sourceServer.port; return parsed.href; }
 function requireCommands(player: RunOptions['player']): void { const required = player ? ['ffmpeg', 'ffprobe', 'ssh'] : ['ffmpeg', 'ffprobe']; const missing = required.filter((command) => Bun.which(command) === null); if (missing.length) throw new Error(`必要なコマンドがありません: ${missing.join(', ')}。macOSでは brew install ffmpeg、sshはXcode Command Line Toolsを確認してください。`); }
+
+const DISCORD_NOTIFY_SCRIPT = `${homedir()}/.claude/skills/discord-mention/scripts/notify-discord.ts`;
+
+/** VRChat を動かす別 PC で URL を拾えるよう、Discord のチャンネルへ配信 URL を投稿する（失敗は計測を止めない）。 */
+async function notifyDiscord(channelId: string, viewerUrl: string, minutes: number): Promise<void> {
+  const message = `遅延計測の配信を開始しました（${minutes} 分）。VRChat に貼ってください:\n${viewerUrl}`;
+  const child = Bun.spawn(['bun', DISCORD_NOTIFY_SCRIPT, '--message', message, '--target', 'nori', '--channel-id', channelId, '--project-dir', process.cwd()], { stdout: 'pipe', stderr: 'pipe' });
+  const stderr = await readPipeText(requirePipe(child.stderr, 'discord notify stderr'));
+  if (await child.exited !== 0) console.warn(`Discord 通知に失敗しました: ${stderr.trim()}`);
+  else console.info(`Discord へ配信 URL を投稿しました（channel ${channelId}）`);
+}
