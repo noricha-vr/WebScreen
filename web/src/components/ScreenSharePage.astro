@@ -8,27 +8,23 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang).screenSharePage;
 const wizard = t.wizard;
+const flowIcons = ['fa-display', 'fa-link', 'fa-paste'];
 ---
 
 <main class="mx-auto max-w-5xl px-4 py-12">
   <section class="text-center">
     <h1 class="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-5xl">{t.heading}</h1>
+    <h2 class="mt-5 text-xl font-bold tracking-tight text-slate-700 sm:text-2xl">{t.subheading}</h2>
     <p class="mx-auto mt-5 max-w-3xl text-lg leading-relaxed text-slate-700">{t.lead}</p>
     <ul class="mt-6 flex flex-wrap justify-center gap-3" aria-label={t.heading}>
-      {
-        t.badges.map((badge) => (
-          <li class="rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-base font-semibold text-brand-700">
-            <i class="fa-solid fa-circle-check mr-2" aria-hidden="true" />
-            {badge}
-          </li>
-        ))
-      }
+      {t.badges.map((badge) => <li class="rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-base font-semibold text-brand-700"><i class="fa-solid fa-circle-check mr-2" aria-hidden="true" />{badge}</li>)}
     </ul>
 
     <section
       data-screen-share
       data-label-start={wizard.start}
       data-label-selecting={wizard.selecting}
+      data-label-starting={wizard.starting}
       data-label-copy={wizard.copy}
       data-label-copied={wizard.copied}
       data-label-extend={wizard.extend}
@@ -51,127 +47,57 @@ const wizard = t.wizard;
       data-msg-generic={wizard.errors.generic}
       data-msg-audio-included={wizard.audioIncluded}
       data-msg-video-only={wizard.videoOnly}
-      class="mx-auto mt-10 max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm sm:p-10"
+      data-audio-on={wizard.audioOn}
+      data-audio-off={wizard.audioOff}
+      class="mx-auto mt-10 max-w-3xl rounded-[20px] border border-brand-100 bg-gradient-to-b from-white to-brand-50/30 p-6 text-left shadow-xl shadow-brand-500/20 sm:p-10"
     >
-      <div data-screen-indicators hidden class="mb-8 flex justify-center gap-3" aria-label={t.howTo.heading}>
-        {
-          [1, 2].map((step) => (
-            <span
-              data-screen-indicator={String(step)}
-              data-active={step === 1 ? 'true' : 'false'}
-              class="h-3 w-3 rounded-full bg-slate-300 data-[active=true]:bg-brand-500"
-              aria-hidden="true"
-            />
-          ))
-        }
-      </div>
+      <ol data-screen-flow class="mx-auto mb-7 flex max-w-xl items-stretch justify-center gap-3" aria-label={t.howTo.heading}>
+        {wizard.flow.map((label, index) => <><li data-screen-flow-item={String(index + 1)} data-state={index === 0 ? 'current' : 'todo'} class="group grid flex-1 justify-items-center gap-2 rounded-xl bg-slate-50 px-1 py-3 sm:px-2 sm:py-4 data-[state=current]:bg-brand-50 data-[state=done]:bg-brand-50"><span data-screen-flow-icon={String(index + 1)} aria-hidden="true" class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-[15px] text-brand-700 group-data-[state=current]:bg-brand-500 group-data-[state=current]:text-white"><i class:list={['fa-solid', flowIcons[index]]} /></span><span data-screen-flow-label={String(index + 1)} class="text-center text-xs font-bold text-slate-700 group-data-[state=current]:text-brand-700 sm:text-sm">{label}</span></li>{index < wizard.flow.length - 1 && <li aria-hidden="true" class="flex items-center text-brand-200"><i class="fa-solid fa-chevron-right" /></li>}</>)}
+      </ol>
 
-      <div data-screen-step="idle">
-        <button
-          type="button"
-          data-screen-start
-          class="flex w-full items-center justify-center gap-3 rounded-lg bg-brand-500 px-6 py-5 text-xl font-bold text-white hover:bg-brand-700"
-        >
-          <i class="fa-solid fa-display" aria-hidden="true" />
-          <span>{wizard.start}</span>
-        </button>
-        <p class="mt-4 text-center text-base leading-relaxed text-slate-500">{wizard.startHint}</p>
-        <p class="mt-3 text-center text-base font-semibold leading-relaxed text-brand-700">{wizard.selectAudioHint}</p>
-      </div>
-
-      <div data-screen-step="login" hidden>
+      <div data-screen-step="login" class="text-center" hidden>
         <h2 class="text-2xl font-bold text-slate-900">{wizard.loginHeading}</h2>
-        <p class="mt-3 text-base leading-relaxed text-slate-700">{wizard.loginBody}</p>
-        <a href="/api/auth/login/" class="mt-7 inline-flex items-center gap-3 rounded-md bg-brand-500 px-6 py-4 text-lg font-semibold text-white no-underline hover:bg-brand-700">
-          <i class="fa-brands fa-discord" aria-hidden="true" />
-          <span>{wizard.login}</span>
-        </a>
+        <p class="mx-auto mt-3 max-w-[30em] text-base leading-relaxed text-slate-700">{wizard.loginBody.map((line) => <span class="block">{line}</span>)}</p>
+        <a href="/api/auth/login/" class="mt-7 inline-flex items-center gap-3 rounded-full bg-brand-500 px-7 py-4 text-lg font-semibold text-white no-underline shadow-lg shadow-brand-500/30 hover:bg-brand-700"><i class="fa-brands fa-discord" aria-hidden="true" /><span>{wizard.login}</span></a>
+        <p class="mt-4 text-sm leading-relaxed text-slate-500">{wizard.loginHint}</p>
       </div>
 
-      <div data-screen-step="url" hidden>
-        <h2 class="text-2xl font-bold text-slate-900">{wizard.urlHeading}</h2>
-        <p class="mt-3 text-base leading-relaxed text-slate-700">{wizard.urlBody}</p>
-        <input data-screen-url readonly aria-label={wizard.urlHeading} class="mt-6 w-full rounded-md border border-brand-300 bg-brand-50 px-4 py-4 font-mono text-lg font-bold text-slate-900 sm:text-2xl" />
-        <p data-screen-audio-status class="mt-3 text-base leading-relaxed text-slate-700"></p>
-        <div class="mt-5 flex flex-wrap gap-3">
-          <button type="button" data-screen-copy class="inline-flex items-center gap-2 rounded-md border border-brand-500 px-5 py-3 text-base font-semibold text-brand-700 hover:bg-brand-50">
-            <i class="fa-solid fa-copy" aria-hidden="true" />
-            <span>{wizard.copy}</span>
-          </button>
-          <button type="button" data-screen-show-live class="inline-flex items-center gap-2 rounded-md bg-brand-500 px-5 py-3 text-base font-semibold text-white hover:bg-brand-700">
-            <i class="fa-solid fa-tower-broadcast" aria-hidden="true" />
-            <span>{wizard.showLive}</span>
-          </button>
+      <div data-screen-step="idle" class="text-center">
+        <button type="button" data-screen-start class="inline-flex items-center justify-center gap-2.5 rounded-full bg-brand-500 px-7 py-3.5 text-lg font-bold text-white shadow-lg shadow-brand-500/40 hover:bg-brand-700"><i class="fa-solid fa-display" aria-hidden="true" /><span>{wizard.start}</span></button>
+        <div role="radiogroup" aria-label={wizard.modeGroupLabel} class="mx-auto mt-5 flex max-w-[520px] flex-wrap gap-2.5">
+          {(['quest', 'pc'] as const).map((mode, index) => <label data-screen-mode={mode} data-checked={index === 0 ? 'true' : 'false'} class="group flex flex-[1_1_220px] cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3.5 text-left data-[checked=true]:border-brand-500 data-[checked=true]:bg-brand-50"><input type="radio" name="screen-mode" checked={index === 0} class="sr-only" /><span aria-hidden="true" class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-slate-300 group-data-[checked=true]:border-brand-500"><span class="h-2 w-2 rounded-full bg-transparent group-data-[checked=true]:bg-brand-500" /></span><span><span class="flex items-center gap-2 text-[15px] font-bold text-slate-900"><i class:list={['fa-solid', mode === 'quest' ? 'fa-gem' : 'fa-bolt', 'text-brand-500']} aria-hidden="true" />{wizard.modes[mode].label}</span><span class="mt-1 block text-sm leading-relaxed text-slate-500">{wizard.modes[mode].body}</span></span></label>)}
+        </div>
+        <div class="mx-auto mt-4 grid max-w-[520px] gap-2.5 rounded-xl border border-brand-100 bg-brand-50 p-4 text-left">
+          <p class="flex gap-2.5 text-[15px] leading-relaxed text-slate-700"><i class="fa-solid fa-hand-pointer mt-1 text-brand-500" aria-hidden="true" /><span>{wizard.startHint.lead}<strong class="text-brand-700">{wizard.startHint.emphasis}</strong>{wizard.startHint.tail}</span></p>
+          <p class="flex gap-2.5 text-[15px] leading-relaxed text-slate-700"><i class="fa-solid fa-volume-high mt-1 text-brand-500" aria-hidden="true" /><span>{wizard.selectAudioHint.lead}<strong class="text-brand-700">{wizard.selectAudioHint.emphasis}</strong>{wizard.selectAudioHint.tail}</span></p>
         </div>
       </div>
 
       <div data-screen-step="live" hidden>
         <h2 class="text-2xl font-bold text-slate-900">{wizard.liveHeading}</h2>
-        <video data-screen-preview aria-label={wizard.preview} autoplay playsinline muted class="mt-5 aspect-video w-full rounded-lg border border-slate-200 bg-slate-950" />
-        <dl class="mt-5 grid gap-3 text-base sm:grid-cols-2">
-          <div class="rounded-md bg-slate-50 p-4"><dt class="font-semibold text-slate-700">{wizard.elapsed}</dt><dd data-screen-elapsed class="mt-1 font-mono text-xl font-bold text-slate-900">0:00</dd></div>
-          <div class="rounded-md bg-slate-50 p-4"><dt class="font-semibold text-slate-700">{wizard.expires}</dt><dd data-screen-expires class="mt-1 font-mono text-xl font-bold text-slate-900">0:00</dd></div>
-        </dl>
-        <p data-screen-expiry-warning hidden role="alert" class="mt-5 rounded-md border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900">
-          <i class="fa-solid fa-triangle-exclamation mr-2" aria-hidden="true" />{wizard.expiryWarning}
-        </p>
-        <div class="mt-6 flex flex-wrap gap-3">
-          <button type="button" data-screen-extend class="inline-flex items-center gap-2 rounded-md bg-brand-500 px-5 py-3 text-base font-semibold text-white hover:bg-brand-700"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true" />{wizard.extend}</button>
-          <button type="button" data-screen-stop class="inline-flex items-center gap-2 rounded-md border border-red-300 px-5 py-3 text-base font-semibold text-red-700 hover:bg-red-50"><i class="fa-solid fa-stop" aria-hidden="true" />{wizard.stop}</button>
+        <p class="mt-3 text-base leading-relaxed text-slate-700">{wizard.urlBody}</p>
+        <div class="mt-4 flex flex-wrap items-center gap-2.5"><input data-screen-url readonly aria-label={wizard.liveHeading} class="min-w-0 flex-[1_1_300px] rounded-lg border border-brand-200 bg-brand-50 px-3.5 py-3 font-mono text-lg font-bold text-slate-900" /><button type="button" data-screen-copy class="inline-flex items-center gap-2 rounded-full bg-brand-500 px-5 py-3 text-[15px] font-bold text-white shadow-lg shadow-brand-500/30 hover:bg-brand-700"><i class="fa-solid fa-copy" aria-hidden="true" /><span>{wizard.copy}</span></button></div>
+        <div class="mt-6 rounded-[14px] border border-brand-100 bg-brand-50/40 p-4">
+          <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="text-xs font-bold tracking-wide text-slate-500">{wizard.expires}</p><p data-screen-expires class="mt-0.5 font-mono text-3xl font-bold text-slate-900">0:00</p></div><div class="flex flex-wrap items-center gap-2"><button type="button" data-screen-extend class="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-4 py-2 text-sm font-bold text-brand-700 hover:bg-brand-50"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true" />{wizard.extend}</button><button type="button" data-screen-stop class="inline-flex items-center gap-1.5 rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50"><i class="fa-solid fa-stop" aria-hidden="true" />{wizard.stop}</button></div></div>
+          <div aria-hidden="true" class="mt-3 h-1.5 w-full rounded-full bg-brand-100"><div data-screen-expires-bar data-warning="false" class="h-1.5 rounded-full bg-brand-500 transition-[width] duration-400 data-[warning=true]:bg-amber-500" style="width: 100%" /></div>
+          <p class="mt-2 text-sm font-semibold text-slate-500">{wizard.elapsed} <span data-screen-elapsed class="font-mono text-lg font-bold text-slate-900">0:00</span></p>
+          <p data-screen-expiry-warning hidden role="alert" class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3.5 font-semibold text-amber-900"><i class="fa-solid fa-triangle-exclamation mr-2" aria-hidden="true" />{wizard.expiryWarning}</p>
+        </div>
+        <div class="mt-5 border-t border-brand-100 pt-4">
+          <div class="flex flex-wrap items-center gap-2.5"><button type="button" data-screen-preview-toggle aria-expanded="true" class="inline-flex items-center gap-2.5 text-[15px] font-bold text-slate-700"><span data-screen-switch-track data-open="true" aria-hidden="true" class="relative inline-block h-[22px] w-10 rounded-full bg-slate-300 transition-colors data-[open=true]:bg-brand-500"><span data-screen-switch-knob data-open="true" class="absolute top-[3px] left-[3px] h-4 w-4 rounded-full bg-white shadow-sm transition-transform data-[open=true]:translate-x-[18px]" /></span>{wizard.previewToggle}</button><span data-tooltip-scope class="relative inline-flex"><button type="button" aria-label={wizard.previewTooltipLabel} class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-brand-200 bg-white text-xs font-bold text-brand-700">?</button><span data-tooltip role="tooltip" class="absolute bottom-[calc(100%+8px)] left-1/2 z-10 w-[260px] -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-sm leading-relaxed font-medium text-white shadow-lg">{wizard.previewTooltip}</span></span></div>
+          <div data-screen-preview-body data-open="true"><div class="relative mt-3.5"><video data-screen-preview aria-label={wizard.preview} autoplay playsinline muted class="block aspect-video w-full rounded-lg border border-slate-200 bg-slate-950" /><div class="absolute top-2.5 right-2.5 flex items-center gap-2"><span data-screen-audio-status class="rounded-full bg-slate-950/60 px-2.5 py-1 text-xs text-slate-200" /><span data-screen-audio-chip data-audio="off" class="inline-flex items-center gap-1.5 rounded-full border border-slate-200/35 bg-slate-950/60 px-3 py-1 text-sm font-bold text-slate-50"><i data-screen-audio-icon class="fa-solid fa-volume-xmark" aria-hidden="true" /><span data-screen-audio-label>{wizard.audioOff}</span></span></div></div></div>
         </div>
       </div>
 
-      <div data-screen-step="error" hidden>
-        <h2 class="text-2xl font-bold text-slate-900">{wizard.errorHeading}</h2>
-        <p data-screen-error-message role="alert" class="mt-3 rounded-md border border-red-200 bg-red-50 p-4 text-base leading-relaxed text-red-800"></p>
-        <button type="button" data-screen-stop-others hidden class="mt-5 inline-flex items-center gap-2 rounded-md border border-brand-500 px-5 py-3 text-base font-semibold text-brand-700 hover:bg-brand-50"><i class="fa-solid fa-stop" aria-hidden="true" /><span>{wizard.stopOthers}</span></button>
-        <button type="button" data-screen-retry class="mt-7 inline-flex items-center gap-2 rounded-md bg-brand-500 px-5 py-3 text-base font-semibold text-white hover:bg-brand-700"><i class="fa-solid fa-arrow-rotate-right" aria-hidden="true" /><span>{wizard.retry}</span></button>
-      </div>
+      <div data-screen-step="error" hidden><h2 class="text-2xl font-bold text-slate-900">{wizard.errorHeading}</h2><p data-screen-error-message role="alert" class="mt-3 rounded-lg border border-red-200 bg-red-50 p-4 text-base leading-relaxed text-red-800"></p><div class="mt-5 flex flex-wrap gap-3"><button type="button" data-screen-stop-others hidden class="inline-flex items-center gap-2 rounded-full bg-brand-500 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700"><i class="fa-solid fa-stop" aria-hidden="true" />{wizard.stopOthers}</button><button type="button" data-screen-retry class="inline-flex items-center gap-2 rounded-full bg-brand-500 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700"><i class="fa-solid fa-arrow-rotate-right" aria-hidden="true" />{wizard.retry}</button></div></div>
     </section>
   </section>
 
-  <section class="mt-20 border-t border-slate-200 pt-12">
-    <h2 class="text-3xl font-bold tracking-tight text-slate-900">{t.howTo.heading}</h2>
-    <div class="mt-8 grid gap-6 md:grid-cols-3">
-      {
-        t.howTo.steps.map((step, index) => (
-          <article class="rounded-xl border border-slate-200 p-5">
-            <figure role="img" aria-label={step.placeholder} class="flex aspect-video items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-center text-base text-slate-600">{step.placeholder}</figure>
-            <h3 class="mt-5 text-xl font-bold text-slate-900">{index + 1}. {step.heading}</h3>
-            <p class="mt-2 leading-relaxed text-slate-700">{step.body}</p>
-          </article>
-        ))
-      }
-    </div>
-  </section>
-
-  <section class="mt-16">
-    <h2 class="text-3xl font-bold tracking-tight text-slate-900">{t.features.heading}</h2>
-    <ul class="mt-6 grid gap-4 sm:grid-cols-2">
-      {t.features.items.map((item) => <li class="flex gap-3 rounded-lg bg-brand-50 p-4 text-base font-semibold text-slate-800"><i class="fa-solid fa-circle-check mt-1 text-brand-500" aria-hidden="true" />{item}</li>)}
-    </ul>
-  </section>
-
-  <section class="mt-16">
-    <h2 class="text-3xl font-bold tracking-tight text-slate-900">{t.faq.heading}</h2>
-    <div class="mt-6 grid gap-3">
-      {t.faq.items.map((item) => <details class="rounded-lg border border-slate-200 p-5"><summary class="cursor-pointer text-lg font-bold text-slate-900">{item.question}</summary><p class="mt-3 leading-relaxed text-slate-700">{item.answer}</p></details>)}
-    </div>
-  </section>
-
-  <section class="mt-16 rounded-xl bg-slate-50 p-7">
-    <h2 class="text-3xl font-bold tracking-tight text-slate-900">{t.explainer.heading}</h2>
-    <p class="mt-4 max-w-3xl leading-relaxed text-slate-700">{t.explainer.body}</p>
-  </section>
-
-  <section class="mt-16 rounded-xl border border-slate-200 p-7">
-    <h2 class="text-3xl font-bold tracking-tight text-slate-900">{t.convert.heading}</h2>
-    <p class="mt-4 max-w-3xl leading-relaxed text-slate-700">{t.convert.body}</p>
-    <div class="mt-6 flex flex-wrap gap-5">
-      <a href={`/${lang}/`} class="font-semibold text-brand-700 underline hover:text-brand-500">{t.convert.home}</a>
-      <a href={`/${lang}/web/`} class="font-semibold text-brand-700 underline hover:text-brand-500">{t.convert.web}</a>
-    </div>
-  </section>
+  <section class="mt-20 border-t border-slate-200 pt-12"><h2 class="inline-block border-b-[3px] border-brand-200 pb-2.5 text-3xl font-bold tracking-tight text-slate-900">{t.howTo.heading}</h2><div class="mt-8 grid gap-6 md:grid-cols-3">{t.howTo.steps.map((step, index) => <article class="rounded-xl border border-slate-200 p-5"><figure role="img" aria-label={step.placeholder} class="flex aspect-video items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-center text-base text-slate-600">{step.placeholder}</figure><h3 class="mt-5 text-xl font-bold text-slate-900">{index + 1}. {step.heading}</h3><p class="mt-2 leading-relaxed text-slate-700">{step.body}</p></article>)}</div></section>
+  <section class="mt-16"><h2 class="inline-block border-b-[3px] border-brand-200 pb-2.5 text-3xl font-bold tracking-tight text-slate-900">{t.features.heading}</h2><ul class="mt-6 grid gap-4 sm:grid-cols-2">{t.features.items.map((item) => <li class="flex gap-3 rounded-lg bg-brand-50 p-4 text-base font-semibold text-slate-800"><i class="fa-solid fa-circle-check mt-1 text-brand-500" aria-hidden="true" />{item}</li>)}</ul></section>
+  <section class="mt-16"><h2 class="inline-block border-b-[3px] border-brand-200 pb-2.5 text-3xl font-bold tracking-tight text-slate-900">{t.faq.heading}</h2><div class="mt-6 grid gap-3">{t.faq.items.map((item) => <details class="rounded-lg border border-slate-200 p-5"><summary class="cursor-pointer text-lg font-bold text-slate-900">{item.question}</summary><p class="mt-3 leading-relaxed text-slate-700">{item.answer}</p></details>)}</div></section>
+  <section class="mt-16 rounded-xl bg-slate-50 p-7"><h2 class="inline-block border-b-[3px] border-brand-200 pb-2.5 text-3xl font-bold tracking-tight text-slate-900">{t.explainer.heading}</h2>{t.explainer.body.map((paragraph) => <p class="mt-4 max-w-3xl leading-relaxed text-slate-700">{paragraph}</p>)}</section>
+  <section class="mt-16 rounded-xl border border-slate-200 p-7"><h2 class="inline-block border-b-[3px] border-brand-200 pb-2.5 text-3xl font-bold tracking-tight text-slate-900">{t.convert.heading}</h2><p class="mt-4 max-w-3xl leading-relaxed text-slate-700">{t.convert.body}</p><div class="mt-6 flex flex-wrap gap-5"><a href={`/${lang}/`} class="font-semibold text-brand-700 underline hover:text-brand-500">{t.convert.home}</a><a href={`/${lang}/web/`} class="font-semibold text-brand-700 underline hover:text-brand-500">{t.convert.web}</a></div></section>
 </main>
 
 <script>

@@ -25,7 +25,7 @@ import {
 export const HEARTBEAT_INTERVAL_MS = 25_000;
 export const EXPIRY_WARNING_SECONDS = 5 * 60;
 
-type ScreenSharePhase = 'idle' | 'login' | 'url' | 'live' | 'error';
+type ScreenSharePhase = 'idle' | 'login' | 'live' | 'error';
 type CaptureHandle = {
   readonly media: MediaStream;
   dispose: () => void;
@@ -98,11 +98,6 @@ export function isExpiryWarning(expiresAt: string, now = Date.now()): boolean {
   return secondsUntil(expiresAt, now) <= EXPIRY_WARNING_SECONDS;
 }
 
-/** 配信開始後に URL 確認カードを経由してライブ画面へ進む順番を返す。 */
-export function nextStreamStep(phase: 'url' | 'live'): 'live' | null {
-  return phase === 'url' ? 'live' : null;
-}
-
 /** 画面共有カードへイベントと配信状態を配線する。 */
 export function mountScreenSharePage(root: HTMLElement): void {
   new ScreenShareController(root).mount();
@@ -117,6 +112,7 @@ export class ScreenShareController {
   private startGeneration = 0;
   private startReservation: number | null = null;
   private activeStart: StartRun | null = null;
+  private expiresBarTotalSeconds = 0;
 
   constructor(
     private readonly root: HTMLElement,
@@ -127,11 +123,14 @@ export class ScreenShareController {
     // getDisplayMedia はクリック起点でのみ許可されるため、開始ボタンから直接呼ぶ。
     this.button('[data-screen-start]')?.addEventListener('click', () => void this.selectScreen());
     this.button('[data-screen-copy]')?.addEventListener('click', () => void this.copyUrl());
-    this.button('[data-screen-show-live]')?.addEventListener('click', () => this.show(nextStreamStep('url') ?? 'live'));
     this.button('[data-screen-extend]')?.addEventListener('click', () => void this.extend());
     this.button('[data-screen-stop]')?.addEventListener('click', () => void this.stop());
     this.button('[data-screen-retry]')?.addEventListener('click', () => void this.retry());
     this.button('[data-screen-stop-others]')?.addEventListener('click', () => void this.stopOthersAndStart());
+    this.button('[data-screen-preview-toggle]')?.addEventListener('click', () => this.togglePreview());
+    for (const mode of this.root.querySelectorAll<HTMLElement>('[data-screen-mode]')) {
+      mode.addEventListener('click', () => this.selectMode(mode));
+    }
     this.deps.onPageHide(() => this.stopForPageHide());
     this.show('idle');
   }
@@ -150,6 +149,7 @@ export class ScreenShareController {
       const media = await this.deps.getDisplayMedia(displayMediaConstraints(profile));
       run = this.registerStart(media, generation);
       if (!run) return;
+      this.setBusy('[data-screen-start]', true, 'labelStarting');
       configureCaptureAudioTracks(media, profile);
       await this.continueStart(run);
     } catch (error) {
@@ -175,6 +175,7 @@ export class ScreenShareController {
       const media = await this.deps.getDisplayMedia(displayMediaConstraints(profile));
       run = this.registerStart(media, generation);
       if (!run) return;
+      this.setBusy('[data-screen-start]', true, 'labelStarting');
       configureCaptureAudioTracks(run.capture.media, profile);
       const stopped = asStopLiveStreams(
         await this.deps.requestJson('/api/streams/stop-live/', {
@@ -201,6 +202,7 @@ export class ScreenShareController {
       if (run && this.activeStart === run) this.activeStart = null;
       this.releaseStartReservation(generation);
       this.setBusy('[data-screen-stop-others]', false, 'labelStopOthers');
+      this.setBusy('[data-screen-start]', false, 'labelStart');
       if (retry) retry.disabled = false;
     }
   }
@@ -217,9 +219,10 @@ export class ScreenShareController {
     this.setUrl(stream.streamUrl);
     this.setAudioStatus(stream.capture.media);
     this.preview(stream.capture.media);
+    this.expiresBarTotalSeconds = durationUntil(stream.extendExpiresAt, Date.parse(stream.startedAt));
     this.startTimers();
     stream.capture.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
-    if (started.ready) this.show('url');
+    if (started.ready) this.show('live');
     else this.showError(new StreamHealthError());
   }
 
@@ -335,7 +338,7 @@ export class ScreenShareController {
       if (!this.isActiveLive(live)) return;
       if (ready) {
         this.setUrl(live.streamUrl);
-        this.show('url');
+        this.show('live');
       } else {
         this.showError(new StreamHealthError());
       }
@@ -363,6 +366,7 @@ export class ScreenShareController {
       live.extendExpiresAt = response.extendExpiresAt;
       live.publishToken = response.publishToken;
       live.publisher.setPublishToken(response.publishToken);
+      this.expiresBarTotalSeconds = durationUntil(response.extendExpiresAt, this.deps.now());
       this.updateClock();
     } catch (error) {
       if (!this.stopping && this.live === live) this.handleRuntimeError(error);
@@ -404,6 +408,14 @@ export class ScreenShareController {
     this.text('[data-screen-expires]', formatDuration(remaining));
     const warning = this.root.querySelector<HTMLElement>('[data-screen-expiry-warning]');
     if (warning) warning.hidden = !isExpiryWarning(this.live.extendExpiresAt, now);
+    const expiresBar = this.root.querySelector<HTMLElement>('[data-screen-expires-bar]');
+    if (expiresBar) {
+      const width = this.expiresBarTotalSeconds === 0
+        ? 0
+        : Math.min(100, (remaining / this.expiresBarTotalSeconds) * 100);
+      expiresBar.style.width = `${width}%`;
+      expiresBar.dataset['warning'] = String(remaining <= EXPIRY_WARNING_SECONDS);
+    }
   }
 
   private handleStartError(error: unknown): void {
@@ -580,10 +592,13 @@ export class ScreenShareController {
     this.text('[data-screen-error-message]', this.messageFor(error));
     this.setButtonLabel('[data-screen-retry]', this.live ? 'labelReconnect' : 'labelRetry');
     const stopOthers = this.button('[data-screen-stop-others]');
+    const retry = this.button('[data-screen-retry]');
     if (stopOthers) {
-      stopOthers.hidden = !isStreamAlreadyLiveError(error);
+      const canStopOthers = isStreamAlreadyLiveError(error);
+      stopOthers.hidden = !canStopOthers;
       stopOthers.disabled = false;
       this.setButtonLabel('[data-screen-stop-others]', 'labelStopOthers');
+      if (retry) retry.hidden = canStopOthers;
     }
     this.show('error');
   }
@@ -610,12 +625,42 @@ export class ScreenShareController {
     for (const step of this.root.querySelectorAll<HTMLElement>('[data-screen-step]')) {
       step.hidden = step.dataset['screenStep'] !== phase;
     }
-    // 開始前（idle / login / error）は進捗を示す段階がないのでドットごと隠す。
-    const active = phase === 'url' ? '1' : phase === 'live' ? '2' : null;
-    const indicators = this.root.querySelector<HTMLElement>('[data-screen-indicators]');
-    if (indicators) indicators.hidden = active === null;
-    for (const indicator of this.root.querySelectorAll<HTMLElement>('[data-screen-indicator]')) {
-      indicator.dataset['active'] = indicator.dataset['screenIndicator'] === active ? 'true' : 'false';
+    for (const item of this.root.querySelectorAll<HTMLElement>('[data-screen-flow-item]')) {
+      const position = item.dataset['screenFlowItem'];
+      item.dataset['state'] = phase === 'live'
+        ? position === '1' ? 'done' : position === '2' ? 'current' : 'todo'
+        : position === '1' ? 'current' : 'todo';
+    }
+    if (phase === 'live') this.setPreviewOpen(true);
+  }
+
+  private togglePreview(): void {
+    const toggle = this.button('[data-screen-preview-toggle]');
+    if (!toggle) return;
+    this.setPreviewOpen(toggle.getAttribute('aria-expanded') !== 'true');
+  }
+
+  private setPreviewOpen(open: boolean): void {
+    const value = String(open);
+    const toggle = this.button('[data-screen-preview-toggle]');
+    if (toggle) toggle.setAttribute('aria-expanded', value);
+    for (const selector of [
+      '[data-screen-preview-body]',
+      '[data-screen-switch-track]',
+      '[data-screen-switch-knob]',
+    ]) {
+      const element = this.root.querySelector<HTMLElement>(selector);
+      if (element) element.dataset['open'] = value;
+    }
+  }
+
+  private selectMode(selected: HTMLElement): void {
+    // 表示のみ。実際の配信設定への反映は Issue #177 の検証結果を待つ。
+    for (const mode of this.root.querySelectorAll<HTMLElement>('[data-screen-mode]')) {
+      const checked = mode === selected;
+      mode.dataset['checked'] = String(checked);
+      const input = mode.querySelector<HTMLInputElement>('input');
+      if (input) input.checked = checked;
     }
   }
 
@@ -637,8 +682,14 @@ export class ScreenShareController {
   }
 
   private setAudioStatus(media: MediaStream): void {
-    const key = media.getAudioTracks().length > 0 ? 'msgAudioIncluded' : 'msgVideoOnly';
+    const hasAudio = media.getAudioTracks().length > 0;
+    const key = hasAudio ? 'msgAudioIncluded' : 'msgVideoOnly';
     this.text('[data-screen-audio-status]', this.message(key));
+    const chip = this.root.querySelector<HTMLElement>('[data-screen-audio-chip]');
+    if (chip) chip.dataset['audio'] = hasAudio ? 'on' : 'off';
+    const icon = this.root.querySelector<HTMLElement>('[data-screen-audio-icon]');
+    if (icon) icon.className = hasAudio ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
+    this.text('[data-screen-audio-label]', this.message(hasAudio ? 'audioOn' : 'audioOff'));
   }
 
   private setBusy(selector: string, busy: boolean, label: string): void {
@@ -754,4 +805,8 @@ function formatDuration(seconds: number): string {
   const minutes = Math.floor(rounded / 60);
   const remaining = String(rounded % 60).padStart(2, '0');
   return `${minutes}:${remaining}`;
+}
+
+function durationUntil(expiresAt: string, from: number): number {
+  return Math.max(0, (Date.parse(expiresAt) - from) / 1000);
 }

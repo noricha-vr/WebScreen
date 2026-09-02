@@ -119,6 +119,19 @@
   opacity: 0;
 }
 
+/* 画面共有のプレビューは配信を止めずに折りたたむ。 */
+[data-screen-preview-body] {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 260ms ease, opacity 200ms ease;
+}
+
+[data-screen-preview-body][data-open='true'] {
+  max-height: 2000px;
+  opacity: 1;
+}
+
 /*
  * 削除のインライン確認。confirm() を使わず、確認 UI を同じ場所に出し分ける。
  * 履歴の各行とプレビューページの両方で同じ規則を使う。
