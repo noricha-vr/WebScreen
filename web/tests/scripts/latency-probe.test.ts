@@ -40,6 +40,30 @@ function rasterize(timestampMs: number, cell = 20): { rgb: Uint8Array; width: nu
   return { rgb, width, height };
 }
 
+function rasterizeWide(timestampMs: number, cell = 40): { rgb: Uint8Array; width: number; height: number } {
+  const width = 1280, height = 720, x0 = Math.floor((width - BLOCK_GRID_SIZE * cell) / 2), y0 = Math.floor((height - BLOCK_GRID_SIZE * cell) / 2);
+  const rgb = new Uint8Array(width * height * 3).fill(20);
+  const grid = encodeBlockCode(timestampMs);
+  for (let y = 0; y < BLOCK_GRID_SIZE; y += 1) for (let x = 0; x < BLOCK_GRID_SIZE; x += 1) {
+    const color = grid[y]![x] ? 255 : 0;
+    for (let py = 0; py < cell; py += 1) for (let px = 0; px < cell; px += 1) {
+      const offset = ((y0 + y * cell + py) * width + x0 + x * cell + px) * 3;
+      rgb[offset] = color; rgb[offset + 1] = color; rgb[offset + 2] = color;
+    }
+  }
+  return { rgb, width, height };
+}
+
+function scaleNearest(frame: { rgb: Uint8Array; width: number; height: number }, width: number, height: number): { rgb: Uint8Array; width: number; height: number } {
+  const rgb = new Uint8Array(width * height * 3);
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const sourceX = Math.min(frame.width - 1, Math.floor(x * frame.width / width));
+    const sourceY = Math.min(frame.height - 1, Math.floor(y * frame.height / height));
+    rgb.set(frame.rgb.slice((sourceY * frame.width + sourceX) * 3, (sourceY * frame.width + sourceX + 1) * 3), (y * width + x) * 3);
+  }
+  return { rgb, width, height };
+}
+
 describe('latency block code', () => {
   test('48 bit時刻をchecksum付きで往復し、改ざんを拒否する', () => {
     const grid = encodeBlockCode(1_756_700_123_456);
@@ -51,6 +75,15 @@ describe('latency block code', () => {
   test('同期パターンを探索してRGB合成フレームから時刻を復号する', () => {
     const frame = rasterize(1_756_700_123_456);
     expect(decodeBlockCodeFrame(frame.rgb, frame.width, frame.height)).toBe(1_756_700_123_456);
+  });
+
+  test('960x540および640x360へ縮小してもブロックコードを復号する', () => {
+    const timestamp = 1_756_700_123_456;
+    const original = rasterizeWide(timestamp);
+    for (const [width, height] of [[960, 540], [640, 360]] as const) {
+      const frame = scaleNearest(original, width, height);
+      expect(decodeBlockCodeFrame(frame.rgb, frame.width, frame.height)).toBe(timestamp);
+    }
   });
 
   test('合成PCMの1kHzビープ立ち上がりを検出する', () => {
@@ -131,11 +164,12 @@ describe('latency probe CLI contract', () => {
   test('run/source/analyzeの凍結された形を検証する', () => {
     const run = parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'http://127.0.0.1:0/latency-source.html?tones=1']);
     expect(run.command).toBe('run');
-    expect(parseLatencyProbeArgs(['source', '--url', 'https://example.test/']).command).toBe('source');
+    expect(parseLatencyProbeArgs(['source', '--url', 'https://example.test/', '--scroll', '240'])).toMatchObject({ command: 'source', scrollPixelsPerSecond: 240 });
     expect(parseLatencyProbeArgs(['analyze', 'docs/tmp/latency/run']).command).toBe('analyze');
     expect(parseLatencyProbeArgs(['login']).command).toBe('login');
     const enabled = parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--notify-discord', '123456789012345', '--server-snap', 'relay-1.example']);
     expect(enabled).toMatchObject({ command: 'run', options: { notifyDiscordChannelId: '123456789012345', serverSnapHost: 'relay-1.example', player: null } });
+    expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--video-profile', 'realtime', '--max-bitrate', '1500000', '--scroll', '240'])).toMatchObject({ command: 'run', options: { videoProfile: 'realtime', maxBitrate: 1_500_000, scrollPixelsPerSecond: 240 } });
   });
 
   test('runの必須引数とplayer値をfail-closedする', () => {
@@ -143,5 +177,8 @@ describe('latency probe CLI contract', () => {
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--player', 'other'])).toThrow('win2022');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '0', '--source', 'https://example.test'])).toThrow('between 1 and 120');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--server-snap', '-host'])).toThrow('ssh host');
+    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--max-bitrate', '1500000'])).toThrow('only valid');
+    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--video-profile', 'realtime', '--max-bitrate', '999999'])).toThrow('1200000');
+    expect(() => parseLatencyProbeArgs(['source', '--url', 'https://example.test', '--scroll', '2001'])).toThrow('between 0 and 2000');
   });
 });

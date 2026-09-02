@@ -80,10 +80,14 @@ export function latencyFromSecondBoundary(observedAtMs: number): number {
 
 /** 最初の30秒と1分単位の集計をMarkdown表へ整形する。 */
 export function formatSummary(
-  outlet: readonly LatencySample[], player: readonly LatencySample[] | null, startedAtMs: number
+  outlet: readonly LatencySample[], player: readonly LatencySample[] | null, startedAtMs: number, sender: readonly SenderSample[] | null = null
 ): string {
   const sections = [formatSeries('RTSPT 出口', outlet, startedAtMs)];
   if (player) sections.push(formatSeries('VRChat プレイヤー', player, startedAtMs));
+  if (sender) {
+    // sender.csvはrun中の生counterを保存し、summaryは再集計可能な差分値だけを追加する。
+    sections.push(formatSenderSummary(sender));
+  }
   return ['# 遅延計測サマリー', '', ...sections].join('\n');
 }
 
@@ -135,3 +139,4 @@ function parseValue(value: string | undefined): number | null {
 function formatValue(value: number | null): string {
   return value === null ? '' : value.toFixed(3);
 }
+import { formatSenderSummary, type SenderSample } from './latency-probe-quality';

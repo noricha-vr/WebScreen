@@ -9,6 +9,7 @@ import {
   collectOutletGrabs, decodeDurationSummary, probeDimensionsFor, readPipeText, requirePipe, scaledProbeDimensions, startAudioProbe, type VideoDiagnostics,
 } from './latency-probe-observe';
 import { recordWindowsPlayer, type PlayerResult } from './latency-probe-player';
+import { captureSenderConfig, collectOutletQuality, collectSenderStats, parseSenderCsv, peerConnectionTrackerInitScript } from './latency-probe-quality';
 
 const SOURCE_TITLE = 'WebScreen Latency Source';
 const ACTIVE_FILE = resolve('..', 'docs', 'tmp', 'latency', '.active.json');
@@ -16,6 +17,10 @@ const SOURCE_FILE = Bun.file(new URL('./latency-source.html', import.meta.url));
 
 /** 実行時に固定する遅延ハーネスの引数。 */
 export interface RunOptions { minutes: number; source: string; player: 'win2022' | null; profileDir: string; outDir: string
+  videoProfile: 'quality' | 'realtime';
+  maxBitrate: number | null;
+  scrollPixelsPerSecond: number;
+  outletQualitySeconds: number;
   notifyDiscordChannelId: string | null;
   serverSnapHost: string | null;
 }
@@ -41,17 +46,21 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
   const outlet: LatencySample[] = [];
   let browser: import('@playwright/test').BrowserContext | null = null;
   let audio: Bun.Subprocess | null = null;
+  const measurementAbort = new AbortController();
   try {
     browser = await startChrome(options.profileDir);
+    await browser.addInitScript(peerConnectionTrackerInitScript());
     const sourcePage = browser.pages()[0] ?? await browser.newPage();
     state.sourcePage = sourcePage;
     await sourcePage.goto(sourceServer.url.href, { waitUntil: 'domcontentloaded' });
     const sharingPage = await browser.newPage();
     attachBrowserLog(sharingPage);
-    await sharingPage.goto('https://web-screen.net/ja/screen-share/', { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await sharingPage.goto(screenShareUrl(options), { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const streamId = await startScreenShare(sharingPage, options.profileDir);
+    await writeFile(join(options.outDir, 'sender-config.json'), JSON.stringify(await captureSenderConfig(sharingPage), null, 2) + '\n');
     const target = resolveSourceUrl(options.source, sourceServer.url);
     if (target !== sourceServer.url.href) await sourcePage.goto(target, { waitUntil: 'domcontentloaded' });
+    await applyAutoScroll(sourcePage, target, sourceServer.url.href, options.scrollPixelsPerSecond);
     await sourcePage.bringToFront();
     const rtspUrl = `rtsp://webscreen.tv/live/${streamId}`;
     // VRChat へ貼る URL を人に渡す経路（クリップボードと固定ファイル）。run はこの後ブロックするため、
@@ -73,14 +82,16 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     state.sourceUrl = target;
     startedAtMs = Date.now();
     const until = startedAtMs + options.minutes * 60_000;
+    const senderPump = collectSenderStats(sharingPage, options.outDir, until, measurementAbort.signal);
+    const outletQualityPump = collectOutletQuality(rtspUrl, options.outDir, startedAtMs, until, options.outletQualitySeconds, measurementAbort.signal);
     const diagnostics: VideoDiagnostics = { firstDecoded: null, lastDecoded: null, lastFailure: null, decodeLog: [], lastLoggedFailureAtMs: null, decodeCount: 0, decodeMsTotal: 0, decodeMsMax: 0 };
     const serverSnap = options.serverSnapHost
       ? captureServerSnapshots(options.serverSnapHost, streamId, options.outDir, startedAtMs, snapshotScheduleSeconds(options.minutes)).catch((error) => { console.warn(`サーバー内スナップショットに失敗しました: ${String(error)}`); return []; })
       : Promise.resolve([]);
     const playerPump = options.player ? recordWindowsPlayer(options.outDir, until).catch((error) => ({ samples: [], warning: `Windows計測は失敗しました: ${String(error)}`, diagnostics: String(error) } satisfies PlayerResult)) : Promise.resolve(null);
-    const [, capturedAudio, player] = await Promise.all([
+    const [, capturedAudio, player, senderResult, outletQualityResult] = await Promise.all([
       collectOutletGrabs(rtspUrl, until, outlet, diagnostics, join(options.outDir, 'frames')),
-      collectAudio(requirePipe(audio.stdout, 'audio'), until), playerPump,
+      collectAudio(requirePipe(audio.stdout, 'audio'), until), playerPump, senderPump, outletQualityPump,
     ]);
     outlet.push(...audioSamplesFromCapture(capturedAudio, outlet));
     const audioExitBeforeStop = audio.exitCode;
@@ -94,8 +105,10 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
       audioExitBeforeStop !== null && audioExitBeforeStop !== 0 ? `audio ffmpeg exit=${audioExitBeforeStop}\n${audioStderr}` : null,
     ].filter((failure): failure is string => failure !== null);
     if (failures.length) throw new Error(`出口ffmpegが計測終了前に失敗しました。outlet-ffmpeg.logを保存しました。\n${failures.join('\n')}`);
-    await persistResults(options.outDir, outlet, startedAtMs, player);
+    await persistResults(options.outDir, outlet, startedAtMs, player, senderResult.samples);
+    if (senderResult.error || outletQualityResult.error) throw new Error([senderResult.error, outletQualityResult.error].filter(Boolean).join('\n'));
   } finally {
+    measurementAbort.abort();
     audio?.kill();
     await Promise.allSettled([
       browser?.close(),
@@ -128,9 +141,9 @@ export async function loginProfile(profileDir: string, timeoutMs = 8 * 60_000): 
 }
 
 /** 動作中ハーネスの共有済みタブを指定URLへ遷移する。 */
-export async function switchSource(url: string): Promise<void> {
+export async function switchSource(url: string, scrollPixelsPerSecond = 0): Promise<void> {
   const active = JSON.parse(await readFile(ACTIVE_FILE, 'utf8')) as ActiveController;
-  const response = await fetch(new URL('/source', active.endpoint), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+  const response = await fetch(new URL('/source', active.endpoint), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, scrollPixelsPerSecond }) });
   if (!response.ok) throw new Error(`source switch failed: ${await response.text()}`);
 }
 
@@ -145,10 +158,12 @@ export async function analyzeDirectory(directory: string): Promise<void> {
   const video = outlet.filter((sample) => sample.videoLatencyMs !== null);
   const audio = await analyzeSavedOutletAudio(directory, video);
   if (audio) await writeFile(join(directory, 'outlet-audio.csv'), formatLatencyCsv(audio, startedAtMs));
-  await writeFile(join(directory, 'summary.md'), formatSummary([...video, ...(audio ?? outlet.filter((sample) => sample.audioLatencyMs !== null || sample.audioLatencyPhaseMs !== null))], player, startedAtMs));
+  const senderPath = join(directory, 'sender.csv');
+  const sender = await Bun.file(senderPath).exists() ? parseSenderCsv(await readFile(senderPath, 'utf8')) : null;
+  await writeFile(join(directory, 'summary.md'), formatSummary([...video, ...(audio ?? outlet.filter((sample) => sample.audioLatencyMs !== null || sample.audioLatencyPhaseMs !== null))], player, startedAtMs, sender));
 }
 
-async function persistResults(outDir: string, outlet: LatencySample[], startedAtMs: number, player: PlayerResult | null): Promise<void> {
+async function persistResults(outDir: string, outlet: LatencySample[], startedAtMs: number, player: PlayerResult | null, sender: Parameters<typeof formatSummary>[3]): Promise<void> {
   await writeFile(join(outDir, 'outlet.csv'), formatLatencyCsv(outlet, startedAtMs));
   if (player) {
     await writeFile(join(outDir, 'player.csv'), formatLatencyCsv(player.samples, startedAtMs));
@@ -156,7 +171,7 @@ async function persistResults(outDir: string, outlet: LatencySample[], startedAt
     if (player.warning) await writeFile(join(outDir, 'player-error.md'), `${player.warning}\n\n${player.diagnostics}`);
   }
   const playerWarning = player?.warning ? `\n## プレイヤー側\n\n- ${player.warning}\n` : '';
-  await writeFile(join(outDir, 'summary.md'), formatSummary(outlet, player?.samples ?? null, startedAtMs) + playerWarning);
+  await writeFile(join(outDir, 'summary.md'), formatSummary(outlet, player?.samples ?? null, startedAtMs, sender) + playerWarning);
 }
 
 function startSourceServer(): ReturnType<typeof Bun.serve> {
@@ -170,11 +185,13 @@ function startControllerServer(state: ControllerState): ReturnType<typeof Bun.se
   return Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
     const url = new URL(request.url);
     if (request.method !== 'POST' || url.pathname !== '/source') return new Response('Not found', { status: 404 });
-    const body = await request.json().catch(() => null) as { url?: unknown } | null;
+    const body = await request.json().catch(() => null) as { url?: unknown; scrollPixelsPerSecond?: unknown } | null;
     if (!body || typeof body.url !== 'string') return new Response('url is required', { status: 400 });
     const target = resolveSourceUrl(body.url, new URL(state.sourceServerUrl));
     if (!state.sourcePage) return new Response('run is not ready', { status: 409 });
-    await state.sourcePage.goto(target, { waitUntil: 'domcontentloaded' }); state.sourceUrl = target;
+    if (typeof body.scrollPixelsPerSecond !== 'number' || !Number.isInteger(body.scrollPixelsPerSecond) || body.scrollPixelsPerSecond < 0 || body.scrollPixelsPerSecond > 2_000) return new Response('scrollPixelsPerSecond must be an integer between 0 and 2000', { status: 400 });
+    await state.sourcePage.goto(target, { waitUntil: 'domcontentloaded' });
+    await applyAutoScroll(state.sourcePage, target, state.sourceServerUrl, body.scrollPixelsPerSecond); state.sourceUrl = target;
     return Response.json({ ok: true, sourceUrl: target });
   } });
 }
@@ -219,6 +236,32 @@ async function startScreenShare(page: import('@playwright/test').Page, profileDi
 }
 
 function resolveSourceUrl(value: string, sourceServer: URL): string { const parsed = new URL(value); if (parsed.hostname === '127.0.0.1' && parsed.port === '0') parsed.port = sourceServer.port; return parsed.href; }
+function screenShareUrl(options: RunOptions): string {
+  if (options.videoProfile === 'quality') return 'https://web-screen.net/ja/screen-share/';
+  const url = new URL('https://web-screen.net/ja/screen-share/');
+  url.searchParams.set('video-profile', 'realtime');
+  url.searchParams.set('video-max-bitrate', String(options.maxBitrate));
+  return url.href;
+}
+async function applyAutoScroll(page: import('@playwright/test').Page, target: string, sourceServerUrl: string, pixelsPerSecond: number): Promise<void> {
+  const source = new URL(sourceServerUrl);
+  const url = new URL(target);
+  if (url.origin === source.origin) return;
+  await page.evaluate((speed) => {
+    const host = window as Window & { __webscreenHarnessScrollFrame?: number };
+    if (host.__webscreenHarnessScrollFrame !== undefined) cancelAnimationFrame(host.__webscreenHarnessScrollFrame);
+    if (speed === 0) return;
+    let direction = 1, previous = performance.now();
+    const tick = (now: number): void => {
+      const maximum = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+      if (scrollY >= maximum - 0.5) direction = -1;
+      if (scrollY <= 0.5) direction = 1;
+      scrollTo(0, Math.min(maximum, Math.max(0, scrollY + direction * speed * (now - previous) / 1_000)));
+      previous = now; host.__webscreenHarnessScrollFrame = requestAnimationFrame(tick);
+    };
+    host.__webscreenHarnessScrollFrame = requestAnimationFrame(tick);
+  }, pixelsPerSecond);
+}
 function rejectRepositoryProfile(profileDir: string): void {
   const repository = resolve('..');
   const candidate = resolve(profileDir);

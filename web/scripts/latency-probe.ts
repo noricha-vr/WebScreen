@@ -13,8 +13,8 @@ WebScreen配信を実Mac Chromeから開始し、RTSPT出口と任意のWindows�
 Subcommands:
   login [--profile-dir PATH]
   player-check [--seconds N] [--out DIR]
-  run --minutes N --source URL [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
-  source --url URL
+  run --minutes N --source URL [--video-profile quality|realtime] [--max-bitrate 1200000|1500000|2000000] [--scroll PX_PER_SECOND] [--outlet-quality-seconds N] [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
+  source --url URL [--scroll PX_PER_SECOND]
   analyze DIR
 
 run options:
@@ -25,6 +25,11 @@ run options:
   --profile-dir PATH Chrome永続プロファイル（既定: ~/.webscreen-harness/chrome-profile）
   --out DIR          出力先（既定: docs/tmp/latency/<UTC timestamp>）
   --server-snap HOST 配信サーバーへ SSH し、run 中に ingress / egress のフレームを撮って relay 前後の遅延を server-snap.md に出す
+  --video-profile PROFILE quality（既定）または realtime。realtime はproduction画面に設定queryを渡す
+  --max-bitrate BPS  realtime 時だけ有効。1200000 / 1500000 / 2000000 のいずれか
+  --scroll PX_PER_SECOND 外部共有ページを指定速度で往復スクロール（0〜2000、既定0）
+  --outlet-quality-seconds N
+                     出口画質の連続ffmpeg測定窓（5〜120秒、既定20）。遅延用の単発取得とは別系統
   --notify-discord CHANNEL_ID
                      配信 URL を Discord の指定チャンネルへ投稿する（VRChat 側の PC で貼るため）
 
@@ -36,7 +41,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
   | { command: 'run'; options: RunOptions }
   | { command: 'login'; profileDir: string }
   | { command: 'player-check'; seconds: number; outDir: string }
-  | { command: 'source'; url: string }
+  | { command: 'source'; url: string; scrollPixelsPerSecond: number }
   | { command: 'analyze'; directory: string } {
   const [command, ...rest] = argv;
   if (!command || command === '--help' || command === '-h' || command === 'help') return { command: 'help' };
@@ -57,20 +62,28 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     return { command, profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile') };
   }
   if (command === 'source') {
-    rejectUnknown(values, ['url']);
-    return { command, url: requiredUrl(values.url, '--url') };
+    rejectUnknown(values, ['url', 'scroll']);
+    return { command, url: requiredUrl(values.url, '--url'), scrollPixelsPerSecond: parseScroll(values.scroll) };
   }
   if (command !== 'run') throw new Error(`unknown subcommand: ${command}`);
-  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap']);
+  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap', 'video-profile', 'max-bitrate', 'scroll', 'outlet-quality-seconds']);
   if (values['server-snap'] !== undefined && !isValidSshHost(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
   if (values['notify-discord'] !== undefined && !/^\d{15,25}$/.test(values['notify-discord'])) throw new Error('--notify-discord must be a Discord channel id');
   const minutes = Number(values.minutes);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) throw new Error('--minutes must be an integer between 1 and 120');
   if (values.player !== undefined && values.player !== 'win2022') throw new Error('--player must be win2022');
+  const videoProfile = values['video-profile'] ?? 'quality';
+  if (videoProfile !== 'quality' && videoProfile !== 'realtime') throw new Error('--video-profile must be quality or realtime');
+  if (videoProfile === 'quality' && values['max-bitrate'] !== undefined) throw new Error('--max-bitrate is only valid with --video-profile realtime');
+  const maxBitrate = values['max-bitrate'] === undefined ? (videoProfile === 'realtime' ? 1_500_000 : null) : Number(values['max-bitrate']);
+  if (maxBitrate !== null && ![1_200_000, 1_500_000, 2_000_000].includes(maxBitrate)) throw new Error('--max-bitrate must be 1200000, 1500000, or 2000000');
+  const outletQualitySeconds = values['outlet-quality-seconds'] === undefined ? 20 : Number(values['outlet-quality-seconds']);
+  if (!Number.isInteger(outletQualitySeconds) || outletQualitySeconds < 5 || outletQualitySeconds > 120) throw new Error('--outlet-quality-seconds must be an integer between 5 and 120');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   return {
     command, options: {
       minutes, source: requiredUrl(values.source, '--source'), player: values.player === 'win2022' ? 'win2022' : null,
+      videoProfile, maxBitrate, scrollPixelsPerSecond: parseScroll(values.scroll), outletQualitySeconds,
       profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile'),
       notifyDiscordChannelId: values['notify-discord'] ?? null,
       serverSnapHost: values['server-snap'] ?? null,
@@ -102,7 +115,7 @@ async function main(): Promise<void> {
     } else if (parsed.command === 'login') {
       await loginProfile(parsed.profileDir);
     } else if (parsed.command === 'source') {
-      await switchSource(parsed.url);
+      await switchSource(parsed.url, parsed.scrollPixelsPerSecond);
     } else {
       await analyzeDirectory(parsed.directory);
     }
@@ -133,6 +146,13 @@ function rejectUnknown(values: Record<string, string | undefined>, names: readon
 function requiredUrl(value: string | undefined, option: string): string {
   if (!value) throw new Error(`${option} is required`);
   try { return new URL(value).href; } catch { throw new Error(`${option} must be an absolute URL`); }
+}
+
+function parseScroll(value: string | undefined): number {
+  if (value === undefined) return 0;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 2_000) throw new Error('--scroll must be an integer between 0 and 2000');
+  return parsed;
 }
 
 if (import.meta.main) await main();

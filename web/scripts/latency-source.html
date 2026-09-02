@@ -14,6 +14,7 @@
   const tickMs = Math.min(1000, Math.max(20, Number(new URLSearchParams(location.search).get('tick')) || 250));
   const GRID = 16;
   const RESERVED = new Set(['1,1', '14,1', '1,14', '14,14']);
+  const heavy = new URLSearchParams(location.search).get('load') === 'heavy';
 
   function checksum(timestamp) {
     let value = BigInt(timestamp), sum = 0xa7;
@@ -50,7 +51,10 @@
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     const now = Date.now(), cell = Math.max(24, Math.floor(Math.min(innerWidth, innerHeight) * 0.038));
     const size = cell * GRID, x = Math.round((innerWidth - size) / 2), y = Math.round((innerHeight - size) / 2 + 42);
-    context.fillStyle = '#101827'; context.fillRect(0, 0, innerWidth, innerHeight);
+    if (heavy) drawHeavyBackground(now);
+    else { context.fillStyle = '#101827'; context.fillRect(0, 0, innerWidth, innerHeight); }
+    // heavy素材でも復号用格子を背景から隔離する。縮小後も同期枠の白黒を保つため余白を広く取る。
+    context.fillStyle = heavy ? 'rgba(8, 12, 22, 0.94)' : '#101827'; context.fillRect(x - cell * 1.2, y - cell * 2.1, size + cell * 2.4, size + cell * 3.3);
     context.fillStyle = '#ffffff'; context.font = `700 ${Math.max(46, cell * 1.45)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
     context.textAlign = 'center'; context.fillText(String(now), innerWidth / 2, y - cell * 0.7);
     const cells = code(now);
@@ -58,6 +62,30 @@
       context.fillStyle = cells[row][column] ? '#fff' : '#000';
       context.fillRect(x + column * cell, y + row * cell, cell, cell);
     }
+    if (heavy) drawSyntheticCursor(now, x, y, size, cell);
+  }
+  function drawHeavyBackground(now) {
+    const width = innerWidth, height = innerHeight;
+    const gradient = context.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#0c2742'); gradient.addColorStop(0.48, '#a74f2f'); gradient.addColorStop(1, '#172c20');
+    context.fillStyle = gradient; context.fillRect(0, 0, width, height);
+    const offset = (now / 14) % 96;
+    for (let y = -96; y < height + 96; y += 24) for (let x = -96; x < width + 96; x += 24) {
+      const wave = Math.sin((x + offset) * 0.071) + Math.cos((y - offset) * 0.053);
+      context.fillStyle = `hsla(${(x * 3 + y * 5 + now / 30) % 360},65%,${48 + wave * 12}%,0.46)`;
+      context.fillRect(x + offset, y + Math.sin((x + now / 12) * 0.02) * 22, 27, 27);
+    }
+    for (let band = 0; band < 7; band += 1) {
+      context.fillStyle = `rgba(255,255,255,${0.05 + band * 0.01})`;
+      context.fillRect(((now / 4 + band * 211) % (width + 340)) - 170, 0, 120, height);
+    }
+  }
+  function drawSyntheticCursor(now, codeX, codeY, codeSize, cell) {
+    const safe = { left: codeX - cell * 1.2, top: codeY - cell * 2.1, right: codeX + codeSize + cell * 1.2, bottom: codeY + codeSize + cell * 1.2 };
+    let x = ((now / 6) % (innerWidth + 80)) - 40, y = ((now / 9) % (innerHeight + 80)) - 40;
+    if (x > safe.left - 28 && x < safe.right && y > safe.top - 28 && y < safe.bottom) { x = safe.right + 36; y = safe.bottom + 36; }
+    context.save(); context.translate(x, y); context.fillStyle = '#fff'; context.strokeStyle = '#000'; context.lineWidth = 2;
+    context.beginPath(); context.moveTo(0, 0); context.lineTo(0, 27); context.lineTo(7, 20); context.lineTo(13, 30); context.lineTo(18, 27); context.lineTo(12, 17); context.lineTo(22, 17); context.closePath(); context.fill(); context.stroke(); context.restore();
   }
   function audio() {
     const audioContext = new AudioContext();

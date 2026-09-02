@@ -2,7 +2,7 @@
 
 ## `latency-probe.ts`
 
-実Mac Chromeの画面共有からRTSPT出口を時系列計測する遅延ハーネス。使い方・前提・既知の限界は [配信遅延ハーネス](../../docs/streaming/latency-harness.md) を参照。
+実Mac Chromeの画面共有からRTSPT出口の遅延を単発取得で計測しつつ、送出側WebRTC統計と出口のfps・解像度・freeze・実効ビットレートを別系統で保存するA/Bハーネス。`--video-profile quality|realtime`、realtime時の`--max-bitrate`、外部ページの`--scroll`に対応する。使い方・前提・既知の限界は [配信遅延ハーネス](../../docs/streaming/latency-harness.md) を参照。
 
 ## `benchmark-screen-share-fps.ts`
 
