@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
-import { captureServerSnapshots } from './latency-probe-server-snap';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { captureServerSnapshots, snapshotScheduleSeconds } from './latency-probe-server-snap';
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, relative, resolve } from 'node:path';
 
 import { formatLatencyCsv, formatSummary, type LatencySample } from './latency-probe-analysis';
 import {
@@ -28,8 +28,10 @@ function browserLogTail(): string { return browserLog.length ? `\nbrowser consol
 
 /** 実Chromeの画面共有、出口プローブ、出力保存を同じcleanup境界で実行する。 */
 export async function runLatencyProbe(options: RunOptions): Promise<void> {
+  rejectRepositoryProfile(options.profileDir);
   requireCommands(options.player);
-  await mkdir(options.outDir, { recursive: true });
+  await mkdir(options.outDir, { recursive: true, mode: 0o700 });
+  await chmod(options.outDir, 0o700);
   const sourceServer = startSourceServer();
   const state: ControllerState = { sourcePage: null, sourceUrl: sourceServer.url.href, sourceServerUrl: sourceServer.url.href };
   const controllerServer = startControllerServer(state);
@@ -73,21 +75,21 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     const until = startedAtMs + options.minutes * 60_000;
     const diagnostics: VideoDiagnostics = { firstDecoded: null, lastDecoded: null, lastFailure: null, decodeLog: [], lastLoggedFailureAtMs: null, decodeCount: 0, decodeMsTotal: 0, decodeMsMax: 0 };
     const serverSnap = options.serverSnapHost
-      ? captureServerSnapshots(options.serverSnapHost, streamId, options.outDir, startedAtMs, [20, 50, 80]).catch((error) => { console.warn(`サーバー内スナップショットに失敗しました: ${String(error)}`); return []; })
+      ? captureServerSnapshots(options.serverSnapHost, streamId, options.outDir, startedAtMs, snapshotScheduleSeconds(options.minutes)).catch((error) => { console.warn(`サーバー内スナップショットに失敗しました: ${String(error)}`); return []; })
       : Promise.resolve([]);
     const playerPump = options.player ? recordWindowsPlayer(options.outDir, until).catch((error) => ({ samples: [], warning: `Windows計測は失敗しました: ${String(error)}`, diagnostics: String(error) } satisfies PlayerResult)) : Promise.resolve(null);
     const [, capturedAudio, player] = await Promise.all([
       collectOutletGrabs(rtspUrl, until, outlet, diagnostics, join(options.outDir, 'frames')),
       collectAudio(requirePipe(audio.stdout, 'audio'), until), playerPump,
     ]);
-    outlet.push(...audioSamplesFromCapture(capturedAudio));
+    outlet.push(...audioSamplesFromCapture(capturedAudio, outlet));
     const audioExitBeforeStop = audio.exitCode;
     if (audioExitBeforeStop === null) audio.kill();
     await serverSnap;
     await audio.exited;
     const [videoStderr, audioStderr] = await Promise.all([videoLog, audioLog]);
     diagnostics.decodeLog.push(`${new Date().toISOString()} ${decodeDurationSummary(diagnostics)}`);
-    await persistOutletArtifacts(options.outDir, startedAtMs, capturedAudio, dimensions, diagnostics, videoStderr, audioStderr);
+    await persistOutletArtifacts(options.outDir, startedAtMs, capturedAudio, outlet, dimensions, diagnostics, videoStderr, audioStderr);
     const failures = [
       audioExitBeforeStop !== null && audioExitBeforeStop !== 0 ? `audio ffmpeg exit=${audioExitBeforeStop}\n${audioStderr}` : null,
     ].filter((failure): failure is string => failure !== null);
@@ -95,15 +97,20 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     await persistResults(options.outDir, outlet, startedAtMs, player);
   } finally {
     audio?.kill();
-    await browser?.close();
-    controllerServer.stop(true); sourceServer.stop(true);
-    await rm(ACTIVE_FILE, { force: true });
+    await Promise.allSettled([
+      browser?.close(),
+      Promise.resolve().then(() => controllerServer.stop(true)),
+      Promise.resolve().then(() => sourceServer.stop(true)),
+      rm(ACTIVE_FILE, { force: true }),
+    ]);
   }
 }
 
 /** ハーネスが起動するChromeに手動ログインし、プロファイルへCookieを残す。 */
 export async function loginProfile(profileDir: string, timeoutMs = 8 * 60_000): Promise<void> {
-  await mkdir(profileDir, { recursive: true });
+  rejectRepositoryProfile(profileDir);
+  await mkdir(profileDir, { recursive: true, mode: 0o700 });
+  await chmod(profileDir, 0o700);
   const browser = await startChrome(profileDir);
   try {
     const page = browser.pages()[0] ?? await browser.newPage();
@@ -135,9 +142,10 @@ export async function analyzeDirectory(directory: string): Promise<void> {
   const playerPath = join(directory, 'player.csv');
   const player = await Bun.file(playerPath).exists() ? parseLatencyCsv(await readFile(playerPath, 'utf8')) : null;
   const startedAtMs = inferLatencyStartedAtMs(outletText) ?? Math.min(...outlet.map((sample) => sample.observedAtMs));
-  const audio = await analyzeSavedOutletAudio(directory);
+  const video = outlet.filter((sample) => sample.videoLatencyMs !== null);
+  const audio = await analyzeSavedOutletAudio(directory, video);
   if (audio) await writeFile(join(directory, 'outlet-audio.csv'), formatLatencyCsv(audio, startedAtMs));
-  await writeFile(join(directory, 'summary.md'), formatSummary(outlet, player, startedAtMs));
+  await writeFile(join(directory, 'summary.md'), formatSummary([...video, ...(audio ?? outlet.filter((sample) => sample.audioLatencyMs !== null || sample.audioLatencyPhaseMs !== null))], player, startedAtMs));
 }
 
 async function persistResults(outDir: string, outlet: LatencySample[], startedAtMs: number, player: PlayerResult | null): Promise<void> {
@@ -211,6 +219,12 @@ async function startScreenShare(page: import('@playwright/test').Page, profileDi
 }
 
 function resolveSourceUrl(value: string, sourceServer: URL): string { const parsed = new URL(value); if (parsed.hostname === '127.0.0.1' && parsed.port === '0') parsed.port = sourceServer.port; return parsed.href; }
+function rejectRepositoryProfile(profileDir: string): void {
+  const repository = resolve('..');
+  const candidate = resolve(profileDir);
+  const path = relative(repository, candidate);
+  if (path === '' || (path !== '..' && !path.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) && !path.startsWith('..'))) throw new Error('--profile-dir must not be inside the repository');
+}
 function requireCommands(player: RunOptions['player']): void { const required = player ? ['ffmpeg', 'ffprobe', 'ssh'] : ['ffmpeg', 'ffprobe']; const missing = required.filter((command) => Bun.which(command) === null); if (missing.length) throw new Error(`必要なコマンドがありません: ${missing.join(', ')}。macOSでは brew install ffmpeg、sshはXcode Command Line Toolsを確認してください。`); }
 
 const DISCORD_NOTIFY_SCRIPT = `${homedir()}/.claude/skills/discord-mention/scripts/notify-discord.ts`;
@@ -220,6 +234,7 @@ async function notifyDiscord(channelId: string, viewerUrl: string, minutes: numb
   const message = `遅延計測の配信を開始しました（${minutes} 分）。VRChat に貼ってください:\n${viewerUrl}`;
   const child = Bun.spawn(['bun', DISCORD_NOTIFY_SCRIPT, '--message', message, '--target', 'nori', '--channel-id', channelId, '--project-dir', process.cwd()], { stdout: 'pipe', stderr: 'pipe' });
   const stderr = await readPipeText(requirePipe(child.stderr, 'discord notify stderr'));
-  if (await child.exited !== 0) console.warn(`Discord 通知に失敗しました: ${stderr.trim()}`);
+  const exit = await Promise.race([child.exited, Bun.sleep(10_000).then(() => { child.kill(); return -1; })]);
+  if (exit !== 0) console.warn(`Discord 通知に失敗またはタイムアウトしました: ${stderr.trim()}`);
   else console.info(`Discord へ配信 URL を投稿しました（channel ${channelId}）`);
 }

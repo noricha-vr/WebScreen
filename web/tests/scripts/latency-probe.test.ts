@@ -17,12 +17,13 @@ import {
   decodeBlockCode,
   decodeBlockCodeFrame,
   detectBeepOnsets,
+  detectIdentifiedBeeps,
   decodeMonoWav,
   encodeBlockCode,
   encodeMonoWav,
 } from '../../scripts/latency-probe-codec';
 import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
-import { shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
+import { resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
 
 function rasterize(timestampMs: number, cell = 20): { rgb: Uint8Array; width: number; height: number } {
   const width = BLOCK_GRID_SIZE * cell + 40;
@@ -59,6 +60,21 @@ describe('latency block code', () => {
     expect(detectBeepOnsets(samples, 48_000)[0]).toBeLessThanOrEqual(1_440);
   });
 
+  test('合成PCMの秒識別ビープを8帯域から復号する', () => {
+    const samples = new Float32Array(48_000);
+    for (let index = 12_000; index < 14_400; index += 1) samples[index] = Math.sin(2 * Math.PI * 1_100 * index / 48_000) * 0.2;
+    const detected = detectIdentifiedBeeps(samples, 48_000)[0]!;
+    expect(detected.secondMod8).toBe(5);
+    expect(detected.onset).toBeGreaterThanOrEqual(11_040);
+    expect(detected.onset).toBeLessThanOrEqual(12_480);
+  });
+
+  test('映像近接標本で8秒内の音声送出秒を絶対遅延へ対応付ける', () => {
+    const observed = 8_005_300;
+    expect(resolveAbsoluteAudioLatency(observed, 4, [{ observedAtMs: observed - 400, videoLatencyMs: 1_200, audioLatencyMs: null }])).toBe(1_300);
+    expect(resolveAbsoluteAudioLatency(observed, 0, [])).toBeNull();
+  });
+
   test('バンドパスは1kHzを通し、WAV往復後もビープを検出する', () => {
     const samples = new Float32Array(4_800);
     for (let index = 1_200; index < 3_600; index += 1) samples[index] = Math.sin(2 * Math.PI * 1_000 * index / 48_000) * 0.25;
@@ -88,7 +104,7 @@ describe('latency CSV analysis', () => {
   ];
 
   test('CSVを往復し、median/p95と最初の1秒未満を集計する', () => {
-    expect(parseLatencyCsv(formatLatencyCsv(samples, startedAtMs))).toEqual(samples);
+    expect(parseLatencyCsv(formatLatencyCsv(samples, startedAtMs))).toEqual(samples.map((sample) => ({ ...sample, audioLatencyPhaseMs: null })));
     expect(inferLatencyStartedAtMs(formatLatencyCsv(samples, startedAtMs))).toBe(startedAtMs);
     expect(summarizeLatency(samples)).toEqual({ count: 3, medianMs: 900, p95Ms: 1_200 });
     expect(firstBelowLatency(samples, startedAtMs)).toBe(31);
@@ -107,7 +123,7 @@ describe('latency CSV analysis', () => {
       { observedAtMs: startedAtMs + 1_000, videoLatencyMs: 600, audioLatencyMs: null },
       { observedAtMs: startedAtMs + 1_120, videoLatencyMs: null, audioLatencyMs: 750 },
     ], null, startedAtMs);
-    expect(summary).toContain('A/V 差（audio - video、近接標本）: 150.0 ms');
+    expect(summary).toContain('A/V 差（audio - video、絶対値を復元できた近接標本）: 150.0 ms');
   });
 });
 
@@ -117,10 +133,15 @@ describe('latency probe CLI contract', () => {
     expect(run.command).toBe('run');
     expect(parseLatencyProbeArgs(['source', '--url', 'https://example.test/']).command).toBe('source');
     expect(parseLatencyProbeArgs(['analyze', 'docs/tmp/latency/run']).command).toBe('analyze');
+    expect(parseLatencyProbeArgs(['login']).command).toBe('login');
+    const enabled = parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--notify-discord', '123456789012345', '--server-snap', 'relay-1.example']);
+    expect(enabled).toMatchObject({ command: 'run', options: { notifyDiscordChannelId: '123456789012345', serverSnapHost: 'relay-1.example', player: null } });
   });
 
   test('runの必須引数とplayer値をfail-closedする', () => {
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2'])).toThrow('--source is required');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--player', 'other'])).toThrow('win2022');
+    expect(() => parseLatencyProbeArgs(['run', '--minutes', '0', '--source', 'https://example.test'])).toThrow('between 1 and 120');
+    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--server-snap', '-host'])).toThrow('ssh host');
   });
 });

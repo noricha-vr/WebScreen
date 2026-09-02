@@ -69,7 +69,8 @@
       const leadMs = 100;
       setTimeout(() => {
         if (audioContext.currentTime >= startAt) { scheduleBeep(); return; }
-        const oscillator = audioContext.createOscillator(); oscillator.frequency.value = 1000;
+        // 秒の 8 秒剰余を周波数に符号化する。受信側は 8 帯域を照合し、映像近接標本と組み合わせて絶対遅延を復元する。
+        const oscillator = audioContext.createOscillator(); oscillator.frequency.value = 600 + 100 * ((nextBoundaryMs / 1000) % 8);
         oscillator.connect(gain); oscillator.start(startAt); oscillator.stop(startAt + 0.05);
         scheduleBeep();
       }, Math.max(0, (startAt - audioContext.currentTime) * 1000 - leadMs));

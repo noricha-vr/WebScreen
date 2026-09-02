@@ -146,6 +146,34 @@ export function detectBeepOnsets(samples: Float32Array, sampleRate: number): num
   return onsets;
 }
 
+/** 秒識別ビープの検出結果。secondMod8 は送出UTC秒の 8 秒剰余である。 */
+export interface IdentifiedBeep { onset: number; secondMod8: number }
+
+/** 600〜1300 Hz の8帯域から、到着した秒識別ビープを復元する。 */
+export function detectIdentifiedBeeps(samples: Float32Array, sampleRate: number): IdentifiedBeep[] {
+  if (!Number.isFinite(sampleRate) || sampleRate < 4_000) throw new Error('sampleRate must be at least 4000');
+  const window = Math.max(32, Math.round(sampleRate * 0.05));
+  const hop = Math.max(1, Math.round(sampleRate * 0.01));
+  const energies: Array<{ start: number; bands: number[]; energy: number }> = [];
+  for (let start = 0; start + window <= samples.length; start += hop) {
+    const bands = Array.from({ length: 8 }, (_, secondMod8) => toneEnergy(samples, start, window, sampleRate, 600 + 100 * secondMod8));
+    energies.push({ start, bands, energy: Math.max(...bands) });
+  }
+  if (energies.length === 0) return [];
+  const sorted = energies.map((item) => item.energy).sort((left, right) => left - right);
+  const noiseFloor = sorted[Math.floor((sorted.length - 1) * 0.2)]!;
+  const threshold = Math.max(noiseFloor * 8, noiseFloor + 0.000_001);
+  const result: IdentifiedBeep[] = [];
+  let active = false;
+  for (const item of energies) {
+    const secondMod8 = strongestBand(item.bands);
+    const isTone = item.energy > threshold;
+    if (isTone && !active && secondMod8 !== null) result.push({ onset: item.start + Math.floor(window / 2), secondMod8 });
+    active = isTone;
+  }
+  return result;
+}
+
 /** Float32モノラルPCMを標準の16 bit WAVへ変換する。 */
 export function encodeMonoWav(samples: Float32Array, sampleRate: number): Uint8Array {
   if (!Number.isInteger(sampleRate) || sampleRate <= 0) throw new Error('sampleRate must be a positive integer');
@@ -256,6 +284,27 @@ function meanSquare(samples: Float32Array, start: number, length: number): numbe
   let total = 0;
   for (let index = start; index < start + length; index += 1) total += samples[index]! ** 2;
   return total / length;
+}
+
+function strongestBand(bands: readonly number[]): number | null {
+  let strongest = -1;
+  let energy = Number.NEGATIVE_INFINITY;
+  for (const [index, candidate] of bands.entries()) {
+    if (candidate > energy) { strongest = index; energy = candidate; }
+  }
+  return strongest < 0 ? null : strongest;
+}
+
+function toneEnergy(samples: Float32Array, start: number, length: number, sampleRate: number, frequencyHz: number): number {
+  const step = (2 * Math.PI * frequencyHz) / sampleRate;
+  let cosine = 0;
+  let sine = 0;
+  for (let index = 0; index < length; index += 1) {
+    const value = samples[start + index]!;
+    cosine += value * Math.cos(step * index);
+    sine += value * Math.sin(step * index);
+  }
+  return (cosine * cosine + sine * sine) / (length * length);
 }
 
 function writeAscii(target: Uint8Array, offset: number, value: string): void {

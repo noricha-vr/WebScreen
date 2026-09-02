@@ -52,7 +52,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
   }
   if (command !== 'run') throw new Error(`unknown subcommand: ${command}`);
   rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap']);
-  if (values['server-snap'] !== undefined && !/^[A-Za-z0-9.-]+$/.test(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
+  if (values['server-snap'] !== undefined && !isValidSshHost(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
   if (values['notify-discord'] !== undefined && !/^\d{15,25}$/.test(values['notify-discord'])) throw new Error('--notify-discord must be a Discord channel id');
   const minutes = Number(values.minutes);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) throw new Error('--minutes must be an integer between 1 and 120');
@@ -67,6 +67,11 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
       outDir: values.out ?? resolve('..', 'docs', 'tmp', 'latency', timestamp),
     },
   };
+}
+
+/** SSHホスト名をlabelごとに検証し、オプションとして解釈される値を拒否する。 */
+export function isValidSshHost(value: string): boolean {
+  return value.length <= 253 && value.split('.').every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label));
 }
 
 async function main(): Promise<void> {

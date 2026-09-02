@@ -1,8 +1,8 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { formatLatencyCsv, latencyFromSecondBoundary, type LatencySample } from './latency-probe-analysis';
-import { type BlockCodePlacement, decodeBlockCodeFrameWithReason, decodeMonoWav, detectBeepOnsets, encodeMonoWav } from './latency-probe-codec';
+import { type BlockCodePlacement, decodeBlockCodeFrameWithReason, decodeMonoWav, detectIdentifiedBeeps, encodeMonoWav } from './latency-probe-codec';
 
 /** 出口音声の再解析に必要なPCMと観測基準時刻。 */
 export interface AudioCapture { samples: Float32Array; firstObservedAtMs: number | null; sampleRate: number }
@@ -120,10 +120,10 @@ export async function collectAudio(stream: ReadableStream<Uint8Array>, until: nu
 }
 
 /** 音声WAV・復号ログ・診断フレームを計測ディレクトリへ保存する。 */
-export async function persistOutletArtifacts(outDir: string, startedAtMs: number, audio: AudioCapture, dimensions: { width: number; height: number }, diagnostics: VideoDiagnostics, videoLog: string, audioLog: string): Promise<void> {
+export async function persistOutletArtifacts(outDir: string, startedAtMs: number, audio: AudioCapture, videoSamples: readonly LatencySample[], dimensions: { width: number; height: number }, diagnostics: VideoDiagnostics, videoLog: string, audioLog: string): Promise<void> {
   await writeFile(join(outDir, 'outlet-audio.wav'), encodeMonoWav(audio.samples, audio.sampleRate));
   await writeFile(join(outDir, 'outlet-audio.json'), JSON.stringify({ firstObservedAtMs: audio.firstObservedAtMs, sampleRate: audio.sampleRate, sampleCount: audio.samples.length } satisfies AudioCaptureMetadata, null, 2) + '\n');
-  await writeFile(join(outDir, 'outlet-audio.csv'), formatLatencyCsv(audioSamplesFromCapture(audio), startedAtMs));
+  await writeFile(join(outDir, 'outlet-audio.csv'), formatLatencyCsv(audioSamplesFromCapture(audio, videoSamples), startedAtMs));
   await writeFile(join(outDir, 'outlet-ffmpeg.log'), `[video]\n${videoLog}\n[audio]\n${audioLog}`);
   await writeFile(join(outDir, 'outlet-decode.log'), diagnostics.decodeLog.join('\n') + (diagnostics.decodeLog.length ? '\n' : ''));
   const frames = join(outDir, 'frames');
@@ -134,24 +134,43 @@ export async function persistOutletArtifacts(outDir: string, startedAtMs: number
 }
 
 /** 保存済み出口WAVを再解析し、音声標本を返す。 */
-export async function analyzeSavedOutletAudio(directory: string): Promise<LatencySample[] | null> {
+export async function analyzeSavedOutletAudio(directory: string, videoSamples: readonly LatencySample[] = []): Promise<LatencySample[] | null> {
   const wavPath = join(directory, 'outlet-audio.wav');
   const metadataPath = join(directory, 'outlet-audio.json');
   if (!await Bun.file(wavPath).exists() || !await Bun.file(metadataPath).exists()) return null;
   const wav = decodeMonoWav(new Uint8Array(await readFile(wavPath)));
   const metadata = JSON.parse(await readFile(metadataPath, 'utf8')) as Partial<AudioCaptureMetadata>;
   if (typeof metadata.firstObservedAtMs !== 'number' || !Number.isFinite(metadata.firstObservedAtMs) || metadata.sampleRate !== wav.sampleRate) throw new Error('outlet-audio.json has invalid capture metadata');
-  return audioSamplesFromCapture({ samples: wav.samples, sampleRate: wav.sampleRate, firstObservedAtMs: metadata.firstObservedAtMs });
+  return audioSamplesFromCapture({ samples: wav.samples, sampleRate: wav.sampleRate, firstObservedAtMs: metadata.firstObservedAtMs }, videoSamples);
 }
 
 /** 捕捉PCMのビープをUTC秒境界との差へ変換する。 */
-export function audioSamplesFromCapture(capture: AudioCapture): LatencySample[] {
+export function audioSamplesFromCapture(capture: AudioCapture, videoSamples: readonly LatencySample[] = []): LatencySample[] {
   if (capture.firstObservedAtMs === null) return [];
   const firstObservedAtMs = capture.firstObservedAtMs;
-  return detectBeepOnsets(capture.samples, capture.sampleRate).map((onset) => {
+  return detectIdentifiedBeeps(capture.samples, capture.sampleRate).map(({ onset, secondMod8 }) => {
     const observedAtMs = firstObservedAtMs + onset * (1_000 / capture.sampleRate);
-    return { observedAtMs, videoLatencyMs: null, audioLatencyMs: latencyFromSecondBoundary(observedAtMs) };
+    return {
+      observedAtMs, videoLatencyMs: null,
+      audioLatencyMs: resolveAbsoluteAudioLatency(observedAtMs, secondMod8, videoSamples),
+      audioLatencyPhaseMs: latencyFromSecondBoundary(observedAtMs),
+    };
   });
+}
+
+/** 映像の近接標本を基準に、8秒内の候補から送出秒を選んで絶対遅延を復元する。 */
+export function resolveAbsoluteAudioLatency(observedAtMs: number, secondMod8: number, videoSamples: readonly LatencySample[]): number | null {
+  const nearby = videoSamples.filter((sample): sample is LatencySample & { videoLatencyMs: number } => sample.videoLatencyMs !== null)
+    .filter((sample) => Math.abs(sample.observedAtMs - observedAtMs) <= 8_000);
+  if (!nearby.length) return null;
+  const nearest = nearby.reduce((best, sample) => Math.abs(sample.observedAtMs - observedAtMs) < Math.abs(best.observedAtMs - observedAtMs) ? sample : best);
+  const currentSecond = Math.floor(observedAtMs / 1_000);
+  const candidates = Array.from({ length: 8 }, (_, offset) => currentSecond - offset)
+    .filter((second) => ((second % 8) + 8) % 8 === secondMod8)
+    .map((second) => observedAtMs - second * 1_000)
+    .filter((latency) => latency >= 0 && latency <= 8_000);
+  if (!candidates.length) return null;
+  return candidates.reduce((best, latency) => Math.abs(latency - nearest.videoLatencyMs) < Math.abs(best - nearest.videoLatencyMs) ? latency : best);
 }
 
 /** Pipeではないsubprocess出力を明示的に拒否する。 */
@@ -197,12 +216,15 @@ function joinFloat32Chunks(chunks: readonly Float32Array[]): Float32Array { cons
 export async function collectOutletGrabs(rtspUrl: string, until: number, output: LatencySample[], diagnostics: VideoDiagnostics, framesDir: string, intervalMs = 4_000): Promise<void> {
   await mkdir(framesDir, { recursive: true });
   let index = 0;
+  let copiedFirstDecoded = false;
   while (Date.now() < until) {
     const beforeMs = Date.now();
     const pngPath = join(framesDir, `grab-${index}.png`);
     const child = Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '500000', '-i', rtspUrl, '-an', '-frames:v', '1', '-pix_fmt', 'rgb24', '-y', pngPath], { stdout: 'ignore', stderr: 'pipe' });
-    const stderr = await readPipeText(requirePipe(child.stderr, 'grab stderr'));
-    const exit = await child.exited;
+    const stderrPromise = readPipeText(requirePipe(child.stderr, 'grab stderr'));
+    const timeoutMs = Math.max(1, Math.min(15_000, until - beforeMs));
+    const exit = await waitForGrab(child, timeoutMs);
+    const stderr = await stderrPromise;
     const afterMs = Date.now();
     if (exit !== 0) {
       logDecodeFailure(diagnostics, `単発取得失敗 ${stderr.trim().slice(0, 120)}`, false);
@@ -213,14 +235,24 @@ export async function collectOutletGrabs(rtspUrl: string, until: number, output:
       if (decoded.timestampMs !== null) {
         output.push({ observedAtMs: afterMs, videoLatencyMs: afterMs - decoded.timestampMs, audioLatencyMs: null });
         diagnostics.decodeLog.push(`${new Date(afterMs).toISOString()} grab=${index} lower=${beforeMs - decoded.timestampMs} upper=${afterMs - decoded.timestampMs} grab_ms=${afterMs - beforeMs}`);
+        if (!copiedFirstDecoded) { await copyFile(pngPath, join(framesDir, 'first-decoded.png')); copiedFirstDecoded = true; }
+        await copyFile(pngPath, join(framesDir, 'last-decoded.png'));
       } else {
         logDecodeFailure(diagnostics, decoded.reason === 'checksum-mismatch' ? 'チェックサム不一致' : '同期パターン未検出', false);
+        await copyFile(pngPath, join(framesDir, 'last-failure.png'));
       }
     }
     index += 1;
     const waitMs = intervalMs - (Date.now() - afterMs);
     if (waitMs > 0 && Date.now() + waitMs < until) await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
+}
+
+async function waitForGrab(child: Bun.Subprocess, timeoutMs: number): Promise<number> {
+  const timeout = setTimeout(() => child.kill(), timeoutMs);
+  const exit = await child.exited;
+  clearTimeout(timeout);
+  return exit;
 }
 
 /** PNG を rawvideo に展開してブロックコードを復号する。 */
