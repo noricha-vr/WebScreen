@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { formatLatencyCsv, formatSummary, type LatencySample } from './latency-probe-analysis';
 import {
   analyzeSavedOutletAudio, audioSamplesFromCapture, collectAudio, collectVideo, persistOutletArtifacts,
-  probeDimensionsFor, readPipeText, requirePipe, startAudioProbe, startVideoProbe, type VideoDiagnostics,
+  decodeDurationSummary, probeDimensionsFor, readPipeText, requirePipe, scaledProbeDimensions, startAudioProbe, startVideoProbe, type VideoDiagnostics,
 } from './latency-probe-observe';
 import { recordWindowsPlayer, type PlayerResult } from './latency-probe-player';
 
@@ -59,7 +59,7 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
       pbcopy.stdin.end();
       await pbcopy.exited;
     }
-    const dimensions = await probeDimensionsFor(rtspUrl);
+    const dimensions = scaledProbeDimensions(await probeDimensionsFor(rtspUrl));
     video = startVideoProbe(rtspUrl);
     audio = startAudioProbe(rtspUrl);
     const videoLog = readPipeText(requirePipe(video.stderr, 'video stderr'));
@@ -67,7 +67,7 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     state.sourceUrl = target;
     startedAtMs = Date.now();
     const until = startedAtMs + options.minutes * 60_000;
-    const diagnostics: VideoDiagnostics = { firstDecoded: null, lastDecoded: null, lastFailure: null, decodeLog: [], lastLoggedFailureAtMs: null };
+    const diagnostics: VideoDiagnostics = { firstDecoded: null, lastDecoded: null, lastFailure: null, decodeLog: [], lastLoggedFailureAtMs: null, decodeCount: 0, decodeMsTotal: 0, decodeMsMax: 0 };
     const playerPump = options.player ? recordWindowsPlayer(options.outDir, until).catch((error) => ({ samples: [], warning: `Windows計測は失敗しました: ${String(error)}`, diagnostics: String(error) } satisfies PlayerResult)) : Promise.resolve(null);
     const [, capturedAudio, player] = await Promise.all([
       collectVideo(requirePipe(video.stdout, 'video'), dimensions.width, dimensions.height, until, outlet, diagnostics, video),
@@ -80,6 +80,7 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     if (audioExitBeforeStop === null) audio.kill();
     await Promise.all([video.exited, audio.exited]);
     const [videoStderr, audioStderr] = await Promise.all([videoLog, audioLog]);
+    diagnostics.decodeLog.push(`${new Date().toISOString()} ${decodeDurationSummary(diagnostics)}`);
     await persistOutletArtifacts(options.outDir, startedAtMs, capturedAudio, dimensions, diagnostics, videoStderr, audioStderr);
     const failures = [
       videoExitBeforeStop !== null && videoExitBeforeStop !== 0 ? `video ffmpeg exit=${videoExitBeforeStop}\n${videoStderr}` : null,

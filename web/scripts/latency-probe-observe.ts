@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { formatLatencyCsv, latencyFromSecondBoundary, type LatencySample } from './latency-probe-analysis';
-import { decodeBlockCodeFrameWithReason, decodeMonoWav, detectBeepOnsets, encodeMonoWav } from './latency-probe-codec';
+import { type BlockCodePlacement, decodeBlockCodeFrameWithReason, decodeMonoWav, detectBeepOnsets, encodeMonoWav } from './latency-probe-codec';
 
 /** 出口音声の再解析に必要なPCMと観測基準時刻。 */
 export interface AudioCapture { samples: Float32Array; firstObservedAtMs: number | null; sampleRate: number }
@@ -11,6 +11,29 @@ interface AudioCaptureMetadata { firstObservedAtMs: number | null; sampleRate: n
 export interface VideoDiagnostics {
   firstDecoded: Uint8Array | null; lastDecoded: Uint8Array | null; lastFailure: Uint8Array | null;
   decodeLog: string[]; lastLoggedFailureAtMs: number | null;
+  decodeCount: number; decodeMsTotal: number; decodeMsMax: number;
+}
+
+/** 出口プローブがffmpegに縮小させるフレーム幅。復号コストを 5 fps に収めるため（原寸だと滞留する）。 */
+export const PROBE_FRAME_WIDTH = 640;
+
+/** ffmpeg の `scale=640:-2` と同じ丸めで、縮小後のフレーム寸法を返す。 */
+export function scaledProbeDimensions(source: { width: number; height: number }): { width: number; height: number } {
+  const height = Math.round((source.height * PROBE_FRAME_WIDTH) / source.width / 2) * 2;
+  return { width: PROBE_FRAME_WIDTH, height };
+}
+
+/** 1フレームの復号所要時間を診断へ加算する。 */
+export function noteDecodeDuration(diagnostics: VideoDiagnostics, durationMs: number): void {
+  diagnostics.decodeCount += 1;
+  diagnostics.decodeMsTotal += durationMs;
+  if (durationMs > diagnostics.decodeMsMax) diagnostics.decodeMsMax = durationMs;
+}
+
+/** 復号所要時間の要約行（decode.log の末尾用）。 */
+export function decodeDurationSummary(diagnostics: VideoDiagnostics): string {
+  if (diagnostics.decodeCount === 0) return 'decode_ms: no frames';
+  return `decode_ms avg=${(diagnostics.decodeMsTotal / diagnostics.decodeCount).toFixed(1)} max=${diagnostics.decodeMsMax.toFixed(1)} frames=${diagnostics.decodeCount}`;
 }
 
 /** 同じ復号失敗を診断ログへ再記録してよい時刻かを判定する。 */
@@ -30,7 +53,7 @@ export async function probeDimensionsFor(input: string): Promise<{ width: number
 
 /** RTSPT出口の映像プローブを起動する。 */
 export function startVideoProbe(rtspUrl: string): Bun.Subprocess {
-  return Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-use_wallclock_as_timestamps', '1', '-i', rtspUrl, '-an', '-vf', 'fps=5', '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
+  return Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-use_wallclock_as_timestamps', '1', '-i', rtspUrl, '-an', '-vf', `fps=5,scale=${PROBE_FRAME_WIDTH}:-2`, '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
 }
 
 /** RTSPT出口のモノラル48kHz音声プローブを起動する。 */
@@ -41,6 +64,7 @@ export function startAudioProbe(rtspUrl: string): Bun.Subprocess {
 /** 指定時刻まで映像を読み、復号標本と失敗診断を蓄積する。 */
 export async function collectVideo(stream: ReadableStream<Uint8Array>, width: number, height: number, until: number, output: LatencySample[], diagnostics: VideoDiagnostics, process: Bun.Subprocess): Promise<void> {
   const frameBytes = width * height * 3;
+  let placementHint: BlockCodePlacement | null = null;
   let pending: Uint8Array<ArrayBufferLike> = new Uint8Array();
   const reader = stream.getReader();
   let nextRead = reader.read();
@@ -52,8 +76,11 @@ export async function collectVideo(stream: ReadableStream<Uint8Array>, width: nu
     pending = appendBytes(pending, chunk.value);
     while (pending.length >= frameBytes && Date.now() < until) {
       const frame = pending.slice(0, frameBytes); pending = pending.slice(frameBytes);
-      const decoded = decodeBlockCodeFrameWithReason(frame, width, height);
+      const decodeStartedAt = performance.now();
+      const decoded = decodeBlockCodeFrameWithReason(frame, width, height, placementHint);
+      noteDecodeDuration(diagnostics, performance.now() - decodeStartedAt);
       if (decoded.timestampMs !== null) {
+        placementHint = decoded.placement ?? placementHint;
         const observedAtMs = Date.now();
         output.push({ observedAtMs, videoLatencyMs: observedAtMs - decoded.timestampMs, audioLatencyMs: null });
         diagnostics.firstDecoded ??= frame; diagnostics.lastDecoded = frame;

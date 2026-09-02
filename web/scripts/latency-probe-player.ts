@@ -16,14 +16,16 @@ export async function recordWindowsPlayer(outDir: string, until: number): Promis
   const started = 'C:\\Users\\win\\latency-harness-started.txt';
   const ffmpeg = 'C:\\Users\\win\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1.1-full_build\\bin\\ffmpeg.exe';
   const command = `$ErrorActionPreference='Stop'; $ff='${ffmpeg}'; $out='${remote}'; $log='${log}'; $startedPath='${started}'; $task='WebScreenLatencyHarness'; Remove-Item $startedPath -Force -ErrorAction SilentlyContinue; $taskScript="\`$recorded=[DateTime]::UtcNow; Set-Content -Path '$startedPath' -Value \`$recorded.ToString('o') -NoNewline; & '$ff' -y -f gdigrab -framerate 30 -i desktop -t ${seconds} '$out' 2>&1 | Set-Content -Path '$log'; exit \`$LASTEXITCODE"; $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskScript)); $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -EncodedCommand $encoded"; $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null; try { Start-ScheduledTask -TaskName $task; $deadline=[DateTime]::UtcNow.AddSeconds(${seconds + 15}); do { Start-Sleep -Seconds 1; $state=(Get-ScheduledTask -TaskName $task).State } while($state -eq 'Running' -and [DateTime]::UtcNow -lt $deadline); $ended=[DateTime]::UtcNow; if($state -eq 'Running'){ throw 'Scheduled Task recording timed out' }; if(-not(Test-Path $startedPath)){ throw 'Scheduled Task did not write recording start time' }; $recorded=(Get-Content -Raw $startedPath).Trim(); Write-Output ('recording_started_utc=' + $recorded); Write-Output ('recording_ended_utc=' + $ended.ToString('o')); Write-Output 'ffmpeg_log_begin'; if(Test-Path $log){ Get-Content -Raw $log }; Write-Output 'ffmpeg_log_end' } finally { Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue }`;
-  const recording = await runTextProcess(['ssh', 'win2022', 'powershell', '-NoProfile', '-Command', command]);
+  // Windows OpenSSH の既定シェルは cmd.exe なので、-Command の生文字列は `|` や引用符を cmd が先に解釈して壊れる。
+  // -EncodedCommand（UTF-16LE の base64）なら cmd を素通りする（Codex 過去実績と同じ経路）
+  const recording = await runTextProcess(['ssh', 'win2022', 'powershell', '-NoProfile', '-EncodedCommand', encodePowerShell(command)]);
   let diagnostics = formatProcessDiagnostics('Windows Scheduled Task 録画', recording);
   if (recording.exitCode !== 0) return { samples: [], warning: 'Windows録画は失敗しました。Scheduled TaskのSSH/ffmpeg出力をplayer-error.mdで確認してください。', diagnostics };
   const startedAt = parseUtcMarker(recording.stdout, 'recording_started_utc');
   if (startedAt === null) return { samples: [], warning: 'Windows録画の実開始UTC時刻を取得できませんでした。', diagnostics };
   const endedAt = parseUtcMarker(recording.stdout, 'recording_ended_utc') ?? Date.now();
   const local = join(outDir, basename(remote));
-  const copy = Bun.spawn(['ssh', 'win2022', 'powershell', '-NoProfile', '-Command', `$stream=[Console]::OpenStandardOutput();$bytes=[IO.File]::ReadAllBytes('${remote}');$stream.Write($bytes,0,$bytes.Length)`], { stdout: 'pipe', stderr: 'pipe' });
+  const copy = Bun.spawn(['ssh', 'win2022', 'powershell', '-NoProfile', '-EncodedCommand', encodePowerShell(`$stream=[Console]::OpenStandardOutput();$bytes=[IO.File]::ReadAllBytes('${remote}');$stream.Write($bytes,0,$bytes.Length)`)], { stdout: 'pipe', stderr: 'pipe' });
   const copyError = readPipeText(requirePipe(copy.stderr, 'Windows recording copy stderr'));
   const bytes = await new Response(requirePipe(copy.stdout, 'Windows recording')).arrayBuffer();
   const copyExitCode = await copy.exited;
@@ -84,4 +86,9 @@ function parseUtcMarker(text: string, key: string): number | null {
 
 function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> {
   const merged = new Uint8Array(left.length + right.length); merged.set(left); merged.set(right, left.length); return merged;
+}
+
+/** PowerShell の -EncodedCommand 用に UTF-16LE の base64 へ変換する。 */
+export function encodePowerShell(script: string): string {
+  return Buffer.from(script, 'utf16le').toString('base64');
 }

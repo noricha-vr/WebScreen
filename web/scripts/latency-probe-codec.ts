@@ -7,6 +7,7 @@ const RESERVED = new Set(['1,1', '14,1', '1,14', '14,14']);
 export interface BlockCodeFrameDecodeResult {
   timestampMs: number | null;
   reason: 'sync-pattern-not-found' | 'checksum-mismatch' | null;
+  placement?: BlockCodePlacement | null;
 }
 
 /** ミリ秒時刻を48 bit + checksumへ符号化した白黒セル格子を返す。 */
@@ -60,11 +61,20 @@ export function decodeBlockCodeFrame(
 }
 
 /** RGB24フレームを復号し、失敗原因を診断用に返す。 */
+export interface BlockCodePlacement { x: number; y: number; cell: number }
+
 export function decodeBlockCodeFrameWithReason(
-  rgb: Uint8Array, width: number, height: number
+  rgb: Uint8Array, width: number, height: number, hint?: BlockCodePlacement | null
 ): BlockCodeFrameDecodeResult {
   if (rgb.length !== width * height * 3 || width < BLOCK_GRID_SIZE || height < BLOCK_GRID_SIZE) {
     return { timestampMs: null, reason: 'sync-pattern-not-found' };
+  }
+  // 前フレームで見つかった位置・セルサイズを先に試す。全探索は 1150x720 で 1 フレーム数百 ms かかり
+  // 5 fps に追いつかずパイプに滞留して遅延が過大に見える（2026-09-02 実測）ため、定常時はここで返す
+  if (hint && hint.x + hint.cell * BLOCK_GRID_SIZE <= width && hint.y + hint.cell * BLOCK_GRID_SIZE <= height
+    && matchesSyncSamples(rgb, width, hint.x, hint.y, hint.cell)) {
+    const timestamp = decodeBlockCode(sampleGrid(rgb, width, hint.x, hint.y, hint.cell));
+    if (timestamp !== null) return { timestampMs: timestamp, reason: null, placement: hint };
   }
   const maxCell = Math.floor(Math.min(width, height) / BLOCK_GRID_SIZE);
   let foundSyncPattern = false;
@@ -77,7 +87,7 @@ export function decodeBlockCodeFrameWithReason(
         foundSyncPattern = true;
         const grid = sampleGrid(rgb, width, x, y, cell);
         const timestamp = decodeBlockCode(grid);
-        if (timestamp !== null) return { timestampMs: timestamp, reason: null };
+        if (timestamp !== null) return { timestampMs: timestamp, reason: null, placement: { x, y, cell } };
       }
     }
   }
