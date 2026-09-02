@@ -10,6 +10,9 @@ import {
 } from './latency-probe-observe';
 import { recordWindowsPlayer, type PlayerResult } from './latency-probe-player';
 import { captureSenderConfig, collectOutletQuality, collectSenderStats, parseSenderCsv, peerConnectionTrackerInitScript } from './latency-probe-quality';
+import { screenShareUrl, stopSharingBeforeClose } from './latency-probe-screen-share';
+
+export { screenShareUrl } from './latency-probe-screen-share';
 
 const SOURCE_TITLE = 'WebScreen Latency Source';
 const ACTIVE_FILE = resolve('..', 'docs', 'tmp', 'latency', '.active.json');
@@ -46,6 +49,8 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
   const outlet: LatencySample[] = [];
   let browser: import('@playwright/test').BrowserContext | null = null;
   let audio: Bun.Subprocess | null = null;
+  let senderPump: Promise<Awaited<ReturnType<typeof collectSenderStats>>> | null = null;
+  let outletQualityPump: Promise<void> | null = null;
   const measurementAbort = new AbortController();
   try {
     browser = await startChrome(options.profileDir);
@@ -83,14 +88,14 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     state.sourceUrl = target;
     startedAtMs = Date.now();
     const until = startedAtMs + options.minutes * 60_000;
-    const senderPump = collectSenderStats(sharingPage, options.outDir, until, measurementAbort.signal);
-    const outletQualityPump = collectOutletQuality(rtspUrl, options.outDir, startedAtMs, until, options.outletQualitySeconds, measurementAbort.signal);
+    senderPump = collectSenderStats(sharingPage, options.outDir, until, measurementAbort.signal);
+    outletQualityPump = collectOutletQuality(rtspUrl, options.outDir, startedAtMs, until, options.outletQualitySeconds, measurementAbort.signal);
     const diagnostics: VideoDiagnostics = { firstDecoded: null, lastDecoded: null, lastFailure: null, decodeLog: [], lastLoggedFailureAtMs: null, decodeCount: 0, decodeMsTotal: 0, decodeMsMax: 0 };
     const serverSnap = options.serverSnapHost
       ? captureServerSnapshots(options.serverSnapHost, streamId, options.outDir, startedAtMs, snapshotScheduleSeconds(options.minutes)).catch((error) => { console.warn(`サーバー内スナップショットに失敗しました: ${String(error)}`); return []; })
       : Promise.resolve([]);
     const playerPump = options.player ? recordWindowsPlayer(options.outDir, until).catch((error) => ({ samples: [], warning: `Windows計測は失敗しました: ${String(error)}`, diagnostics: String(error) } satisfies PlayerResult)) : Promise.resolve(null);
-    const [, capturedAudio, player, senderResult, outletQualityResult] = await Promise.all([
+    const [, capturedAudio, player, senderResult] = await Promise.all([
       collectOutletGrabs(rtspUrl, until, outlet, diagnostics, join(options.outDir, 'frames')),
       collectAudio(requirePipe(audio.stdout, 'audio'), until), playerPump, senderPump, outletQualityPump,
     ]);
@@ -107,13 +112,14 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     ].filter((failure): failure is string => failure !== null);
     if (failures.length) throw new Error(`出口ffmpegが計測終了前に失敗しました。outlet-ffmpeg.logを保存しました。\n${failures.join('\n')}`);
     await persistResults(options.outDir, outlet, startedAtMs, player, senderResult.samples);
-    if (senderResult.error || outletQualityResult.error) throw new Error([senderResult.error, outletQualityResult.error].filter(Boolean).join('\n'));
   } finally {
     measurementAbort.abort();
+    // 各pumpはfinallyでCSVを書き出すため、出力先のcleanup前に終了まで回収する。
+    await Promise.allSettled([senderPump, outletQualityPump].filter((pump): pump is Exclude<typeof pump, null> => pump !== null));
     audio?.kill();
     // browser.close() だけでは pagehide の停止ビーコンが飛ばず配信がサーバーに残り、次の run が
     // 「既存の配信を終了」経路に入って不安定になる（2026-09-02 実測）。閉じる前に停止ボタンを押す
-    if (browser) await stopSharingBeforeClose(browser);
+    if (browser) await stopSharingBeforeClose(browser, options.outDir);
     await Promise.allSettled([
       browser?.close(),
       Promise.resolve().then(() => controllerServer.stop(true)),
@@ -239,27 +245,12 @@ async function startScreenShare(page: import('@playwright/test').Page, profileDi
   return streamId;
 }
 
-async function stopSharingBeforeClose(browser: import('@playwright/test').BrowserContext): Promise<void> {
-  for (const page of browser.pages()) {
-    const stop = page.locator('[data-screen-stop]');
-    if (!(await stop.isVisible().catch(() => false))) continue;
-    await stop.click({ timeout: 3_000 }).catch(() => undefined);
-    await page.waitForFunction(() => { const live = document.querySelector<HTMLElement>('[data-screen-step="live"]'); return !live || live.hidden; }, undefined, { timeout: 5_000 }).catch(() => undefined);
-  }
-}
 function resolveSourceUrl(value: string, sourceServer: URL): string {
   const parsed = new URL(value);
   // controller 経由（/source）でも CLI と同じ制約を掛ける。http(s) 以外と資格情報付きは拒否
   if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || parsed.username || parsed.password) throw new Error('source url must be http(s) without credentials');
   if (parsed.hostname === '127.0.0.1' && parsed.port === '0') parsed.port = sourceServer.port;
   return parsed.href;
-}
-function screenShareUrl(options: RunOptions): string {
-  if (options.videoProfile === 'quality') return 'https://web-screen.net/ja/screen-share/';
-  const url = new URL('https://web-screen.net/ja/screen-share/');
-  url.searchParams.set('video-profile', 'realtime');
-  url.searchParams.set('video-max-bitrate', String(options.maxBitrate));
-  return url.href;
 }
 async function applyAutoScroll(page: import('@playwright/test').Page, target: string, sourceServerUrl: string, pixelsPerSecond: number): Promise<void> {
   const source = new URL(sourceServerUrl);

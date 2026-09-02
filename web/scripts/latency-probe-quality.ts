@@ -2,6 +2,9 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { selectPrimaryH264VideoOutbound, type StatsRow } from './benchmark-screen-share-fps-core';
+import { parseFreezeLog } from './latency-probe-freeze';
+
+export { parseFreezeLog } from './latency-probe-freeze';
 
 /** 送出側primary H.264 reportをそのまま保存する1秒標本。 */
 export interface SenderSample {
@@ -48,8 +51,12 @@ export function peerConnectionTrackerInitScript(): () => void {
 export async function captureSenderConfig(page: import('@playwright/test').Page): Promise<Record<string, unknown>> {
   try {
     return await page.evaluate(async () => {
-      const connections = (window as PagePeerConnectionWindow).__webscreenHarnessPeerConnections ?? [];
-      const sender = connections.flatMap((connection) => connection.getSenders()).find((candidate) => candidate.track?.kind === 'video');
+      const tracked = window as PagePeerConnectionWindow;
+      const connections = (tracked.__webscreenHarnessPeerConnections ?? []).filter((connection) => connection.connectionState !== 'closed');
+      tracked.__webscreenHarnessPeerConnections = connections;
+      // 自動再接続後は古いPeerConnectionのsenderを混ぜず、最新のlive video senderだけを観測する。
+      const connection = connections.toReversed().find((candidate) => candidate.getSenders().some((sender) => sender.track?.kind === 'video' && sender.track.readyState === 'live'));
+      const sender = connection?.getSenders().find((candidate) => candidate.track?.kind === 'video' && candidate.track.readyState === 'live');
       if (!sender?.track) return { error: 'video RTCRtpSender was not found after screen share started' };
       const parameters = sender.getParameters();
       const settings = sender.track.getSettings();
@@ -76,24 +83,31 @@ export async function captureSenderConfig(page: import('@playwright/test').Page)
 /** 指定終了時刻まで1秒間隔でprimary video outbound-rtpをCSVへ保存する。 */
 export async function collectSenderStats(
   page: import('@playwright/test').Page, outDir: string, until: number, signal?: AbortSignal
-): Promise<{ samples: SenderSample[]; error: string | null }> {
+): Promise<{ samples: SenderSample[] }> {
   const samples: SenderSample[] = [];
-  let error: string | null = null;
+  let consecutiveFailures = 0;
+  let terminalError: Error | null = null;
   try {
     while (Date.now() < until && !signal?.aborted) {
       try {
         samples.push(await readSenderSample(page));
+        consecutiveFailures = 0;
       } catch (caught) {
-        error ??= `sender stats collection failed: ${errorMessage(caught)}`;
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= 5) {
+          terminalError = new Error(`sender stats collection failed ${consecutiveFailures} consecutive times: ${errorMessage(caught)}`);
+          break;
+        }
       }
       const remaining = until - Date.now();
       if (remaining > 0 && !signal?.aborted) await Bun.sleep(Math.min(1_000, remaining));
     }
   } finally {
     await writeFile(join(outDir, 'sender.csv'), formatSenderCsv(samples));
-    if (error) await writeFile(join(outDir, 'sender-error.md'), `${error}\n`);
+    if (terminalError) await writeFile(join(outDir, 'sender-error.md'), `${terminalError.message}\n`);
   }
-  return { samples, error };
+  if (terminalError) throw terminalError;
+  return { samples };
 }
 
 /** sender.csvを再集計用に読み込む。 */
@@ -143,10 +157,10 @@ export function formatSenderSummary(samples: readonly SenderSample[]): string {
 /** 連続ffmpegを画質専用に使い、遅延用の単発取得と分離して出口品質を保存する。 */
 export async function collectOutletQuality(
   rtspUrl: string, outDir: string, startedAtMs: number, until: number, windowSeconds: number, signal?: AbortSignal
-): Promise<{ error: string | null }> {
+): Promise<void> {
   const samples: OutletQualitySample[] = [];
   const logs: string[] = [];
-  let error: string | null = null;
+  let terminalError: Error | null = null;
   let previousDimensions: string | null = null;
   try {
     for (let index = 0; Date.now() < until && !signal?.aborted; index += 1) {
@@ -155,13 +169,13 @@ export async function collectOutletQuality(
       const seconds = Math.min(windowSeconds, remainingSeconds);
       const started = Date.now();
       try {
-        const result = await measureOutletQualityWindow(rtspUrl, seconds);
+        const result = await measureOutletQualityWindow(rtspUrl, seconds, signal);
         const dimensions = `${result.width ?? '?'}x${result.height ?? '?'}`;
         samples.push({ index, startedAtMs: started, durationSeconds: result.durationSeconds, frames: result.frames, receivedBytes: result.receivedBytes, width: result.width, height: result.height, resolutionEvents: result.resolutionEvents, freezes: result.freezes, freezeSeconds: result.freezeSeconds, resolutionChanged: result.resolutionEvents.length > 1 || (previousDimensions !== null && previousDimensions !== dimensions), status: 'ok' });
         previousDimensions = dimensions;
         logs.push(`## window ${index + 1}\n\n${result.log}`);
       } catch (caught) {
-        error ??= `outlet quality collection failed: ${errorMessage(caught)}`;
+        terminalError = new Error(`outlet quality collection failed: ${errorMessage(caught)}`);
         samples.push({ index, startedAtMs: started, durationSeconds: 0, frames: null, receivedBytes: null, width: null, height: null, resolutionEvents: [], freezes: null, freezeSeconds: null, resolutionChanged: false, status: 'error' });
         logs.push(`## window ${index + 1} error\n\n${errorMessage(caught)}`);
         break;
@@ -172,7 +186,7 @@ export async function collectOutletQuality(
     await writeFile(join(outDir, 'outlet-quality.md'), formatOutletQualitySummary(samples, windowSeconds));
     await writeFile(join(outDir, 'outlet-quality.log'), `${logs.join('\n\n')}\n`);
   }
-  return { error };
+  if (terminalError) throw terminalError;
 }
 
 interface OutletQualitySample {
@@ -189,15 +203,18 @@ async function readSenderSample(page: import('@playwright/test').Page): Promise<
     const stringValue = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
     const numberValue = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
     const recordValue = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === 'object' ? value as Record<string, unknown> : undefined);
-    const connections = (window as PagePeerConnectionWindow).__webscreenHarnessPeerConnections ?? [];
+    const tracked = window as PagePeerConnectionWindow;
+    const connections = (tracked.__webscreenHarnessPeerConnections ?? []).filter((connection) => connection.connectionState !== 'closed');
+    tracked.__webscreenHarnessPeerConnections = connections;
+    // statsも再接続済みの閉じた接続を除外し、最新のlive video senderを持つ1本に限定する。
+    const connection = connections.toReversed().find((candidate) => candidate.getSenders().some((sender) => sender.track?.kind === 'video' && sender.track.readyState === 'live'));
+    if (!connection) throw new Error('live video RTCPeerConnection was not found');
     const rows: SenderStatsRow[] = [];
-    for (const connection of connections) {
-      const stats = await connection.getStats();
-      stats.forEach((report) => {
-        const item = report as unknown as Record<string, unknown>;
-        rows.push({ id: String(report.id), type: String(report.type), kind: stringValue(item.kind), mediaType: stringValue(item.mediaType), codecId: stringValue(item.codecId), mimeType: stringValue(item.mimeType), framesPerSecond: numberValue(item.framesPerSecond), framesEncoded: numberValue(item.framesEncoded), keyFramesEncoded: numberValue(item.keyFramesEncoded), frameWidth: numberValue(item.frameWidth), frameHeight: numberValue(item.frameHeight), bytesSent: numberValue(item.bytesSent), qpSum: numberValue(item.qpSum), totalEncodeTime: numberValue(item.totalEncodeTime), qualityLimitationReason: stringValue(item.qualityLimitationReason), qualityLimitationDurations: recordValue(item.qualityLimitationDurations) });
-      });
-    }
+    const stats = await connection.getStats();
+    stats.forEach((report) => {
+      const item = report as unknown as Record<string, unknown>;
+      rows.push({ id: String(report.id), type: String(report.type), kind: stringValue(item.kind), mediaType: stringValue(item.mediaType), codecId: stringValue(item.codecId), mimeType: stringValue(item.mimeType), framesPerSecond: numberValue(item.framesPerSecond), framesEncoded: numberValue(item.framesEncoded), keyFramesEncoded: numberValue(item.keyFramesEncoded), frameWidth: numberValue(item.frameWidth), frameHeight: numberValue(item.frameHeight), bytesSent: numberValue(item.bytesSent), qpSum: numberValue(item.qpSum), totalEncodeTime: numberValue(item.totalEncodeTime), qualityLimitationReason: stringValue(item.qualityLimitationReason), qualityLimitationDurations: recordValue(item.qualityLimitationDurations) });
+    });
     return { observedAtMs: Date.now(), rows };
   });
   const { outbound } = selectPrimaryH264VideoOutbound(result.rows);
@@ -208,22 +225,32 @@ async function readSenderSample(page: import('@playwright/test').Page): Promise<
   };
 }
 
-async function measureOutletQualityWindow(rtspUrl: string, seconds: number): Promise<{ durationSeconds: number; frames: number | null; receivedBytes: number; width: number | null; height: number | null; resolutionEvents: string[]; freezes: number; freezeSeconds: number; log: string }> {
+async function measureOutletQualityWindow(rtspUrl: string, seconds: number, signal?: AbortSignal): Promise<{ durationSeconds: number; frames: number | null; receivedBytes: number; width: number | null; height: number | null; resolutionEvents: string[]; freezes: number; freezeSeconds: number; log: string }> {
   // `-t` は直後の出力にしか効かない。2 本目（byte 計数用 mpegts）にも付けないと ffmpeg が終わらず run 全体が固まる
   const duration = seconds.toFixed(3);
   const child = Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'info', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-i', rtspUrl, '-t', duration, '-map', '0:v:0', '-an', '-vf', 'freezedetect=n=-60dB:d=0.4,showinfo', '-f', 'null', '-', '-t', duration, '-map', '0:v:0', '-c:v', 'copy', '-f', 'mpegts', 'pipe:1'], { stdout: 'pipe', stderr: 'pipe' });
+  const abortFfmpeg = () => child.kill();
+  if (signal?.aborted) abortFfmpeg();
+  else signal?.addEventListener('abort', abortFfmpeg, { once: true });
   const stdout = child.stdout;
-  if (!stdout || typeof stdout === 'number' || !child.stderr || typeof child.stderr === 'number') throw new Error('outlet quality ffmpeg pipes are unavailable');
+  if (!stdout || typeof stdout === 'number' || !child.stderr || typeof child.stderr === 'number') {
+    signal?.removeEventListener('abort', abortFfmpeg);
+    child.kill();
+    throw new Error('outlet quality ffmpeg pipes are unavailable');
+  }
   // 出口が止まって ffmpeg が入力待ちのまま終わらない場合の上限（窓長 + 接続猶予）
   const watchdog = setTimeout(() => child.kill(), (seconds + 20) * 1_000);
-  const [receivedBytes, log, exit] = await Promise.all([countBytes(stdout), new Response(child.stderr).text(), child.exited]).finally(() => clearTimeout(watchdog));
+  const [receivedBytes, log, exit] = await Promise.all([countBytes(stdout), new Response(child.stderr).text(), child.exited]).finally(() => {
+    clearTimeout(watchdog);
+    signal?.removeEventListener('abort', abortFfmpeg);
+  });
   if (exit !== 0) throw new Error(`ffmpeg exit=${exit}: ${log.slice(-800)}`);
   const durationSeconds = Math.max(0.001, seconds);
   const frames = lastNumber(log, /frame=\s*(\d+)/g);
   const resolutionEvents = [...new Set(Array.from(log.matchAll(/\bs:(\d{2,5})x(\d{2,5})\b/g), (match) => `${match[1]}x${match[2]}`))];
   const dimensions = resolutionEvents.at(-1)?.split('x').map(Number) ?? null;
-  const freezeDurations = Array.from(log.matchAll(/freeze_duration:\s*([0-9.]+)/g), (match) => Number(match[1])).filter(Number.isFinite);
-  return { durationSeconds, frames, receivedBytes, width: dimensions?.[0] ?? null, height: dimensions?.[1] ?? null, resolutionEvents, freezes: freezeDurations.length, freezeSeconds: freezeDurations.reduce((total, duration) => total + duration, 0), log };
+  const { freezes, freezeSeconds } = parseFreezeLog(log, durationSeconds);
+  return { durationSeconds, frames, receivedBytes, width: dimensions?.[0] ?? null, height: dimensions?.[1] ?? null, resolutionEvents, freezes, freezeSeconds, log };
 }
 
 function formatSenderCsv(samples: readonly SenderSample[]): string {

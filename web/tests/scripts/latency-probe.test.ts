@@ -24,6 +24,8 @@ import {
 } from '../../scripts/latency-probe-codec';
 import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
 import { resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
+import { screenShareUrl } from '../../scripts/latency-probe-run';
+import { parseFreezeLog } from '../../scripts/latency-probe-quality';
 
 function rasterize(timestampMs: number, cell = 20): { rgb: Uint8Array; width: number; height: number } {
   const width = BLOCK_GRID_SIZE * cell + 40;
@@ -187,5 +189,29 @@ describe('latency probe CLI contract', () => {
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--max-bitrate', '1500000'])).toThrow('only valid');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--video-profile', 'realtime', '--max-bitrate', '999999'])).toThrow('1200000');
     expect(() => parseLatencyProbeArgs(['source', '--url', 'https://example.test', '--scroll', '2001'])).toThrow('between 0 and 2000');
+  });
+});
+
+describe('latency probe quality helpers', () => {
+  test('freezedetectの開始・終了を窓内のfreezeとして集計する', () => {
+    const log = '[freezedetect] lavfi.freezedetect.freeze_start: 1.25\n[freezedetect] lavfi.freezedetect.freeze_duration: 2.5\n[freezedetect] lavfi.freezedetect.freeze_end: 3.75';
+    expect(parseFreezeLog(log, 10)).toEqual({ freezes: 1, freezeSeconds: 2.5 });
+  });
+
+  test('窓末尾で未閉鎖のfreezeを窓末尾まで集計する', () => {
+    expect(parseFreezeLog('lavfi.freezedetect.freeze_start: 8.5', 10)).toEqual({ freezes: 1, freezeSeconds: 1.5 });
+  });
+
+  test('freezeが無いログは0として集計する', () => {
+    expect(parseFreezeLog('frame=  42 fps=30', 10)).toEqual({ freezes: 0, freezeSeconds: 0 });
+  });
+
+  test('production画面共有URLはqualityでqueryなし、realtimeで設定2個だけにする', () => {
+    const quality = new URL(screenShareUrl({ videoProfile: 'quality', maxBitrate: null }));
+    expect(quality.search).toBe('');
+    const realtime = new URL(screenShareUrl({ videoProfile: 'realtime', maxBitrate: 1_500_000 }));
+    expect([...realtime.searchParams.entries()]).toEqual([
+      ['video-profile', 'realtime'], ['video-max-bitrate', '1500000'],
+    ]);
   });
 });
