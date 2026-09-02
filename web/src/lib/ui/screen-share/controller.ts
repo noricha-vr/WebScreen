@@ -6,7 +6,7 @@ import type { startWhipPublisher, WhipPublisher } from '../whip-publisher';
 import { currentAudioProfile, displayMediaConstraints } from './capture';
 import { isExpiryWarning, LiveStreamSession, releasePublisher, secondsUntil, StartRun } from './session';
 import { createStreamApi, type StreamApi } from './stream-api';
-import { SCREEN_SHARE_VIDEO_SETTINGS } from './video-profile';
+import { resolveScreenShareVideoSettingsForSearch } from './video-profile';
 import {
   isStreamAlreadyLiveError,
   messageKeyForError,
@@ -147,7 +147,7 @@ export class ScreenShareControllerImpl {
         publishToken: created.publishToken,
         keyframeRequestIntervalMs: keyframeRequestIntervalForSearch(currentSearch()),
         audioProfile: currentAudioProfile(),
-        videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,
+        videoSettings: resolveScreenShareVideoSettingsForSearch(currentSearch()),
       });
       stream = new LiveStreamSession(created, publisher, run);
       if (!this.isActiveRun(run)) return this.discardInactiveRun(stream, run);

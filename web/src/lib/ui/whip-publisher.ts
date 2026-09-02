@@ -56,7 +56,7 @@ export interface WhipVideoSettings {
   maxBitrate: number;
   contentHint: string;
   degradationPreference: RTCDegradationPreference;
-  scaleResolutionDownBy: number;
+  scaleResolutionDownBy?: number;
 }
 
 interface StartWhipPublisherInput {
@@ -143,7 +143,9 @@ async function configureVideoSender(sender: RTCRtpSender, settings: WhipVideoSet
   const parameters = sender.getParameters();
   parameters.encodings = parameters.encodings?.length ? parameters.encodings : [{}];
   parameters.encodings[0]!.maxBitrate = settings.maxBitrate;
-  parameters.encodings[0]!.scaleResolutionDownBy = settings.scaleResolutionDownBy;
+  if (settings.scaleResolutionDownBy !== undefined) {
+    parameters.encodings[0]!.scaleResolutionDownBy = settings.scaleResolutionDownBy;
+  }
   parameters.degradationPreference = settings.degradationPreference;
   try {
     await sender.setParameters(parameters);

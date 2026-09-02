@@ -8,7 +8,10 @@ import {
   resolveWhipResourceUrl,
   startWhipPublisher,
 } from '../../src/lib/ui/whip-publisher';
-import { SCREEN_SHARE_VIDEO_SETTINGS } from '../../src/lib/ui/screen-share/video-profile';
+import {
+  REALTIME_SCREEN_SHARE_VIDEO_SETTINGS,
+  SCREEN_SHARE_VIDEO_SETTINGS,
+} from '../../src/lib/ui/screen-share/video-profile';
 
 describe('WHIP publisher', () => {
   test('固定済みの配信オリジンから stream ID ごとの WHIP URL を作る', () => {
@@ -255,6 +258,28 @@ describe('WHIP publisher', () => {
     }
   });
 
+  test('解像度倍率が未指定の映像設定では sender encoding に代入しない', async () => {
+    const restore = installWebRtcMocks(() => undefined);
+    try {
+      const publisher = await startWhipPublisher({
+        ...testPublisherInput(),
+        videoSettings: REALTIME_SCREEN_SHARE_VIDEO_SETTINGS,
+      });
+      publisher.close();
+
+      expect(restore.parameters).toEqual([
+        {
+          maxBitrate: 1_500_000,
+          scaleResolutionDownBy: undefined,
+          degradationPreference: 'maintain-framerate',
+        },
+      ]);
+      expect(restore.encodingKeys).toEqual([['maxBitrate']]);
+    } finally {
+      restore.globals();
+    }
+  });
+
   test('full設定とfallbackがともに拒否されたらPOSTせず接続を閉じてfallback例外を返す', async () => {
     const fallbackError = new Error('fallback rejected');
     const restore = installWebRtcMocks((_parameters, attempt) => {
@@ -342,6 +367,7 @@ interface WebRtcMockState {
     scaleResolutionDownBy: number | undefined;
     degradationPreference: RTCDegradationPreference | undefined;
   }>;
+  encodingKeys: string[][];
   getParametersCalls: number;
   postCalls: number;
   closed: number;
@@ -358,6 +384,7 @@ function installWebRtcMocks(
   const previousConnection = globalThis.RTCPeerConnection;
   const state: WebRtcMockState = {
     parameters: [],
+    encodingKeys: [],
     getParametersCalls: 0,
     postCalls: 0,
     closed: 0,
@@ -388,6 +415,7 @@ function installWebRtcMocks(
               scaleResolutionDownBy: parameters.encodings?.[0]?.scaleResolutionDownBy,
               degradationPreference: parameters.degradationPreference,
             });
+            state.encodingKeys.push(Object.keys(parameters.encodings?.[0] ?? {}));
             setParameters(parameters, state.parameters.length);
           },
         },
