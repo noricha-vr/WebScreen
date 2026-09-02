@@ -2,28 +2,29 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   configureCaptureAudioTracks,
-  displayAudioConstraintForRawProfile,
-  isRawAudioProfileForSearch,
+  displayAudioConstraint,
+  resolveAudioProfileForSearch,
 } from '../../src/lib/ui/audio-profile';
 
-describe('raw 音声プロファイル', () => {
-  test('audio-profile=raw が重複なく1個の時だけ有効にする', () => {
-    expect(isRawAudioProfileForSearch('?audio-profile=raw')).toBe(true);
-    expect(isRawAudioProfileForSearch('')).toBe(false);
-    expect(isRawAudioProfileForSearch('?audio-profile=aac')).toBe(false);
-    expect(isRawAudioProfileForSearch('?audio-profile=raw&audio-profile=raw')).toBe(false);
-    expect(isRawAudioProfileForSearch('?audio-profile=raw&audio-profile=aac')).toBe(false);
-    expect(isRawAudioProfileForSearch('?audio-profile=')).toBe(false);
-    expect(isRawAudioProfileForSearch('?audio-profile=RAW')).toBe(false);
+describe('音声プロファイル', () => {
+  test('audio-profile=legacy が重複なく1個の時だけ旧挙動へ戻す', () => {
+    expect(resolveAudioProfileForSearch('?audio-profile=legacy')).toBe('legacy');
+    expect(resolveAudioProfileForSearch('')).toBe('raw');
+    expect(resolveAudioProfileForSearch('?audio-profile=raw')).toBe('raw');
+    expect(resolveAudioProfileForSearch('?audio-profile=aac')).toBe('raw');
+    expect(resolveAudioProfileForSearch('?audio-profile=legacy&audio-profile=legacy')).toBe('raw');
+    expect(resolveAudioProfileForSearch('?audio-profile=legacy&audio-profile=raw')).toBe('raw');
+    expect(resolveAudioProfileForSearch('?audio-profile=')).toBe('raw');
+    expect(resolveAudioProfileForSearch('?audio-profile=LEGACY')).toBe('raw');
   });
 
-  test('有効時だけブラウザの音声処理を無効化する制約を返す', () => {
-    expect(displayAudioConstraintForRawProfile(false)).toBe(true);
-    expect(displayAudioConstraintForRawProfile(true)).toEqual({
+  test('raw だけブラウザの音声処理を無効化する制約を返す', () => {
+    expect(displayAudioConstraint('raw')).toEqual({
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
     });
+    expect(displayAudioConstraint('legacy')).toBe(true);
   });
 
   test('raw 音声トラックを music として送出し、取得設定を記録する', () => {
@@ -41,7 +42,7 @@ describe('raw 音声プロファイル', () => {
     } as unknown as MediaStreamTrack;
     console.info = (...values: unknown[]) => { events.push(values); };
     try {
-      configureCaptureAudioTracks({ getAudioTracks: () => [track] } as unknown as MediaStream, true);
+      configureCaptureAudioTracks({ getAudioTracks: () => [track] } as unknown as MediaStream, 'raw');
 
       expect(track.contentHint).toBe('music');
       expect(events).toEqual([['audio_capture_settings', {
@@ -58,7 +59,7 @@ describe('raw 音声プロファイル', () => {
     }
   });
 
-  test('既定経路でも取得設定を記録するが contentHint は変えない', () => {
+  test('legacy でも取得設定を記録するが contentHint は変えない', () => {
     const previousInfo = console.info;
     const events: unknown[][] = [];
     const track = {
@@ -67,12 +68,12 @@ describe('raw 音声プロファイル', () => {
     } as unknown as MediaStreamTrack;
     console.info = (...values: unknown[]) => { events.push(values); };
     try {
-      configureCaptureAudioTracks({ getAudioTracks: () => [track] } as unknown as MediaStream, false);
+      configureCaptureAudioTracks({ getAudioTracks: () => [track] } as unknown as MediaStream, 'legacy');
 
       expect(track.contentHint).toBe('');
       expect(events).toEqual([['audio_capture_settings', {
         event: 'audio_capture_settings',
-        profile: 'default',
+        profile: 'legacy',
         channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,

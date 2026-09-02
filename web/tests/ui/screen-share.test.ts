@@ -64,6 +64,7 @@ describe('画面共有 controller', () => {
     let closed = 0;
     let deleted = 0;
     let requestedConstraints: MediaStreamConstraints | undefined;
+    let publishedInput: Parameters<ScreenShareDependencies['startWhipPublisher']>[0] | undefined;
     const page = fakeScreenSharePage();
     const publisher: WhipPublisher = {
       close: () => { closed += 1; },
@@ -76,7 +77,7 @@ describe('画面共有 controller', () => {
       addEventListener: () => undefined,
       stop: () => { stopped += 1; },
     };
-    const audioTrack = { stop: () => { stopped += 1; }, getSettings: () => ({ channelCount: 2 }) };
+    const audioTrack = { contentHint: '', stop: () => { stopped += 1; }, getSettings: () => ({ channelCount: 2 }) };
     const media = {
       getTracks: () => [videoTrack, audioTrack],
       getVideoTracks: () => [videoTrack],
@@ -97,7 +98,10 @@ describe('画面共有 controller', () => {
         }
         return null;
       }) as unknown as ScreenShareDependencies['requestJson'],
-      startWhipPublisher: async () => publisher,
+      startWhipPublisher: async (input) => {
+        publishedInput = input;
+        return publisher;
+      },
       waitForStreamReady: async () => true,
       getDisplayMedia: async (constraints) => {
         requestedConstraints = constraints;
@@ -114,14 +118,17 @@ describe('画面共有 controller', () => {
     await waitFor(() => !page.step('url').hidden);
     expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
     expect(page.button('[data-screen-audio-status]').textContent).toBe('audio-included');
+    // クエリなし = 既定の raw なので、音声処理を切る制約と raw プロファイルで publish する。
     expect(requestedConstraints).toEqual({
-      audio: true,
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       video: {
         width: { ideal: 1280 },
         height: { ideal: 720 },
         frameRate: { ideal: 30, max: 30 },
       },
     });
+    expect(publishedInput?.audioProfile).toBe('raw');
+    expect(audioTrack.contentHint).toBe('music');
 
     page.button('[data-screen-show-live]').click();
     expect(page.step('live').hidden).toBe(false);

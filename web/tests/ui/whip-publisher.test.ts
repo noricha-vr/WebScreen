@@ -156,6 +156,8 @@ describe('WHIP publisher', () => {
         stream,
         streamId: 'Ab12Cd34Ef56',
         publishToken: 'first-token',
+        // 再 publish と停止だけを見るケースなので、audio sender へ触らない legacy で固定する。
+        audioProfile: 'legacy',
         fetchImpl: (async (_url, options) => {
           requests.push(options ?? {});
           if (options?.method === 'POST') {
@@ -187,6 +189,7 @@ describe('WHIP publisher', () => {
         } as unknown as MediaStream,
         streamId: 'Ab12Cd34Ef56',
         publishToken: 'video-only-token',
+        audioProfile: 'raw',
         fetchImpl: (async () => new Response('answer', {
           status: 201,
           headers: { Location: '/live/Ab12Cd34Ef56/whip/video-only' },
@@ -269,7 +272,7 @@ describe('WHIP publisher', () => {
     }
   });
 
-  test('既定経路では Opus を含む answer を加工せず audio sender の上限も変更しない', async () => {
+  test('legacy では Opus を含む answer を加工せず audio sender の上限も変更しない', async () => {
     const restore = installWebRtcMocks(() => undefined);
     const audioTrack = { stop() {} } as unknown as MediaStreamTrack;
     const answerSdp = ['a=rtpmap:111 opus/48000/2', 'a=fmtp:111 minptime=10;useinbandfec=1'].join('\r\n');
@@ -280,6 +283,7 @@ describe('WHIP publisher', () => {
           getVideoTracks: () => [{ contentHint: '', stop() {} }],
           getAudioTracks: () => [audioTrack],
         } as unknown as MediaStream,
+        audioProfile: 'legacy',
         fetchImpl: (async () => new Response(answerSdp, {
           status: 201,
           headers: { Location: '/live/Ab12Cd34Ef56/whip/resource' },
@@ -294,7 +298,7 @@ describe('WHIP publisher', () => {
     }
   });
 
-  test('raw 音声プロファイルだけが Opus answer と audio sender の上限を変更する', async () => {
+  test('既定の raw は Opus answer と audio sender の上限を変更する', async () => {
     const restore = installWebRtcMocks(() => undefined);
     const audioTrack = { stop() {} } as unknown as MediaStreamTrack;
     try {
@@ -304,7 +308,7 @@ describe('WHIP publisher', () => {
           getVideoTracks: () => [{ contentHint: '', stop() {} }],
           getAudioTracks: () => [audioTrack],
         } as unknown as MediaStream,
-        rawAudioProfile: true,
+        audioProfile: 'raw',
         fetchImpl: (async () => new Response([
           'a=rtpmap:111 opus/48000/2',
           'a=fmtp:111 minptime=10',
@@ -417,6 +421,7 @@ function testPublisherInput(onPost: () => void = () => {}): Parameters<typeof st
     } as unknown as MediaStream,
     streamId: 'Ab12Cd34Ef56',
     publishToken: 'token',
+    audioProfile: 'raw',
     fetchImpl: (async (_url, options) => {
       if (options?.method === 'POST') {
         onPost();

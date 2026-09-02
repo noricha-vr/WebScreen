@@ -1,5 +1,5 @@
 import { STREAM_WHIP_BASE_URL } from '../contracts/streams';
-import { configureRawAudioSender, withRawAudioOpusParameters } from './audio-profile';
+import { configureRawAudioSender, withRawAudioOpusParameters, type AudioProfile } from './audio-profile';
 import { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from './stream-profile';
 
 export { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from './stream-profile';
@@ -67,7 +67,8 @@ interface StartWhipPublisherInput {
   streamId: string;
   publishToken: string;
   keyframeRequestIntervalMs?: typeof MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS;
-  rawAudioProfile?: boolean;
+  /** 呼び出し元が URL query から決めた音声プロファイル（既定は raw だが、省略は許さず明示させる）。 */
+  audioProfile: AudioProfile;
   fetchImpl?: typeof fetch;
 }
 
@@ -104,7 +105,7 @@ export async function startWhipPublisher(input: StartWhipPublisherInput): Promis
     track.contentHint = SCREEN_SHARE_VIDEO_SETTINGS.contentHint;
     for (const audioTrack of input.stream.getAudioTracks()) {
       const audioSender = peerConnection.addTrack(audioTrack, input.stream);
-      if (input.rawAudioProfile) await configureRawAudioSender(audioSender);
+      if (input.audioProfile === 'raw') await configureRawAudioSender(audioSender);
     }
 
     await peerConnection.setLocalDescription(await peerConnection.createOffer());
@@ -113,7 +114,7 @@ export async function startWhipPublisher(input: StartWhipPublisherInput): Promis
     resourceUrl = response.resourceUrl;
     await peerConnection.setRemoteDescription({
       type: 'answer',
-      sdp: input.rawAudioProfile ? withRawAudioOpusParameters(response.answerSdp) : response.answerSdp,
+      sdp: input.audioProfile === 'raw' ? withRawAudioOpusParameters(response.answerSdp) : response.answerSdp,
     });
     const keyframeRequester = input.keyframeRequestIntervalMs === MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS
       ? createKeyframeRequester(transceiver.sender)
