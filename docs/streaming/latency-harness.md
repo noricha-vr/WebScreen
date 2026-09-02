@@ -7,15 +7,23 @@ cd web
 # 初回のみ、ハーネスのChromeでログインしてCookieを保存
 bun scripts/latency-probe.ts login
 bun scripts/latency-probe.ts run --minutes 3 --source 'http://127.0.0.1:0/latency-source.html?tones=1'
+# quality既定と realtime を同じ素材・同じ窓でA/B比較する例
+bun scripts/latency-probe.ts run --minutes 3 --source 'http://127.0.0.1:0/latency-source.html?load=heavy' --video-profile quality
+bun scripts/latency-probe.ts run --minutes 3 --source 'http://127.0.0.1:0/latency-source.html?load=heavy' --video-profile realtime --max-bitrate 1500000
 # 実行中に共有タブを切替
-bun scripts/latency-probe.ts source --url https://example.com/
+bun scripts/latency-probe.ts source --url https://example.com/ --scroll 240
 # 保存済みCSVを再集計
 bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 ```
 
 - 初回だけ既定プロファイル `~/.webscreen-harness/chrome-profile` で `bun scripts/latency-probe.ts login` を実行し、開いたChromeでWebScreenへ手動ログインする。未ログイン時は開始せず終了する。
 - `--source` の `127.0.0.1:0` は起動時の空きポートへ置換される。`?tones=1` はステレオ定常トーンも加える。
-- 結果は `outlet.csv` と `summary.md`。`--player win2022` 指定時はWindows録画を回収・復号して `player.csv` を作る。失敗・未復号は `player-error.md` に明記する。
+- 結果は `outlet.csv` と `summary.md`。送出側の生counterは `sender.csv`、共有ページで実際に使われたsender/track設定は `sender-config.json` に保存する。設定取得に失敗してもJSONに理由を残す。
+- 出口画質は遅延用の単発取得と別の連続ffmpegで測り、`outlet-quality.csv`（fps・解像度・freeze・実効ビットレートの窓別値）と `outlet-quality.md`（窓数・freeze・解像度変化の要約）を出す。既定の窓は20秒で、`--outlet-quality-seconds 5..120`で変えられる。失敗時は `outlet-quality.log` に理由を残しrunを失敗にする。
+- `--video-profile quality`（既定）は通常の共有ページを開く。`--video-profile realtime --max-bitrate 1200000|1500000|2000000` はproduction共有ページへ設定queryを渡す（省略時は1500000）。`--max-bitrate`をqualityと併用したり許可外の値を指定すると開始前に失敗する。
+- `--scroll 0..2000` は `run` と `source` で使える。外部ページだけを指定速度（px/秒）で末尾で反転する往復スクロールにし、計測ページには適用しない。I9との比較は `--scroll 240` を使う。
+- `latency-source.html?load=heavy` は外部取得なしの写真調グラデーション・広い変化領域・連続移動カーソルを描く高負荷素材。ブロックコードは独立した高コントラスト領域に置くため、縮小しても遅延復号を維持する。
+- `--player win2022` 指定時はWindows録画を回収・復号して `player.csv` を作る。失敗・未復号は `player-error.md` に明記する。
 - `ffmpeg` と `ffprobe` が必要。`--player` にはさらに `ssh`、Windows側ffmpeg、VRChatを表示した対話desktopが必要。
 
 制限: v1の必須範囲はRTSPT出口。Windows側はgdigrabの30 fpsフレーム番号から録画時刻を復元するベストエフォートで、dshow音声・ddagrabは未実装。外部URLへ切り替えた後は時刻ブロックがないため、出口遅延の標本は記録されない。
@@ -26,6 +34,10 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - `frames/` の最初/最後の復号フレームと直近の失敗フレームで、配信映像を目視確認できる。
 - `outlet-audio.wav` と `outlet-audio.json` は `analyze` 時に再検出され、`outlet-audio.csv` と既存の映像行を結合して `summary.md` を再生成する。毎秒ビープは `600 + 100 * (UTC秒 mod 8)` Hz の8種類で、絶対遅延を映像近接標本から復元できない時は `audio_latency_phase_ms`（1秒位相）のみを残す。
 - Windows録画は対話セッションのScheduled Taskを使う。失敗時は `player-error.md`、成功時の時刻・`w32tm`補正は `player-recording.md` を見る。
+- run 終了時は共有ページの停止ボタンを押してから Chrome を閉じる。`browser.close()` だけでは停止ビーコンが届かず配信がサーバーに残り、次の run が「既存の配信を終了」経路に入って不安定になる（2026-09-02 に連続 8 run 中 3 run が失敗）。Playwright がクラッシュして Chrome が残った時も同じ状態になるので、`pgrep -f webscreen-harness/chrome-profile` で残留を確認してから始める
+- `page.evaluate` に渡す関数はシリアライズされるため module scope の helper を参照できない（`ReferenceError` になり 1 秒標本が 0 件になる）。閉包内に定義する
+- ffmpeg の `-t` は直後の出力にしか効かない。出力を 2 本持つ画質計測では両方に付けないと終わらず run 全体が固まる
+- `?load=heavy` は色ノイズのモザイクをパンする **最悪ケース**で、A（1.2 Mbps / maintain-resolution）では出口 1 fps・freeze 15 秒/20 秒まで落ちる。実ページ相当の負荷は Wikipedia の `--scroll 240` で測り、heavy は帯域飢餓時の挙動比較にだけ使う（2026-09-02 実測）
 
 ## 出口の測り方と既知のアーティファクト（2026-09-02）
 
