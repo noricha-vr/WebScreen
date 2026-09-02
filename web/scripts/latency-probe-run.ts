@@ -110,6 +110,9 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
   } finally {
     measurementAbort.abort();
     audio?.kill();
+    // browser.close() だけでは pagehide の停止ビーコンが飛ばず配信がサーバーに残り、次の run が
+    // 「既存の配信を終了」経路に入って不安定になる（2026-09-02 実測）。閉じる前に停止ボタンを押す
+    if (browser) await stopSharingBeforeClose(browser);
     await Promise.allSettled([
       browser?.close(),
       Promise.resolve().then(() => controllerServer.stop(true)),
@@ -222,7 +225,7 @@ async function startScreenShare(page: import('@playwright/test').Page, profileDi
   const stopOthers = page.locator('[data-screen-stop-others]');
   if (await stopOthers.isVisible().catch(() => false)) {
     console.info('既存の配信を終了して開始します（同時配信上限）'); await stopOthers.click({ timeout: 15_000 });
-    await page.waitForFunction(() => Boolean(document.querySelector<HTMLInputElement>('[data-screen-url]')?.value) || Boolean(document.querySelector<HTMLElement>('[data-screen-step="login"]') && !document.querySelector<HTMLElement>('[data-screen-step="login"]')?.hidden), undefined, { timeout: 45_000 });
+    await page.waitForFunction(() => Boolean(document.querySelector<HTMLInputElement>('[data-screen-url]')?.value) || Boolean(document.querySelector<HTMLElement>('[data-screen-step="login"]') && !document.querySelector<HTMLElement>('[data-screen-step="login"]')?.hidden), undefined, { timeout: 90_000 });
   }
   const url = await page.locator('[data-screen-url]').inputValue().catch(() => '');
   if (!url) {
@@ -235,6 +238,14 @@ async function startScreenShare(page: import('@playwright/test').Page, profileDi
   return streamId;
 }
 
+async function stopSharingBeforeClose(browser: import('@playwright/test').BrowserContext): Promise<void> {
+  for (const page of browser.pages()) {
+    const stop = page.locator('[data-screen-stop]');
+    if (!(await stop.isVisible().catch(() => false))) continue;
+    await stop.click({ timeout: 3_000 }).catch(() => undefined);
+    await page.waitForFunction(() => { const live = document.querySelector<HTMLElement>('[data-screen-step="live"]'); return !live || live.hidden; }, undefined, { timeout: 5_000 }).catch(() => undefined);
+  }
+}
 function resolveSourceUrl(value: string, sourceServer: URL): string { const parsed = new URL(value); if (parsed.hostname === '127.0.0.1' && parsed.port === '0') parsed.port = sourceServer.port; return parsed.href; }
 function screenShareUrl(options: RunOptions): string {
   if (options.videoProfile === 'quality') return 'https://web-screen.net/ja/screen-share/';
