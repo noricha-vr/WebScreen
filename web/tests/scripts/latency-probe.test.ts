@@ -5,19 +5,24 @@ import {
   formatLatencyCsv,
   formatSummary,
   inferLatencyStartedAtMs,
+  latencyFromSecondBoundary,
   parseLatencyCsv,
   summarizeLatency,
   type LatencySample,
 } from '../../scripts/latency-probe-analysis';
 import {
   BLOCK_GRID_SIZE,
+  bandPassOneKilohertz,
   compensateClockOffset,
   decodeBlockCode,
   decodeBlockCodeFrame,
   detectBeepOnsets,
+  decodeMonoWav,
   encodeBlockCode,
+  encodeMonoWav,
 } from '../../scripts/latency-probe-codec';
 import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
+import { shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
 
 function rasterize(timestampMs: number, cell = 20): { rgb: Uint8Array; width: number; height: number } {
   const width = BLOCK_GRID_SIZE * cell + 40;
@@ -48,14 +53,29 @@ describe('latency block code', () => {
   });
 
   test('合成PCMの1kHzビープ立ち上がりを検出する', () => {
-    const samples = new Float32Array(4_800);
-    for (let index = 1_200; index < 3_600; index += 1) samples[index] = Math.sin(2 * Math.PI * 1_000 * index / 48_000) * 0.5;
+    const samples = new Float32Array(4_800).fill(0.002);
+    for (let index = 1_200; index < 3_600; index += 1) samples[index] += Math.sin(2 * Math.PI * 1_000 * index / 48_000) * 0.1;
     expect(detectBeepOnsets(samples, 48_000)[0]).toBeGreaterThanOrEqual(960);
     expect(detectBeepOnsets(samples, 48_000)[0]).toBeLessThanOrEqual(1_440);
   });
 
+  test('バンドパスは1kHzを通し、WAV往復後もビープを検出する', () => {
+    const samples = new Float32Array(4_800);
+    for (let index = 1_200; index < 3_600; index += 1) samples[index] = Math.sin(2 * Math.PI * 1_000 * index / 48_000) * 0.25;
+    const filtered = bandPassOneKilohertz(samples, 48_000);
+    expect(Math.max(...filtered.map(Math.abs))).toBeGreaterThan(0.05);
+    const decoded = decodeMonoWav(encodeMonoWav(samples, 48_000));
+    expect(detectBeepOnsets(decoded.samples, decoded.sampleRate)).not.toEqual([]);
+  });
+
   test('Windows時計差をMac基準へ補正する', () => {
     expect(compensateClockOffset(10_250, 250)).toBe(10_000);
+  });
+
+  test('復号失敗ログを指定間隔に間引く', () => {
+    expect(shouldLogDecodeFailure(10_000, null)).toBe(true);
+    expect(shouldLogDecodeFailure(14_999, 10_000)).toBe(false);
+    expect(shouldLogDecodeFailure(15_000, 10_000)).toBe(true);
   });
 });
 
@@ -72,6 +92,7 @@ describe('latency CSV analysis', () => {
     expect(inferLatencyStartedAtMs(formatLatencyCsv(samples, startedAtMs))).toBe(startedAtMs);
     expect(summarizeLatency(samples)).toEqual({ count: 3, medianMs: 900, p95Ms: 1_200 });
     expect(firstBelowLatency(samples, startedAtMs)).toBe(31);
+    expect(latencyFromSecondBoundary(startedAtMs + 1_234.5)).toBe(234.5);
   });
 
   test('summaryに開始直後、分単位、A/V差を含める', () => {
@@ -79,6 +100,14 @@ describe('latency CSV analysis', () => {
     expect(summary).toContain('開始後 30 秒');
     expect(summary).toContain('1 分');
     expect(summary).toContain('A/V 差');
+  });
+
+  test('近接した別標本の音声と映像からA/V差を集計する', () => {
+    const summary = formatSummary([
+      { observedAtMs: startedAtMs + 1_000, videoLatencyMs: 600, audioLatencyMs: null },
+      { observedAtMs: startedAtMs + 1_120, videoLatencyMs: null, audioLatencyMs: 750 },
+    ], null, startedAtMs);
+    expect(summary).toContain('A/V 差（audio - video、近接標本）: 150.0 ms');
   });
 });
 

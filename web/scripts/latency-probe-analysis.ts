@@ -68,6 +68,12 @@ export function firstBelowLatency(
   return sample ? (sample.observedAtMs - startedAtMs) / 1_000 : null;
 }
 
+/** 観測したビープから直前のUTC秒境界までの遅延を返す。 */
+export function latencyFromSecondBoundary(observedAtMs: number): number {
+  const remainder = observedAtMs % 1_000;
+  return remainder >= 0 ? remainder : remainder + 1_000;
+}
+
 /** 最初の30秒と1分単位の集計をMarkdown表へ整形する。 */
 export function formatSummary(
   outlet: readonly LatencySample[], player: readonly LatencySample[] | null, startedAtMs: number
@@ -97,13 +103,17 @@ function formatSeries(name: string, samples: readonly LatencySample[], startedAt
   return [
     `## ${name}`, '', '| 区間 | 映像標本 | median ms | p95 ms |', '|---|---:|---:|---:|', ...table,
     '', `- 最初に 1 秒未満へ入った時刻: ${firstBelow === null ? '未検出' : `${firstBelow.toFixed(3)} 秒`}`,
-    `- A/V 差（audio - video、同一標本）: ${av === null ? '標本なし' : `${av.toFixed(1)} ms`}`, '',
+    `- A/V 差（audio - video、近接標本）: ${av === null ? '標本なし' : `${av.toFixed(1)} ms`}`, '',
   ].join('\n');
 }
 
 function avDifference(samples: readonly LatencySample[]): number | null {
-  const differences = samples.flatMap((sample) => sample.audioLatencyMs === null || sample.videoLatencyMs === null
-    ? [] : [sample.audioLatencyMs - sample.videoLatencyMs]).sort((left, right) => left - right);
+  const videos = samples.filter((sample): sample is LatencySample & { videoLatencyMs: number } => sample.videoLatencyMs !== null);
+  const differences = samples.flatMap((audio) => {
+    if (audio.audioLatencyMs === null || videos.length === 0) return [];
+    const nearest = videos.reduce((best, candidate) => Math.abs(candidate.observedAtMs - audio.observedAtMs) < Math.abs(best.observedAtMs - audio.observedAtMs) ? candidate : best);
+    return Math.abs(nearest.observedAtMs - audio.observedAtMs) <= 1_000 ? [audio.audioLatencyMs - nearest.videoLatencyMs] : [];
+  }).sort((left, right) => left - right);
   return differences.length ? percentile(differences, 0.5) : null;
 }
 

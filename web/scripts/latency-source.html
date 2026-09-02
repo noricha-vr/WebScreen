@@ -41,7 +41,6 @@
     return cells;
   }
   function draw() {
-    requestAnimationFrame(draw);
     const ratio = Math.min(devicePixelRatio || 1, 2);
     if (canvas.width !== innerWidth * ratio || canvas.height !== innerHeight * ratio) {
       canvas.width = innerWidth * ratio; canvas.height = innerHeight * ratio;
@@ -61,13 +60,17 @@
   function audio() {
     const audioContext = new AudioContext();
     const gain = audioContext.createGain(); gain.gain.value = 0.1; gain.connect(audioContext.destination);
+    const wallClockOffsetMs = Date.now() - audioContext.currentTime * 1000;
     const scheduleBeep = () => {
-      const now = audioContext.currentTime;
-      let next = Math.ceil(now);
-      if (next - now < 0.05) next += 1;
-      const oscillator = audioContext.createOscillator(); oscillator.frequency.value = 1000;
-      oscillator.connect(gain); oscillator.start(next); oscillator.stop(next + 0.05);
-      setTimeout(scheduleBeep, Math.max(100, (next + 1 - audioContext.currentTime) * 1000));
+      const nextBoundaryMs = (Math.floor((audioContext.currentTime * 1000 + wallClockOffsetMs) / 1000) + 1) * 1000;
+      const startAt = (nextBoundaryMs - wallClockOffsetMs) / 1000;
+      const leadMs = 100;
+      setTimeout(() => {
+        if (audioContext.currentTime >= startAt) { scheduleBeep(); return; }
+        const oscillator = audioContext.createOscillator(); oscillator.frequency.value = 1000;
+        oscillator.connect(gain); oscillator.start(startAt); oscillator.stop(startAt + 0.05);
+        scheduleBeep();
+      }, Math.max(0, (startAt - audioContext.currentTime) * 1000 - leadMs));
     };
     if (new URLSearchParams(location.search).get('tones') === '1') {
       for (const [frequency, pan] of [[440, -1], [880, 1]]) {
@@ -77,6 +80,6 @@
     }
     scheduleBeep();
   }
-  audio(); draw();
+  audio(); draw(); setInterval(draw, 50);
 </script>
 </html>

@@ -17,3 +17,10 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - `ffmpeg` と `ffprobe` が必要。`--player` にはさらに `ssh`、Windows側ffmpeg、VRChatを表示した対話desktopが必要。
 
 制限: v1の必須範囲はRTSPT出口。Windows側はgdigrabの30 fpsフレーム番号から録画時刻を復元するベストエフォートで、dshow音声・ddagrabは未実装。外部URLへ切り替えた後は時刻ブロックがないため、出口遅延の標本は記録されない。
+
+## 既知の失敗と診断ファイル
+
+- 出口が止まっても指定時間まで待機し、`outlet-ffmpeg.log` と `outlet-decode.log` にffmpeg・復号状態を残す。
+- `frames/` の最初/最後の復号フレームと直近の失敗フレームで、配信映像を目視確認できる。
+- `outlet-audio.wav` と `outlet-audio.json` は `analyze` 時に再検出され、`outlet-audio.csv` を再生成する。
+- Windows録画は対話セッションのScheduled Taskを使う。失敗時は `player-error.md`、成功時の時刻・`w32tm`補正は `player-recording.md` を見る。
