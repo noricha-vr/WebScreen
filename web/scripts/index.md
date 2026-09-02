@@ -1,5 +1,9 @@
 # 開発用スクリプト
 
+## `latency-probe.ts`
+
+実Mac Chromeの画面共有からRTSPT出口を時系列計測する遅延ハーネス。使い方・前提・既知の限界は [配信遅延ハーネス](../../docs/streaming/latency-harness.md) を参照。
+
 ## `benchmark-screen-share-fps.ts`
 
 実Macのsystem Chromeで、WebScreenの画面共有を指定順に取得し、H.264 loopback encoderの統計を比較する。解像度・bitrate・content hint・degradation preference・scale・keyframe間隔は製品moduleのexportを直接使う。音声は計測しない。

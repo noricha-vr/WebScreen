@@ -4,6 +4,8 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 配信セッション API・lifecycle 管理・配信 UI（/screen-share/）・ingress / egress の MediaMTX・音声 relay まで実装済み（2026-09-01）。
 本番の実構成は [operations.md](operations.md) が正本。
 
+[配信遅延ハーネス](latency-harness.md) — 実Macの画面共有からRTSPT出口を時系列計測するCLI。
+
 現行の変換（アップロード → MP4 → R2 配信）とは別系統の機能で、既存の動作には影響しない。
 
 ## 結論
