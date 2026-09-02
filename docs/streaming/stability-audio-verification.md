@@ -18,7 +18,7 @@ Qiita の「配信が不安定な時」の OBS 設定を比較対象にし、Web
 | 劣化方針 | OBS プリセット P7 / 高品質 | **`contentHint = 'detail'` + `maintain-resolution`** | I18 の本番 relay 合成QAで、文字可読性と動画安定性が合格 |
 | スケール | — | **`scaleResolutionDownBy = 1`** | I18 で動画像区間の送出解像度を1280x720に維持 |
 | キーフレーム | 0 秒（自動） | **通常はMediaMTXのPLIにより約2秒** | MP3 betaのChromeだけ500 ms周期で次キーフレームを要求。first-packet IDRは保証しない |
-| 音声 | FFmpeg AAC、音声トラック 1 | **タブ音声 → WebRTC 音声 → AAC-LC 48 kHz / stereo / 128 kbps** | Chrome で「タブの音声を共有」をオンにした時だけ音声を付ける |
+| 音声 | FFmpeg AAC、音声トラック 1 | **タブ音声 → WebRTC 音声 → AAC-LC 48 kHz / stereo / 128 kbps。Chrome の音声処理は切る（EC/NS/AGC=false, contentHint 'music'）** | Chrome で「タブの音声を共有」をオンにした時だけ音声を付ける |
 
 採用実装の正本は `web/src/lib/ui/whip-publisher.ts`。本番 relay の合成 motion/static QA は合格したが、WebScreen UI からの actual YouTube 最終確認は未実施。
 full設定がブラウザに拒否された時はfresh parametersからmaxBitrate-only fallbackを1回だけ試す。これは配信継続の互換策であり、文字品質を保証しない。
@@ -114,7 +114,8 @@ MP3 48 kHz stereo 128 kbpsは30分・非無音・A/V 7〜15 msまで自動確認
 - 選択結果に音声トラックがあれば「音声を含めて配信しています」、なければ「映像のみ」と表示する。
 - relay 出口は現行でH.264 + AAC、MP3 beta候補でH.264 + MP3を `verify-codecs.sh` で検証する。
 - 表示文言は **「検証時に音声が出ることを確認済み」** とし、PoC という表現は使わない。
-- `?audio-profile=raw` は、Chromeの音声処理（EC / NS / AGC）がモノラル化・高域減衰の一因かもしれないという仮説を比較する候補（既定では無効。ブラウザ取得側の設定で、relay の `audio-profile.sh` とは別物）。
-- A/Bでは同じ共有元で既定とrawを各5秒測り、`ffmpeg -rtsp_transport tcp -i rtsp://webscreen.tv/live/{id} -t 5 -vn -af "pan=mono|c0=0.5*c0-0.5*c1,volumedetect" -f null -` を実行する。L−R差分が本体（`volumedetect` 単独）より 40 dB 以上低ければモノラルとみなす（2026-09-02 の実測は本体 −21 dB に対し L−R −91 dB）。
+- Chromeの音声処理（EC / NS / AGC）がモノラル化の原因だったため、**rawが既定**になった（ブラウザ取得側の設定で、relay の `audio-profile.sh` とは別物）。2026-09-02の本番A/Bで、legacy（処理あり）は出口のL−Rが−91 dBの完全モノラルだったのに対し、rawは−57.6 dB（本体 −32.6 dB との差 25 dB）でステレオ成分が残り、実聴でもステレオを確認した。
+- `?audio-profile=legacy` は旧挙動へ戻す退避経路。rawが原因かを切り分ける時と、rawで問題が出た配信環境の一時回避に使う。
+- A/Bでは同じ共有元でrawとlegacyを各5秒測り、`ffmpeg -rtsp_transport tcp -i rtsp://webscreen.tv/live/{id} -t 5 -vn -af "pan=mono|c0=0.5*c0-0.5*c1,volumedetect" -f null -` を実行する。L−R差分が本体（`volumedetect` 単独）より 40 dB 以上低ければモノラルとみなす（2026-09-02 の legacy 実測は本体 −21 dB に対し L−R −91 dB）。
 - 測定境界: 出口は relay が `-ac 2 -b:a 128k` で再エンコードした後なので、判定できるのは**モノラルかどうか**まで。Opus の `maxaveragebitrate` や高域の差は出口に届かないため、高域比較は ingress（`rtsp://127.0.0.1:8554`、サーバー内）で測る。
-- 取得側の `audio_capture_settings` ログ（channelCount / EC / NS / AGC）は既定・rawの両方で出るので、A/Bではこれも並べて比較する。raw で `raw_audio_sender_bitrate_failed` が出た時は 128 kbps 未適用として記録する。
+- 取得側の `audio_capture_settings` ログ（`profile` は `raw` / `legacy`、channelCount / EC / NS / AGC）は両方で出るので、A/Bではこれも並べて比較する。raw で `raw_audio_sender_bitrate_failed` が出た時は 128 kbps 未適用として記録する。

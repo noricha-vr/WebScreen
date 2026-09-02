@@ -9,8 +9,9 @@ import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './req
 import { waitForStreamReady } from './stream-health';
 import {
   configureCaptureAudioTracks,
-  displayAudioConstraintForRawProfile,
-  isRawAudioProfileForSearch,
+  displayAudioConstraint,
+  resolveAudioProfileForSearch,
+  type AudioProfile,
 } from './audio-profile';
 import { keyframeRequestIntervalForSearch } from './stream-profile';
 import {
@@ -117,9 +118,9 @@ export class ScreenShareController {
     const retry = this.button('[data-screen-retry]');
     if (retry) retry.disabled = true;
     try {
-      const rawAudioProfile = hasRawAudioProfile();
-      const media = await this.deps.getDisplayMedia(displayMediaConstraints(rawAudioProfile));
-      configureCaptureAudioTracks(media, rawAudioProfile);
+      const profile = currentAudioProfile();
+      const media = await this.deps.getDisplayMedia(displayMediaConstraints(profile));
+      configureCaptureAudioTracks(media, profile);
       if (!this.isActiveStart(generation)) {
         stopMedia(media);
         return;
@@ -141,9 +142,9 @@ export class ScreenShareController {
     const retry = this.button('[data-screen-retry]');
     if (retry) retry.disabled = true;
     try {
-      const rawAudioProfile = hasRawAudioProfile();
-      media = await this.deps.getDisplayMedia(displayMediaConstraints(rawAudioProfile));
-      configureCaptureAudioTracks(media, rawAudioProfile);
+      const profile = currentAudioProfile();
+      media = await this.deps.getDisplayMedia(displayMediaConstraints(profile));
+      configureCaptureAudioTracks(media, profile);
       if (!this.isActiveStart(generation)) {
         stopMedia(media);
         return;
@@ -221,7 +222,7 @@ export class ScreenShareController {
         streamId: created.id,
         publishToken: created.publishToken,
         keyframeRequestIntervalMs: keyframeRequestIntervalForSearch(globalThis.window?.location?.search ?? ''),
-        rawAudioProfile: hasRawAudioProfile(),
+        audioProfile: currentAudioProfile(),
       });
       stream = { ...created, publisher, media };
       if (!this.isActiveStart(generation)) {
@@ -514,7 +515,7 @@ export class ScreenShareController {
   }
 }
 
-function displayMediaConstraints(rawAudioProfile: boolean): MediaStreamConstraints {
+function displayMediaConstraints(profile: AudioProfile): MediaStreamConstraints {
   return {
     // ピッカーは既定のまま（画面全体・ウィンドウ・タブから選ばせる）。検証時の
     // preferCurrentTab は macOS 権限回避用で、自タブ共有は製品では意味がない。
@@ -524,12 +525,12 @@ function displayMediaConstraints(rawAudioProfile: boolean): MediaStreamConstrain
       height: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.height },
       frameRate: { ideal: SCREEN_SHARE_VIDEO_SETTINGS.frameRate, max: SCREEN_SHARE_VIDEO_SETTINGS.frameRate },
     },
-    audio: displayAudioConstraintForRawProfile(rawAudioProfile),
+    audio: displayAudioConstraint(profile),
   };
 }
 
-function hasRawAudioProfile(): boolean {
-  return isRawAudioProfileForSearch(globalThis.window?.location?.search ?? '');
+function currentAudioProfile(): AudioProfile {
+  return resolveAudioProfileForSearch(globalThis.window?.location?.search ?? '');
 }
 
 function asCreateStream(value: unknown): CreateStreamResponse {

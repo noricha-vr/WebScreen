@@ -182,6 +182,7 @@ function publisherInput(
     } as unknown as MediaStream,
     streamId: 'Ab12Cd34Ef56',
     publishToken: 'token',
+    audioProfile: 'raw',
     fetchImpl: (async (_url, options) => {
       if (options?.method === 'POST') {
         return new Response('answer', { status: 201, headers: { Location: '/live/Ab12Cd34Ef56/whip/resource' } });

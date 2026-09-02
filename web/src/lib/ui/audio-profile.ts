@@ -1,5 +1,8 @@
 import { hasSingleExactQueryValue } from './stream-profile';
 
+/** 画面取得〜送出までの音声の扱い。'legacy' は Chrome の音声処理に任せた旧挙動。 */
+export type AudioProfile = 'raw' | 'legacy';
+
 export const RAW_AUDIO_MAX_BITRATE = 128_000;
 
 const RAW_AUDIO_CONSTRAINTS = {
@@ -8,27 +11,32 @@ const RAW_AUDIO_CONSTRAINTS = {
   autoGainControl: false,
 } as const satisfies MediaTrackConstraints;
 
-/** URL query で raw 音声プロファイルが明示的に有効かを判定する。 */
-export function isRawAudioProfileForSearch(search: string): boolean {
-  return hasSingleExactQueryValue(search, 'audio-profile', 'raw');
+/**
+ * URL query から音声プロファイルを決める。既定は raw。
+ * 2026-09-02 の本番 A/B で、旧挙動は出口の L−R が −91 dB（完全モノラル）だったのに対し
+ * raw は −57.6 dB でステレオ成分が残り、実聴でもステレオだったため raw を既定にした。
+ * `audio-profile=legacy` が重複なく1個ある時だけ旧挙動へ戻す（切り分け用の退避経路）。
+ */
+export function resolveAudioProfileForSearch(search: string): AudioProfile {
+  return hasSingleExactQueryValue(search, 'audio-profile', 'legacy') ? 'legacy' : 'raw';
 }
 
-/** raw 音声プロファイルに応じた画面共有の音声制約を返す。 */
-export function displayAudioConstraintForRawProfile(rawAudioProfile: boolean): boolean | MediaTrackConstraints {
-  return rawAudioProfile ? { ...RAW_AUDIO_CONSTRAINTS } : true;
+/** 音声プロファイルに応じた画面共有の音声制約を返す。 */
+export function displayAudioConstraint(profile: AudioProfile): boolean | MediaTrackConstraints {
+  return profile === 'raw' ? { ...RAW_AUDIO_CONSTRAINTS } : true;
 }
 
 /**
- * 取得済み音声トラックの設定を既定・raw の両方でログに残し（A/B で並べて比較するため）、
+ * 取得済み音声トラックの設定を raw・legacy の両方でログに残し（A/B で並べて比較するため）、
  * raw の時だけ contentHint を 'music' にして音声向けの処理を避ける。
  */
-export function configureCaptureAudioTracks(media: MediaStream, rawAudioProfile: boolean): void {
+export function configureCaptureAudioTracks(media: MediaStream, profile: AudioProfile): void {
   for (const track of media.getAudioTracks()) {
-    if (rawAudioProfile) track.contentHint = 'music';
+    if (profile === 'raw') track.contentHint = 'music';
     const settings = track.getSettings();
     console.info('audio_capture_settings', {
       event: 'audio_capture_settings',
-      profile: rawAudioProfile ? 'raw' : 'default',
+      profile,
       channelCount: settings.channelCount,
       echoCancellation: settings.echoCancellation,
       noiseSuppression: settings.noiseSuppression,

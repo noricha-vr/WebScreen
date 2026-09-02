@@ -66,7 +66,7 @@ Issue #93 で `stream.web-screen.net` に凍結後、実装着手前の 2026-09-
 
 MP3 betaだけは、ChromeでURL queryに `stream-profile=mp3-beta` が**ちょうど1個**ある時、ブラウザから500 ms周期で次キーフレームを要求する。通常アクセス、unknown値、重複値では無効で、任意intervalは受け付けない。これは生成完了やreaderのfirst-packet IDRを保証せず、MediaMTXにGOP cacheもない。非対応ブラウザでは第2引数が無視され、要求がno-opになる可能性がある。本番AACの2秒GOP契約は変更しない。
 
-同じ判定意味論で、URL queryに `audio-profile=raw` が**ちょうど1個**ある時だけ、画面取得の音声制約を `echoCancellation / noiseSuppression / autoGainControl = false` にし、音声トラックに `contentHint = 'music'`、answer SDPのOpus fmtpに `stereo=1;maxaveragebitrate=128000` を補い、audio senderの上限を128 kbpsにする。これはモノラル化の仮説を比較するための候補で、既定経路の制約・SDPは変えない（[stability-audio-verification.md](stability-audio-verification.md) の A/B 手順）。
+音声は**既定がraw**で、画面取得の音声制約を `echoCancellation / noiseSuppression / autoGainControl = false` にし、音声トラックに `contentHint = 'music'`、answer SDPのOpus fmtpに `stereo=1;sprop-stereo=1;maxaveragebitrate=128000` を補い、audio senderの上限を128 kbpsにする。2026-09-02の本番A/Bで旧挙動は出口のL−Rが−91 dB（完全モノラル）だったのに対し、rawは−57.6 dBでステレオ成分が残り実聴でもステレオだったため既定にした。同じ判定意味論で、URL queryに `audio-profile=legacy` が**ちょうど1個**ある時だけ旧挙動（`audio: true`・contentHintなし・SDP無加工・sender未設定）へ戻す。unknown値・重複・空値・case違いは既定のrawになる（[stability-audio-verification.md](stability-audio-verification.md) の A/B 手順）。
 
 ### キーフレーム 2 秒固定が連鎖させる制約
 
@@ -88,7 +88,7 @@ MP3 betaだけは、ChromeでURL queryに `stream-profile=mp3-beta` が**ちょ�
 | コンテンツヒント | `track.contentHint = 'detail'` | R10。I18で動画像・文字可読性とも合格 |
 | スケール | `encodings[0].scaleResolutionDownBy = 1` | R10。I18で動画像・文字可読性とも合格 |
 | 解像度 / fps | **入力 1280x720 / 最大 30 fps** | I18で動画像のRTSP出力は1280x720 / 30.00〜30.06 fps。24 fpsの旧代表素材比較は変更しない |
-| 画面取得 | `getDisplayMedia({ video, audio: true })`（`audio-profile=raw` 時だけ音声制約オブジェクト。**既定ピッカー**。画面全体・ウィンドウ・タブから選ばせる） | Chrome のタブ共有で「タブの音声を共有」をオンにした時だけ音声が付く。macOS の画面収録未許可はエラー文言でシステム設定へ案内する |
+| 画面取得 | `getDisplayMedia({ video, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })`（`audio-profile=legacy` 時だけ `audio: true`。**既定ピッカー**。画面全体・ウィンドウ・タブから選ばせる） | Chrome のタブ共有で「タブの音声を共有」をオンにした時だけ音声が付く。macOS の画面収録未許可はエラー文言でシステム設定へ案内する |
 | 開始判定 | ingress / egress bytes を最大 10 秒、1 秒間隔で監視 | 両方が連続観測で増えた時だけ URL を表示する。未到達なら 1 回自動再 publish する |
 
 ### 対応ブラウザ
