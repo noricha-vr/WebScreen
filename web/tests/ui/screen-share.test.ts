@@ -76,7 +76,7 @@ describe('画面共有 controller', () => {
       addEventListener: () => undefined,
       stop: () => { stopped += 1; },
     };
-    const audioTrack = { stop: () => { stopped += 1; } };
+    const audioTrack = { stop: () => { stopped += 1; }, getSettings: () => ({ channelCount: 2 }) };
     const media = {
       getTracks: () => [videoTrack, audioTrack],
       getVideoTracks: () => [videoTrack],
