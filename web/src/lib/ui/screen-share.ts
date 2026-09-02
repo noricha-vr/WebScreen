@@ -407,14 +407,15 @@ export class ScreenShareController {
     this.text('[data-screen-elapsed]', formatDuration((now - Date.parse(this.live.startedAt)) / 1000));
     this.text('[data-screen-expires]', formatDuration(remaining));
     const warning = this.root.querySelector<HTMLElement>('[data-screen-expiry-warning]');
-    if (warning) warning.hidden = !isExpiryWarning(this.live.extendExpiresAt, now);
+    const expiryWarning = isExpiryWarning(this.live.extendExpiresAt, now);
+    if (warning) warning.hidden = !expiryWarning;
     const expiresBar = this.root.querySelector<HTMLElement>('[data-screen-expires-bar]');
     if (expiresBar) {
       const width = this.expiresBarTotalSeconds === 0
         ? 0
         : Math.min(100, (remaining / this.expiresBarTotalSeconds) * 100);
       expiresBar.style.width = `${width}%`;
-      expiresBar.dataset['warning'] = String(remaining <= EXPIRY_WARNING_SECONDS);
+      expiresBar.dataset['warning'] = String(expiryWarning);
     }
   }
 
@@ -593,13 +594,14 @@ export class ScreenShareController {
     this.setButtonLabel('[data-screen-retry]', this.live ? 'labelReconnect' : 'labelRetry');
     const stopOthers = this.button('[data-screen-stop-others]');
     const retry = this.button('[data-screen-retry]');
+    const canStopOthers = isStreamAlreadyLiveError(error);
     if (stopOthers) {
-      const canStopOthers = isStreamAlreadyLiveError(error);
       stopOthers.hidden = !canStopOthers;
       stopOthers.disabled = false;
       this.setButtonLabel('[data-screen-stop-others]', 'labelStopOthers');
-      if (retry) retry.hidden = canStopOthers;
     }
+    // 他配信の停止が唯一の正しい操作の時は、同じ失敗を繰り返す再試行を出さない。
+    if (retry) retry.hidden = canStopOthers;
     this.show('error');
   }
 
@@ -651,6 +653,12 @@ export class ScreenShareController {
     ]) {
       const element = this.root.querySelector<HTMLElement>(selector);
       if (element) element.dataset['open'] = value;
+    }
+    // 閉じている間はデコードと描画を止めて PC の負荷を下げる。MediaStream と WHIP には触れない。
+    const video = this.root.querySelector<HTMLVideoElement>('[data-screen-preview]');
+    if (video) {
+      if (open) void video.play();
+      else video.pause();
     }
   }
 

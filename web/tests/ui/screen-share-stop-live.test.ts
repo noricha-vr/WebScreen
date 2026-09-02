@@ -14,6 +14,9 @@ describe('他の配信を終了して開始', () => {
 
     expect(liveError.button('[data-screen-stop-others]').hidden).toBe(false);
     expect(otherError.button('[data-screen-stop-others]').hidden).toBe(true);
+    // 同じ失敗を繰り返す再試行は、終了ボタンを出す時だけ隠す
+    expect(liveError.button('[data-screen-retry]').hidden).toBe(true);
+    expect(otherError.button('[data-screen-retry]').hidden).toBe(false);
   });
 
   test('画面選択後に停止、待機、配信開始の順で URL 表示まで進む', async () => {
@@ -416,6 +419,9 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  paused = false;
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   textContent = '';
   value = '';
   className = '';

@@ -432,6 +432,9 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  paused = false;
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   srcObject: MediaProvider | null = null;
   textContent = '';
   value = '';

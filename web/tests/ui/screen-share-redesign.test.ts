@@ -35,6 +35,7 @@ describe('画面共有リデザインの状態', () => {
     const retry = page.button('[data-screen-retry]');
     start.labelSpan = new FakeElement();
     start.labelSpan.textContent = 'start';
+    retry.labelSpan = new FakeElement();
     let rejectPicker: ((reason: unknown) => void) | undefined;
     new ScreenShareController(page.root, dependencies({
       getDisplayMedia: () => new Promise((_resolve, reject) => { rejectPicker = reject; }),
@@ -50,6 +51,9 @@ describe('画面共有リデザインの状態', () => {
     expect(start.disabled).toBe(false);
     expect(retry.disabled).toBe(false);
     expect(start.labelSpan.textContent).toBe('start');
+    // button 直下（FontAwesome アイコン）を書き換えない
+    expect(start.textContent).toBe('');
+    expect(retry.textContent).toBe('');
   });
 
   test('プレビューを閉じても配信中の video を外さず、開閉状態を同期する', async () => {
@@ -67,6 +71,11 @@ describe('画面共有リデザインの状態', () => {
     expect(page.button('[data-screen-switch-track]').dataset.open).toBe('false');
     expect(page.button('[data-screen-switch-knob]').dataset.open).toBe('false');
     expect(page.button('[data-screen-preview]').srcObject).toBe(media);
+    expect(page.button('[data-screen-preview]').paused).toBe(true);
+
+    page.button('[data-screen-preview-toggle]').click();
+    expect(page.button('[data-screen-preview-body]').dataset.open).toBe('true');
+    expect(page.button('[data-screen-preview]').paused).toBe(false);
   });
 
   test('期限バーは残り時間比を表示し、5分以下で警告色にする', async () => {
@@ -88,6 +97,45 @@ describe('画面共有リデザインの状態', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  test('延長すると期限バーは新しい期限を 100% として引き直す', async () => {
+    jest.useFakeTimers();
+    try {
+      let now = Date.parse('2026-09-01T00:00:00.000Z');
+      const page = fakePage();
+      new ScreenShareController(page.root, dependencies({ now: () => now })).mount();
+
+      page.button('[data-screen-start]').click();
+      await waitFor(() => !page.step('live').hidden);
+      now += 45 * 60 * 1000;
+      jest.advanceTimersByTime(1_000);
+      expect(page.button('[data-screen-expires-bar]').style.width).toBe('25%');
+
+      // 延長応答の期限は 01:00 のまま（残り 15 分）。延長時点からの長さを分母にするので 100% に戻る。
+      page.button('[data-screen-extend]').click();
+      await waitFor(() => page.button('[data-screen-expires-bar]').style.width === '100%');
+      expect(page.button('[data-screen-expires-bar]').dataset.warning).toBe('false');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('閉じたプレビューは、配信を止めて再開すると開いた状態に戻る', async () => {
+    const page = fakePage();
+    new ScreenShareController(page.root, dependencies()).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('live').hidden);
+    page.button('[data-screen-preview-toggle]').click();
+    expect(page.button('[data-screen-preview-body]').dataset.open).toBe('false');
+
+    page.button('[data-screen-stop]').click();
+    await waitFor(() => !page.step('idle').hidden);
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('live').hidden);
+    expect(page.button('[data-screen-preview-body]').dataset.open).toBe('true');
+    expect(page.button('[data-screen-preview-toggle]').getAttribute('aria-expanded')).toBe('true');
   });
 });
 
@@ -135,7 +183,7 @@ function fakePage(): {
 } {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
-    '[data-screen-start]', '[data-screen-retry]', '[data-screen-url]', '[data-screen-preview]', '[data-screen-elapsed]',
+    '[data-screen-start]', '[data-screen-retry]', '[data-screen-extend]', '[data-screen-stop]', '[data-screen-url]', '[data-screen-preview]', '[data-screen-elapsed]',
     '[data-screen-expires]', '[data-screen-expiry-warning]', '[data-screen-audio-status]',
     '[data-screen-preview-toggle]', '[data-screen-preview-body]', '[data-screen-switch-track]',
     '[data-screen-switch-knob]', '[data-screen-expires-bar]', '[data-screen-audio-chip]',
@@ -185,6 +233,9 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  paused = false;
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   textContent = '';
   value = '';
   className = '';
