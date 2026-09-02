@@ -32,7 +32,8 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `PATCH /api/movies/{shortId}/` | ファイル名の変更 | 本人（所有者） | `RenameMovieRequest` / `RenameMovieResponse` |
 | `DELETE /api/movies/{shortId}/` | `ready` 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | `pending` / `failed` は 409 `INVALID_REQUEST`。`pending` の破棄は abandon を使う |
 | `POST /api/client-error/` | クライアント側の失敗報告（識別子だけを受けて `client_error` として構造化ログに残す。応答は 204） | 任意（Cookie があれば `userId` を添える） | `ClientErrorReport` |
-| `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行 | 本人 | `CreateStreamResponse`。本人の同時配信は 409 `STREAM_ALREADY_LIVE`、全体 20 本到達は 429 `STREAM_CAPACITY_REACHED`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
+| `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行 | 本人 | `CreateStreamResponse`。任意の `X-WebScreen-Start-Token` は UUIDv4。欠落は旧クライアント互換。本人の同時配信は 409 `STREAM_ALREADY_LIVE`、取り消し済み token は 409 `STREAM_START_CANCELLED`、全体 20 本到達は 429 `STREAM_CAPACITY_REACHED`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
+| `POST /api/streams/cancel-start/` | 配信開始操作を取り消す | 本人 | `application/json` の `{ "startToken": UUIDv4 }` だけを許可（余分なフィールド不可、本文 1024 byte 上限）。対象が未作成・作成済み・取り消し済みのいずれでも冪等 204 |
 | `POST /api/streams/stop-live/` | 本人の live 配信をすべて `user_stop` で終了し、cron の kick 対象にする | 本人 | `StopLiveStreamsResponse`（`stopped` と `retryAfterSeconds`）。冪等 200 |
 | `POST /api/streams/{id}/extend/` | 延長期限を更新し、同じ期限の新 publish JWT を発行 | 本人（所有者） | `ExtendStreamResponse`。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/heartbeat/` | 配信ブラウザの生存時刻を更新 | 本人（所有者） | 成功は 204。終了済みは 409 `STREAM_ENDED` |
@@ -42,6 +43,17 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `GET /api/streams/jwks/` | MediaMTX が publish JWT を検証する公開 JWKS | 不要 | RS256 公開鍵のみ。秘密要素は返さない。`Cache-Control: no-store` |
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
+
+### 配信開始 operation token
+
+同一ユーザーの create と cancel は、UUIDv4 の開始 token 単位で次を保証する。
+
+- cancel が先なら tombstone を作り、同じ token の create は 409 `STREAM_START_CANCELLED` で live を作らない
+- create が先なら cancel が同じ token の live を `user_stop` で終了する。並行実行でも両方の完了後に live は残らない
+- tombstone はユーザーごとに最新 32 件まで保持し、24 時間を超えたものを毎分の cron で削除する
+
+この契約を追加する migration は既存列を壊さない加算変更であり、デプロイは **D1 migration → 本体 Worker → cron Worker** の順に行う。
+旧 Worker は追加列・追加テーブルを参照しないため、Worker コードだけを旧版へロールバックしても動作できる。ただし D1 migration 自体は戻さない。
 
 ### 配信JWTとMediaMTXの運用ゲート
 

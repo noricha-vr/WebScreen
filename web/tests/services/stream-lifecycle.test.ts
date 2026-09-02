@@ -57,6 +57,28 @@ function row(database: StreamSqliteAdapter) {
 }
 
 describe('配信セッション lifecycle', () => {
+  it('streamが0件でも24時間を超えた開始tombstoneだけを削除する', async () => {
+    const database = await createStreamDatabase();
+    database.sqlite
+      .query(
+        `INSERT INTO stream_start_cancellations (user_id, start_token, cancelled_at)
+         VALUES (10, ?, ?), (10, ?, ?)`
+      )
+      .run(
+        '11111111-1111-4111-8111-111111111111',
+        '2026-08-31T01:59:59.999Z',
+        '22222222-2222-4222-9222-222222222222',
+        '2026-08-31T02:00:00.000Z'
+      );
+
+    const summary = await runStreamLifecycle({ database, settings: SETTINGS, now: NOW });
+
+    expect(summary.deletedStartCancellations).toBe(1);
+    expect(
+      database.sqlite.query('SELECT start_token FROM stream_start_cancellations').all()
+    ).toEqual([{ start_token: '22222222-2222-4222-9222-222222222222' }]);
+  });
+
   it('延長期限に達したliveをextend_timeoutで終了しpublisherをkickする', async () => {
     const database = await createStreamDatabase();
     await insertLive(database, { extendAt: NOW.toISOString() });

@@ -4,6 +4,7 @@ import {
   type ExtendStreamResponse,
   type StopLiveStreamsResponse,
 } from '../contracts/api';
+import { STREAM_START_TOKEN_HEADER } from '../contracts/streams';
 import { copyToClipboard } from './clipboard';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
 import { waitForStreamReady } from './stream-health';
@@ -31,8 +32,10 @@ type CaptureHandle = {
 };
 type StartRun = {
   readonly generation: number;
+  readonly startToken: string;
   readonly capture: CaptureHandle;
   readonly abortController: AbortController;
+  cancellationRequested: boolean;
 };
 type LiveStreamLifecycle = {
   localReleased: boolean;
@@ -58,7 +61,8 @@ export interface ScreenShareDependencies {
   getDisplayMedia: typeof navigator.mediaDevices.getDisplayMedia;
   delay?: (ms: number) => Promise<void>;
   now: () => number;
-  sendBeacon: (url: string) => boolean;
+  createStartToken?: () => string;
+  sendBeacon: (url: string, data?: BodyInit | null) => boolean;
   onPageHide: (handler: () => void) => void;
 }
 
@@ -69,7 +73,8 @@ const DEFAULT_DEPENDENCIES: ScreenShareDependencies = {
   getDisplayMedia: (constraints) => navigator.mediaDevices.getDisplayMedia(constraints),
   delay: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
   now: () => Date.now(),
-  sendBeacon: (url) => navigator.sendBeacon(url),
+  createStartToken: () => globalThis.crypto.randomUUID(),
+  sendBeacon: (url, data) => navigator.sendBeacon(url, data),
   onPageHide: (handler) => window.addEventListener('pagehide', handler),
 };
 
@@ -224,6 +229,7 @@ export class ScreenShareController {
       // 応答前に離脱しても作成済みIDを回収し、直後にserver stopできるようPOST自体はabortしない。
       created = asCreateStream(await this.deps.requestJson('/api/streams/', {
         method: 'POST',
+        headers: { [STREAM_START_TOKEN_HEADER]: run.startToken },
       }));
     } catch (error) {
       this.cancelStart(run);
@@ -428,10 +434,14 @@ export class ScreenShareController {
   }
 
   private stopForPageHide(): void {
+    const run = this.activeStart;
     const live = this.finishLocally('idle');
-    if (!live) return;
-    void this.notifyLiveServerStop(live, true);
-    void this.notifyWhipDeletion(live);
+    if (live) {
+      void this.notifyLiveServerStop(live, true);
+      void this.notifyWhipDeletion(live);
+      return;
+    }
+    if (run) void this.notifyStartCancellation(run, true);
   }
 
   private async notifyRemoteStop(live: LiveStream): Promise<void> {
@@ -456,6 +466,30 @@ export class ScreenShareController {
       await this.deps.requestJson(streamStopUrl(id), { method: 'POST' });
     } catch (error) {
       console.warn('Failed to stop stream session remotely', error);
+    }
+  }
+
+  private async notifyStartCancellation(run: StartRun, preferBeacon = false): Promise<void> {
+    if (run.cancellationRequested) return;
+    run.cancellationRequested = true;
+    const body = JSON.stringify({ startToken: run.startToken });
+    if (preferBeacon) {
+      try {
+        const payload = new Blob([body], { type: 'application/json' });
+        if (this.deps.sendBeacon('/api/streams/cancel-start/', payload)) return;
+      } catch (error) {
+        console.warn('Failed to queue stream start cancellation beacon', error);
+      }
+    }
+    try {
+      await this.deps.requestJson('/api/streams/cancel-start/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+      });
+    } catch (error) {
+      console.warn('Failed to cancel stream start remotely', error);
     }
   }
 
@@ -501,8 +535,10 @@ export class ScreenShareController {
   private registerStart(media: MediaStream, generation: number): StartRun | null {
     const run: StartRun = {
       generation,
+      startToken: this.deps.createStartToken?.() ?? globalThis.crypto.randomUUID(),
       capture: createCaptureHandle(media),
       abortController: new AbortController(),
+      cancellationRequested: false,
     };
     if (this.startReservation !== generation || !this.isActiveStart(generation)) {
       this.cancelStart(run);

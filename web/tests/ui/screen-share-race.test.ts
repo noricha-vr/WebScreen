@@ -3,7 +3,113 @@ import { describe, expect, test } from 'bun:test';
 import { ScreenShareController, type ScreenShareDependencies } from '../../src/lib/ui/screen-share';
 import type { WhipPublisher } from '../../src/lib/ui/whip-publisher';
 
+const START_TOKEN = '11111111-1111-4111-8111-111111111111';
+
 describe('画面共有runの競合拒否', () => {
+  test('pagehideはcreate headerと同じtokenをcancel-start beaconへ送る', async () => {
+    const page = fakePage();
+    const pendingCreate = deferred<Record<string, unknown>>();
+    let pageHide: (() => void) | undefined;
+    let createToken: string | undefined;
+    let beaconUrl: string | undefined;
+    let beaconData: BodyInit | null | undefined;
+    new ScreenShareController(page.root, dependencies({
+      createStartToken: () => START_TOKEN,
+      requestJson: async (path, init) => {
+        if (path === '/api/streams/') {
+          createToken = new Headers(init.headers).get('X-WebScreen-Start-Token') ?? undefined;
+          return pendingCreate.promise;
+        }
+        return null;
+      },
+      sendBeacon: (url, data) => {
+        beaconUrl = url;
+        beaconData = data;
+        return true;
+      },
+      onPageHide: (handler) => { pageHide = handler; },
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => createToken !== undefined);
+    pageHide?.();
+
+    expect(createToken).toBe(START_TOKEN);
+    expect(beaconUrl).toBe('/api/streams/cancel-start/');
+    expect(beaconData).toBeInstanceOf(Blob);
+    expect(JSON.parse(await (beaconData as Blob).text())).toEqual({ startToken: START_TOKEN });
+    expect((beaconData as Blob).type).toContain('application/json');
+    pendingCreate.resolve(createResponse());
+    await flushMicrotasks();
+  });
+
+  test.each(['false', 'throw'] as const)(
+    'cancel-start beaconが%sならkeepalive fetchへfallbackする',
+    async (failure) => {
+      const page = fakePage();
+      const pendingCreate = deferred<Record<string, unknown>>();
+      let pageHide: (() => void) | undefined;
+      let fallback: RequestInit | undefined;
+      const originalWarn = console.warn;
+      console.warn = () => undefined;
+      try {
+        new ScreenShareController(page.root, dependencies({
+          createStartToken: () => START_TOKEN,
+          requestJson: async (path, init) => {
+            if (path === '/api/streams/') return pendingCreate.promise;
+            if (path === '/api/streams/cancel-start/') fallback = init;
+            return null;
+          },
+          sendBeacon: () => {
+            if (failure === 'throw') throw new Error('beacon unavailable');
+            return false;
+          },
+          onPageHide: (handler) => { pageHide = handler; },
+        })).mount();
+
+        page.button('[data-screen-start]').click();
+        await flushMicrotasks();
+        pageHide?.();
+        await waitFor(() => fallback !== undefined);
+
+        expect(fallback).toMatchObject({ method: 'POST', keepalive: true });
+        expect(new Headers(fallback?.headers).get('Content-Type')).toBe('application/json');
+        expect(JSON.parse(String(fallback?.body))).toEqual({ startToken: START_TOKEN });
+        pendingCreate.resolve(createResponse());
+        await flushMicrotasks();
+      } finally {
+        console.warn = originalWarn;
+      }
+    }
+  );
+
+  test('live IDが既知ならpagehideは既存stopだけをbeaconしcancel-startを送らない', async () => {
+    const page = fakePage();
+    let pageHide: (() => void) | undefined;
+    const beaconUrls: string[] = [];
+    const requestUrls: string[] = [];
+    new ScreenShareController(page.root, dependencies({
+      createStartToken: () => START_TOKEN,
+      requestJson: async (path) => {
+        requestUrls.push(path);
+        return path === '/api/streams/' ? createResponse() : null;
+      },
+      sendBeacon: (url) => {
+        beaconUrls.push(url);
+        return true;
+      },
+      onPageHide: (handler) => { pageHide = handler; },
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('url').hidden);
+    pageHide?.();
+    await flushMicrotasks();
+
+    expect(beaconUrls).toEqual(['/api/streams/OldStream123/stop/']);
+    expect(requestUrls).not.toContain('/api/streams/cancel-start/');
+  });
+
   test('create待機中のpagehideでPOSTをabortせず、回収したIDを即stopする', async () => {
     const page = fakePage();
     const pendingCreate = deferred<Record<string, unknown>>();

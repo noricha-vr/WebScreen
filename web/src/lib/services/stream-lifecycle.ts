@@ -16,6 +16,7 @@ export interface StreamLifecycleSettings {
 }
 
 export interface StreamLifecycleSummary {
+  deletedStartCancellations: number;
   endedByExtendTimeout: number;
   endedByHeartbeatLost: number;
   endedByNoViewers: number;
@@ -44,6 +45,10 @@ export async function runStreamLifecycle(input: {
   now: Date;
 }): Promise<StreamLifecycleSummary> {
   const summary = emptySummary();
+  summary.deletedStartCancellations = await deleteExpiredStartCancellations(
+    input.database,
+    input.now
+  );
   const newlyEnded = new Set<string>();
   const initialRows = await listRelevant(input.database);
   if (initialRows.length === 0) return summary;
@@ -225,6 +230,7 @@ async function listRelevant(database: StreamLifecycleDatabase): Promise<Lifecycl
 
 function emptySummary(): StreamLifecycleSummary {
   return {
+    deletedStartCancellations: 0,
     endedByExtendTimeout: 0,
     endedByHeartbeatLost: 0,
     endedByNoViewers: 0,
@@ -232,6 +238,18 @@ function emptySummary(): StreamLifecycleSummary {
     publishersKicked: 0,
     kickPendingCleared: 0,
   };
+}
+
+async function deleteExpiredStartCancellations(
+  database: StreamLifecycleDatabase,
+  now: Date
+): Promise<number> {
+  const cutoff = subtractSeconds(now, 24 * 60 * 60).toISOString();
+  const result = await database
+    .prepare('DELETE FROM stream_start_cancellations WHERE cancelled_at < ?')
+    .bind(cutoff)
+    .run();
+  return result.meta.changes;
 }
 
 function subtractSeconds(date: Date, seconds: number): Date {

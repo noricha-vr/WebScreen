@@ -10,6 +10,10 @@ import {
   stopStream,
   type StreamSettings,
 } from '../../src/lib/services/streams';
+import {
+  cancelStreamStart,
+  MAX_STREAM_START_CANCELLATIONS_PER_USER,
+} from '../../src/lib/services/stream-start';
 import { createStreamDatabase } from './helpers/stream-db';
 
 const NOW = new Date('2026-09-01T00:00:00.000Z');
@@ -21,6 +25,8 @@ const SETTINGS: StreamSettings = {
 };
 const signer = async ({ expiresAtSeconds }: { expiresAtSeconds: number }) =>
   `token-exp-${expiresAtSeconds}`;
+const START_TOKEN_A = '11111111-1111-4111-8111-111111111111';
+const START_TOKEN_B = '22222222-2222-4222-9222-222222222222';
 
 function input(database: Awaited<ReturnType<typeof createStreamDatabase>>, id: string, now = NOW) {
   return {
@@ -34,6 +40,180 @@ function input(database: Awaited<ReturnType<typeof createStreamDatabase>>, id: s
 }
 
 describe('配信セッション service', () => {
+  it('cancel先行ならcreateを409で拒否しliveも作らない', async () => {
+    const database = await createStreamDatabase();
+    await cancelStreamStart({ database, userId: 10, startToken: START_TOKEN_A, now: NOW });
+
+    await expect(
+      createStream({ ...input(database, 'AbCdEf123456'), startToken: START_TOKEN_A })
+    ).rejects.toMatchObject({
+      status: 409,
+      errorCode: ERROR_CODES.streamStartCancelled,
+    });
+    expect(
+      database.sqlite.query("SELECT COUNT(*) AS count FROM stream_sessions WHERE status = 'live'").get()
+    ).toEqual({ count: 0 });
+  });
+
+  it('create先行なら同じtokenのliveだけをuser_stopで終了する', async () => {
+    const database = await createStreamDatabase();
+    await createStream({ ...input(database, 'AbCdEf123456'), startToken: START_TOKEN_A });
+
+    await cancelStreamStart({ database, userId: 10, startToken: START_TOKEN_A, now: NOW });
+
+    expect(
+      database.sqlite
+        .query('SELECT status, end_reason, kick_pending, start_token FROM stream_sessions')
+        .get()
+    ).toEqual({
+      status: 'ended',
+      end_reason: 'user_stop',
+      kick_pending: 1,
+      start_token: START_TOKEN_A,
+    });
+  });
+
+  it('createとcancelが並行しても完了後のliveは0本になる', async () => {
+    const database = await createStreamDatabase();
+    await Promise.allSettled([
+      createStream({ ...input(database, 'AbCdEf123456'), startToken: START_TOKEN_A }),
+      cancelStreamStart({ database, userId: 10, startToken: START_TOKEN_A, now: NOW }),
+    ]);
+
+    expect(
+      database.sqlite.query("SELECT COUNT(*) AS count FROM stream_sessions WHERE status = 'live'").get()
+    ).toEqual({ count: 0 });
+  });
+
+  it('別tokenと別userのliveへキャンセルを波及させない', async () => {
+    const database = await createStreamDatabase();
+    await createStream({ ...input(database, 'AbCdEf123456'), startToken: START_TOKEN_A });
+    await createStream({
+      ...input(database, 'ZyXwVu987654'),
+      userId: 20,
+      startToken: START_TOKEN_A,
+    });
+
+    await cancelStreamStart({ database, userId: 10, startToken: START_TOKEN_B, now: NOW });
+    await cancelStreamStart({ database, userId: 20, startToken: START_TOKEN_B, now: NOW });
+
+    expect(
+      database.sqlite
+        .query("SELECT user_id, status FROM stream_sessions WHERE status = 'live' ORDER BY user_id")
+        .all()
+    ).toEqual([
+      { user_id: 10, status: 'live' },
+      { user_id: 20, status: 'live' },
+    ]);
+  });
+
+  it('同じキャンセルを再送してもtombstoneは1件で対象は終了済みのまま', async () => {
+    const database = await createStreamDatabase();
+    await createStream({ ...input(database, 'AbCdEf123456'), startToken: START_TOKEN_A });
+
+    await cancelStreamStart({ database, userId: 10, startToken: START_TOKEN_A, now: NOW });
+    await cancelStreamStart({
+      database,
+      userId: 10,
+      startToken: START_TOKEN_A,
+      now: new Date(NOW.getTime() + 1_000),
+    });
+
+    expect(
+      database.sqlite.query('SELECT COUNT(*) AS count FROM stream_start_cancellations').get()
+    ).toEqual({ count: 1 });
+    expect(
+      database.sqlite.query('SELECT cancelled_at FROM stream_start_cancellations').get()
+    ).toEqual({ cancelled_at: NOW.toISOString() });
+    expect(database.sqlite.query('SELECT status FROM stream_sessions').get()).toEqual({
+      status: 'ended',
+    });
+  });
+
+  it('40 token burst後も利用者ごとに最新32件だけを保持する', async () => {
+    const database = await createStreamDatabase();
+    for (const userId of [10, 20]) {
+      for (let index = 0; index < 40; index += 1) {
+        await cancelStreamStart({
+          database,
+          userId,
+          startToken: numberedStartToken(index),
+          now: new Date(NOW.getTime() + index * 1_000),
+        });
+      }
+    }
+    const oldCurrentToken = numberedStartToken(99);
+    const oldCancelledAt = new Date(NOW.getTime() - 1_000).toISOString();
+    database.sqlite
+      .query(
+        `INSERT INTO stream_start_cancellations (user_id, start_token, cancelled_at)
+         VALUES (10, ?, ?)`
+      )
+      .run(oldCurrentToken, oldCancelledAt);
+    await cancelStreamStart({
+      database,
+      userId: 10,
+      startToken: oldCurrentToken,
+      now: new Date(NOW.getTime() + 100_000),
+    });
+
+    for (const userId of [10, 20]) {
+      expect(
+        database.sqlite
+          .query('SELECT COUNT(*) AS count FROM stream_start_cancellations WHERE user_id = ?')
+          .get(userId)
+      ).toEqual({ count: MAX_STREAM_START_CANCELLATIONS_PER_USER });
+      expect(
+        database.sqlite
+          .query(
+            'SELECT start_token FROM stream_start_cancellations WHERE user_id = ? AND start_token = ?'
+          )
+          .get(userId, numberedStartToken(39))
+      ).toEqual({ start_token: numberedStartToken(39) });
+    }
+    expect(
+      database.sqlite
+        .query('SELECT cancelled_at FROM stream_start_cancellations WHERE start_token = ?')
+        .get(oldCurrentToken)
+    ).toEqual({ cancelled_at: oldCancelledAt });
+  });
+
+  it('cancel先行は作成間隔を消費せず別tokenを直後に作成できる', async () => {
+    const database = await createStreamDatabase();
+    await cancelStreamStart({ database, userId: 10, startToken: START_TOKEN_A, now: NOW });
+
+    await expect(
+      createStream({ ...input(database, 'AbCdEf123456'), startToken: START_TOKEN_B })
+    ).resolves.toMatchObject({ id: 'AbCdEf123456' });
+  });
+
+  it('start tokenのない旧クライアントは従来通り作成しNULLを保存する', async () => {
+    const database = await createStreamDatabase();
+    await createStream(input(database, 'AbCdEf123456'));
+
+    expect(database.sqlite.query('SELECT start_token FROM stream_sessions').get()).toEqual({
+      start_token: null,
+    });
+  });
+
+  it('同じstart tokenのcreate再送を既存session状態に応じた409へ変換する', async () => {
+    const liveDatabase = await createStreamDatabase();
+    await createStream({ ...input(liveDatabase, 'AbCdEf123456'), startToken: START_TOKEN_A });
+    await expect(
+      createStream({ ...input(liveDatabase, 'ZyXwVu987654'), startToken: START_TOKEN_A })
+    ).rejects.toMatchObject({ status: 409, errorCode: ERROR_CODES.streamAlreadyLive });
+
+    const endedDatabase = await createStreamDatabase();
+    await createStream({ ...input(endedDatabase, 'AbCdEf123456'), startToken: START_TOKEN_A });
+    await stopStream({ database: endedDatabase, userId: 10, id: 'AbCdEf123456', now: NOW });
+    await expect(
+      createStream({
+        ...input(endedDatabase, 'ZyXwVu987654', new Date(NOW.getTime() + 11_000)),
+        startToken: START_TOKEN_A,
+      })
+    ).rejects.toMatchObject({ status: 409, errorCode: ERROR_CODES.streamEnded });
+  });
+
   it('作成時刻を秒精度へ揃えD1・response・JWT NumericDateを一致させる', async () => {
     const database = await createStreamDatabase();
     let signedIssued = 0;
@@ -299,3 +479,7 @@ describe('配信セッション service', () => {
     ).toEqual({ status: 'live' });
   });
 });
+
+function numberedStartToken(index: number): string {
+  return `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+}

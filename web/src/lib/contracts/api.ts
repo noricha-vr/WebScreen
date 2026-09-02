@@ -20,7 +20,6 @@ export type {
 } from './streams';
 /** 1 ファイルあたりのアップロード上限（50 MiB）。R2 の単発 PUT で扱える範囲に収める。 */
 export const MAX_UPLOAD_BYTES = 52_428_800;
-
 /** abandon の JSON 本文上限。shortId 1 件に対し十分な余裕を持たせる。 */
 export const MAX_ABANDON_UPLOAD_BODY_BYTES = 4 * 1024;
 
@@ -75,6 +74,7 @@ export const ERROR_CODES = {
   streamAlreadyLive: 'STREAM_ALREADY_LIVE',
   streamCapacityReached: 'STREAM_CAPACITY_REACHED',
   streamCreateRateLimited: 'STREAM_CREATE_RATE_LIMITED',
+  streamStartCancelled: 'STREAM_START_CANCELLED',
   streamEnded: 'STREAM_ENDED',
   captureFailed: 'CAPTURE_FAILED',
   pageTooLong: 'PAGE_TOO_LONG',
