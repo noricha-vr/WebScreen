@@ -3,6 +3,7 @@
 > **採用設定は入力 1280x720 / 30 fps / 映像上限 1200 kbps / `detail` / `maintain-resolution` / scale 1 の単一設定。**
 > 本番relayの合成motion/static QAは、動画像で1280x720・30 fps・total egress約1.04 Mbps・freeze 0を確認した。WebScreen UIからのactual YouTube最終確認は未実施。
 > 最新の設定・同条件比較・再接続方針は [stability-audio-verification.md](stability-audio-verification.md) を正本とする。
+> リアルタイム優先（`motion` + `maintain-framerate`）候補との同条件 A/B は [verification.md](verification.md) I25（2026-09-03）。実ページ・動画で fps / freeze に差が出ず、解像度が落ちて戻らないリスクだけ増えるため**採用しない**。
 > 以下の 300〜1500 kbps の表は過去の判断経緯として残すが、現行実装値ではない。
 
 **「より多くの人に配信する」ための画質設計。** 収容人数の計算は [capacity.md](capacity.md)、実装設定は [requirements.md](requirements.md)。
