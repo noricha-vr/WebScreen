@@ -5,7 +5,7 @@ import {
 } from '../contracts/api';
 import { generateShortId, movieUrl, temporaryUploadKey } from '../contracts/r2key';
 import { createR2PutPresignedUrl, type R2PresignConfig } from '../infra/r2presign';
-import { logWorkerFailure } from '../infra/worker-log';
+import { logWorkerFailure } from '../observability/worker-log';
 import {
   getUserUploadQuota,
   MAX_PENDING_UPLOADS_PER_USER,

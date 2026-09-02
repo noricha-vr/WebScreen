@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES, validateRenameMovieRequest } from '../../../../lib/contracts/api';
-import { logWorkerFailure } from '../../../../lib/infra/worker-log';
+import { logWorkerFailure } from '../../../../lib/observability/worker-log';
 import { importSigningKey } from '../../../../lib/contracts/session';
 import { requireUser, type AuthDatabase } from '../../../../lib/services/auth';
 import type { CachePurgeSettings } from '../../../../lib/services/cache-purge';

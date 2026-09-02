@@ -78,7 +78,7 @@ main への push で GitHub Actions が本番へ反映する（`.github/workflow
 ## 気をつけること
 
 - **文言をコードに直書きしない**（辞書経由。テンプレートへは `data-*` 属性で渡す）
-- **エラーを握り潰さない**。上流のエラーコードは表示文言まで届ける。Worker の失敗は `lib/infra/worker-log.ts` で構造化ログに残す
+- **エラーを握り潰さない**。上流のエラーコードは表示文言まで届ける。Worker の失敗は `lib/observability/worker-log.ts` で構造化ログに残す
 - **VRChat 互換のエンコード条件を変えない**（全キーフレーム `-g 1 -bf 0`。変えると再生できなくなる）
 - 変換した動画とキャプチャ画像は**公開**（認証なしで取得できる）。保護は 12 文字のランダム ID だけ
 - ブラウザ内変換は FFmpeg.wasm を使うため COOP/COEP ヘッダーが要る（`web/src/middleware.ts`）

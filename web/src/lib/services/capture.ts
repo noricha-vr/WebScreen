@@ -5,7 +5,7 @@ import {
   type ErrorResponse,
   validateCaptureRequest,
 } from '../contracts/api';
-import { logWorkerFailure } from '../infra/worker-log';
+import { logWorkerFailure } from '../observability/worker-log';
 import { requireUser, type AuthDatabase } from './auth';
 
 const CAPTURE_TIMEOUT_MS = 150_000;

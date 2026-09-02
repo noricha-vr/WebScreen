@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 import { ERROR_CODES, type ErrorResponse } from '../../../lib/contracts/api';
-import { logWorkerFailure } from '../../../lib/infra/worker-log';
+import { logWorkerFailure } from '../../../lib/observability/worker-log';
 import { resolveLocale } from '../../../i18n';
 import {
   OAUTH_STATE_COOKIE_NAME,

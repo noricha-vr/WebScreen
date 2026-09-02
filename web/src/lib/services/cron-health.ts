@@ -12,7 +12,7 @@
 
 import { ERROR_CODES } from '../contracts/api';
 import { postDiscordWebhook } from '../infra/discord-webhook';
-import { logWorkerFailure } from '../infra/worker-log';
+import { logWorkerFailure } from '../observability/worker-log';
 
 /** D1 の最小操作面。この監視が必要とするのは all / run だけ。 */
 export interface CronRunDatabase {

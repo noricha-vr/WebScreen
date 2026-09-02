@@ -1,6 +1,6 @@
 import { ERROR_CODES, type ErrorResponse } from '../contracts/api';
 import { isShortId } from '../contracts/r2key';
-import { logWorkerFailure } from '../infra/worker-log';
+import { logWorkerFailure } from '../observability/worker-log';
 import { importSigningKey } from '../contracts/session';
 import { requireUser, type AuthDatabase } from './auth';
 import { createStreamJwtKeySet } from './stream-jwt';

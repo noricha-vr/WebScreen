@@ -1,6 +1,6 @@
 import { ERROR_CODES, MAX_UPLOAD_BYTES, type CommitResponse } from '../contracts/api';
 import { movieUrl } from '../contracts/r2key';
-import { logWorkerFailure } from '../infra/worker-log';
+import { logWorkerFailure } from '../observability/worker-log';
 import { USER_STORAGE_QUOTA_BYTES } from './quota';
 import {
   getTemporaryUpload,

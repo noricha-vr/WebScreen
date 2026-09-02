@@ -15,7 +15,7 @@ import {
   type RenameMovieResponse,
 } from '../contracts/api';
 import { isShortId, movieKey, movieUrl, temporaryUploadKey } from '../contracts/r2key';
-import { logWorkerFailure } from '../infra/worker-log';
+import { logWorkerFailure } from '../observability/worker-log';
 import {
   logMovieDeletePurgeFailure,
   purgeMovieCache,

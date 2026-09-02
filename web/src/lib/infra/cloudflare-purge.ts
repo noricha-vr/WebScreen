@@ -61,7 +61,7 @@ function logFailure(
       source,
       severity: 'warn',
       kind: 'event',
-      // infra/worker-log.ts と同じ形にする（ダッシュボードの level 絞り込みから漏れないため）。
+      // observability/worker-log.ts と同じ形にする（ダッシュボードの level 絞り込みから漏れないため）。
       level: 'warn',
       event: 'cache_purge_failed',
       reason,
