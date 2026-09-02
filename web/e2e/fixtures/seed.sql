@@ -62,6 +62,30 @@ VALUES
     0,
     datetime('now', '-1 days'),
     strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+29 days')
+  ),
+  -- リネーム専用。E2EReady0001 を書き換えると、公開プレビューが期待する
+  -- ファイル名・タイトルが後続の spec で崩れる（実行順はファイル名順で決まる）。
+  (
+    'E2ERename001',
+    1,
+    'rename-me.pdf',
+    1048576,
+    'ready',
+    0,
+    datetime('now', '-2 days'),
+    strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+15 days')
+  ),
+  -- pin 解除専用。E2EPinned001 の pin を外すと、残日数を見る他の spec が崩れる。
+  -- 3 日前に作られているので、解除すると作成 + 30 日 = あと 27 日に戻る。
+  (
+    'E2EUnpin0001',
+    1,
+    'unpin-me.mp4',
+    2097152,
+    'ready',
+    1,
+    datetime('now', '-3 days'),
+    strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+365 days')
   );
 
 -- 保持期間バッチの実行記録。e2e ではバッチが走らないので、直前に成功した状態を作って
