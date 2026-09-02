@@ -7,5 +7,6 @@ import { resolveLocale } from '../i18n';
 export const prerender = false;
 
 const locale = resolveLocale(Astro.request.headers.get('accept-language'));
-return Astro.redirect(`/${locale}/screen-share/`, 302);
+// audio-profile=legacy 等のクエリを言語別 URL へ引き継ぐ（落とすと既定の raw に戻ってしまう）
+return Astro.redirect(`/${locale}/screen-share/${Astro.url.search}`, 302);
 ---
