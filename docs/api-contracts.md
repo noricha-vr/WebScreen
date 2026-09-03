@@ -39,7 +39,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `POST /api/streams/{id}/heartbeat/` | 配信ブラウザの生存時刻を更新 | 本人（所有者） | 成功は 204。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/stop/` | 配信を `user_stop` で終了し、cron の kick 対象にする | 本人（所有者） | 冪等 204 |
 | `GET /api/streams/{id}/` | 配信状態を取得 | 本人（所有者） | `StreamStatusResponse`、`Cache-Control: no-store` |
-| `GET /api/streams/{id}/health/` | ingress → relay → egress の到達状態を取得 | 本人（所有者） | `StreamHealthResponse`。`ingressBytes` / `egressBytes` を返し、両方の増加をブラウザが確認してから配信 URL を表示する |
+| `GET /api/streams/{id}/health/` | ingress → relay → egress の到達状態を取得 | 本人（所有者） | `StreamHealthResponse`。`ingressBytes` / `egressBytes` を返し、`state==='ready'` かつ `egressBytes` の増加をブラウザが確認してから配信 URL を表示する（さらにブラウザ側で映像 outbound-rtp の bytesSent>0 も確認する） |
 | `GET /api/streams/jwks/` | MediaMTX が publish JWT を検証する公開 JWKS | 不要 | RS256 公開鍵のみ。秘密要素は返さない。`Cache-Control: no-store` |
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。

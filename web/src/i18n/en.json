@@ -327,6 +327,8 @@
       "retry": "Try again",
       "reconnect": "Reconnect to the streaming server",
       "reconnecting": "Reconnecting…",
+      "copyDiagnostics": "Copy diagnostic info",
+      "diagnosticsCopied": "Copied",
       "errors": {
         "h264": "This browser cannot send H.264 video. Open this page in Chrome or Safari and try again.",
         "displayDenied": "No screen was selected. Please try again. On macOS, sharing your entire screen requires allowing your browser under System Settings > Privacy & Security > Screen Recording.",

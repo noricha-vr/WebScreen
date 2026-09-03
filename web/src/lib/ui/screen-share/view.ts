@@ -88,6 +88,14 @@ export class ScreenShareView {
     this.show('error');
   }
 
+  /** 診断コピーボタンの表示切替。表示時はラベルを初期状態へ戻す。 */
+  setDiagnosticsButtonVisible(visible: boolean): void {
+    const button = this.button('[data-screen-copy-diagnostics]');
+    if (!button) return;
+    button.hidden = !visible;
+    if (visible) this.setButtonLabel('[data-screen-copy-diagnostics]', 'labelDiagnosticsCopy');
+  }
+
   /** stop-live完了待ちの文言だけを更新し、button状態を保持する。 */
   showStoppingOthers(): void {
     this.text('[data-screen-error-message]', this.message('labelStoppingOthers'));

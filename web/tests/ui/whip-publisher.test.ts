@@ -5,6 +5,7 @@ import { withRawAudioOpusParameters } from '../../src/lib/ui/audio-profile';
 import {
   buildWhipUrl,
   prioritizeH264,
+  readVideoPublishStats,
   resolveWhipResourceUrl,
   startWhipPublisher,
 } from '../../src/lib/ui/whip-publisher';
@@ -496,3 +497,33 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   });
   return { promise, resolve };
 }
+
+describe('readVideoPublishStats', () => {
+  function statsPc(entries: Array<Record<string, unknown> & { id: string }>): RTCPeerConnection {
+    const report = new Map(entries.map((entry) => [entry.id, entry]));
+    return { getStats: async () => report } as unknown as RTCPeerConnection;
+  }
+
+  test('RTX(bytesSent:0)が先でも H264 本体の outbound を選ぶ', async () => {
+    const pc = statsPc([
+      { id: 'codec-rtx', type: 'codec', mimeType: 'video/rtx' },
+      { id: 'codec-h264', type: 'codec', mimeType: 'video/H264' },
+      { id: 'out-rtx', type: 'outbound-rtp', kind: 'video', codecId: 'codec-rtx', bytesSent: 0 },
+      { id: 'out-h264', type: 'outbound-rtp', kind: 'video', codecId: 'codec-h264', bytesSent: 4096, framesEncoded: 30 },
+    ]);
+    expect(await readVideoPublishStats(pc)).toEqual({ bytesSent: 4096, framesEncoded: 30 });
+  });
+
+  test('映像 outbound-rtp が無ければ null', async () => {
+    const pc = statsPc([
+      { id: 'codec-opus', type: 'codec', mimeType: 'audio/opus' },
+      { id: 'out-audio', type: 'outbound-rtp', kind: 'audio', codecId: 'codec-opus', bytesSent: 512 },
+    ]);
+    expect(await readVideoPublishStats(pc)).toBeNull();
+  });
+
+  test('getStats が失敗したら null', async () => {
+    const pc = { getStats: async () => { throw new Error('closed'); } } as unknown as RTCPeerConnection;
+    expect(await readVideoPublishStats(pc)).toBeNull();
+  });
+});

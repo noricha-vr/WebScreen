@@ -45,6 +45,11 @@ describe('validateClientErrorReport', () => {
     expect(validateClientErrorReport({ stage: 'nowhere', errorCode: 'failed' }).ok).toBe(false);
   });
 
+  test('stream 段と配信の分類コードを受理する', () => {
+    const result = validateClientErrorReport({ stage: 'stream', errorCode: 'streamNoVideo' });
+    expect(result).toEqual({ ok: true, value: { stage: 'stream', errorCode: 'streamNoVideo' } });
+  });
+
   test('httpStatus は 100〜599 の整数だけ受け付ける', () => {
     const base = { stage: 'upload', errorCode: 'failed' };
     expect(validateClientErrorReport({ ...base, httpStatus: 99 }).ok).toBe(false);
@@ -75,5 +80,17 @@ describe('CLIENT_ERROR_CODES', () => {
   test('未知の文字列は含まない', () => {
     expect(CLIENT_ERROR_CODES).not.toContain('MADE_UP' as never);
     expect(isClientErrorCode('MADE_UP')).toBe(false);
+  });
+
+  test('配信の分類コードをすべて含む', () => {
+    for (const code of [
+      'streamNoVideo',
+      'streamHealthTimeout',
+      'streamPublishFailed',
+      'streamDisplayDenied',
+      'streamStatsUnavailable',
+    ]) {
+      expect(isClientErrorCode(code)).toBe(true);
+    }
   });
 });

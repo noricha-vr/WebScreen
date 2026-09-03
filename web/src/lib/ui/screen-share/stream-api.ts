@@ -7,7 +7,19 @@ import { STREAM_START_TOKEN_HEADER } from '../../contracts/streams';
 import { requestJson } from '../request-json';
 
 export const STREAM_HEALTH_POLL_INTERVAL_MS = 1_000;
-export const STREAM_HEALTH_MAX_ATTEMPTS = 10;
+/** バックオフ後の待機（ms）。relay/reuse のリトライが 1 秒より遅いことがあるため後半を延ばす。 */
+export const STREAM_HEALTH_BACKOFF_INTERVAL_MS = 2_000;
+/** この試行数までは 1 秒間隔、以降は BACKOFF 間隔にする。 */
+export const STREAM_HEALTH_FAST_ATTEMPTS = 4;
+/** 合計待機を約 18 秒（4×1秒 + 7×2秒）に伸ばす（配信は生きているのに short window で誤って失敗表示する競合を減らす）。 */
+export const STREAM_HEALTH_MAX_ATTEMPTS = 12;
+
+/** attempt 番号（0 始まり）に対する次の poll 待機時間（ms）。 */
+export function streamHealthPollInterval(attempt: number): number {
+  return attempt < STREAM_HEALTH_FAST_ATTEMPTS
+    ? STREAM_HEALTH_POLL_INTERVAL_MS
+    : STREAM_HEALTH_BACKOFF_INTERVAL_MS;
+}
 
 type JsonRequester = typeof requestJson;
 type BeaconSender = (url: string, data?: BodyInit | null) => boolean;
@@ -81,18 +93,25 @@ export async function waitForStreamReady(
     if (signal?.aborted) return false;
     const current = asStreamHealth(await request(streamPath(streamId, 'health'), { signal }));
     if (signal?.aborted) return false;
-    if (previous && current.state === 'ready' && bytesIncreased(previous, current)) return true;
+    if (previous && current.state === 'ready' && egressIncreased(previous, current)) return true;
     previous = current;
     if (attempt + 1 < STREAM_HEALTH_MAX_ATTEMPTS) {
-      await wait(STREAM_HEALTH_POLL_INTERVAL_MS);
+      await wait(streamHealthPollInterval(attempt));
       if (signal?.aborted) return false;
     }
   }
   return false;
 }
 
-function bytesIncreased(previous: StreamHealthResponse, current: StreamHealthResponse): boolean {
-  return current.ingressBytes > previous.ingressBytes && current.egressBytes > previous.egressBytes;
+/**
+ * egress が 2 回連続で増えた時だけ ready と判定する。
+ *
+ * ingress 増加は要求しない（reuse/relay リトライ中は ingress が動いていても egress が
+ * 出ていない「path はあるが視聴側へ流れていない」状態があり、それを live と誤表示しない
+ * ため egress の増加だけを条件にする）。previous サンプルの存在は呼び出し側で担保する。
+ */
+function egressIncreased(previous: StreamHealthResponse, current: StreamHealthResponse): boolean {
+  return current.egressBytes > previous.egressBytes;
 }
 
 function queueBeacon(sendBeacon: BeaconSender, url: string, body?: string): boolean {
