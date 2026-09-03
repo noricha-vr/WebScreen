@@ -33,7 +33,7 @@
 制約として押さえること:
 
 - **視聴者の分散は DNS ラウンドロビンの均等のみ**。重み付け・容量比例の振り分けはホスト名固定の制約上できない。D1 の配置は publisher / origin にしか効かない
-- `maxReaders` は **path 単位**の上限（1 本の配信がバズるケースに効く）。ノード全体の上限は別途
+- `maxReaders` は **path 単位**の上限（1 本の配信がバズるケースに効く）。20 配信がそれぞれ上限未満でもノード帯域は超えうるので、M2 では **ノード全体の上限**（TCP 554 の同時接続数を nftables の `ct count` で制限）も同時に入れる。両方揃って初めて自衛になる
 - A レコードの TTL は 300 秒（2026-09-03 実測）。VRChat が滞在中に再解決するかは未確認なので、ノード撤去は reader 0 を実測で待つ
 
 ## 段階
@@ -41,7 +41,7 @@
 | 段 | 内容 | 急負荷への効き | 追跡 |
 |---|---|---|---|
 | M1 | replica 1 台（`runOnDemand` + `ORIGINS`）+ cron の複数 egress 集計 + `whipUrl` 契約 + A レコード 2 本 + runbook | viewer 容量・転送量が 2 倍。origin 移設の準備が整う | milestone「配信サーバーを origin 1 + replica 1 の 2 台構成にする」（#219 #220 #221 #222 #224） |
-| M2 | egress `maxReaders` + 転送量 160 GB/日 の日次監視と通知 | Worker / D1 / cron 全滅でも自衛できる | #223 |
+| M2 | egress `maxReaders`（path 単位）+ TCP 554 の同時接続数上限（ノード単位）+ 転送量 160 GB/日 の日次監視と通知 | Worker / D1 / cron 全滅でも自衛できる | #223 |
 | M3 | D1 `media_nodes`（provider 列）+ `stream_sessions.origin_node_id` + 配置を既存の条件付き INSERT に統合 + `node_lost` end_reason + 容量不足の専用 error code | origin 2 台以上。origin 死でも新規配信可 | M1 の実機ゲート後に milestone 化 |
 | M4 | `node_scale_actions` Outbox + Provisioner（provider ごとのアダプタ）+ draining + DNS 自動更新 | 翌時間帯への備え | M3 の後 |
 
@@ -53,17 +53,18 @@
 
 1. Cherry を replica として A レコードに追加。この時点で視聴者の 1/N と転送量が Cherry へ流れる
 2. Cherry で ingress / relay を起動し、負荷試験（600 Mbps 連続 72 時間・reader 800 本・WHIP 20 本・UDP 8189）
-3. Worker の `STREAM_WHIP_ORIGIN` を Cherry に切替。新規配信は Cherry が origin、既存配信は Indigo で継続
-4. 旧 origin の live が 0 になるまで待つ。本番は延長無効・15 分固定なので**最長 15 分**（延長を有効にした後は cron の origin 別 live 数で判定）
-5. 全 replica の `ORIGINS` を `cherry,indigo` → `cherry` に更新（3 の時点で `cherry,indigo` にしておけば 5 は掃除だけ）
-6. Indigo は replica として残す（ロールバック先）。戻す時は 3〜5 を逆順
+3. **Indigo（現 origin）の egress にも `runOnDemand` + `ORIGINS=cherry` を入れる**。origin 自身の配信はローカル path があるので発火せず、他 origin の配信だけ pull する。これが無いと切替後に Indigo を引いた視聴者は Cherry 発の配信を再生できない（DNS に両方が並ぶ間は全 read ノードが相互に replica を兼ねる）
+4. Worker の `STREAM_WHIP_ORIGIN` を Cherry に切替。新規配信は Cherry が origin、既存配信は Indigo で継続
+5. 旧 origin の live が 0 になるまで待つ。本番は延長無効・15 分固定なので**最長 15 分**（延長を有効にした後は cron の origin 別 live 数で判定）
+6. 全 replica の `ORIGINS` を `cherry,indigo` → `cherry` に更新（1 の時点で `cherry,indigo` にしておけば 6 は掃除だけ）
+7. Indigo は replica として残す（ロールバック先）。戻す時は 4〜6 を逆順
 
 移す判断基準（案）: 転送量の 7 日移動平均が 160 GB/日 の 70% 超。値は運用で確定する。
 publish JWT は Worker が署名するので origin が変わっても鍵は同じ。コマンド粒度の runbook は #224 で operations.md に置く。
 
 ## 自宅・会社回線を edge として足す条件
 
-- 必要: 固定 IPv4、TCP 554 の開放（ingress を置かないので 80/443/8189 は不要）、replica 設定、`webscreen.tv` への A レコード追加、cron の read ノード一覧への追加（入れないと `no_viewers` が誤発火する）
+- 必要: 固定 IPv4、TCP 554 の開放、**TCP 80/443 の開放 + Caddy + 証明書**（cron が Control API を HTTPS で読むため。到達できない edge を A レコードに入れると reader を数えられず `no_viewers` が誤発火する）、replica 設定、`webscreen.tv` への A レコード追加、cron の read ノード一覧への追加。ingress を置かないので UDP 8189 は不要
 - 制約: A レコードに入れた瞬間に他ノードと均等に視聴者が来る。回線が細くても 1/N を受けるので `maxReaders` で自衛する。自宅 IP が公開 A レコードに載る
 - 撤去: A レコード削除 → TTL + 既存 reader が切れるまで待つ → cron 一覧から除外 → 停止
 
