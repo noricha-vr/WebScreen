@@ -138,10 +138,11 @@ test.describe('ログイン済み', () => {
     await expect(restoredPanel).toHaveAttribute('data-phase', 'error');
   });
 
-  // 実ファイルをブラウザ内変換パイプライン（PDF.js / FFmpeg.wasm）に通し、
+  // 実ファイルをブラウザ内変換パイプライン（Canvas / PDF.js / FFmpeg.wasm）に通し、
   // 出力 mp4 が faststart mp4（先頭ボックスが ftyp）であることを確認する。
-  // PDF 入力経路が実データで mp4 を生成できることの機械実証。
+  // 画像 / PDF 入力経路が実データで mp4 を生成できることの機械実証。
   for (const c of [
+    { label: 'progressive JPEG（2560×1440）', file: 'progressive-2560x1440.jpg', mimeType: 'image/jpeg' },
     { label: 'PDF（3ページ）', file: 'sample-3page.pdf', mimeType: 'application/pdf' },
   ]) {
     test(`${c.label}を MP4 に変換し、ftyp を含む成果物をアップロードする`, async ({ page }) => {
