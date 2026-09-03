@@ -17,7 +17,7 @@ describe('画面共有リデザインの状態', () => {
     expect(page.flowItem('1').dataset.state).toBe('done');
   });
 
-  test('ピッカーがキャンセル以外で失敗したら idle ではなくエラー画面へ進む', async () => {
+  test('ピッカーがキャンセル以外で失敗してもエラー画面へ進み starting に残らない', async () => {
     const page = fakePage();
     new ScreenShareController(page.root, dependencies({
       getDisplayMedia: () => Promise.reject(new DOMException('unsupported', 'NotSupportedError')),
@@ -29,7 +29,7 @@ describe('画面共有リデザインの状態', () => {
     expect(page.step('idle').hidden).toBe(true);
   });
 
-  test('ピッカーを閉じると開始前のidleへ戻り、ラベルは span だけ差し替える', async () => {
+  test('ピッカー拒否（キャンセル・OS 権限なし）はエラー画面へ進み、ラベルは span だけ差し替える', async () => {
     const page = fakePage();
     const start = page.button('[data-screen-start]');
     const retry = page.button('[data-screen-retry]');
@@ -47,7 +47,7 @@ describe('画面共有リデザインの状態', () => {
     expect(start.labelSpan.textContent).toBe('selecting');
 
     rejectPicker!(new DOMException('denied', 'NotAllowedError'));
-    await waitFor(() => !page.step('idle').hidden);
+    await waitFor(() => !page.step('error').hidden);
     expect(start.disabled).toBe(false);
     expect(retry.disabled).toBe(false);
     expect(start.labelSpan.textContent).toBe('start');

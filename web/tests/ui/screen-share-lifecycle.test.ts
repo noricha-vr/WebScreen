@@ -32,7 +32,7 @@ describe('画面共有 controller', () => {
     expect(page.currentFlowItems()).toEqual(['2']);
   });
 
-  test('ピッカーを閉じると開始前のidleへ戻り、ラベルは span だけ差し替えてアイコンを保つ', async () => {
+  test('ピッカー選択中は開始・再試行を無効化し、ラベルは span だけ差し替えてアイコンを保つ', async () => {
     const page = fakeScreenSharePage();
     const start = page.button('[data-screen-start]');
     const retry = page.button('[data-screen-retry]');
@@ -57,7 +57,7 @@ describe('画面共有 controller', () => {
     expect(start.textContent).toBe(''); // ボタン直下（アイコン）は書き換えない
 
     rejectPicker!(new DOMException('denied', 'NotAllowedError'));
-    await waitFor(() => !page.step('idle').hidden);
+    await waitFor(() => !page.step('error').hidden);
     expect(start.disabled).toBe(false);
     expect(retry.disabled).toBe(false);
     expect(start.labelSpan.textContent).toBe('start');

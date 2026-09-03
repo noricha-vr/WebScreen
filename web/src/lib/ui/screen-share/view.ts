@@ -23,13 +23,10 @@ export function messageKeyForError(error: unknown): string {
     if (error.errorCode === ERROR_CODES.streamEnded) return 'msgStreamEnded';
   }
   if (error instanceof StreamHealthError) return 'msgStreamUnhealthy';
-  if (isDisplayPickerDismissed(error)) return 'msgDisplayDenied';
+  if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
+    return 'msgDisplayDenied';
+  }
   return 'msgGeneric';
-}
-
-/** 利用者が画面選択ダイアログを閉じた（または拒否した）エラーか判定する。 */
-export function isDisplayPickerDismissed(error: unknown): boolean {
-  return error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'AbortError');
 }
 
 /** 別の live を明示停止できる競合エラーか判定する。 */

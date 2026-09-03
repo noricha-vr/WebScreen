@@ -10,7 +10,6 @@ import { resolveScreenShareVideoSettingsForSearch } from './video-profile';
 import type { PreviewPreferenceStore } from './preview-preference';
 import { currentSearch, delay, durationUntil } from './controller-helpers';
 import {
-  isDisplayPickerDismissed,
   isStreamAlreadyLiveError,
   isStreamIdNotReusableError,
   messageKeyForError,
@@ -90,10 +89,9 @@ export class ScreenShareControllerImpl {
       await this.continueStart(run);
     } catch (error) {
       if (run) this.cancelStart(run);
-      if (!this.isActiveStart(generation)) return;
-      // 画面選択を閉じただけなら共有は始まっていないので、エラー画面ではなく idle へ戻す。
-      if (!run && isDisplayPickerDismissed(error)) this.view.show('idle');
-      else this.handleStartError(error);
+      // NotAllowedError は選択のキャンセルだけでなく OS の画面収録権限拒否でも出るため、
+      // idle へ黙って戻さず displayDenied の案内を出す。
+      if (this.isActiveStart(generation)) this.handleStartError(error);
     } finally {
       if (run && this.activeStart === run) this.activeStart = null;
       this.releaseStartReservation(generation);
