@@ -137,6 +137,7 @@ describe('画面共有リデザインの状態', () => {
         stop: async () => undefined,
         republish: async () => publisher,
         setPublishToken: () => undefined,
+        videoStats: async () => null,
       };
       new ScreenShareController(page.root, dependencies({
         now: () => now,
@@ -214,6 +215,7 @@ function publisher(): WhipPublisher {
     stop: async () => undefined,
     republish: async () => publisher(),
     setPublishToken: () => undefined,
+    videoStats: async () => null,
   };
 }
 

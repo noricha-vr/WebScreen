@@ -76,6 +76,7 @@ describe('画面共有 controller', () => {
       stop: async () => undefined,
       republish: async () => { calls.republished += 1; return publisher; },
       setPublishToken: () => undefined,
+      videoStats: async () => null,
     };
     const videoTrack = { addEventListener: () => undefined, stop: () => { calls.stopped += 1; } };
     const media = { getTracks: () => [videoTrack], getVideoTracks: () => [videoTrack], getAudioTracks: () => [] } as unknown as MediaStream;
@@ -265,5 +266,6 @@ function publisherStub(republish: () => Promise<WhipPublisher> = async () => {
     stop: async () => undefined,
     republish,
     setPublishToken: () => undefined,
+    videoStats: async () => null,
   };
 }

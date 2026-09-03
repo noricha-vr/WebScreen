@@ -270,6 +270,7 @@ describe('他の配信を終了して開始', () => {
       stop: async () => undefined,
       republish: async () => delayedPublisher,
       setPublishToken: () => undefined,
+      videoStats: async () => null,
     };
     new ScreenShareController(page.root, dependencies({
       requestJson: async (path) => {
@@ -379,6 +380,7 @@ function publisher(): WhipPublisher {
     stop: async () => undefined,
     republish: async () => publisher(),
     setPublishToken: () => undefined,
+    videoStats: async () => null,
   };
 }
 

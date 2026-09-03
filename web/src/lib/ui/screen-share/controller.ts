@@ -2,13 +2,27 @@ import { copyToClipboard } from '../clipboard';
 import { isUnauthorizedRequestError, type requestJson } from '../request-json';
 import { configureCaptureAudioTracks } from '../audio-profile';
 import { keyframeRequestIntervalForSearch, reusableStreamIdForSearch } from '../stream-profile';
-import type { startWhipPublisher, WhipPublisher } from '../whip-publisher';
+import { WhipPublishError, type startWhipPublisher, type VideoPublishStats, type WhipPublisher } from '../whip-publisher';
+import type { ClientErrorReport } from '../../contracts/client-error';
+import { reportClientError } from '../client-error-report';
 import { currentAudioProfile, displayMediaConstraints } from './capture';
 import { isExpiryWarning, LiveStreamSession, releasePublisher, secondsUntil, StartRun } from './session';
 import { createStreamApi, type StreamApi } from './stream-api';
+import {
+  buildStreamDiagnosticSnapshot,
+  classifyStreamFailure,
+  type StreamFailureKind,
+} from './diagnostics';
 import { resolveScreenShareVideoSettingsForSearch } from './video-profile';
 import type { PreviewPreferenceStore } from './preview-preference';
-import { currentSearch, delay, durationUntil } from './controller-helpers';
+import {
+  currentSearch,
+  delay,
+  displaySurfaceOf,
+  durationUntil,
+  userAgentString,
+  videoSettingsOf,
+} from './controller-helpers';
 import {
   isStreamAlreadyLiveError,
   isStreamIdNotReusableError,
@@ -30,6 +44,8 @@ export interface ScreenShareDependencies {
   search?: () => string;
   sendBeacon: (url: string, data?: BodyInit | null) => boolean;
   onPageHide: (handler: () => void) => void;
+  /** 失敗の匿名報告。既定は client-error-report の reportClientError。 */
+  reportStreamFailure?: (report: ClientErrorReport) => void;
 }
 
 type StartedStream = { live: LiveStreamSession; ready: boolean };
@@ -44,11 +60,17 @@ export class ScreenShareControllerImpl {
   private activeStart: StartRun | null = null;
   private expiresBarTotalSeconds = 0;
   private reuseDisabled = false;
+  private readonly reportStreamFailure: (report: ClientErrorReport) => void;
+  // 失敗診断用。lastVideoStats は publisher を閉じる前に採取した値を保持する。
+  private lastStreamId: string | null = null;
+  private lastVideoStats: VideoPublishStats | null = null;
+  private lastDiagnostic: Record<string, unknown> | null = null;
   constructor(
     root: HTMLElement,
     private readonly deps: ScreenShareDependencies
   ) {
     this.view = new ScreenShareView(root, deps.previewPreference);
+    this.reportStreamFailure = deps.reportStreamFailure ?? reportClientError;
     this.api = createStreamApi(
       deps.requestJson,
       deps.sendBeacon,
@@ -60,6 +82,7 @@ export class ScreenShareControllerImpl {
     // getDisplayMedia はクリック起点で直接呼び、user activation を失わない。
     this.view.onClick('[data-screen-start]', () => void this.beginStart(false));
     this.view.onClick('[data-screen-copy]', () => void this.copyUrl());
+    this.view.onClick('[data-screen-copy-diagnostics]', () => void this.copyDiagnostics());
     this.view.onClick('[data-screen-stop]', () => void this.stop());
     this.view.onClick('[data-screen-retry]', () => void this.retry());
     this.view.onClick('[data-screen-stop-others]', () => void this.beginStart(true));
@@ -91,7 +114,7 @@ export class ScreenShareControllerImpl {
       if (run) this.cancelStart(run);
       // NotAllowedError は選択のキャンセルだけでなく OS の画面収録権限拒否でも出るため、
       // idle へ黙って戻さず displayDenied の案内を出す。
-      if (this.isActiveStart(generation)) this.handleStartError(error);
+      if (this.isActiveStart(generation)) this.handleStartError(error, run?.capture.media ?? null);
     } finally {
       if (run && this.activeStart === run) this.activeStart = null;
       this.releaseStartReservation(generation);
@@ -124,8 +147,15 @@ export class ScreenShareControllerImpl {
     this.expiresBarTotalSeconds = durationUntil(stream.extendExpiresAt, Date.parse(stream.startedAt));
     stream.startTimers(() => void this.heartbeat(), () => this.updateClock());
     stream.capture.media.getVideoTracks()[0]?.addEventListener('ended', () => void this.stop());
-    if (started.ready) this.view.show('live');
-    else this.showError(new StreamHealthError());
+    if (started.ready) {
+      this.markLiveSuccess();
+      return this.view.show('live');
+    }
+    // 映像が届かないまま health 未達。現 publisher の stats で分類する（旧値へフォールバックしない）。
+    const stats = await stream.publisher.videoStats();
+    if (!this.isActiveLive(stream)) return; // videoStats 待機中に停止/pagehide されたら復活させない。
+    this.recordStreamFailure('healthTimeout', stats, stream.capture.media);
+    this.showError(new StreamHealthError());
   }
 
   private async createAndPublish(run: StartRun): Promise<StartedStream | null> {
@@ -143,6 +173,8 @@ export class ScreenShareControllerImpl {
       this.cancelStart(run);
       throw error;
     }
+    // 配信 ID を診断へ引き渡す（journald live/<id>・Cloudflare ログとの突合キー）。
+    this.lastStreamId = created.id;
     if (!this.isActiveRun(run)) {
       this.cancelStart(run);
       void this.notifyServerStop(created.id);
@@ -193,7 +225,21 @@ export class ScreenShareControllerImpl {
       this.discardInactiveRun(stream, run);
       return null;
     }
+    // health は音声込みの path 全体 bytes を見るため、音声だけ流れて H.264 未生成でも
+    // ready になりうる。live 確定前に「映像 bytes が実際に出たか」を videoStats で確認する。
+    const initialStats = await stream.publisher.videoStats();
+    if (!this.isActiveRun(run) || !this.isActiveLive(stream)) {
+      this.discardInactiveRun(stream, run);
+      return null;
+    }
+    // 厳密に 0 バイト = H.264 未生成。ready でも live にせず no-video 失敗へ落とす。
+    // republish しても Chrome は映像を出さないので 2回目の health 待機も省く。
+    // undefined（取得不能）は live を妨げない（テレメトリ欠落で健全な配信を弾かない）。
+    if (initialStats?.bytesSent === 0) return { live: stream, ready: false };
     if (ready) return { live: stream, ready: true };
+    // republish は close を同期実行する。失敗して publisher が死ぬ経路の診断用に、
+    // ここでだけ現 publisher の stats を退避する（republish 成功後の分類には使わない）。
+    this.lastVideoStats = initialStats;
     // 復旧 republish が失敗した publisher は PeerConnection を閉じ失敗 Promise をキャッシュし再接続不能。
     // WHIP エラー（サーバー接続不可）で誤誘導せず StreamHealthError（映像未到達）で破棄し、再選択へ導く。
     const replacement = await stream.publisher.republish().catch((error: unknown) => {
@@ -221,6 +267,16 @@ export class ScreenShareControllerImpl {
     this.view.setButtonLabel('[data-screen-copy]', copied ? 'labelCopied' : 'labelCopy');
   }
 
+  private async copyDiagnostics(): Promise<void> {
+    const snapshot = this.lastDiagnostic;
+    if (!snapshot) return;
+    const copied = await copyToClipboard(JSON.stringify(snapshot, null, 2), null);
+    this.view.setButtonLabel(
+      '[data-screen-copy-diagnostics]',
+      copied ? 'labelDiagnosticsCopied' : 'labelDiagnosticsCopy'
+    );
+  }
+
   private async retry(): Promise<void> {
     const live = this.live;
     if (!live) return this.beginStart(false);
@@ -232,9 +288,16 @@ export class ScreenShareControllerImpl {
       const ready = await this.api.waitForReady(live.id, live.abortController.signal);
       if (!this.isActiveLive(live)) return;
       if (ready) {
+        this.markLiveSuccess();
         this.view.setUrl(live.streamUrl);
         this.view.show('live');
-      } else this.showError(new StreamHealthError());
+      } else {
+        // 再接続しても映像が届かない。現 publisher の stats で分類する（旧値へフォールバックしない）。
+        const stats = await live.publisher.videoStats();
+        if (!this.isActiveLive(live)) return; // videoStats 待機中に停止されたら復活させない。
+        this.recordStreamFailure('healthTimeout', stats, live.capture.media);
+        this.showError(new StreamHealthError());
+      }
     } catch (error) {
       if (!this.isActiveLive(live)) return;
       const stopped = this.finishLocally('error', error);
@@ -275,9 +338,47 @@ export class ScreenShareControllerImpl {
     if (remaining === 0) void this.stop();
   }
 
-  private handleStartError(error: unknown): void {
+  private handleStartError(error: unknown, media: MediaStream | null): void {
     if (isUnauthorizedRequestError(error)) return this.view.show('login');
+    const kind = startFailureKind(error);
+    // stats は close 前に採取済み（verifyInitialStream）。ここでの publisher は既に閉じている。
+    // 診断対象外のエラー（サーバー業務エラー等）では古い診断を残さずボタンを隠す。
+    if (kind) this.recordStreamFailure(kind, this.lastVideoStats, media);
+    else this.lastDiagnostic = null;
     this.showError(error);
+  }
+
+  /** live 表示に到達したら診断を捨てる（後続の別エラーで古い診断をコピーさせない）。 */
+  private markLiveSuccess(): void {
+    this.lastDiagnostic = null;
+    this.view.setDiagnosticsButtonVisible(false);
+  }
+
+  /**
+   * 失敗を匿名報告し、コピー用の診断スナップショットを退避する。
+   * 診断の失敗で失敗表示を壊さないよう、全体を握り潰す（テレメトリ優先で画面を壊さない）。
+   */
+  private recordStreamFailure(
+    kind: StreamFailureKind,
+    stats: VideoPublishStats | null,
+    media: MediaStream | null
+  ): void {
+    try {
+      const failureCode = classifyStreamFailure({ kind, stats, health: null });
+      this.reportStreamFailure({ stage: 'stream', errorCode: failureCode });
+      this.lastDiagnostic = buildStreamDiagnosticSnapshot({
+        streamId: this.lastStreamId,
+        at: new Date(this.deps.now()).toISOString(),
+        userAgent: userAgentString(),
+        displaySurface: displaySurfaceOf(media),
+        video: videoSettingsOf(media),
+        stats,
+        health: null,
+        failureCode,
+      });
+    } catch (error) {
+      console.warn('Failed to record stream failure diagnostics', error);
+    }
   }
 
   private handleRuntimeError(error: unknown): void {
@@ -297,8 +398,11 @@ export class ScreenShareControllerImpl {
     if (live) live.closeLocal();
     else run?.capture.dispose();
     this.live = null;
-    if (phase === 'error') this.showError(error);
-    else this.view.show('idle');
+    // ランタイム/再接続エラーは分類しない診断対象外の経路なので、古い診断は残さない。
+    if (phase === 'error') {
+      this.lastDiagnostic = null;
+      this.showError(error);
+    } else this.view.show('idle');
     return live;
   }
 
@@ -342,6 +446,10 @@ export class ScreenShareControllerImpl {
   private reserveStart(): number | null {
     if (this.startReservation !== null || this.activeStart || this.live) return null;
     this.stopping = false;
+    // 前回の試行の診断値を持ち越さない（無関係な次の失敗で古い stream id をコピーさせない）。
+    this.lastStreamId = null;
+    this.lastVideoStats = null;
+    this.lastDiagnostic = null;
     const generation = ++this.startGeneration;
     this.startReservation = generation;
     return generation;
@@ -396,9 +504,24 @@ export class ScreenShareControllerImpl {
       isStreamAlreadyLiveError(error),
       retryAfterSecondsForError(error)
     );
+    // 診断スナップショットがある失敗（配信の映像/接続系）でだけコピーボタンを出す。
+    this.view.setDiagnosticsButtonVisible(this.lastDiagnostic !== null);
   }
 
   private search(): string {
     return this.deps.search?.() ?? currentSearch();
   }
+}
+
+/**
+ * 開始時の例外を診断の失敗種別へ写す。報告すべきでない失敗（サーバー側の業務エラー
+ * = capacity・already-live 等の JsonRequestError）は null を返して報告しない。
+ */
+function startFailureKind(error: unknown): StreamFailureKind | null {
+  if (error instanceof StreamHealthError) return 'healthTimeout';
+  if (error instanceof WhipPublishError) return 'publishFailed';
+  if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
+    return 'displayDenied';
+  }
+  return null;
 }

@@ -168,6 +168,7 @@ function publisher(onClose = () => {}, onDelete = () => {}): WhipPublisher {
     stop: async () => undefined,
     republish: async () => value,
     setPublishToken: () => undefined,
+    videoStats: async () => null,
   };
   return value;
 }

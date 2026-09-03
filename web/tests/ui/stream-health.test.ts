@@ -3,16 +3,17 @@ import { describe, expect, test } from 'bun:test';
 import {
   STREAM_HEALTH_MAX_ATTEMPTS,
   STREAM_HEALTH_POLL_INTERVAL_MS,
+  streamHealthPollInterval,
   waitForStreamReady,
 } from '../../src/lib/ui/screen-share/stream-api';
 import type { ScreenShareDependencies } from '../../src/lib/ui/screen-share';
 
 describe('配信開始のhealth判定', () => {
-  test('ingressとegressのbytesが連続して増えた時だけreadyにする', async () => {
+  test('egressが連続して増えればready（ingressが動かなくてもよい）', async () => {
+    // reuse/relay リトライ中は ingress が固定でも視聴側 egress の増加だけを ready の根拠にする。
     const responses = [
-      { state: 'starting', ingressBytes: 0, egressBytes: 0, audioDetected: null },
-      { state: 'ready', ingressBytes: 10, egressBytes: 5, audioDetected: null },
-      { state: 'ready', ingressBytes: 20, egressBytes: 10, audioDetected: true },
+      { state: 'starting', ingressBytes: 100, egressBytes: 0, audioDetected: null },
+      { state: 'ready', ingressBytes: 100, egressBytes: 5, audioDetected: null },
     ];
     const waits: number[] = [];
     const request = (async () => responses.shift()) as unknown as ScreenShareDependencies['requestJson'];
@@ -23,19 +24,37 @@ describe('配信開始のhealth判定', () => {
     expect(waits).toEqual([STREAM_HEALTH_POLL_INTERVAL_MS]);
   });
 
-  test('bytesが増えなければ上限回数でstartingを打ち切る', async () => {
+  test('egressが増えなければready(state)でもreadyにしない', async () => {
+    // path はあるが視聴側へ流れていない（egress 停滞）状態を live と誤表示しない。
+    const responses = [
+      { state: 'ready', ingressBytes: 100, egressBytes: 5, audioDetected: null },
+      { state: 'ready', ingressBytes: 200, egressBytes: 5, audioDetected: null },
+    ];
+    let index = 0;
+    const request = (async () => responses[Math.min(index++, responses.length - 1)]) as
+      unknown as ScreenShareDependencies['requestJson'];
+
+    await expect(waitForStreamReady('Ab12Cd34Ef56', request, async () => undefined)).resolves.toBe(false);
+  });
+
+  test('bytesが増えなければ上限回数でstartingを打ち切り、待機はバックオフする', async () => {
     let requests = 0;
-    let waits = 0;
+    const waits: number[] = [];
     const request = (async () => {
       requests += 1;
       return { state: 'ready', ingressBytes: 10, egressBytes: 5, audioDetected: null };
     }) as unknown as ScreenShareDependencies['requestJson'];
 
-    await expect(waitForStreamReady('Ab12Cd34Ef56', request, async () => {
-      waits += 1;
+    await expect(waitForStreamReady('Ab12Cd34Ef56', request, async (milliseconds) => {
+      waits.push(milliseconds);
     })).resolves.toBe(false);
     expect(requests).toBe(STREAM_HEALTH_MAX_ATTEMPTS);
-    expect(waits).toBe(STREAM_HEALTH_MAX_ATTEMPTS - 1);
+    // attempt 0..(MAX-2) の待機がスケジュールどおりに並ぶ（前半 1s・後半 2s）。
+    const expectedWaits = Array.from(
+      { length: STREAM_HEALTH_MAX_ATTEMPTS - 1 },
+      (_unused, attempt) => streamHealthPollInterval(attempt)
+    );
+    expect(waits).toEqual(expectedWaits);
   });
 
   test('health request待機中のabort後は次のrequestを送らない', async () => {

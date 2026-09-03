@@ -37,6 +37,19 @@ export function prioritizeH264(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] | 
   return [...h264, ...codecs.filter((codec) => !/\/h264$/i.test(codec.mimeType))];
 }
 
+/**
+ * 映像 outbound-rtp の送出量。失敗診断で「H.264 を 1 バイトも送れていない」のか
+ * 「送れているのに health 未達」なのかを切り分けるために使う。
+ *
+ * bytesSent / framesEncoded は欠落しうる（Safari は framesEncoded を返さない）。
+ * 欠落を 0 に潰すと Safari 利用者全員を no-video と誤分類するため、そのまま
+ * undefined で保持する。
+ */
+export interface VideoPublishStats {
+  bytesSent: number | undefined;
+  framesEncoded: number | undefined;
+}
+
 /** WHIP 接続を終了するために必要な操作を返す。 */
 export interface WhipPublisher {
   /** ローカルの RTCPeerConnection を同期的に閉じる。 */
@@ -49,6 +62,11 @@ export interface WhipPublisher {
   republish(): Promise<WhipPublisher>;
   /** 延長で更新された publish token を以後の操作へ反映する。 */
   setPublishToken(publishToken: string): void;
+  /**
+   * 映像 outbound-rtp の送出統計を返す。閉じた pc やレポート無しでは null。
+   * 閉じると getStats が空になるので、必ず close/republish の前に呼ぶこと。
+   */
+  videoStats(): Promise<VideoPublishStats | null>;
 }
 
 /** feature 側が決定し WHIP sender へ注入する映像設定。 */
@@ -296,5 +314,71 @@ function publisherFor(
     setPublishToken(nextPublishToken: string): void {
       currentPublishToken = nextPublishToken;
     },
+    async videoStats(): Promise<VideoPublishStats | null> {
+      // 閉じた pc の getStats は空を返すので、close 済みなら観測不能として null。
+      if (closed) return null;
+      return readVideoPublishStats(peerConnection);
+    },
   };
+}
+
+/**
+ * 補助的な映像 codec（RTX 再送・RED・FEC）の mimeType。これらの outbound-rtp は
+ * 本来の映像送出量ではないため no-video 判定から除外する
+ * （手法は scripts/benchmark-screen-share-fps-core.ts の selectPrimaryH264VideoOutbound と同じ）。
+ */
+const AUXILIARY_VIDEO_CODECS = /^video\/(rtx|red|ulpfec|flexfec)/i;
+
+/** codec レポート（type==='codec'）の mimeType を読むための最小形。lib.dom に型が無い。 */
+interface CodecMimeStats {
+  mimeType?: string;
+}
+
+/**
+ * 映像 outbound-rtp レポートから送出量を取り出す。取得不能・レポート無しは null。
+ *
+ * Chrome は RTX（再送）の outbound-rtp を H.264 本体より先に返すことがあり、その
+ * bytesSent:0 を拾うと no-video 誤判定になる。codecId→codec の mimeType を解決して
+ * H.264 本体を選び、補助 codec を除外する。
+ */
+export async function readVideoPublishStats(
+  peerConnection: RTCPeerConnection
+): Promise<VideoPublishStats | null> {
+  let report: RTCStatsReport;
+  try {
+    report = await peerConnection.getStats();
+  } catch {
+    return null;
+  }
+
+  const byId = new Map<string, RTCStats>();
+  const videoOutbounds: RTCOutboundRtpStreamStats[] = [];
+  for (const stat of report.values()) {
+    byId.set(stat.id, stat);
+    if (stat.type !== 'outbound-rtp') continue;
+    // RTCStats に kind が無いため、outbound-rtp 判定後に映像レポート型へ絞る。
+    const outbound = stat as RTCOutboundRtpStreamStats;
+    if (outbound.kind === 'video') videoOutbounds.push(outbound);
+  }
+  if (videoOutbounds.length === 0) return null;
+
+  const codecMime = (outbound: RTCOutboundRtpStreamStats): string | undefined => {
+    if (!outbound.codecId) return undefined;
+    // codec レポートは mimeType を持つ discriminant なのでその型へ絞る。
+    return (byId.get(outbound.codecId) as CodecMimeStats | undefined)?.mimeType;
+  };
+  const nonAuxiliary = videoOutbounds.filter((outbound) => {
+    const mimeType = codecMime(outbound);
+    return mimeType === undefined || !AUXILIARY_VIDEO_CODECS.test(mimeType);
+  });
+  const candidates = nonAuxiliary.length > 0 ? nonAuxiliary : videoOutbounds;
+  const h264 = candidates.find((outbound) => {
+    const mimeType = codecMime(outbound);
+    return mimeType !== undefined && /^video\/h264$/i.test(mimeType);
+  });
+  // H.264 本体が引けなければ bytesSent 最大の映像 outbound（undefined は 0 として比較のみ）。
+  const selected = h264 ?? candidates.reduce((best, current) =>
+    (current.bytesSent ?? 0) > (best.bytesSent ?? 0) ? current : best
+  );
+  return { bytesSent: selected.bytesSent, framesEncoded: selected.framesEncoded };
 }

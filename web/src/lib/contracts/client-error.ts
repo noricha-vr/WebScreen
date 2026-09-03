@@ -26,6 +26,7 @@ export const CLIENT_ERROR_STAGES = [
   'delete',
   'history',
   'session',
+  'stream',
 ] as const;
 export type ClientErrorStage = (typeof CLIENT_ERROR_STAGES)[number];
 
@@ -53,11 +54,26 @@ const CLIENT_UI_ERROR_CODES = [
 ] as const;
 type ClientUiErrorCode = (typeof CLIENT_UI_ERROR_CODES)[number];
 
-/** 受け付けるコード。API のエラーコードと UI の表示コードの和集合。 */
-export type ClientErrorCode = ErrorCode | ClientUiErrorCode;
+/**
+ * 画面共有ライブ配信で、クライアント側が分類した失敗コード。upload-flow の
+ * UploadErrorCode（CLIENT_UI_ERROR_CODES）とは同期義務が無いので混ぜない。
+ * 匿名ログへ送るのはこの識別子だけで、getStats の数値や UA は送らない。
+ */
+const CLIENT_STREAM_ERROR_CODES = [
+  'streamNoVideo',
+  'streamHealthTimeout',
+  'streamPublishFailed',
+  'streamDisplayDenied',
+  'streamStatsUnavailable',
+] as const;
+type ClientStreamErrorCode = (typeof CLIENT_STREAM_ERROR_CODES)[number];
+
+/** 受け付けるコード。API のエラーコードと UI の表示コードと配信コードの和集合。 */
+export type ClientErrorCode = ErrorCode | ClientUiErrorCode | ClientStreamErrorCode;
 export const CLIENT_ERROR_CODES: readonly ClientErrorCode[] = [
   ...Object.values(ERROR_CODES),
   ...CLIENT_UI_ERROR_CODES,
+  ...CLIENT_STREAM_ERROR_CODES,
 ];
 
 const ALLOWED_CODES: ReadonlySet<string> = new Set<string>(CLIENT_ERROR_CODES);
