@@ -30,6 +30,7 @@ function setBindings(database: StreamSqliteAdapter): void {
     DB: database,
     SESSION_SIGNING_KEY: SESSION_SECRET,
     STREAM_JWT_PRIVATE_KEY: privateKey,
+    STREAM_WHIP_ORIGIN: 'https://webscreen.tv',
     STREAM_EXTENSION_SECONDS: '900',
     STREAM_MAX_LIVE_PER_USER: '1',
     STREAM_MAX_LIVE: '20',

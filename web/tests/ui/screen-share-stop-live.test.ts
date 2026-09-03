@@ -361,7 +361,7 @@ function dependencies(overrides: Partial<ScreenShareDependencies>): ScreenShareD
 
 function createResponse(): Record<string, unknown> {
   return {
-    id: 'Ab12Cd34Ef56', streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56', status: 'live',
+    id: 'Ab12Cd34Ef56', streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56', whipUrl: 'https://webscreen.tv/live/Ab12Cd34Ef56/whip', status: 'live',
     publishToken: 'token', publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',
     extendExpiresAt: '2026-09-01T01:00:00.000Z', startedAt: '2026-09-01T00:00:00.000Z',
     lastHeartbeatAt: '2026-09-01T00:00:00.000Z', endedAt: null, endReason: null,

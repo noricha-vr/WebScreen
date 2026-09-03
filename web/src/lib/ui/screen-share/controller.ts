@@ -192,7 +192,7 @@ export class ScreenShareControllerImpl {
     try {
       publisher = await this.deps.startWhipPublisher({
         stream: run.capture.media,
-        streamId: created.id,
+        whipUrl: created.whipUrl,
         publishToken: created.publishToken,
         keyframeRequestIntervalMs: keyframeRequestIntervalForSearch(this.search()),
         audioProfile: currentAudioProfile(),

@@ -2,9 +2,6 @@
 export const STREAM_SESSION_STATUSES = ['live', 'ended'] as const;
 export type StreamSessionStatus = (typeof STREAM_SESSION_STATUSES)[number];
 
-/** WHIP publisher が接続する、allowlist 固定済みの配信オリジン。 */
-export const STREAM_WHIP_BASE_URL = 'https://webscreen.tv/live';
-
 /** 配信開始操作を pagehide 後も同定する任意ヘッダー。 */
 export const STREAM_START_TOKEN_HEADER = 'X-WebScreen-Start-Token';
 
@@ -44,6 +41,8 @@ export interface StreamStatusResponse {
 
 /** `POST /api/streams/` の応答。 */
 export interface CreateStreamResponse extends StreamStatusResponse {
+  /** WHIP publish と resource 操作に使う、この配信専用の絶対 URL。 */
+  whipUrl: string;
   publishToken: string;
   publishTokenExpiresAt: string;
 }
@@ -52,6 +51,8 @@ export interface CreateStreamResponse extends StreamStatusResponse {
 export interface ExtendStreamResponse {
   id: string;
   status: 'live';
+  /** 配信開始時と同じ WHIP endpoint。再接続先を Worker 設定で切り替えられるよう返す。 */
+  whipUrl: string;
   publishToken: string;
   publishTokenExpiresAt: string;
   extendExpiresAt: string;

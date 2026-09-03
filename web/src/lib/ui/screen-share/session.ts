@@ -40,6 +40,7 @@ export class LiveStreamSession {
 
   readonly id: string;
   readonly streamUrl: string;
+  readonly whipUrl: string;
   readonly startedAt: string;
   readonly capture: CaptureHandle;
   readonly abortController: AbortController;
@@ -47,6 +48,7 @@ export class LiveStreamSession {
   constructor(created: CreateStreamResponse, publisher: WhipPublisher, run: StartRun) {
     this.id = created.id;
     this.streamUrl = created.streamUrl;
+    this.whipUrl = created.whipUrl;
     this.startedAt = created.startedAt;
     this.publishToken = created.publishToken;
     this.publishTokenExpiresAt = created.publishTokenExpiresAt;

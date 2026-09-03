@@ -39,6 +39,7 @@ function bindings(database: StreamSqliteAdapter): StreamApiBindings {
     DB: database as unknown as StreamApiBindings['DB'],
     SESSION_SIGNING_KEY: SESSION_SECRET,
     STREAM_JWT_PRIVATE_KEY: privateKey,
+    STREAM_WHIP_ORIGIN: 'https://webscreen.tv',
     STREAM_EXTENSION_SECONDS: '900',
     STREAM_EXTENSION_ENABLED: 'false',
     STREAM_MAX_LIVE_PER_USER: '1',
@@ -54,11 +55,15 @@ function request(authenticated = true): Request {
 }
 
 describe('stream API HTTP境界', () => {
-  it('延長サイクルは15分で、延長フラグの未設定既定値はfalseにする', () => {
-    const settings = streamSettings({} as StreamApiBindings);
+  it('WHIP origin は必須で、延長サイクルは15分・延長フラグの未設定既定値はfalseにする', () => {
+    expect(() => streamSettings({} as StreamApiBindings)).toThrow('Missing stream setting');
+    const settings = streamSettings({ STREAM_WHIP_ORIGIN: 'https://webscreen.tv' } as StreamApiBindings);
     expect(settings.extensionCycleSeconds).toBe(15 * 60);
     expect(settings.extensionEnabled).toBe(false);
-    expect(streamSettings({ STREAM_EXTENSION_ENABLED: 'true' } as StreamApiBindings).extensionEnabled).toBe(true);
+    expect(streamSettings({
+      STREAM_WHIP_ORIGIN: 'https://webscreen.tv',
+      STREAM_EXTENSION_ENABLED: 'true',
+    } as StreamApiBindings).extensionEnabled).toBe(true);
   });
 
   it('認証失敗を401 UNAUTHORIZEDへ変換する', async () => {

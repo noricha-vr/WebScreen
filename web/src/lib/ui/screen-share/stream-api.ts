@@ -130,7 +130,7 @@ function streamPath(id: string, operation: 'heartbeat' | 'health' | 'stop'): str
 
 function asCreateStream(value: unknown): CreateStreamResponse {
   if (!isRecord(value) || !hasStringFields(value, [
-    'id', 'streamUrl', 'publishToken', 'publishTokenExpiresAt', 'extendExpiresAt',
+    'id', 'streamUrl', 'whipUrl', 'publishToken', 'publishTokenExpiresAt', 'extendExpiresAt',
     'startedAt', 'lastHeartbeatAt',
   ]) || value.status !== 'live' || value.endedAt !== null || value.endReason !== null) {
     throw new Error('Invalid create stream response');

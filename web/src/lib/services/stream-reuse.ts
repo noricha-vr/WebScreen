@@ -79,7 +79,7 @@ export async function reuseStream(
     if (retryAfterSeconds > 0) throw streamIdNotReusableError(retryAfterSeconds);
     await rejectCreate();
   }
-  return createResponse(id, now, expiresAt, publishToken);
+  return createResponse(id, now, expiresAt, publishToken, input.settings.whipOrigin);
 }
 
 function streamIdNotReusableError(retryAfterSeconds?: number): StreamError {
@@ -101,11 +101,13 @@ function createResponse(
   id: string,
   now: Date,
   expiresAt: Date,
-  publishToken: string
+  publishToken: string,
+  whipOrigin: string
 ): CreateStreamResponse {
   return {
     id,
     streamUrl: `rtspt://webscreen.tv/live/${id}`,
+    whipUrl: `${whipOrigin}/live/${encodeURIComponent(id)}/whip`,
     publishToken,
     publishTokenExpiresAt: expiresAt.toISOString(),
     extendExpiresAt: expiresAt.toISOString(),

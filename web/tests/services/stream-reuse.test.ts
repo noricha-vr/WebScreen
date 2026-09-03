@@ -6,6 +6,7 @@ import { createStreamDatabase } from './helpers/stream-db';
 
 const NOW = new Date('2026-09-01T00:00:00.000Z');
 const SETTINGS: StreamSettings = {
+  whipOrigin: 'https://webscreen.tv',
   extensionCycleSeconds: 7200,
   maxLiveStreamsPerUser: 1,
   maxLiveStreams: 20,

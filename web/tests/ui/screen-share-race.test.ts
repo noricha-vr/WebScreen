@@ -317,6 +317,7 @@ function createResponse(): Record<string, unknown> {
   return {
     id: 'OldStream123',
     streamUrl: 'rtspt://webscreen.tv/live/OldStream123',
+    whipUrl: 'https://webscreen.tv/live/OldStream123/whip',
     status: 'live',
     publishToken: 'token',
     publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',

@@ -11,6 +11,9 @@ SESSION_SIGNING_KEY=replace_with_a_long_random_value
 # 本番: `bunx wrangler secret put STREAM_JWT_PRIVATE_KEY`
 STREAM_JWT_PRIVATE_KEY=
 
+# WHIP publish の接続先 origin（末尾スラッシュなし）。
+STREAM_WHIP_ORIGIN=https://webscreen.tv
+
 # MediaMTX Control API。二段構成では INGRESS / EGRESS を両 Worker へ投入する。
 # 新キーがあれば旧単一MEDIAMTX_API_URL/TOKENより優先する。値はHTTPS originとsecretのみ。
 MEDIAMTX_API_URL=

@@ -97,6 +97,7 @@ describe('画面共有 stream API の応答検証', () => {
   test.each([
     null,
     { id: 'Ab12Cd34Ef56' },
+    { ...createResponse(), whipUrl: null },
     { ...createResponse(), status: 'ended' },
     { ...createResponse(), endedAt: '2026-09-01T00:01:00.000Z' },
   ])('createの不正応答を拒否する', async (response) => {
@@ -174,6 +175,7 @@ function createResponse(): Record<string, unknown> {
   return {
     id: 'Ab12Cd34Ef56',
     streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56',
+    whipUrl: 'https://webscreen.tv/live/Ab12Cd34Ef56/whip',
     status: 'live',
     publishToken: 'token',
     publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',
