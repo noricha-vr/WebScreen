@@ -6,7 +6,7 @@ import {
   isStreamStartToken,
   STREAM_START_TOKEN_HEADER,
 } from '../../../lib/contracts/streams';
-import { ERROR_CODES } from '../../../lib/contracts/api';
+import { ERROR_CODES, validateCreateStreamRequest } from '../../../lib/contracts/api';
 import {
   json,
   runStreamApi,
@@ -25,5 +25,17 @@ export const POST: APIRoute = ({ request }) =>
         400
       );
     }
-    return json(await createStream({ ...context, startToken }), 201);
+    const createRequest = await parseCreateRequest(request);
+    if (!createRequest.ok) return json(createRequest.error, 400);
+    return json(await createStream({ ...context, startToken, reuseId: createRequest.value.id }), 201);
   });
+
+async function parseCreateRequest(request: Request) {
+  // Body なしの既存クライアントは従来の新規発行として扱う。
+  if (request.body === null) return validateCreateStreamRequest({});
+  try {
+    return validateCreateStreamRequest(await request.json());
+  } catch {
+    return validateCreateStreamRequest(null);
+  }
+}

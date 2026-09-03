@@ -8,6 +8,7 @@ import {
   MAX_UPLOAD_BYTES,
   MIN_CAPTURE_DIMENSION,
   parseEstimatedImages,
+  validateCreateStreamRequest,
   validateCaptureRequest,
   validateCommitRequest,
   validatePresignRequest,
@@ -137,6 +138,29 @@ describe('validateCommitRequest', () => {
     ['shortId が欠落', {}],
   ])('%s は拒否する', (_label, input) => {
     expect(validateCommitRequest(input).ok).toBe(false);
+  });
+});
+
+describe('validateCreateStreamRequest', () => {
+  test('id を省略した従来の作成と、12文字 ID の再利用を受理する', () => {
+    expect(validateCreateStreamRequest({})).toEqual({ ok: true, value: {} });
+    expect(validateCreateStreamRequest({ id: VALID_SHORT_ID })).toEqual({
+      ok: true,
+      value: { id: VALID_SHORT_ID },
+    });
+  });
+
+  test.each([
+    ['短い ID', { id: 'abc' }],
+    ['記号を含む ID', { id: 'aB3dE5fG7h-9' }],
+    ['数値の ID', { id: 123 }],
+    ['余分な項目', { id: VALID_SHORT_ID, extra: true }],
+    ['配列', []],
+  ])('%s は INVALID_REQUEST で拒否する', (_label, input) => {
+    expect(validateCreateStreamRequest(input)).toMatchObject({
+      ok: false,
+      error: { errorCode: ERROR_CODES.invalidRequest },
+    });
   });
 });
 

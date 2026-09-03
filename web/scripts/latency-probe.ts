@@ -13,7 +13,7 @@ WebScreen配信を実Mac Chromeから開始し、RTSPT出口と任意のWindows�
 Subcommands:
   login [--profile-dir PATH]
   player-check [--seconds N] [--out DIR]
-  run --minutes N --source URL [--video-profile quality|realtime] [--max-bitrate 1200000|1500000|2000000] [--ab-cycle 60..600] [--scroll PX_PER_SECOND] [--outlet-quality-seconds N] [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
+  run --minutes N --source URL [--stream-id ID] [--video-profile quality|realtime] [--max-bitrate 1200000|1500000|2000000] [--ab-cycle 60..600] [--scroll PX_PER_SECOND] [--outlet-quality-seconds N] [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
   source --url URL [--scroll PX_PER_SECOND]
   analyze DIR
 
@@ -25,6 +25,7 @@ run options:
   --profile-dir PATH Chrome永続プロファイル（既定: ~/.webscreen-harness/chrome-profile）
   --out DIR          出力先（既定: docs/tmp/latency/<UTC timestamp>）
   --server-snap HOST 配信サーバーへ SSH し、run 中に ingress / egress のフレームを撮って relay 前後の遅延を server-snap.md に出す
+  --stream-id ID    終了済みの自分の12文字配信 ID を再利用する
   --video-profile PROFILE quality（既定）または realtime。realtime はproduction画面に設定queryを渡す
   --max-bitrate BPS  realtime 時、または --ab-cycle 時に必須。1200000 / 1500000 / 2000000 のいずれか
   --ab-cycle SECONDS quality/realtimeを指定秒ごとに切替（60〜600）。--max-bitrate が必須
@@ -67,9 +68,10 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     return { command, url: requiredUrl(values.url, '--url'), scrollPixelsPerSecond: parseScroll(values.scroll) };
   }
   if (command !== 'run') throw new Error(`unknown subcommand: ${command}`);
-  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap', 'video-profile', 'max-bitrate', 'ab-cycle', 'scroll', 'outlet-quality-seconds']);
+  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap', 'stream-id', 'video-profile', 'max-bitrate', 'ab-cycle', 'scroll', 'outlet-quality-seconds']);
   if (values['server-snap'] !== undefined && !isValidSshHost(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
   if (values['notify-discord'] !== undefined && !/^\d{15,25}$/.test(values['notify-discord'])) throw new Error('--notify-discord must be a Discord channel id');
+  if (values['stream-id'] !== undefined && !/^[A-Za-z0-9]{12}$/.test(values['stream-id'])) throw new Error('--stream-id must be a 12-character alphanumeric ID');
   const minutes = Number(values.minutes);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) throw new Error('--minutes must be an integer between 1 and 120');
   if (values.player !== undefined && values.player !== 'win2022') throw new Error('--player must be win2022');
@@ -92,6 +94,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
       profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile'),
       notifyDiscordChannelId: values['notify-discord'] ?? null,
       serverSnapHost: values['server-snap'] ?? null,
+      streamId: values['stream-id'] ?? null,
       outDir: values.out ?? resolve('..', 'docs', 'tmp', 'latency', timestamp),
     },
   };

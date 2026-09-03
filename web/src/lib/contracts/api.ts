@@ -9,6 +9,7 @@
  * D1 のカラム名（short_id など）は snake_case なので、境界で変換する。
  */
 import { isShortId } from './r2key';
+export { type CreateStreamRequest, validateCreateStreamRequest } from './stream-create';
 export type {
   CreateStreamResponse,
   ExtendStreamResponse,
@@ -25,7 +26,6 @@ export const MAX_ABANDON_UPLOAD_BODY_BYTES = 4 * 1024;
 /** アップロード元の種別。ローカル入力は PDF / 画像、URL 変換は web に限定する。 */
 export const UPLOAD_KINDS = ['pdf', 'image', 'web'] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
-
 /** 動画のライフサイクル。D1 movies.status の CHECK 制約と一致させること。 */
 export const MOVIE_STATUSES = ['pending', 'ready', 'failed'] as const;
 export type MovieStatus = (typeof MOVIE_STATUSES)[number];
@@ -71,6 +71,7 @@ export const ERROR_CODES = {
   tooManyPendingUploads: 'TOO_MANY_PENDING_UPLOADS',
   tooManyPresignRequests: 'TOO_MANY_PRESIGN_REQUESTS',
   streamAlreadyLive: 'STREAM_ALREADY_LIVE',
+  streamIdNotReusable: 'STREAM_ID_NOT_REUSABLE',
   streamCapacityReached: 'STREAM_CAPACITY_REACHED',
   streamCreateRateLimited: 'STREAM_CREATE_RATE_LIMITED',
   streamStartCancelled: 'STREAM_START_CANCELLED',

@@ -14,7 +14,7 @@ type BeaconSender = (url: string, data?: BodyInit | null) => boolean;
 
 /** 画面共有 controller が利用する stream HTTP 境界。 */
 export interface StreamApi {
-  create(startToken: string): Promise<CreateStreamResponse>;
+  create(startToken: string, reuseId?: string): Promise<CreateStreamResponse>;
   stopLive(signal: AbortSignal): Promise<StopLiveStreamsResponse>;
   heartbeat(id: string, signal: AbortSignal): Promise<void>;
   waitForReady(id: string, signal?: AbortSignal): Promise<boolean>;
@@ -30,11 +30,15 @@ export function createStreamApi(
   readyOverride?: (id: string, signal?: AbortSignal) => Promise<boolean>
 ): StreamApi {
   return {
-    async create(startToken) {
+    async create(startToken, reuseId) {
       // pagehide 後も late ID を回収して stop するため create 自体には signal を付けない。
       return asCreateStream(await request('/api/streams/', {
         method: 'POST',
-        headers: { [STREAM_START_TOKEN_HEADER]: startToken },
+        headers: {
+          [STREAM_START_TOKEN_HEADER]: startToken,
+          ...(reuseId ? { 'Content-Type': 'application/json' } : {}),
+        },
+        ...(reuseId ? { body: JSON.stringify({ id: reuseId }) } : {}),
       }));
     },
     async stopLive(signal) {

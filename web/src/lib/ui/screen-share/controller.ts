@@ -1,7 +1,7 @@
 import { copyToClipboard } from '../clipboard';
 import { isUnauthorizedRequestError, type requestJson } from '../request-json';
 import { configureCaptureAudioTracks } from '../audio-profile';
-import { keyframeRequestIntervalForSearch } from '../stream-profile';
+import { keyframeRequestIntervalForSearch, reusableStreamIdForSearch } from '../stream-profile';
 import type { startWhipPublisher, WhipPublisher } from '../whip-publisher';
 import { currentAudioProfile, displayMediaConstraints } from './capture';
 import { isExpiryWarning, LiveStreamSession, releasePublisher, secondsUntil, StartRun } from './session';
@@ -119,7 +119,7 @@ export class ScreenShareControllerImpl {
   private async createAndPublish(run: StartRun): Promise<StartedStream | null> {
     let created;
     try {
-      created = await this.api.create(run.startToken);
+      created = await this.api.create(run.startToken, reusableStreamIdForSearch(currentSearch()));
     } catch (error) {
       this.cancelStart(run);
       throw error;

@@ -330,6 +330,7 @@
         "h264": "This browser cannot send H.264 video. Open this page in Chrome or Safari and try again.",
         "displayDenied": "No screen was selected. Please try again. On macOS, sharing your entire screen requires allowing your browser under System Settings > Privacy & Security > Screen Recording.",
         "streamAlreadyLive": "You already have a live stream. End it before starting another one.",
+        "streamIdNotReusable": "This streaming URL cannot be restarted. Start a new stream instead.",
         "streamCapacity": "The streaming service is at capacity. Wait a moment and try again.",
         "rateLimited": "A new stream cannot be created yet. Wait a moment and try again.",
         "streamExtensionDisabled": "Extensions are unavailable during beta. Streams end automatically after 15 minutes.",

@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from '../../src/lib/ui/whip-publisher';
-import { hasSingleExactQueryValue, keyframeRequestIntervalForSearch } from '../../src/lib/ui/stream-profile';
+import {
+  hasSingleExactQueryValue,
+  keyframeRequestIntervalForSearch,
+  reusableStreamIdForSearch,
+} from '../../src/lib/ui/stream-profile';
 import {
   REALTIME_SCREEN_SHARE_VIDEO_SETTINGS,
   resolveScreenShareVideoSettingsForSearch,
@@ -34,6 +38,22 @@ describe('MP3 beta stream profile', () => {
     ).toBeUndefined();
     expect(keyframeRequestIntervalForSearch('?stream-profile=')).toBeUndefined();
     expect(keyframeRequestIntervalForSearch('?stream-profile=MP3-BETA')).toBeUndefined();
+  });
+});
+
+describe('固定配信 ID query', () => {
+  test('stream-id が12文字で一つだけの時に再利用する ID を返す', () => {
+    expect(reusableStreamIdForSearch('?stream-id=Ab12Cd34Ef56')).toBe('Ab12Cd34Ef56');
+  });
+
+  test.each([
+    '',
+    '?stream-id=short',
+    '?stream-id=Ab12Cd34Ef-6',
+    '?stream-id=Ab12Cd34Ef56&stream-id=Ab12Cd34Ef56',
+    '?stream-id=Ab12Cd34Ef56&stream-id=Zy98Xw76Vu54',
+  ])('欠落・不正・重複の stream-id は通常発行へ fail-closed する: %s', (search) => {
+    expect(reusableStreamIdForSearch(search)).toBeUndefined();
   });
 });
 
