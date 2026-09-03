@@ -83,6 +83,20 @@ describe('配信開始token API境界', () => {
     });
   });
 
+  test('content-length: 0 の空ストリーム本文（workerd の body なし POST）も新規発行する', async () => {
+    const database = await createStreamDatabase();
+    setBindings(database);
+    const response = await callCreate(
+      new Request('https://web-screen.net/api/streams/', {
+        method: 'POST',
+        headers: authHeaders({ 'content-length': '0' }),
+        body: '',
+      })
+    );
+
+    expect(response.status).toBe(201);
+  });
+
   test.each(['', '   \n\t  '])('空白だけのcreate本文は従来どおり新規発行する: %p', async (body) => {
     const database = await createStreamDatabase();
     setBindings(database);

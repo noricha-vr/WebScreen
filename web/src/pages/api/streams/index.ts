@@ -33,9 +33,12 @@ export const POST: APIRoute = ({ request }) =>
   });
 
 async function parseCreateRequest(request: Request) {
-  // Body なしの既存クライアントは従来の新規発行として扱う。
-  if (request.body === null) return { ok: true as const, value: {} };
-  if (!isJsonContentType(request.headers.get('content-type'))) {
+  const contentType = request.headers.get('content-type');
+  // Body なしの既存クライアントは従来の新規発行として扱う。ブラウザの fetch は body なし POST にも
+  // content-length: 0 を付け、workerd ではその request.body が null にならないため長さでも判定する。
+  const isEmptyBody = request.body === null || request.headers.get('content-length') === '0';
+  if (contentType === null && isEmptyBody) return { ok: true as const, value: {} };
+  if (!isJsonContentType(contentType)) {
     return { ok: false as const, status: 400 as const, error: {
       errorCode: ERROR_CODES.invalidRequest,
       message: 'Content-Type は application/json である必要があります',
