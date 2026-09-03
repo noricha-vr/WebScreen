@@ -1,4 +1,3 @@
-import { STREAM_WHIP_BASE_URL } from '../contracts/streams';
 import { configureRawAudioSender, withRawAudioOpusParameters, type AudioProfile } from './audio-profile';
 import { MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS } from './stream-profile';
 
@@ -14,14 +13,9 @@ export class WhipPublishError extends Error {
   }
 }
 
-/** WHIP のセッション URL を、固定した配信オリジンから組み立てる。 */
-export function buildWhipUrl(streamId: string): string {
-  return `${STREAM_WHIP_BASE_URL}/${encodeURIComponent(streamId)}/whip`;
-}
-
 /** WHIP 応答の resource URL が、要求した同一配信オリジン配下か検証する。 */
-export function resolveWhipResourceUrl(location: string, streamId: string): string | null {
-  const endpoint = new URL(buildWhipUrl(streamId));
+export function resolveWhipResourceUrl(location: string, whipUrl: string): string | null {
+  const endpoint = new URL(whipUrl);
   const resource = new URL(location, endpoint);
   const resourcePrefix = `${endpoint.pathname}/`;
   if (resource.origin !== endpoint.origin || !resource.pathname.startsWith(resourcePrefix)) {
@@ -79,7 +73,7 @@ export interface WhipVideoSettings {
 
 interface StartWhipPublisherInput {
   stream: MediaStream;
-  streamId: string;
+  whipUrl: string;
   publishToken: string;
   keyframeRequestIntervalMs?: typeof MP3_BETA_KEYFRAME_REQUEST_INTERVAL_MS;
   /** 呼び出し元が URL query から決めた音声プロファイル（既定は raw だが、省略は許さず明示させる）。 */
@@ -237,18 +231,19 @@ async function publishOffer(
   input: StartWhipPublisherInput,
   fetchImpl: typeof fetch
 ): Promise<{ resourceUrl: string; answerSdp: string }> {
-  const response = await fetchImpl(buildWhipUrl(input.streamId), {
+  const response = await fetchImpl(input.whipUrl, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${input.publishToken}`,
       'Content-Type': 'application/sdp',
     },
     body: peerConnection.localDescription?.sdp,
+    redirect: 'error',
   });
   if (response.status !== 201) throw new WhipPublishError('WHIP_REQUEST_FAILED');
 
   const location = response.headers.get('Location');
-  const resourceUrl = location ? resolveWhipResourceUrl(location, input.streamId) : null;
+  const resourceUrl = location ? resolveWhipResourceUrl(location, input.whipUrl) : null;
   if (!resourceUrl) throw new WhipPublishError('WHIP_RESPONSE_INVALID');
   return { resourceUrl, answerSdp: await response.text() };
 }
@@ -260,7 +255,11 @@ async function deleteWhipResource(
   fetchImpl: typeof fetch
 ): Promise<void> {
   try {
-    await fetchImpl(resourceUrl, { method: 'DELETE', headers: { Authorization: `Bearer ${publishToken}` } });
+    await fetchImpl(resourceUrl, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${publishToken}` },
+      redirect: 'error',
+    });
   } catch {
     // 元の publish 失敗を隠さず、PeerConnection は必ず閉じる。
   }
@@ -289,6 +288,7 @@ function publisherFor(
       deletePromise = fetchImpl(resourceUrl, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${currentPublishToken}` },
+        redirect: 'error',
       }).then((response) => {
         if (!response.ok) throw new WhipPublishError('WHIP_REQUEST_FAILED');
       });

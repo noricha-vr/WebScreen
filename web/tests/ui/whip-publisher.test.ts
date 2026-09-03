@@ -1,9 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { STREAM_WHIP_BASE_URL } from '../../src/lib/contracts/streams';
 import { withRawAudioOpusParameters } from '../../src/lib/ui/audio-profile';
 import {
-  buildWhipUrl,
   prioritizeH264,
   readVideoPublishStats,
   resolveWhipResourceUrl,
@@ -15,10 +13,6 @@ import {
 } from '../../src/lib/ui/screen-share/video-profile';
 
 describe('WHIP publisher', () => {
-  test('固定済みの配信オリジンから stream ID ごとの WHIP URL を作る', () => {
-    expect(buildWhipUrl('Ab12Cd34Ef56')).toBe(`${STREAM_WHIP_BASE_URL}/Ab12Cd34Ef56/whip`);
-  });
-
   test('画面共有の映像設定を採用設定へ固定する', () => {
     expect(SCREEN_SHARE_VIDEO_SETTINGS).toEqual({
       width: 1280,
@@ -47,11 +41,12 @@ describe('WHIP publisher', () => {
   });
 
   test('WHIP resource は要求した配信オリジンとパス配下だけを許可する', () => {
-    expect(resolveWhipResourceUrl('/live/Ab12Cd34Ef56/whip/resource', 'Ab12Cd34Ef56')).toBe(
-      'https://webscreen.tv/live/Ab12Cd34Ef56/whip/resource'
+    const whipUrl = 'https://whip.example/live/Ab12Cd34Ef56/whip';
+    expect(resolveWhipResourceUrl('/live/Ab12Cd34Ef56/whip/resource', whipUrl)).toBe(
+      'https://whip.example/live/Ab12Cd34Ef56/whip/resource'
     );
-    expect(resolveWhipResourceUrl('https://attacker.example/resource', 'Ab12Cd34Ef56')).toBeNull();
-    expect(resolveWhipResourceUrl('/live/other/whip/resource', 'Ab12Cd34Ef56')).toBeNull();
+    expect(resolveWhipResourceUrl('https://attacker.example/resource', whipUrl)).toBeNull();
+    expect(resolveWhipResourceUrl('/live/other/whip/resource', whipUrl)).toBeNull();
   });
 
   test('raw 音声用に既存の Opus fmtp へ不足パラメータだけを補完する', () => {
@@ -102,7 +97,7 @@ describe('WHIP publisher', () => {
   test('H.264 映像とすべての音声 track を送出し、同じ入力で一度だけ再 publish できる', async () => {
     const previousSender = globalThis.RTCRtpSender;
     const previousConnection = globalThis.RTCPeerConnection;
-    const requests: RequestInit[] = [];
+    const requests: Array<{ url: string; init: RequestInit }> = [];
     let codecPreferences: RTCRtpCodec[] | undefined;
     const senderParameters: RTCRtpSendParameters[] = [];
     let keyframeRequests = 0;
@@ -158,13 +153,13 @@ describe('WHIP publisher', () => {
       } as unknown as MediaStream;
       const publisher = await startWhipPublisher({
         stream,
-        streamId: 'Ab12Cd34Ef56',
+        whipUrl: 'https://whip.example/live/Ab12Cd34Ef56/whip',
         publishToken: 'first-token',
         // 再 publish と停止だけを見るケースなので、audio sender へ触らない legacy で固定する。
         audioProfile: 'legacy',
         videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,
-        fetchImpl: (async (_url, options) => {
-          requests.push(options ?? {});
+        fetchImpl: (async (url, options) => {
+          requests.push({ url: String(url), init: options ?? {} });
           if (options?.method === 'POST') {
             return new Response('answer', {
               status: 201,
@@ -192,7 +187,7 @@ describe('WHIP publisher', () => {
           getVideoTracks: () => [{ contentHint: '', stop() {} }],
           getAudioTracks: () => [],
         } as unknown as MediaStream,
-        streamId: 'Ab12Cd34Ef56',
+        whipUrl: 'https://whip.example/live/Ab12Cd34Ef56/whip',
         publishToken: 'video-only-token',
         audioProfile: 'raw',
         videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,
@@ -223,10 +218,17 @@ describe('WHIP publisher', () => {
         { type: 'answer', sdp: 'answer' },
         { type: 'answer', sdp: 'answer' },
       ]);
-      expect(requests[0]?.headers).toMatchObject({ Authorization: 'Bearer first-token' });
-      expect(requests[1]?.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
-      expect(requests[2]?.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
-      expect(requests[3]?.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
+      expect(requests.map(({ url }) => url)).toEqual([
+        'https://whip.example/live/Ab12Cd34Ef56/whip',
+        'https://whip.example/live/Ab12Cd34Ef56/whip/resource',
+        'https://whip.example/live/Ab12Cd34Ef56/whip',
+        'https://whip.example/live/Ab12Cd34Ef56/whip/resource',
+      ]);
+      expect(requests[0]?.init.headers).toMatchObject({ Authorization: 'Bearer first-token' });
+      expect(requests[1]?.init.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
+      expect(requests[2]?.init.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
+      expect(requests[3]?.init.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
+      expect(requests.map(({ init }) => init.redirect)).toEqual(['error', 'error', 'error', 'error']);
       expect(requests).toHaveLength(4);
       expect(closed).toBe(3);
       expect(keyframeRequests).toBe(0);
@@ -476,7 +478,7 @@ function testPublisherInput(onPost: () => void = () => {}): Parameters<typeof st
       getVideoTracks: () => [{ contentHint: '', stop() {} }],
       getAudioTracks: () => [],
     } as unknown as MediaStream,
-    streamId: 'Ab12Cd34Ef56',
+    whipUrl: 'https://webscreen.tv/live/Ab12Cd34Ef56/whip',
     publishToken: 'token',
     audioProfile: 'raw',
     videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,

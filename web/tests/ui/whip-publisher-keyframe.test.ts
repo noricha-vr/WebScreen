@@ -181,7 +181,7 @@ function publisherInput(
       getVideoTracks: () => [{ contentHint: '', stop() {} }],
       getAudioTracks: () => [],
     } as unknown as MediaStream,
-    streamId: 'Ab12Cd34Ef56',
+    whipUrl: 'https://webscreen.tv/live/Ab12Cd34Ef56/whip',
     publishToken: 'token',
     audioProfile: 'raw',
     videoSettings: SCREEN_SHARE_VIDEO_SETTINGS,

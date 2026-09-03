@@ -23,6 +23,7 @@ export interface StreamDatabaseStatement {
   run(): Promise<{ meta: { changes: number } }>;
 }
 export interface StreamSettings {
+  whipOrigin: string;
   extensionCycleSeconds: number;
   extensionEnabled: boolean;
   maxLiveStreamsPerUser: number;
@@ -76,7 +77,7 @@ export async function createStream(input: StreamServiceInput): Promise<CreateStr
     });
     try {
       const inserted = await insertStream(input, id, now, expiresAt, rateThreshold);
-      if (inserted) return createResponse(id, now, expiresAt, publishToken);
+      if (inserted) return createResponse(id, now, expiresAt, publishToken, input.settings);
     } catch (error) {
       if (await streamIdExists(input.database, id)) continue;
       if (input.startToken) {
@@ -330,11 +331,13 @@ function createResponse(
   id: string,
   now: Date,
   expiresAt: Date,
-  publishToken: string
+  publishToken: string,
+  settings: StreamSettings
 ): CreateStreamResponse {
   return {
     id,
     streamUrl: streamUrl(id),
+    whipUrl: whipUrl(settings.whipOrigin, id),
     publishToken,
     publishTokenExpiresAt: expiresAt.toISOString(),
     extendExpiresAt: expiresAt.toISOString(),
@@ -361,6 +364,10 @@ function toStatusResponse(row: StreamRow): StreamStatusResponse {
 
 function streamUrl(id: string): string {
   return `${STREAM_BASE_URL}/${id}`;
+}
+
+function whipUrl(origin: string, id: string): string {
+  return `${origin}/live/${encodeURIComponent(id)}/whip`;
 }
 
 function addSeconds(date: Date, seconds: number): Date {

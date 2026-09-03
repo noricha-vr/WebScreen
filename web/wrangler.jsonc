@@ -40,6 +40,7 @@
     "STREAM_MAX_LIVE_PER_USER": "1",
     "STREAM_MAX_LIVE": "20",
     "STREAM_CREATE_INTERVAL_SECONDS": "10",
+    "STREAM_WHIP_ORIGIN": "https://webscreen.tv",
     "MEDIAMTX_INGRESS_API_URL": "https://stream.web-screen.net",
     "MEDIAMTX_EGRESS_API_URL": "https://stream.web-screen.net"
   },

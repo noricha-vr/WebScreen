@@ -15,6 +15,7 @@ export interface StreamApiBindings {
   DB: StreamDatabase & AuthDatabase;
   SESSION_SIGNING_KEY: string;
   STREAM_JWT_PRIVATE_KEY: string;
+  STREAM_WHIP_ORIGIN?: string;
   STREAM_EXTENSION_SECONDS?: string;
   STREAM_EXTENSION_ENABLED?: string;
   STREAM_MAX_LIVE_PER_USER?: string;
@@ -70,6 +71,7 @@ export function requireStreamId(value: string | undefined): string {
 
 export function streamSettings(bindings: StreamApiBindings): StreamSettings {
   return {
+    whipOrigin: requiredOrigin(bindings.STREAM_WHIP_ORIGIN),
     extensionCycleSeconds: positiveInt(bindings.STREAM_EXTENSION_SECONDS, DEFAULT_EXTENSION_SECONDS),
     extensionEnabled: booleanSetting(bindings.STREAM_EXTENSION_ENABLED, false),
     maxLiveStreamsPerUser: positiveInt(
@@ -137,4 +139,15 @@ function booleanSetting(value: string | undefined, fallback: boolean): boolean {
   if (value === 'true') return true;
   if (value === 'false') return false;
   throw new Error('Invalid stream setting');
+}
+
+function requiredOrigin(value: string | undefined): string {
+  if (value === undefined) throw new Error('Missing stream setting');
+  try {
+    const origin = new URL(value);
+    if (origin.origin !== value || origin.protocol !== 'https:') throw new Error('Invalid stream setting');
+    return value;
+  } catch {
+    throw new Error('Invalid stream setting');
+  }
 }
