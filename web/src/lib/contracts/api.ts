@@ -9,6 +9,7 @@
  * D1 のカラム名（short_id など）は snake_case なので、境界で変換する。
  */
 import { isShortId } from './r2key';
+export { type CreateStreamRequest, validateCreateStreamRequest } from './stream-create';
 export type {
   CreateStreamResponse,
   ExtendStreamResponse,
@@ -25,7 +26,6 @@ export const MAX_ABANDON_UPLOAD_BODY_BYTES = 4 * 1024;
 /** アップロード元の種別。ローカル入力は PDF / 画像、URL 変換は web に限定する。 */
 export const UPLOAD_KINDS = ['pdf', 'image', 'web'] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
-
 /** 動画のライフサイクル。D1 movies.status の CHECK 制約と一致させること。 */
 export const MOVIE_STATUSES = ['pending', 'ready', 'failed'] as const;
 export type MovieStatus = (typeof MOVIE_STATUSES)[number];
@@ -71,6 +71,7 @@ export const ERROR_CODES = {
   tooManyPendingUploads: 'TOO_MANY_PENDING_UPLOADS',
   tooManyPresignRequests: 'TOO_MANY_PRESIGN_REQUESTS',
   streamAlreadyLive: 'STREAM_ALREADY_LIVE',
+  streamIdNotReusable: 'STREAM_ID_NOT_REUSABLE',
   streamCapacityReached: 'STREAM_CAPACITY_REACHED',
   streamCreateRateLimited: 'STREAM_CREATE_RATE_LIMITED',
   streamStartCancelled: 'STREAM_START_CANCELLED',
@@ -91,6 +92,8 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 export interface ErrorResponse {
   errorCode: ErrorCode;
   message: string;
+  /** `STREAM_ID_NOT_REUSABLE` で旧 publish JWT の失効を待つ秒数。 */
+  retryAfterSeconds?: number;
   /**
    * `PAGE_TOO_LONG` のときだけ付く、ページ全体に必要と推定した画面数。
    *
@@ -115,6 +118,14 @@ export function parseEstimatedImages(value: unknown): number | null {
   if (typeof estimated !== 'number' || !Number.isSafeInteger(estimated)) return null;
   if (estimated <= 0 || estimated > MAX_ESTIMATED_IMAGES) return null;
   return estimated;
+}
+
+/** API 応答から再試行までの秒数だけを安全に取り出す。 */
+export function parseRetryAfterSeconds(value: unknown): number | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const seconds = (value as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+  if (typeof seconds !== 'number' || !Number.isSafeInteger(seconds) || seconds <= 0) return null;
+  return seconds;
 }
 
 // ---------------------------------------------------------------------------

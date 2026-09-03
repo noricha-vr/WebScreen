@@ -83,6 +83,43 @@ describe('配信開始token API境界', () => {
     });
   });
 
+  test.each(['', '   \n\t  '])('空白だけのcreate本文は従来どおり新規発行する: %p', async (body) => {
+    const database = await createStreamDatabase();
+    setBindings(database);
+    const response = await callCreate(
+      new Request('https://web-screen.net/api/streams/', {
+        method: 'POST',
+        headers: authHeaders({ 'content-type': 'application/json' }),
+        body,
+      })
+    );
+
+    expect(response.status).toBe(201);
+  });
+
+  test('create本文がある時はapplication/jsonと1024 byte上限を要求する', async () => {
+    const database = await createStreamDatabase();
+    setBindings(database);
+    const missingContentType = await callCreate(
+      new Request('https://web-screen.net/api/streams/', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ id: 'AbCdEf123456' }),
+      })
+    );
+    const oversized = await callCreate(
+      new Request('https://web-screen.net/api/streams/', {
+        method: 'POST',
+        headers: authHeaders({ 'content-type': 'application/json' }),
+        body: ' '.repeat(1_025),
+      })
+    );
+
+    expect(missingContentType.status).toBe(400);
+    expect(oversized.status).toBe(413);
+    expect(await oversized.json()).toMatchObject({ errorCode: 'PAYLOAD_TOO_LARGE' });
+  });
+
   test('有効なheader tokenをcreate行へ保存する', async () => {
     const database = await createStreamDatabase();
     setBindings(database);

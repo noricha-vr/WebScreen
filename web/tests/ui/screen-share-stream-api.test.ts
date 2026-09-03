@@ -14,6 +14,23 @@ describe('画面共有 stream API のHTTP契約', () => {
     }]);
   });
 
+  test('createは再利用 ID がある時だけ JSON body を送る', async () => {
+    const state = recordingApi();
+    await state.api.create(START_TOKEN, 'Ab12Cd34Ef56');
+
+    expect(state.calls).toEqual([{
+      url: '/api/streams/',
+      init: {
+        method: 'POST',
+        headers: {
+          'X-WebScreen-Start-Token': START_TOKEN,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: 'Ab12Cd34Ef56' }),
+      },
+    }]);
+  });
+
   test('stop-live・heartbeatはPOSTとsignalを固定しIDをencodeする', async () => {
     const state = recordingApi();
     const signal = new AbortController().signal;

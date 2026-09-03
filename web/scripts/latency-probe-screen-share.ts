@@ -1,14 +1,16 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export interface ScreenSharePageOptions { videoProfile: 'quality' | 'realtime'; maxBitrate: number | null }
+export interface ScreenSharePageOptions { videoProfile: 'quality' | 'realtime'; maxBitrate: number | null; streamId: string | null }
 
 /** 画質プロファイルごとに本番画面共有ページのURLを組み立てる。 */
 export function screenShareUrl(options: ScreenSharePageOptions): string {
-  if (options.videoProfile === 'quality') return 'https://web-screen.net/ja/screen-share/';
   const url = new URL('https://web-screen.net/ja/screen-share/');
-  url.searchParams.set('video-profile', 'realtime');
-  url.searchParams.set('video-max-bitrate', String(options.maxBitrate));
+  if (options.videoProfile === 'realtime') {
+    url.searchParams.set('video-profile', 'realtime');
+    url.searchParams.set('video-max-bitrate', String(options.maxBitrate));
+  }
+  if (options.streamId) url.searchParams.set('stream-id', options.streamId);
   return url.href;
 }
 

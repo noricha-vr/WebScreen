@@ -559,6 +559,21 @@ bun scripts/latency-probe.ts run --minutes 4 --source 'http://127.0.0.1:0/latenc
 bun scripts/latency-probe.ts run --minutes 4 --source 'http://127.0.0.1:0/latency-source.html?tones=1' --video-profile realtime --max-bitrate 1500000 --player win2022 --notify-discord 1380914078100488334 --server-snap webscreen-indigo-poc
 ```
 
+#### I25 追記: VRChat 実機の A/B（2026-09-03 JST 09:52〜14:20、PC / YamaStream / AVPro）
+
+ハーネスの `--player win2022`（Windows の gdigrab 録画をブロックコード復号）で採取。値は録画時間基準（frame 番号 / 30 fps）で、開始直後の値が負になることから約 0.3〜1 秒のオフセットを含む。**同一 run 内の相対比較にだけ使う**（Issue: ハーネスの時間基準を PTS に直す）。
+
+| run | 設定 | VRChat 側 median | 出口 | 備考 |
+|---|---|---|---|---|
+| vrc-A（4 分） | A | 3〜4 分区間 0.68〜0.70 s | 0.781 s | 安定 |
+| vrc-B1500-try3（4 分） | B1.5 | 2〜3 分区間 0.31 s → 3 分以降 4.3 s | 0.780 s（4 分区間 p95 3.3 s） | 回線の停滞後に AVPro が遅れを溜め込み戻らず |
+| vrc-abab3（12 分、2 分ごと切替） | A→B→A→B→A→B | 区間 1〜3: −107 / −90 / −75 ms（A と B に差なし） | 0.78 s | 区間 4（B）で回線停滞: 出口 6.5 s、送出は `bandwidth` で 960x393 → **404x166**。以後 AVPro は約 4 秒遅れのまま再生継続 |
+
+- 回線が安定している区間では A と B の VRChat 側遅延は同じ（差は 20〜30 ms で測定誤差内）
+- 回線が停滞すると B は解像度を 404x166 まで落とす（文字は読めない）。A は解像度を保つ（fps が落ちる）。停滞後に AVPro が遅れを溜め込む挙動は B の 2 run で観測、A は停滞に当たった run がなく未観測
+- 前の配信が終了した直後に新 URL を貼ると Player Error になり再貼付が要る（2 回再現）。ストリームの SPS / PPS は A / B で一致しており設定差ではない
+- 貼付漏れ・視点ずれで無効になった run が 5 本あり、人の操作が律速だった。URL 固定（#210）と 1 配信内の自動切替（#209）で次回からは 1 回貼るだけで済む
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |
@@ -577,4 +592,4 @@ bun scripts/latency-probe.ts run --minutes 4 --source 'http://127.0.0.1:0/latenc
 | 12 | Quest でMP3音声付き1秒未満 | I23の非統制PC実聴で無音（統制条件で再試験するまで昇格不可）。Questの統制済み実聴は未完。現行AACは体感2〜3秒で、サーバー設定だけでは保証不能 |
 | 13 | ~~30 分の長時間安定性~~ | **2026-09-02解消**（I21。continuous sourceで30分、freeze/error/restart 0） |
 | 14 | ~~実Mac動的映像の30 / 24 fps安定性比較~~ | **2026-09-02解消**（I22。各600秒、30 fps送出29.853 fps / 24 fps送出23.870 fps。30 fpsを採用） |
-| 15 | VRChat 実機での A / B1.5 の遅延・追従性 A/B（Issue #177 の最重要評価） | ハーネスの `--player win2022` で採取できる状態。URL 貼付と正面視点の維持に人の操作が要る（コマンドは I25 末尾） |
+| 15 | ~~VRChat 実機での A / B1.5 の遅延・追従性 A/B~~ | **2026-09-03 解消**（I25 追記。安定時は差なし、停滞時に B は 404x166 まで低下） |

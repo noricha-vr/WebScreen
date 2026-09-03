@@ -13,6 +13,13 @@ export function hasSingleExactQueryValue(search: string, name: string, expectedV
   return values.length === 1 && values[0] === expectedValue;
 }
 
+/** stream-id が一つだけの正しい path ID の時だけ、既存 URL の再利用を要求する。 */
+export function reusableStreamIdForSearch(search: string): string | undefined {
+  const values = new URLSearchParams(search).getAll('stream-id');
+  const id = values[0];
+  return values.length === 1 && id !== undefined && isShortId(id) ? id : undefined;
+}
+
 /** URL queryで許可されたMP3 beta配信だけに固定keyframe要求を有効化する。 */
 export function keyframeRequestIntervalForSearch(
   search: string
@@ -40,3 +47,4 @@ export function realtimeVideoMaxBitrateForSearch(search: string): RealtimeVideoM
     default: return undefined;
   }
 }
+import { isShortId } from '../contracts/r2key';

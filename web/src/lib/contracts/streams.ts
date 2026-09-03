@@ -10,6 +10,8 @@ export const STREAM_START_TOKEN_HEADER = 'X-WebScreen-Start-Token';
 
 /** 配信開始キャンセル本文の上限。UUID 1 件だけを受け取る。 */
 export const MAX_CANCEL_STREAM_START_BODY_BYTES = 1024;
+/** 配信開始・固定 ID 再利用リクエストの本文上限。 */
+export const MAX_CREATE_STREAM_BODY_BYTES = 1024;
 
 /** crypto.randomUUID() が返す RFC 4122 UUID v4 だけを受理する。 */
 export function isStreamStartToken(value: unknown): value is string {

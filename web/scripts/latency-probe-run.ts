@@ -29,7 +29,7 @@ const PREVIOUS_RUN_ARTIFACTS = [
 /** 実行時に固定する遅延ハーネスの引数。 */
 export interface RunOptions {
   minutes: number; source: string; player: 'win2022' | null; profileDir: string; outDir: string; videoProfile: 'quality' | 'realtime'; maxBitrate: number | null;
-  abCycleSeconds: number | null; scrollPixelsPerSecond: number; outletQualitySeconds: number; notifyDiscordChannelId: string | null; serverSnapHost: string | null;
+  abCycleSeconds: number | null; scrollPixelsPerSecond: number; outletQualitySeconds: number; notifyDiscordChannelId: string | null; serverSnapHost: string | null; streamId: string | null;
 }
 interface ActiveController { endpoint: string; sourceUrl: string }
 interface ControllerState { sourcePage: import('@playwright/test').Page | null; sourceUrl: string; sourceServerUrl: string }

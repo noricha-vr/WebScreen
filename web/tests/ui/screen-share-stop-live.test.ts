@@ -19,6 +19,32 @@ describe('他の配信を終了して開始', () => {
     expect(otherError.button('[data-screen-retry]').hidden).toBe(false);
   });
 
+  test('固定 ID の再利用失敗後のRetryは新規 ID 発行へフォールバックする', async () => {
+    const page = fakePage();
+    const streamRequests: RequestInit[] = [];
+    new ScreenShareController(page.root, dependencies({
+      search: () => '?stream-id=Ab12Cd34Ef56',
+      requestJson: async (path, init) => {
+        if (path !== '/api/streams/') return null;
+        streamRequests.push(init);
+        if (streamRequests.length === 1) {
+          throw new JsonRequestError(409, ERROR_CODES.streamIdNotReusable, null, 120);
+        }
+        return createResponse();
+      },
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('error').hidden);
+    expect(page.button('[data-screen-error-message]').textContent).toBe('reuse in 2');
+    page.button('[data-screen-retry]').click();
+    await waitFor(() => !page.step('live').hidden);
+
+    expect(JSON.parse(String(streamRequests[0]?.body))).toEqual({ id: 'Ab12Cd34Ef56' });
+    expect(streamRequests[1]?.body).toBeUndefined();
+    expect(new Headers(streamRequests[1]?.headers).get('content-type')).toBeNull();
+  });
+
   test('画面選択後に停止、待機、配信開始の順で URL 表示まで進む', async () => {
     const page = fakePage();
     const events: string[] = [];
@@ -379,6 +405,7 @@ function fakePage(): {
       labelStart: 'start', labelSelecting: 'selecting', labelStarting: 'starting', labelRetry: 'retry', labelReconnect: 'reconnect',
       labelStopOthers: 'stop-others', labelStoppingOthers: 'stopping', msgStreamAlreadyLive: 'already-live',
       msgGeneric: 'error', msgH264: 'h264', msgWhip: 'whip', msgDisplayDenied: 'denied',
+      msgStreamIdNotReusable: 'new-url', msgStreamIdReusableAfter: 'reuse in {minutes}',
       msgStreamCapacity: 'capacity', msgRateLimited: 'rate-limited', msgStreamEnded: 'ended',
       msgStreamUnhealthy: 'unhealthy', msgAudioIncluded: 'audio', msgVideoOnly: 'video', audioOn: 'audio-on', audioOff: 'audio-off',
     },

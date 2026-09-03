@@ -6,10 +6,16 @@ export type LimitedJsonBodyResult =
   | { ok: true; value: unknown }
   | { ok: false; status: 400 | 413; error: ErrorResponse };
 
+export interface ReadLimitedJsonBodyOptions {
+  /** 空白だけの本文を後方互換用の値として扱う。 */
+  emptyValue?: unknown;
+}
+
 /** Content-Length と実読み込み量の両方で JSON 本文を制限する。 */
 export async function readLimitedJsonBody(
   request: Request,
-  maxBytes: number
+  maxBytes: number,
+  options: ReadLimitedJsonBodyOptions = {}
 ): Promise<LimitedJsonBodyResult> {
   const declared = request.headers.get('content-length');
   if (declared !== null) {
@@ -47,8 +53,13 @@ export async function readLimitedJsonBody(
     offset += chunk.byteLength;
   }
 
+  const text = new TextDecoder().decode(bytes);
+  if (text.trim() === '' && Object.hasOwn(options, 'emptyValue')) {
+    return { ok: true, value: options.emptyValue };
+  }
+
   try {
-    return { ok: true, value: JSON.parse(new TextDecoder().decode(bytes)) };
+    return { ok: true, value: JSON.parse(text) };
   } catch {
     return invalidBody();
   }

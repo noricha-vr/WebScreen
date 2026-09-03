@@ -1,14 +1,16 @@
 import {
   ERROR_CODES,
   type CreateStreamResponse,
-  type ErrorCode,
   type ExtendStreamResponse,
   type StopLiveStreamsResponse,
   type StreamEndReason,
   type StreamStatusResponse,
 } from '../contracts/api';
 import { generateShortId } from '../contracts/r2key';
-import { existingStreamStartStatus } from './stream-start';
+import { throwIfExistingStartToken } from './stream-start';
+import { StreamError } from './stream-error';
+import { reuseStream } from './stream-reuse';
+export { StreamError } from './stream-error';
 // 配信ホスト名は allowlist に焼き込まれるため凍結（2026-09-01 webscreen.tv に確定。docs/streaming/requirements.md）
 const STREAM_BASE_URL = 'rtspt://webscreen.tv/live';
 const DEFAULT_CREATE_RETRIES = 4;
@@ -33,15 +35,6 @@ export interface StreamJwtSignInput {
   expiresAtSeconds: number;
 }
 export type StreamJwtSigner = (input: StreamJwtSignInput) => Promise<string>;
-export class StreamError extends Error {
-  constructor(
-    public readonly status: 404 | 409 | 429,
-    public readonly errorCode: ErrorCode,
-    message: string
-  ) {
-    super(message);
-  }
-}
 interface StreamRow {
   id: string;
   user_id: number;
@@ -60,12 +53,19 @@ export interface StreamServiceInput {
   now?: Date;
   generateId?: () => string;
   startToken?: string | null;
+  reuseId?: string;
 }
 /** 新しい path ID を予約し、延長期限と同じ exp の publish JWT を返す。 */
 export async function createStream(input: StreamServiceInput): Promise<CreateStreamResponse> {
   const now = truncateToSeconds(input.now ?? new Date());
   const expiresAt = addSeconds(now, input.settings.extensionCycleSeconds);
   const rateThreshold = addSeconds(now, -input.settings.createIntervalSeconds).toISOString();
+
+  if (input.reuseId) {
+    return reuseStream(input, input.reuseId, now, expiresAt, rateThreshold, () =>
+      throwCreateRejection(input.database, input.userId, rateThreshold, input.settings, input.startToken)
+    );
+  }
 
   for (let attempt = 0; attempt < DEFAULT_CREATE_RETRIES; attempt += 1) {
     const id = (input.generateId ?? generateShortId)();
@@ -94,6 +94,7 @@ export async function createStream(input: StreamServiceInput): Promise<CreateStr
   }
   throw new Error('Unable to allocate a unique stream path ID');
 }
+
 /** live セッションだけを延長し、新期限と同じ exp の JWT を返す。 */
 export async function extendStream(
   input: StreamServiceInput & { id: string }
@@ -297,18 +298,6 @@ async function throwCreateRejection(
   throw new Error('Stream reservation was rejected unexpectedly');
 }
 
-async function throwIfExistingStartToken(
-  database: StreamDatabase,
-  userId: number,
-  startToken: string
-): Promise<void> {
-  const status = await existingStreamStartStatus(database, userId, startToken);
-  if (status === 'live') {
-    throw new StreamError(409, ERROR_CODES.streamAlreadyLive, '既に配信中です');
-  }
-  if (status === 'ended') throw endedError();
-}
-
 async function streamIdExists(database: StreamDatabase, id: string): Promise<boolean> {
   return Boolean(
     await database.prepare('SELECT id FROM stream_sessions WHERE id = ?').bind(id).first<{ id: string }>()
@@ -335,6 +324,7 @@ async function requireOwnedStream(
 function endedError(): StreamError {
   return new StreamError(409, ERROR_CODES.streamEnded, '終了した配信は更新できません');
 }
+
 
 function createResponse(
   id: string,

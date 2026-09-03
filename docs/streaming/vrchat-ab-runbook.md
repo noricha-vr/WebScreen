@@ -38,6 +38,10 @@ bun scripts/latency-probe.ts run --minutes 12 --ab-cycle 120 \
   --player win2022 --notify-discord 1380914078100488334 --server-snap webscreen-indigo-poc
 ```
 
+初回 run で発行された ID を控える。
+以後は `--stream-id AbCdEf123456` を付けて run すると、同じ配信 URL を再利用できる。
+指定できるのは、終了済みでログイン中ユーザーが所有する ID だけ。前の配信の期限が切れ、停止処理が完了するまでは同じ ID を再利用できない。
+
 - `--ab-cycle 120` で quality → realtime → … を 2 分ごとに切り替える（6 区間）。`--max-bitrate` は realtime 区間の上限
 - 単一プロファイルで測る時は `--ab-cycle` を外し、`--video-profile quality` または `--video-profile realtime --max-bitrate 1500000`
 

@@ -1,4 +1,4 @@
-import { parseEstimatedImages } from '../contracts/api';
+import { parseEstimatedImages, parseRetryAfterSeconds } from '../contracts/api';
 
 interface ErrorBody {
   errorCode?: unknown;
@@ -7,14 +7,14 @@ interface ErrorBody {
 /**
  * HTTP エラー時に安全に読めた errorCode だけを保持する。
  *
- * 例外は `estimatedImages`（`PAGE_TOO_LONG` に付く推定画面数）で、契約の検証を
- * 通した数値 1 つだけを持つ。本文そのものは持たない（画面へ流さないため）。
+ * 例外は契約の検証を通した表示用数値だけを持つ。本文そのものは持たない（画面へ流さないため）。
  */
 export class JsonRequestError extends Error {
   constructor(
     readonly status: number,
     readonly errorCode: string | null,
-    readonly estimatedImages: number | null = null
+    readonly estimatedImages: number | null = null,
+    readonly retryAfterSeconds: number | null = null
   ) {
     super('JSON request failed');
   }
@@ -32,7 +32,8 @@ export async function requestJson(
     throw new JsonRequestError(
       response.status,
       errorCode(body.value),
-      parseEstimatedImages(body.value)
+      parseEstimatedImages(body.value),
+      parseRetryAfterSeconds(body.value)
     );
   }
   // 成功応答なのに JSON として読めないのは上流の異常。null を返すと呼び出し側が

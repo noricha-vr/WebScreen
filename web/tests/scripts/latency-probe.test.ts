@@ -129,8 +129,8 @@ describe('latency probe video profiles', () => {
   test('公開境界は不正なプロファイル・bitrate・周期を副作用前に拒否する', async () => {
     const evaluator: VideoProfileEvaluator = { evaluate: async () => { throw new Error('must not evaluate'); } };
     await expect(applyVideoProfile(evaluator, 'other' as 'quality', 1_500_000, 1_000)).rejects.toThrow('video profile');
-    expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: 999_999, abCycleSeconds: null, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null })).toThrow('maxBitrate');
-    expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: 1_500_000, abCycleSeconds: 59, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null })).toThrow('cycleSeconds');
+    expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: 999_999, abCycleSeconds: null, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null, streamId: null })).toThrow('maxBitrate');
+    expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: 1_500_000, abCycleSeconds: 59, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null, streamId: null })).toThrow('cycleSeconds');
   });
 
   test('sender差し替え時は5秒ポーリングで同じプロファイルを再適用する', async () => {
@@ -349,6 +349,7 @@ describe('latency probe CLI contract', () => {
     expect(enabled).toMatchObject({ command: 'run', options: { notifyDiscordChannelId: '123456789012345', serverSnapHost: 'relay-1.example', player: null } });
     expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--video-profile', 'realtime', '--max-bitrate', '1500000', '--scroll', '240'])).toMatchObject({ command: 'run', options: { videoProfile: 'realtime', maxBitrate: 1_500_000, scrollPixelsPerSecond: 240 } });
     expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '60', '--max-bitrate', '1500000'])).toMatchObject({ command: 'run', options: { videoProfile: 'quality', abCycleSeconds: 60, maxBitrate: 1_500_000 } });
+    expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--stream-id', 'Ab12Cd34Ef56'])).toMatchObject({ command: 'run', options: { streamId: 'Ab12Cd34Ef56' } });
   });
 
   test('共有タブへ渡す URL は http(s) かつ資格情報なしに限る', () => {
@@ -369,6 +370,7 @@ describe('latency probe CLI contract', () => {
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '601', '--max-bitrate', '1500000'])).toThrow('between 60 and 600');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '60'])).toThrow('requires --max-bitrate');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '105', '--max-bitrate', '1500000'])).toThrow('must exceed');
+    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--stream-id', 'invalid-id'])).toThrow('12-character alphanumeric');
     expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '104', '--max-bitrate', '1500000'])).toMatchObject({ command: 'run', options: { abCycleSeconds: 104 } });
     expect(() => parseLatencyProbeArgs(['source', '--url', 'https://example.test', '--scroll', '2001'])).toThrow('between 0 and 2000');
   });
@@ -389,11 +391,18 @@ describe('latency probe quality helpers', () => {
   });
 
   test('production画面共有URLはqualityでqueryなし、realtimeで設定2個だけにする', () => {
-    const quality = new URL(screenShareUrl({ videoProfile: 'quality', maxBitrate: null }));
+    const quality = new URL(screenShareUrl({ videoProfile: 'quality', maxBitrate: null, streamId: null }));
     expect(quality.search).toBe('');
-    const realtime = new URL(screenShareUrl({ videoProfile: 'realtime', maxBitrate: 1_500_000 }));
+    const realtime = new URL(screenShareUrl({ videoProfile: 'realtime', maxBitrate: 1_500_000, streamId: null }));
     expect([...realtime.searchParams.entries()]).toEqual([
       ['video-profile', 'realtime'], ['video-max-bitrate', '1500000'],
     ]);
+  });
+
+  test('固定 ID がある時は共有ページ URL の stream-id query に渡す', () => {
+    const url = new URL(screenShareUrl({
+      videoProfile: 'quality', maxBitrate: null, streamId: 'Ab12Cd34Ef56',
+    }));
+    expect([...url.searchParams.entries()]).toEqual([['stream-id', 'Ab12Cd34Ef56']]);
   });
 });
