@@ -74,22 +74,25 @@ describe('エンコードの進捗', () => {
   });
 
   test('読み込みの擬似進捗は上限に達したら刻むのをやめる', () => {
-    jest.useFakeTimers();
+    const timers = installFakeIntervals();
     const ratios: number[] = [];
-    const stop = startLoadPseudoProgress(200, (progress) => ratios.push(progress.ratio ?? 0));
+    try {
+      const stop = startLoadPseudoProgress(200, (progress) => ratios.push(progress.ratio ?? 0));
 
-    jest.advanceTimersByTime(60_000);
-    const cappedCount = ratios.length;
-    jest.advanceTimersByTime(60_000);
-    stop();
-    jest.useRealTimers();
+      timers.advance(60_000);
+      const cappedCount = ratios.length;
+      timers.advance(60_000);
+      stop();
 
-    // 読み込みが返らないまま（オフライン・CDN 停止）でも、上限へ達した後は通知しない。
-    expect(cappedCount).toBeGreaterThan(0);
-    expect(ratios.length).toBe(cappedCount);
-    expect(ratios).toEqual([...ratios].sort((a, b) => a - b));
-    // 読み込み完了の合図（区間の端）へは擬似進捗では届かせない。
-    expect(ratios.at(-1)).toBeLessThan(encodePhaseRatio('loading', 1, 1));
+      // 読み込みが返らないまま（オフライン・CDN 停止）でも、上限へ達した後は通知しない。
+      expect(cappedCount).toBeGreaterThan(0);
+      expect(ratios.length).toBe(cappedCount);
+      expect(ratios).toEqual([...ratios].sort((a, b) => a - b));
+      // 読み込み完了の合図（区間の端）へは擬似進捗では届かせない。
+      expect(ratios.at(-1)).toBeLessThan(encodePhaseRatio('loading', 1, 1));
+    } finally {
+      timers.restore();
+    }
   });
 
   test('総数が 0 や NaN でも工程の区間から出ない', () => {
@@ -104,3 +107,31 @@ test('PDF は 200 ページを超えると変換前に拒否する', () => {
   expect(() => assertPdfPageCount(MAX_PDF_PAGES)).not.toThrow();
   expect(() => assertPdfPageCount(MAX_PDF_PAGES + 1)).toThrow('PDF has more than');
 });
+
+function installFakeIntervals(): { advance: (milliseconds: number) => void; restore: () => void } {
+  let callback: (() => void) | undefined;
+  let delay = 0;
+  let active = false;
+  const setIntervalMock = jest.spyOn(globalThis, 'setInterval').mockImplementation((
+    (nextCallback: () => void, milliseconds = 0) => {
+      callback = nextCallback;
+      delay = milliseconds;
+      active = true;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    }
+  ) as typeof setInterval);
+  const clearIntervalMock = jest.spyOn(globalThis, 'clearInterval').mockImplementation((
+    () => { active = false; }
+  ) as typeof clearInterval);
+
+  return {
+    advance(milliseconds) {
+      if (!callback || delay <= 0) throw new Error('Expected a positive interval');
+      for (let elapsed = delay; elapsed <= milliseconds && active; elapsed += delay) callback();
+    },
+    restore() {
+      clearIntervalMock.mockRestore();
+      setIntervalMock.mockRestore();
+    },
+  };
+}

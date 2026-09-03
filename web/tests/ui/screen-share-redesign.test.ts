@@ -82,7 +82,7 @@ describe('画面共有リデザインの状態', () => {
   });
 
   test('期限バーは残り時間比を表示し、5分以下で警告色にする', async () => {
-    jest.useFakeTimers();
+    const timers = installFakeIntervals();
     try {
       let now = Date.parse('2026-09-01T00:00:00.000Z');
       const page = fakePage();
@@ -91,19 +91,19 @@ describe('画面共有リデザインの状態', () => {
       page.button('[data-screen-start]').click();
       await waitFor(() => !page.step('live').hidden);
       now += 45 * 60 * 1000;
-      jest.advanceTimersByTime(1_000);
+      timers.tick(1_000);
       expect(page.button('[data-screen-expires-bar]').style.width).toBe('25%');
 
       now += 10 * 60 * 1000;
-      jest.advanceTimersByTime(1_000);
+      timers.tick(1_000);
       expect(page.button('[data-screen-expires-bar]').dataset.warning).toBe('true');
     } finally {
-      jest.useRealTimers();
+      timers.restore();
     }
   });
 
   test('15分経過時は配信をローカル終了し、停止APIを呼んでidleへ戻る', async () => {
-    jest.useFakeTimers();
+    const timers = installFakeIntervals();
     try {
       let now = Date.parse('2026-09-01T00:00:00.000Z');
       const page = fakePage();
@@ -137,13 +137,13 @@ describe('画面共有リデザインの状態', () => {
       page.button('[data-screen-start]').click();
       await waitFor(() => !page.step('live').hidden);
       now += 15 * 60 * 1000;
-      jest.advanceTimersByTime(15 * 60 * 1000);
+      timers.tick(1_000);
       await waitFor(() => !page.step('idle').hidden);
 
       expect(stopped).toEqual({ capture: 1, peerConnection: 1, whipResource: 1 });
       expect(calls).toContain('/api/streams/Ab12Cd34Ef56/stop/');
     } finally {
-      jest.useRealTimers();
+      timers.restore();
     }
   });
 
@@ -288,4 +288,32 @@ async function waitFor(condition: () => boolean): Promise<void> {
     await Promise.resolve();
   }
   throw new Error('Expected asynchronous UI update');
+}
+
+function installFakeIntervals(): { tick: (delay: number) => void; restore: () => void } {
+  const intervals = new Map<number, { callback: () => void; delay: number }>();
+  let nextId = 1;
+  const setIntervalMock = jest.spyOn(globalThis, 'setInterval').mockImplementation((
+    (callback: () => void, delay = 0) => {
+      const id = nextId;
+      nextId += 1;
+      intervals.set(id, { callback, delay });
+      return id as unknown as ReturnType<typeof setInterval>;
+    }
+  ) as typeof setInterval);
+  const clearIntervalMock = jest.spyOn(globalThis, 'clearInterval').mockImplementation((
+    (id: ReturnType<typeof setInterval>) => { intervals.delete(Number(id)); }
+  ) as typeof clearInterval);
+
+  return {
+    tick(delay) {
+      const interval = [...intervals.values()].find((candidate) => candidate.delay === delay);
+      if (!interval) throw new Error(`Expected a ${delay} ms interval`);
+      interval.callback();
+    },
+    restore() {
+      clearIntervalMock.mockRestore();
+      setIntervalMock.mockRestore();
+    },
+  };
 }
