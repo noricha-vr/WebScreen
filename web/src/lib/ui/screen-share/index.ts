@@ -4,6 +4,7 @@ import { requestJson } from '../request-json';
 import { waitForStreamReady } from './stream-api';
 import { startWhipPublisher } from '../whip-publisher';
 import { browserPreviewPreference } from './preview-preference';
+import { getDisplayMediaKeepingFocus } from './capture';
 
 export type { ScreenShareDependencies } from './controller';
 export {
@@ -23,23 +24,11 @@ const BROWSER_DEPENDENCIES: ScreenShareDependencies = {
   requestJson,
   startWhipPublisher,
   waitForStreamReady: (id, signal) => waitForStreamReady(id, requestJson, undefined, signal),
-  getDisplayMedia: async (constraints) => {
-    if (typeof CaptureController === 'undefined') {
-      return navigator.mediaDevices.getDisplayMedia(constraints);
-    }
-    const controller = new CaptureController();
-    const stream = await navigator.mediaDevices.getDisplayMedia({ ...constraints, controller });
-    const displaySurface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
-    if (displaySurface === 'browser' || displaySurface === 'window') {
-      try {
-        controller.setFocusBehavior('no-focus-change');
-      } catch (error) {
-        // 共有先の種類や解決後の経過時間により拒否されても、配信開始は継続する。
-        console.warn('Failed to preserve WebScreen focus after screen selection', error);
-      }
-    }
-    return stream;
-  },
+  getDisplayMedia: (constraints) => getDisplayMediaKeepingFocus(
+    constraints ?? {},
+    (options) => navigator.mediaDevices.getDisplayMedia(options),
+    typeof CaptureController === 'undefined' ? null : () => new CaptureController()
+  ),
   previewPreference: browserPreviewPreference,
   delay: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
   now: () => Date.now(),
