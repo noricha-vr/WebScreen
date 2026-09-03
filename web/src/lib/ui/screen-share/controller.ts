@@ -7,7 +7,10 @@ import { currentAudioProfile, displayMediaConstraints } from './capture';
 import { isExpiryWarning, LiveStreamSession, releasePublisher, secondsUntil, StartRun } from './session';
 import { createStreamApi, type StreamApi } from './stream-api';
 import { resolveScreenShareVideoSettingsForSearch } from './video-profile';
+import type { PreviewPreferenceStore } from './preview-preference';
+import { currentSearch, delay, durationUntil } from './controller-helpers';
 import {
+  isDisplayPickerDismissed,
   isStreamAlreadyLiveError,
   isStreamIdNotReusableError,
   messageKeyForError,
@@ -21,6 +24,7 @@ export interface ScreenShareDependencies {
   startWhipPublisher: typeof startWhipPublisher;
   waitForStreamReady: (streamId: string, signal?: AbortSignal) => Promise<boolean>;
   getDisplayMedia: typeof navigator.mediaDevices.getDisplayMedia;
+  previewPreference: PreviewPreferenceStore;
   delay?: (ms: number) => Promise<void>;
   now: () => number;
   createStartToken?: () => string;
@@ -45,7 +49,7 @@ export class ScreenShareControllerImpl {
     root: HTMLElement,
     private readonly deps: ScreenShareDependencies
   ) {
-    this.view = new ScreenShareView(root);
+    this.view = new ScreenShareView(root, deps.previewPreference);
     this.api = createStreamApi(
       deps.requestJson,
       deps.sendBeacon,
@@ -79,11 +83,17 @@ export class ScreenShareControllerImpl {
       if (!run) return;
       this.view.setBusy('[data-screen-start]', true, 'labelStarting');
       configureCaptureAudioTracks(media, profile);
+      // 競合配信の停止中は error ステップの「停止中…」を保ち、完了後に開始待機へ進める。
       if (stopOthers) await this.stopOthers(run);
-      if (this.isActiveRun(run)) await this.continueStart(run);
+      if (!this.isActiveRun(run)) return;
+      this.view.show('starting');
+      await this.continueStart(run);
     } catch (error) {
       if (run) this.cancelStart(run);
-      if (this.isActiveStart(generation)) this.handleStartError(error);
+      if (!this.isActiveStart(generation)) return;
+      // 画面選択を閉じただけなら共有は始まっていないので、エラー画面ではなく idle へ戻す。
+      if (!run && isDisplayPickerDismissed(error)) this.view.show('idle');
+      else this.handleStartError(error);
     } finally {
       if (run && this.activeStart === run) this.activeStart = null;
       this.releaseStartReservation(generation);
@@ -388,14 +398,4 @@ export class ScreenShareControllerImpl {
   private search(): string {
     return this.deps.search?.() ?? currentSearch();
   }
-}
-function currentSearch(): string {
-  return globalThis.window?.location?.search ?? '';
-}
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function durationUntil(expiresAt: string, from: number): number {
-  return Math.max(0, (Date.parse(expiresAt) - from) / 1000);
 }

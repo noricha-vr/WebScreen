@@ -293,6 +293,7 @@
       "flow": ["Pick a screen", "Get a URL", "Paste it in VRChat"],
       "start": "Start screen sharing",
       "starting": "Starting the stream…",
+      "startingBody": "Keep this page open. The stream URL will appear here as soon as it is ready.",
       "startHint": { "lead": "Pressing the button opens ", "emphasis": "your browser's screen picker", "tail": ". Choose the tab, window, or screen you want to show." },
       "selectAudioHint": { "lead": "To stream audio in Chrome, choose a tab and turn on ", "emphasis": "Share tab audio", "tail": "." },
       "selecting": "Choosing a screen…",

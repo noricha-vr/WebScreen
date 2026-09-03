@@ -17,7 +17,19 @@ describe('画面共有リデザインの状態', () => {
     expect(page.flowItem('1').dataset.state).toBe('done');
   });
 
-  test('ピッカー選択中は開始・再試行を無効化し、ラベルは span だけ差し替える', async () => {
+  test('ピッカーがキャンセル以外で失敗したら idle ではなくエラー画面へ進む', async () => {
+    const page = fakePage();
+    new ScreenShareController(page.root, dependencies({
+      getDisplayMedia: () => Promise.reject(new DOMException('unsupported', 'NotSupportedError')),
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('error').hidden);
+
+    expect(page.step('idle').hidden).toBe(true);
+  });
+
+  test('ピッカーを閉じると開始前のidleへ戻り、ラベルは span だけ差し替える', async () => {
     const page = fakePage();
     const start = page.button('[data-screen-start]');
     const retry = page.button('[data-screen-retry]');
@@ -35,7 +47,7 @@ describe('画面共有リデザインの状態', () => {
     expect(start.labelSpan.textContent).toBe('selecting');
 
     rejectPicker!(new DOMException('denied', 'NotAllowedError'));
-    await waitFor(() => !page.step('error').hidden);
+    await waitFor(() => !page.step('idle').hidden);
     expect(start.disabled).toBe(false);
     expect(retry.disabled).toBe(false);
     expect(start.labelSpan.textContent).toBe('start');
@@ -55,6 +67,8 @@ describe('画面共有リデザインの状態', () => {
     await waitFor(() => page.button('[data-screen-start]').textContent === 'starting');
 
     expect(page.button('[data-screen-start]').disabled).toBe(true);
+    expect(page.step('starting').hidden).toBe(false);
+    expect(page.currentFlowItems()).toEqual(['2']);
     pendingCreate.resolve(createResponse());
     await waitFor(() => !page.step('live').hidden);
   });
@@ -63,10 +77,15 @@ describe('画面共有リデザインの状態', () => {
     const page = fakePage();
     const track = { addEventListener: () => undefined, stop: () => undefined };
     const media = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
-    new ScreenShareController(page.root, dependencies({ getDisplayMedia: async () => media })).mount();
+    const saved: boolean[] = [];
+    new ScreenShareController(page.root, dependencies({
+      getDisplayMedia: async () => media,
+      previewPreference: { load: () => null, save: (open) => { saved.push(open); } },
+    })).mount();
 
     page.button('[data-screen-start]').click();
     await waitFor(() => !page.step('live').hidden);
+    expect(page.button('[data-screen-preview-toggle]').getAttribute('aria-expanded')).toBe('true');
     page.button('[data-screen-preview-toggle]').click();
 
     expect(page.button('[data-screen-preview-toggle]').getAttribute('aria-expanded')).toBe('false');
@@ -79,6 +98,7 @@ describe('画面共有リデザインの状態', () => {
     page.button('[data-screen-preview-toggle]').click();
     expect(page.button('[data-screen-preview-body]').dataset.open).toBe('true');
     expect(page.button('[data-screen-preview]').paused).toBe(false);
+    expect(saved).toEqual([false, true]);
   });
 
   test('期限バーは残り時間比を表示し、5分以下で警告色にする', async () => {
@@ -147,21 +167,17 @@ describe('画面共有リデザインの状態', () => {
     }
   });
 
-  test('閉じたプレビューは、配信を止めて再開すると開いた状態に戻る', async () => {
+  test('保存済みのfalseで開始したプレビューは動画を停止したままにする', async () => {
     const page = fakePage();
-    new ScreenShareController(page.root, dependencies()).mount();
+    new ScreenShareController(page.root, dependencies({
+      previewPreference: { load: () => false, save: () => undefined },
+    })).mount();
 
     page.button('[data-screen-start]').click();
     await waitFor(() => !page.step('live').hidden);
-    page.button('[data-screen-preview-toggle]').click();
     expect(page.button('[data-screen-preview-body]').dataset.open).toBe('false');
-
-    page.button('[data-screen-stop]').click();
-    await waitFor(() => !page.step('idle').hidden);
-    page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('live').hidden);
-    expect(page.button('[data-screen-preview-body]').dataset.open).toBe('true');
-    expect(page.button('[data-screen-preview-toggle]').getAttribute('aria-expanded')).toBe('true');
+    expect(page.button('[data-screen-preview]').srcObject).not.toBeNull();
+    expect(page.button('[data-screen-preview]').paused).toBe(true);
   });
 });
 
@@ -173,6 +189,7 @@ function dependencies(overrides: Partial<ScreenShareDependencies> = {}): ScreenS
     startWhipPublisher: async () => publisher(),
     waitForStreamReady: async () => true,
     getDisplayMedia: async () => stream,
+    previewPreference: { load: () => null, save: () => undefined },
     now: () => Date.parse('2026-09-01T00:00:00.000Z'),
     sendBeacon: () => true,
     onPageHide: () => undefined,
@@ -221,7 +238,7 @@ function fakePage(): {
     '[data-screen-switch-knob]', '[data-screen-expires-bar]', '[data-screen-audio-chip]',
     '[data-screen-audio-icon]', '[data-screen-audio-label]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'starting', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;

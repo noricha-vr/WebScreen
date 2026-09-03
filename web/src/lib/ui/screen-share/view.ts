@@ -1,8 +1,9 @@
 import { ERROR_CODES } from '../../contracts/api';
 import { JsonRequestError } from '../request-json';
 import { WhipPublishError } from '../whip-publisher';
+import type { PreviewPreferenceStore } from './preview-preference';
 
-export type ScreenSharePhase = 'idle' | 'login' | 'live' | 'error';
+export type ScreenSharePhase = 'idle' | 'login' | 'starting' | 'live' | 'error';
 
 export class StreamHealthError extends Error {}
 
@@ -22,10 +23,13 @@ export function messageKeyForError(error: unknown): string {
     if (error.errorCode === ERROR_CODES.streamEnded) return 'msgStreamEnded';
   }
   if (error instanceof StreamHealthError) return 'msgStreamUnhealthy';
-  if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
-    return 'msgDisplayDenied';
-  }
+  if (isDisplayPickerDismissed(error)) return 'msgDisplayDenied';
   return 'msgGeneric';
+}
+
+/** 利用者が画面選択ダイアログを閉じた（または拒否した）エラーか判定する。 */
+export function isDisplayPickerDismissed(error: unknown): boolean {
+  return error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'AbortError');
 }
 
 /** 別の live を明示停止できる競合エラーか判定する。 */
@@ -45,7 +49,10 @@ export function retryAfterSecondsForError(error: unknown): number | null {
 
 /** 画面共有カードの selector・表示状態・ラベル更新を所有する。 */
 export class ScreenShareView {
-  constructor(private readonly root: HTMLElement) {}
+  constructor(
+    private readonly root: HTMLElement,
+    private readonly previewPreference: PreviewPreferenceStore
+  ) {}
 
   onClick(selector: string, listener: () => void): void {
     this.button(selector)?.addEventListener('click', listener);
@@ -57,11 +64,11 @@ export class ScreenShareView {
     }
     for (const item of this.root.querySelectorAll<HTMLElement>('[data-screen-flow-item]')) {
       const position = item.dataset['screenFlowItem'];
-      item.dataset['state'] = phase === 'live'
+      item.dataset['state'] = phase === 'live' || phase === 'starting'
         ? position === '1' ? 'done' : position === '2' ? 'current' : 'todo'
         : position === '1' ? 'current' : 'todo';
     }
-    if (phase === 'live') this.setPreviewOpen(true);
+    if (phase === 'live') this.setPreviewOpen(this.previewPreference.load() ?? true);
   }
 
   showError(
@@ -98,7 +105,9 @@ export class ScreenShareView {
   togglePreview(): void {
     const toggle = this.button('[data-screen-preview-toggle]');
     if (!toggle) return;
-    this.setPreviewOpen(toggle.getAttribute('aria-expanded') !== 'true');
+    const open = toggle.getAttribute('aria-expanded') !== 'true';
+    this.setPreviewOpen(open);
+    this.previewPreference.save(open);
   }
 
   setUrl(url: string): void {

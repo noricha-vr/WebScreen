@@ -58,7 +58,7 @@ describe('画面共有の表示契約', () => {
 
   test('期限警告の表示境界はisExpiryWarningの判定だけに従う', () => {
     const page = fakePage();
-    const view = new ScreenShareView(page.root);
+    const view = new ScreenShareView(page.root, { load: () => null, save: () => undefined });
     const now = Date.parse('2026-09-01T00:00:00.000Z');
     const warningAt = new Date(now + EXPIRY_WARNING_SECONDS * 1000).toISOString();
     const later = new Date(now + (EXPIRY_WARNING_SECONDS + 1) * 1000).toISOString();
@@ -106,6 +106,7 @@ describe('画面共有の表示契約', () => {
         requestedConstraints = constraints;
         return media;
       },
+      previewPreference: { load: () => null, save: () => undefined },
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
       onPageHide: () => undefined,
@@ -185,7 +186,7 @@ function fakePage(): {
     '[data-screen-audio-status]', '[data-screen-stop-others]', '[data-screen-audio-chip]',
     '[data-screen-audio-icon]', '[data-screen-audio-label]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'starting', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;

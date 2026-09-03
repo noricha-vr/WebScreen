@@ -18,6 +18,7 @@ describe('画面共有 controller', () => {
       startWhipPublisher: async () => publisherStub(),
       waitForStreamReady: async () => true,
       getDisplayMedia: async () => media,
+      previewPreference: { load: () => null, save: () => undefined },
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
       onPageHide: () => undefined,
@@ -31,7 +32,7 @@ describe('画面共有 controller', () => {
     expect(page.currentFlowItems()).toEqual(['2']);
   });
 
-  test('ピッカー選択中は開始・再試行を無効化し、ラベルは span だけ差し替えてアイコンを保つ', async () => {
+  test('ピッカーを閉じると開始前のidleへ戻り、ラベルは span だけ差し替えてアイコンを保つ', async () => {
     const page = fakeScreenSharePage();
     const start = page.button('[data-screen-start]');
     const retry = page.button('[data-screen-retry]');
@@ -43,6 +44,7 @@ describe('画面共有 controller', () => {
       startWhipPublisher: async () => publisherStub(),
       waitForStreamReady: async () => true,
       getDisplayMedia: () => new Promise((_resolve, reject) => { rejectPicker = reject; }),
+      previewPreference: { load: () => null, save: () => undefined },
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
       onPageHide: () => undefined,
@@ -55,7 +57,7 @@ describe('画面共有 controller', () => {
     expect(start.textContent).toBe(''); // ボタン直下（アイコン）は書き換えない
 
     rejectPicker!(new DOMException('denied', 'NotAllowedError'));
-    await waitFor(() => !page.step('error').hidden);
+    await waitFor(() => !page.step('idle').hidden);
     expect(start.disabled).toBe(false);
     expect(retry.disabled).toBe(false);
     expect(start.labelSpan.textContent).toBe('start');
@@ -82,6 +84,7 @@ describe('画面共有 controller', () => {
       startWhipPublisher: async () => publisher,
       waitForStreamReady: () => { healthStarted = true; return pendingHealth.promise; },
       getDisplayMedia: async () => media,
+      previewPreference: { load: () => null, save: () => undefined },
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: (url) => { beaconUrls.push(url); return true; },
       onPageHide: (handler) => { pageHide = handler; },
@@ -120,6 +123,7 @@ describe('画面共有 controller', () => {
       },
       waitForStreamReady: async () => true,
       getDisplayMedia: () => pendingMedia.promise,
+      previewPreference: { load: () => null, save: () => undefined },
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
       onPageHide: (handler) => { pageHide = handler; },
@@ -162,7 +166,7 @@ function fakeScreenSharePage(): {
     '[data-screen-expiry-warning]', '[data-screen-error-message]',
     '[data-screen-audio-status]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'starting', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;

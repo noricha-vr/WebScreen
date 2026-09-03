@@ -203,7 +203,7 @@ describe('画面共有runの競合拒否', () => {
     })).mount();
 
     page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('error').hidden);
+    await waitFor(() => !page.step('idle').hidden);
     page.button('[data-screen-start]').click();
     await waitFor(() => !page.step('live').hidden);
 
@@ -304,6 +304,7 @@ function dependencies(overrides: Partial<ScreenShareDependencies>): ScreenShareD
     startWhipPublisher: async () => publisher(() => undefined, () => undefined),
     waitForStreamReady: async () => true,
     getDisplayMedia: async () => media(() => undefined),
+    previewPreference: { load: () => null, save: () => undefined },
     delay: async () => undefined,
     now: () => Date.parse('2026-09-01T00:00:00.000Z'),
     sendBeacon: () => true,
@@ -361,7 +362,7 @@ function fakePage(): {
     '[data-screen-expires-bar]', '[data-screen-audio-chip]', '[data-screen-audio-icon]',
     '[data-screen-audio-label]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'starting', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;

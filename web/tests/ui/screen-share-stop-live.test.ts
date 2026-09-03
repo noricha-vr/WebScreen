@@ -336,6 +336,7 @@ async function pageAfterStartError(error: Error): Promise<ReturnType<typeof fake
   new ScreenShareController(page.root, dependencies({
     requestJson: async () => { throw error; },
     getDisplayMedia: async () => media(),
+    previewPreference: { load: () => null, save: () => undefined },
   })).mount();
   page.button('[data-screen-start]').click();
   await waitFor(() => !page.step('error').hidden);
@@ -349,6 +350,7 @@ function dependencies(overrides: Partial<ScreenShareDependencies>): ScreenShareD
     waitForStreamReady: async () => true,
     getDisplayMedia: async () => media(),
     delay: async () => undefined,
+    previewPreference: { load: () => null, save: () => undefined },
     now: () => Date.parse('2026-09-01T00:00:00.000Z'),
     sendBeacon: () => true,
     onPageHide: () => undefined,
@@ -395,7 +397,7 @@ function fakePage(): {
     '[data-screen-switch-track]', '[data-screen-switch-knob]', '[data-screen-expires-bar]',
     '[data-screen-audio-chip]', '[data-screen-audio-icon]', '[data-screen-audio-label]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'starting', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
     step.dataset.screenStep = phase;
     return step;
