@@ -148,24 +148,25 @@ test.describe('ログイン済み', () => {
     test(`${c.label}を MP4 に変換し、ftyp を含む成果物をアップロードする`, async ({ page }) => {
       test.setTimeout(180_000);
       await signIn(page);
-      await mockUploadEndpoints(page);
+      await mockUploadEndpoints(page, E2E_FIXTURES.readyShortId);
       await page.goto('/ja/');
 
       const panel = page.locator('[data-convert-panel]');
       const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
+      const resultResponse = page.waitForResponse((response) => response.request().isNavigationRequest());
       await panel.locator('[data-file-input]').setInputFiles({
         name: c.file,
         mimeType: c.mimeType,
         buffer: fixture(c.file),
       });
-
       const request = await uploadRequest;
       expect(request.headers()['content-type']).toBe('video/mp4');
       const body = request.postDataBuffer();
       expect(body).not.toBeNull();
       expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
-
-      await expect(page).toHaveURL(/\/Ab12Cd34Ef56\/$/, { timeout: 120_000 });
+      expect((await resultResponse).status()).toBe(200);
+      await expect(page).toHaveURL(new RegExp(`/${E2E_FIXTURES.readyShortId}/$`), { timeout: 120_000 });
+      await expect(page.locator('[data-preview]')).toBeVisible();
     });
   }
 
