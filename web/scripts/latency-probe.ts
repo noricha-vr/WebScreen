@@ -13,7 +13,7 @@ WebScreen配信を実Mac Chromeから開始し、RTSPT出口と任意のWindows�
 Subcommands:
   login [--profile-dir PATH]
   player-check [--seconds N] [--out DIR]
-  run --minutes N --source URL [--video-profile quality|realtime] [--max-bitrate 1200000|1500000|2000000] [--scroll PX_PER_SECOND] [--outlet-quality-seconds N] [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
+  run --minutes N --source URL [--video-profile quality|realtime] [--max-bitrate 1200000|1500000|2000000] [--ab-cycle 60..600] [--scroll PX_PER_SECOND] [--outlet-quality-seconds N] [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
   source --url URL [--scroll PX_PER_SECOND]
   analyze DIR
 
@@ -26,7 +26,8 @@ run options:
   --out DIR          出力先（既定: docs/tmp/latency/<UTC timestamp>）
   --server-snap HOST 配信サーバーへ SSH し、run 中に ingress / egress のフレームを撮って relay 前後の遅延を server-snap.md に出す
   --video-profile PROFILE quality（既定）または realtime。realtime はproduction画面に設定queryを渡す
-  --max-bitrate BPS  realtime 時だけ有効。1200000 / 1500000 / 2000000 のいずれか
+  --max-bitrate BPS  realtime 時、または --ab-cycle 時に必須。1200000 / 1500000 / 2000000 のいずれか
+  --ab-cycle SECONDS quality/realtimeを指定秒ごとに切替（60〜600）。--max-bitrate が必須
   --scroll PX_PER_SECOND 外部共有ページを指定速度で往復スクロール（0〜2000、既定0）
   --outlet-quality-seconds N
                      出口画質の連続ffmpeg測定窓（5〜120秒、既定20）。遅延用の単発取得とは別系統
@@ -66,7 +67,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     return { command, url: requiredUrl(values.url, '--url'), scrollPixelsPerSecond: parseScroll(values.scroll) };
   }
   if (command !== 'run') throw new Error(`unknown subcommand: ${command}`);
-  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap', 'video-profile', 'max-bitrate', 'scroll', 'outlet-quality-seconds']);
+  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap', 'video-profile', 'max-bitrate', 'ab-cycle', 'scroll', 'outlet-quality-seconds']);
   if (values['server-snap'] !== undefined && !isValidSshHost(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
   if (values['notify-discord'] !== undefined && !/^\d{15,25}$/.test(values['notify-discord'])) throw new Error('--notify-discord must be a Discord channel id');
   const minutes = Number(values.minutes);
@@ -74,7 +75,10 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
   if (values.player !== undefined && values.player !== 'win2022') throw new Error('--player must be win2022');
   const videoProfile = values['video-profile'] ?? 'quality';
   if (videoProfile !== 'quality' && videoProfile !== 'realtime') throw new Error('--video-profile must be quality or realtime');
-  if (videoProfile === 'quality' && values['max-bitrate'] !== undefined) throw new Error('--max-bitrate is only valid with --video-profile realtime');
+  const abCycleSeconds = values['ab-cycle'] === undefined ? null : Number(values['ab-cycle']);
+  if (abCycleSeconds !== null && (!Number.isInteger(abCycleSeconds) || abCycleSeconds < 60 || abCycleSeconds > 600)) throw new Error('--ab-cycle must be an integer between 60 and 600');
+  if (videoProfile === 'quality' && values['max-bitrate'] !== undefined && abCycleSeconds === null) throw new Error('--max-bitrate is only valid with --video-profile realtime');
+  if (abCycleSeconds !== null && values['max-bitrate'] === undefined) throw new Error('--ab-cycle requires --max-bitrate for realtime intervals');
   const maxBitrate = values['max-bitrate'] === undefined ? (videoProfile === 'realtime' ? 1_500_000 : null) : Number(values['max-bitrate']);
   if (maxBitrate !== null && ![1_200_000, 1_500_000, 2_000_000].includes(maxBitrate)) throw new Error('--max-bitrate must be 1200000, 1500000, or 2000000');
   const outletQualitySeconds = values['outlet-quality-seconds'] === undefined ? 20 : Number(values['outlet-quality-seconds']);
@@ -83,7 +87,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
   return {
     command, options: {
       minutes, source: requiredUrl(values.source, '--source'), player: values.player === 'win2022' ? 'win2022' : null,
-      videoProfile, maxBitrate, scrollPixelsPerSecond: parseScroll(values.scroll), outletQualitySeconds,
+      videoProfile, maxBitrate, abCycleSeconds, scrollPixelsPerSecond: parseScroll(values.scroll), outletQualitySeconds,
       profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile'),
       notifyDiscordChannelId: values['notify-discord'] ?? null,
       serverSnapHost: values['server-snap'] ?? null,

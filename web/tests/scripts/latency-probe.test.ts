@@ -10,6 +10,7 @@ import {
   summarizeLatency,
   type LatencySample,
 } from '../../scripts/latency-probe-analysis';
+import { poolProfileSegments, splitByProfile, type ProfileSwitch } from '../../scripts/latency-probe-profile-analysis';
 import {
   BLOCK_GRID_SIZE,
   bandPassOneKilohertz,
@@ -25,7 +26,7 @@ import {
 import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
 import { resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
 import { screenShareUrl } from '../../scripts/latency-probe-run';
-import { parseFreezeLog } from '../../scripts/latency-probe-quality';
+import { parseFreezeLog, type SenderSample } from '../../scripts/latency-probe-quality';
 
 function rasterize(timestampMs: number, cell = 20): { rgb: Uint8Array; width: number; height: number } {
   const width = BLOCK_GRID_SIZE * cell + 40;
@@ -160,6 +161,57 @@ describe('latency CSV analysis', () => {
     ], null, startedAtMs);
     expect(summary).toContain('A/V 差（audio - video、絶対値を復元できた近接標本）: 150.0 ms');
   });
+
+  test('2回の切替を3区間に分け、切替後15秒の過渡標本を除外する', () => {
+    const switches: ProfileSwitch[] = [
+      { observedAtMs: startedAtMs, elapsedSeconds: 0, profile: 'quality', maxBitrate: 1_200_000 },
+      { observedAtMs: startedAtMs + 60_000, elapsedSeconds: 60, profile: 'realtime', maxBitrate: 1_500_000 },
+      { observedAtMs: startedAtMs + 120_000, elapsedSeconds: 120, profile: 'quality', maxBitrate: 1_200_000 },
+    ];
+    const samples = [10, 60, 74, 75, 90, 120, 134, 135, 150].map((seconds) => ({ observedAtMs: startedAtMs + seconds * 1_000 }));
+
+    expect(splitByProfile(samples, switches, 15).map((segment) => segment.samples.map((sample) => (sample.observedAtMs - startedAtMs) / 1_000))).toEqual([
+      [10], [75, 90], [135, 150],
+    ]);
+  });
+
+  test('切替なしは1区間のままにする', () => {
+    const switches: ProfileSwitch[] = [{ observedAtMs: startedAtMs, elapsedSeconds: 0, profile: 'quality', maxBitrate: 1_200_000 }];
+    const samples = [{ observedAtMs: startedAtMs + 5_000 }, { observedAtMs: startedAtMs + 30_000 }];
+
+    expect(splitByProfile(samples, switches, 15)).toMatchObject([{ profile: 'quality', samples }]);
+  });
+
+  test('同一プロファイルの複数区間をプールする', () => {
+    const switches: ProfileSwitch[] = [
+      { observedAtMs: startedAtMs, elapsedSeconds: 0, profile: 'quality', maxBitrate: 1_200_000 },
+      { observedAtMs: startedAtMs + 60_000, elapsedSeconds: 60, profile: 'realtime', maxBitrate: 1_500_000 },
+      { observedAtMs: startedAtMs + 120_000, elapsedSeconds: 120, profile: 'quality', maxBitrate: 1_200_000 },
+    ];
+    const samples = [10, 75, 90, 135, 150].map((seconds) => ({ observedAtMs: startedAtMs + seconds * 1_000 }));
+    const segments = splitByProfile(samples, switches, 15);
+
+    expect(poolProfileSegments(segments, 'quality').map((sample) => (sample.observedAtMs - startedAtMs) / 1_000)).toEqual([10, 135, 150]);
+    expect(poolProfileSegments(segments, 'realtime').map((sample) => (sample.observedAtMs - startedAtMs) / 1_000)).toEqual([75, 90]);
+  });
+
+  test('送出側のプールは別プロファイルをまたぐcounter差分を混ぜない', () => {
+    const switches: ProfileSwitch[] = [
+      { observedAtMs: startedAtMs, elapsedSeconds: 0, profile: 'quality', maxBitrate: 1_200_000 },
+      { observedAtMs: startedAtMs + 60_000, elapsedSeconds: 60, profile: 'realtime', maxBitrate: 1_500_000 },
+      { observedAtMs: startedAtMs + 120_000, elapsedSeconds: 120, profile: 'quality', maxBitrate: 1_200_000 },
+    ];
+    const sender = [
+      [0, 0, 0, 0], [10, 300, 300_000, 6_000], [75, 2_250, 2_250_000, 45_000],
+      [90, 2_700, 2_700_000, 54_000], [135, 4_050, 4_050_000, 81_000], [150, 4_500, 4_500_000, 90_000],
+    ].map(([seconds, framesEncoded, bytesSent, qpSum]) => ({
+      observedAtMs: startedAtMs + seconds! * 1_000, framesPerSecond: 30, framesEncoded: framesEncoded!, keyFramesEncoded: 0,
+      frameWidth: 1280, frameHeight: 720, bytesSent: bytesSent!, qpSum: qpSum!, totalEncodeTime: 0,
+      qualityLimitationReason: null, qualityLimitationDurations: { none: null, cpu: null, bandwidth: null, other: null },
+    } satisfies SenderSample));
+
+    expect(formatSummary([], null, startedAtMs, sender, switches)).toContain('| quality（プール） |  /  / 0 | なし | 30.00 | 240000 | 20.00 | 1280x720 |');
+  });
 });
 
 describe('latency probe CLI contract', () => {
@@ -172,6 +224,7 @@ describe('latency probe CLI contract', () => {
     const enabled = parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--notify-discord', '123456789012345', '--server-snap', 'relay-1.example']);
     expect(enabled).toMatchObject({ command: 'run', options: { notifyDiscordChannelId: '123456789012345', serverSnapHost: 'relay-1.example', player: null } });
     expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--video-profile', 'realtime', '--max-bitrate', '1500000', '--scroll', '240'])).toMatchObject({ command: 'run', options: { videoProfile: 'realtime', maxBitrate: 1_500_000, scrollPixelsPerSecond: 240 } });
+    expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '60', '--max-bitrate', '1500000'])).toMatchObject({ command: 'run', options: { videoProfile: 'quality', abCycleSeconds: 60, maxBitrate: 1_500_000 } });
   });
 
   test('共有タブへ渡す URL は http(s) かつ資格情報なしに限る', () => {
@@ -188,6 +241,9 @@ describe('latency probe CLI contract', () => {
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--server-snap', '-host'])).toThrow('ssh host');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--max-bitrate', '1500000'])).toThrow('only valid');
     expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--video-profile', 'realtime', '--max-bitrate', '999999'])).toThrow('1200000');
+    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '59', '--max-bitrate', '1500000'])).toThrow('between 60 and 600');
+    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '601', '--max-bitrate', '1500000'])).toThrow('between 60 and 600');
+    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '60'])).toThrow('requires --max-bitrate');
     expect(() => parseLatencyProbeArgs(['source', '--url', 'https://example.test', '--scroll', '2001'])).toThrow('between 0 and 2000');
   });
 });

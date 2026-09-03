@@ -10,6 +10,8 @@ import {
 } from './latency-probe-observe';
 import { recordWindowsPlayer, type PlayerResult } from './latency-probe-player';
 import { captureSenderConfig, collectOutletQuality, collectSenderStats, parseSenderCsv, peerConnectionTrackerInitScript } from './latency-probe-quality';
+import { cycleVideoProfiles, startVideoProfileCycle } from './latency-probe-profile';
+import type { ProfileSwitch } from './latency-probe-profile-analysis';
 import { screenShareUrl, stopSharingBeforeClose } from './latency-probe-screen-share';
 
 export { screenShareUrl } from './latency-probe-screen-share';
@@ -19,13 +21,9 @@ const ACTIVE_FILE = resolve('..', 'docs', 'tmp', 'latency', '.active.json');
 const SOURCE_FILE = Bun.file(new URL('./latency-source.html', import.meta.url));
 
 /** 実行時に固定する遅延ハーネスの引数。 */
-export interface RunOptions { minutes: number; source: string; player: 'win2022' | null; profileDir: string; outDir: string
-  videoProfile: 'quality' | 'realtime';
-  maxBitrate: number | null;
-  scrollPixelsPerSecond: number;
-  outletQualitySeconds: number;
-  notifyDiscordChannelId: string | null;
-  serverSnapHost: string | null;
+export interface RunOptions {
+  minutes: number; source: string; player: 'win2022' | null; profileDir: string; outDir: string; videoProfile: 'quality' | 'realtime'; maxBitrate: number | null;
+  abCycleSeconds: number | null; scrollPixelsPerSecond: number; outletQualitySeconds: number; notifyDiscordChannelId: string | null; serverSnapHost: string | null;
 }
 interface ActiveController { endpoint: string; sourceUrl: string }
 interface ControllerState { sourcePage: import('@playwright/test').Page | null; sourceUrl: string; sourceServerUrl: string }
@@ -51,6 +49,7 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
   let audio: Bun.Subprocess | null = null;
   let senderPump: Promise<Awaited<ReturnType<typeof collectSenderStats>>> | null = null;
   let outletQualityPump: Promise<void> | null = null;
+  let profileSwitchPump: Promise<ProfileSwitch[]> | null = null;
   const measurementAbort = new AbortController();
   try {
     browser = await startChrome(options.profileDir);
@@ -88,6 +87,12 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     state.sourceUrl = target;
     startedAtMs = Date.now();
     const until = startedAtMs + options.minutes * 60_000;
+    if (options.abCycleSeconds !== null) {
+      if (options.maxBitrate === null) throw new Error('--ab-cycle requires --max-bitrate for realtime intervals');
+      // 初期プロファイルの反映・読み戻しに失敗した場合は、出口計測を始めずにrunを失敗させる。
+      const initialProfileSwitch = await startVideoProfileCycle(sharingPage, options.outDir, startedAtMs, options.videoProfile, options.maxBitrate);
+      profileSwitchPump = cycleVideoProfiles(sharingPage, options.outDir, startedAtMs, until, initialProfileSwitch, options.maxBitrate, options.abCycleSeconds, measurementAbort.signal);
+    }
     senderPump = collectSenderStats(sharingPage, options.outDir, until, measurementAbort.signal);
     outletQualityPump = collectOutletQuality(rtspUrl, options.outDir, startedAtMs, until, options.outletQualitySeconds, measurementAbort.signal);
     const diagnostics: VideoDiagnostics = { firstDecoded: null, lastDecoded: null, lastFailure: null, decodeLog: [], lastLoggedFailureAtMs: null, decodeCount: 0, decodeMsTotal: 0, decodeMsMax: 0 };
@@ -95,9 +100,10 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
       ? captureServerSnapshots(options.serverSnapHost, streamId, options.outDir, startedAtMs, snapshotScheduleSeconds(options.minutes)).catch((error) => { console.warn(`サーバー内スナップショットに失敗しました: ${String(error)}`); return []; })
       : Promise.resolve([]);
     const playerPump = options.player ? recordWindowsPlayer(options.outDir, until).catch((error) => ({ samples: [], warning: `Windows計測は失敗しました: ${String(error)}`, diagnostics: String(error) } satisfies PlayerResult)) : Promise.resolve(null);
-    const [, capturedAudio, player, senderResult] = await Promise.all([
+    const [, capturedAudio, player, senderResult, , profileSwitches] = await Promise.all([
       collectOutletGrabs(rtspUrl, until, outlet, diagnostics, join(options.outDir, 'frames')),
       collectAudio(requirePipe(audio.stdout, 'audio'), until), playerPump, senderPump, outletQualityPump,
+      profileSwitchPump ?? Promise.resolve(null),
     ]);
     outlet.push(...audioSamplesFromCapture(capturedAudio, outlet));
     const audioExitBeforeStop = audio.exitCode;
@@ -111,11 +117,11 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
       audioExitBeforeStop !== null && audioExitBeforeStop !== 0 ? `audio ffmpeg exit=${audioExitBeforeStop}\n${audioStderr}` : null,
     ].filter((failure): failure is string => failure !== null);
     if (failures.length) throw new Error(`出口ffmpegが計測終了前に失敗しました。outlet-ffmpeg.logを保存しました。\n${failures.join('\n')}`);
-    await persistResults(options.outDir, outlet, startedAtMs, player, senderResult.samples);
+    await persistResults(options.outDir, outlet, startedAtMs, player, senderResult.samples, profileSwitches);
   } finally {
     measurementAbort.abort();
     // 各pumpはfinallyでCSVを書き出すため、出力先のcleanup前に終了まで回収する。
-    await Promise.allSettled([senderPump, outletQualityPump].filter((pump): pump is Exclude<typeof pump, null> => pump !== null));
+    await Promise.allSettled([senderPump, outletQualityPump, profileSwitchPump].filter((pump): pump is Exclude<typeof pump, null> => pump !== null));
     audio?.kill();
     // browser.close() だけでは pagehide の停止ビーコンが飛ばず配信がサーバーに残り、次の run が
     // 「既存の配信を終了」経路に入って不安定になる（2026-09-02 実測）。閉じる前に停止ボタンを押す
@@ -170,10 +176,13 @@ export async function analyzeDirectory(directory: string): Promise<void> {
   if (audio) await writeFile(join(directory, 'outlet-audio.csv'), formatLatencyCsv(audio, startedAtMs));
   const senderPath = join(directory, 'sender.csv');
   const sender = await Bun.file(senderPath).exists() ? parseSenderCsv(await readFile(senderPath, 'utf8')) : null;
-  await writeFile(join(directory, 'summary.md'), formatSummary([...video, ...(audio ?? outlet.filter((sample) => sample.audioLatencyMs !== null || sample.audioLatencyPhaseMs !== null))], player, startedAtMs, sender));
+  const switchesPath = join(directory, 'profile-switches.csv');
+  const { parseProfileSwitchesCsv } = await import('./latency-probe-profile-analysis');
+  const profileSwitches = await Bun.file(switchesPath).exists() ? parseProfileSwitchesCsv(await readFile(switchesPath, 'utf8')) : null;
+  await writeFile(join(directory, 'summary.md'), formatSummary([...video, ...(audio ?? outlet.filter((sample) => sample.audioLatencyMs !== null || sample.audioLatencyPhaseMs !== null))], player, startedAtMs, sender, profileSwitches));
 }
 
-async function persistResults(outDir: string, outlet: LatencySample[], startedAtMs: number, player: PlayerResult | null, sender: Parameters<typeof formatSummary>[3]): Promise<void> {
+async function persistResults(outDir: string, outlet: LatencySample[], startedAtMs: number, player: PlayerResult | null, sender: Parameters<typeof formatSummary>[3], profileSwitches: Parameters<typeof formatSummary>[4]): Promise<void> {
   await writeFile(join(outDir, 'outlet.csv'), formatLatencyCsv(outlet, startedAtMs));
   if (player) {
     await writeFile(join(outDir, 'player.csv'), formatLatencyCsv(player.samples, startedAtMs));
@@ -181,7 +190,7 @@ async function persistResults(outDir: string, outlet: LatencySample[], startedAt
     if (player.warning) await writeFile(join(outDir, 'player-error.md'), `${player.warning}\n\n${player.diagnostics}`);
   }
   const playerWarning = player?.warning ? `\n## プレイヤー側\n\n- ${player.warning}\n` : '';
-  await writeFile(join(outDir, 'summary.md'), formatSummary(outlet, player?.samples ?? null, startedAtMs, sender) + playerWarning);
+  await writeFile(join(outDir, 'summary.md'), formatSummary(outlet, player?.samples ?? null, startedAtMs, sender, profileSwitches) + playerWarning);
 }
 
 function startSourceServer(): ReturnType<typeof Bun.serve> {
