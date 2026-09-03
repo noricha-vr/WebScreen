@@ -1,0 +1,22 @@
+[Unit]
+Description=WebScreen MediaMTX egress (read replica)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=webscreen
+Group=webscreen
+# ORIGINS (ordered comma list) and optional SELF_HOSTS live here. Keep the file root-owned
+# and readable by the `webscreen` group only.
+EnvironmentFile=/etc/webscreen/streaming/replica.env
+ExecStart=/usr/local/bin/mediamtx /etc/webscreen/streaming/mediamtx-egress-replica.yml
+Restart=on-failure
+RestartSec=3
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
