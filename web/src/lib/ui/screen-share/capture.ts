@@ -42,3 +42,28 @@ export function displayMediaConstraints(profile: AudioProfile): MediaStreamConst
     audio: displayAudioConstraint(profile),
   };
 }
+
+/**
+ * 画面選択後もこのページにフォーカスを留めて getDisplayMedia を呼ぶ。
+ * Chrome はタブ共有時に共有先タブをアクティブにするため、CaptureController が使える時だけ抑止する。
+ */
+export async function getDisplayMediaKeepingFocus(
+  constraints: DisplayMediaStreamOptions,
+  getDisplayMedia: (constraints: DisplayMediaStreamOptions) => Promise<MediaStream>,
+  createController: (() => CaptureController) | null
+): Promise<MediaStream> {
+  if (createController === null) return getDisplayMedia(constraints);
+  const controller = createController();
+  const stream = await getDisplayMedia({ ...constraints, controller });
+  // setFocusBehavior は Promise 解決直後の短い窓でしか受け付けず、monitor 共有では InvalidStateError になる。
+  const displaySurface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
+  if (displaySurface === 'browser' || displaySurface === 'window') {
+    try {
+      controller.setFocusBehavior('no-focus-change');
+    } catch (error) {
+      // フォーカス抑止は補助機能なので、拒否されても配信開始は続ける（無言で握り潰さない）。
+      console.warn('Failed to preserve WebScreen focus after screen selection', error);
+    }
+  }
+  return stream;
+}

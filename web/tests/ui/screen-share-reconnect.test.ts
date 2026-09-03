@@ -101,6 +101,7 @@ function dependencies(overrides: Partial<ScreenShareDependencies>): ScreenShareD
     startWhipPublisher: async () => publisher(),
     waitForStreamReady: async () => true,
     getDisplayMedia: async () => media(),
+    previewPreference: { load: () => null, save: () => undefined },
     now: () => Date.parse('2026-09-01T00:00:00.000Z'),
     sendBeacon: () => true,
     onPageHide: () => undefined,
@@ -143,7 +144,7 @@ function fakePage(): { root: HTMLElement; button: (selector: string) => FakeElem
     '[data-screen-expiry-warning]', '[data-screen-error-message]',
     '[data-screen-audio-status]', '[data-screen-stop-others]',
   ]) elements.set(selector, new FakeElement());
-  const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
+  const steps = ['idle', 'login', 'starting', 'live', 'error'].map((phase) => {
     const step = new FakeElement(); step.dataset.screenStep = phase; return step;
   });
   const root = {

@@ -3,6 +3,8 @@ import type { ScreenShareDependencies } from './controller';
 import { requestJson } from '../request-json';
 import { waitForStreamReady } from './stream-api';
 import { startWhipPublisher } from '../whip-publisher';
+import { browserPreviewPreference } from './preview-preference';
+import { getDisplayMediaKeepingFocus } from './capture';
 
 export type { ScreenShareDependencies } from './controller';
 export {
@@ -22,7 +24,12 @@ const BROWSER_DEPENDENCIES: ScreenShareDependencies = {
   requestJson,
   startWhipPublisher,
   waitForStreamReady: (id, signal) => waitForStreamReady(id, requestJson, undefined, signal),
-  getDisplayMedia: (constraints) => navigator.mediaDevices.getDisplayMedia(constraints),
+  getDisplayMedia: (constraints) => getDisplayMediaKeepingFocus(
+    constraints ?? {},
+    (options) => navigator.mediaDevices.getDisplayMedia(options),
+    typeof CaptureController === 'undefined' ? null : () => new CaptureController()
+  ),
+  previewPreference: browserPreviewPreference,
   delay: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
   now: () => Date.now(),
   createStartToken: () => globalThis.crypto.randomUUID(),
