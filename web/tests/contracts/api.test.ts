@@ -8,6 +8,7 @@ import {
   MAX_UPLOAD_BYTES,
   MIN_CAPTURE_DIMENSION,
   parseEstimatedImages,
+  parseRetryAfterSeconds,
   validateCreateStreamRequest,
   validateCaptureRequest,
   validateCommitRequest,
@@ -51,6 +52,19 @@ describe('parseEstimatedImages', () => {
     expect(parseEstimatedImages({ estimatedImages: 1_000_000 })).toBeNull();
     expect(parseEstimatedImages({ errorCode: 'PAGE_TOO_LONG' })).toBeNull();
     expect(parseEstimatedImages(null)).toBeNull();
+  });
+});
+
+describe('parseRetryAfterSeconds', () => {
+  test('正の整数だけを受け取る', () => {
+    expect(parseRetryAfterSeconds({ retryAfterSeconds: 120 })).toBe(120);
+  });
+
+  test('0・小数・不正な値は null にする', () => {
+    expect(parseRetryAfterSeconds({ retryAfterSeconds: 0 })).toBeNull();
+    expect(parseRetryAfterSeconds({ retryAfterSeconds: 1.5 })).toBeNull();
+    expect(parseRetryAfterSeconds({ retryAfterSeconds: '120' })).toBeNull();
+    expect(parseRetryAfterSeconds(null)).toBeNull();
   });
 });
 

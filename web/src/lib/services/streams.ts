@@ -7,7 +7,7 @@ import {
   type StreamStatusResponse,
 } from '../contracts/api';
 import { generateShortId } from '../contracts/r2key';
-import { existingStreamStartStatus } from './stream-start';
+import { throwIfExistingStartToken } from './stream-start';
 import { StreamError } from './stream-error';
 import { reuseStream } from './stream-reuse';
 export { StreamError } from './stream-error';
@@ -296,18 +296,6 @@ async function throwCreateRejection(
     throw new StreamError(429, ERROR_CODES.streamCreateRateLimited, '配信の再作成が速すぎます');
   }
   throw new Error('Stream reservation was rejected unexpectedly');
-}
-
-async function throwIfExistingStartToken(
-  database: StreamDatabase,
-  userId: number,
-  startToken: string
-): Promise<void> {
-  const status = await existingStreamStartStatus(database, userId, startToken);
-  if (status === 'live') {
-    throw new StreamError(409, ERROR_CODES.streamAlreadyLive, '既に配信中です');
-  }
-  if (status === 'ended') throw endedError();
 }
 
 async function streamIdExists(database: StreamDatabase, id: string): Promise<boolean> {

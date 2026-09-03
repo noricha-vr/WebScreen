@@ -56,6 +56,17 @@ describe('requestJson', () => {
     expect((error as JsonRequestError).estimatedImages).toBe(402);
   });
 
+  test('再利用待ち秒数が付いていれば一緒に保持する', async () => {
+    const fetchImpl = respondWith(
+      '{"errorCode":"STREAM_ID_NOT_REUSABLE","message":"...","retryAfterSeconds":120}',
+      { status: 409, headers: { 'Content-Type': 'application/json' } }
+    );
+
+    const error = await requestJson('/api/streams/', { method: 'POST' }, fetchImpl).catch((thrown) => thrown);
+
+    expect((error as JsonRequestError).retryAfterSeconds).toBe(120);
+  });
+
   test('エラー応答が JSON でなくても status は保持する', async () => {
     const fetchImpl = respondWith('gateway timeout', { status: 504 });
 

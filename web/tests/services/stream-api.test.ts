@@ -87,6 +87,24 @@ describe('stream API HTTP境界', () => {
     });
   });
 
+  it('StreamError の公開済み待機秒数を応答へ含める', async () => {
+    const response = await runStreamApi(
+      request(),
+      bindings(await createStreamDatabase()),
+      async () => {
+        throw new StreamError(409, ERROR_CODES.streamIdNotReusable, '期限待ちです', {
+          retryAfterSeconds: 120,
+        });
+      }
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      errorCode: ERROR_CODES.streamIdNotReusable,
+      message: '期限待ちです',
+      retryAfterSeconds: 120,
+    });
+  });
+
   it('未知例外を安全なログと500 INTERNAL_ERRORへ変換する', async () => {
     const lines: string[] = [];
     const original = console.error;

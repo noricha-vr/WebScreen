@@ -1,3 +1,5 @@
+import { ERROR_CODES } from '../contracts/api';
+import { StreamError } from './stream-error';
 import type { StreamDatabase } from './streams';
 
 /** 各利用者について保持する開始キャンセルtombstoneの上限。 */
@@ -57,4 +59,19 @@ export async function existingStreamStartStatus(
     .bind(userId, startToken)
     .first<{ status: 'live' | 'ended' }>();
   return existing?.status ?? null;
+}
+
+/** 同じ開始 token の確定済み session を、通常作成と同じ 409 へ変換する。 */
+export async function throwIfExistingStartToken(
+  database: StreamDatabase,
+  userId: number,
+  startToken: string
+): Promise<void> {
+  const status = await existingStreamStartStatus(database, userId, startToken);
+  if (status === 'live') {
+    throw new StreamError(409, ERROR_CODES.streamAlreadyLive, '既に配信中です');
+  }
+  if (status === 'ended') {
+    throw new StreamError(409, ERROR_CODES.streamEnded, '終了した配信は更新できません');
+  }
 }

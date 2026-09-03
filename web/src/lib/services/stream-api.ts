@@ -48,7 +48,7 @@ export async function runStreamApi(
     });
   } catch (error) {
     if (error instanceof StreamError) {
-      return errorResponse(error.status, error.errorCode, error.message);
+      return errorResponse(error.status, error.errorCode, error.message, error.details);
     }
     logWorkerFailure({
       event: 'stream_api_failed',
@@ -119,9 +119,10 @@ export async function streamJwksResponse(secret: string): Promise<Response> {
 function errorResponse(
   status: number,
   errorCode: ErrorResponse['errorCode'],
-  message: string
+  message: string,
+  details: Pick<ErrorResponse, 'retryAfterSeconds'> = {}
 ): Response {
-  return json({ errorCode, message }, status);
+  return json({ errorCode, message, ...details }, status);
 }
 
 function positiveInt(value: string | undefined, fallback: number): number {

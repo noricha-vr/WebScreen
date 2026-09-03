@@ -13,7 +13,9 @@ export function messageKeyForError(error: unknown): string {
   }
   if (error instanceof JsonRequestError) {
     if (error.errorCode === ERROR_CODES.streamAlreadyLive) return 'msgStreamAlreadyLive';
-    if (error.errorCode === ERROR_CODES.streamIdNotReusable) return 'msgStreamIdNotReusable';
+    if (error.errorCode === ERROR_CODES.streamIdNotReusable) {
+      return error.retryAfterSeconds === null ? 'msgStreamIdNotReusable' : 'msgStreamIdReusableAfter';
+    }
     if (error.errorCode === ERROR_CODES.streamCapacityReached) return 'msgStreamCapacity';
     if (error.errorCode === ERROR_CODES.streamCreateRateLimited) return 'msgRateLimited';
     if (error.errorCode === ERROR_CODES.streamExtensionDisabled) return 'msgStreamExtensionDisabled';
@@ -29,6 +31,16 @@ export function messageKeyForError(error: unknown): string {
 /** 別の live を明示停止できる競合エラーか判定する。 */
 export function isStreamAlreadyLiveError(error: unknown): boolean {
   return error instanceof JsonRequestError && error.errorCode === ERROR_CODES.streamAlreadyLive;
+}
+
+/** 固定 ID の再利用が拒否されたエラーか判定する。 */
+export function isStreamIdNotReusableError(error: unknown): boolean {
+  return error instanceof JsonRequestError && error.errorCode === ERROR_CODES.streamIdNotReusable;
+}
+
+/** 再利用待ちの秒数だけを、表示用に取り出す。 */
+export function retryAfterSecondsForError(error: unknown): number | null {
+  return error instanceof JsonRequestError ? error.retryAfterSeconds : null;
 }
 
 /** 画面共有カードの selector・表示状態・ラベル更新を所有する。 */
@@ -52,8 +64,13 @@ export class ScreenShareView {
     if (phase === 'live') this.setPreviewOpen(true);
   }
 
-  showError(messageKey: string, hasLive: boolean, canStopOthers: boolean): void {
-    this.text('[data-screen-error-message]', this.message(messageKey));
+  showError(
+    messageKey: string,
+    hasLive: boolean,
+    canStopOthers: boolean,
+    retryAfterSeconds: number | null = null
+  ): void {
+    this.text('[data-screen-error-message]', this.message(messageKey, retryAfterSeconds));
     this.setButtonLabel('[data-screen-retry]', hasLive ? 'labelReconnect' : 'labelRetry');
     const stopOthers = this.button('[data-screen-stop-others]');
     if (stopOthers) {
@@ -142,8 +159,10 @@ export class ScreenShareView {
     if (button) (button.querySelector('span') ?? button).textContent = this.message(label);
   }
 
-  message(key: string): string {
-    return this.root.dataset[key] ?? '';
+  message(key: string, retryAfterSeconds: number | null = null): string {
+    const message = this.root.dataset[key] ?? '';
+    if (retryAfterSeconds === null) return message;
+    return message.replace('{minutes}', String(Math.ceil(retryAfterSeconds / 60)));
   }
 
   private text(selector: string, value: string): void {

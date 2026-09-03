@@ -92,6 +92,8 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 export interface ErrorResponse {
   errorCode: ErrorCode;
   message: string;
+  /** `STREAM_ID_NOT_REUSABLE` で旧 publish JWT の失効を待つ秒数。 */
+  retryAfterSeconds?: number;
   /**
    * `PAGE_TOO_LONG` のときだけ付く、ページ全体に必要と推定した画面数。
    *
@@ -116,6 +118,14 @@ export function parseEstimatedImages(value: unknown): number | null {
   if (typeof estimated !== 'number' || !Number.isSafeInteger(estimated)) return null;
   if (estimated <= 0 || estimated > MAX_ESTIMATED_IMAGES) return null;
   return estimated;
+}
+
+/** API 応答から再試行までの秒数だけを安全に取り出す。 */
+export function parseRetryAfterSeconds(value: unknown): number | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const seconds = (value as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+  if (typeof seconds !== 'number' || !Number.isSafeInteger(seconds) || seconds <= 0) return null;
+  return seconds;
 }
 
 // ---------------------------------------------------------------------------

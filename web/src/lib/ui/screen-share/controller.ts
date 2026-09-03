@@ -9,7 +9,9 @@ import { createStreamApi, type StreamApi } from './stream-api';
 import { resolveScreenShareVideoSettingsForSearch } from './video-profile';
 import {
   isStreamAlreadyLiveError,
+  isStreamIdNotReusableError,
   messageKeyForError,
+  retryAfterSecondsForError,
   ScreenShareView,
   StreamHealthError,
 } from './view';
@@ -22,6 +24,7 @@ export interface ScreenShareDependencies {
   delay?: (ms: number) => Promise<void>;
   now: () => number;
   createStartToken?: () => string;
+  search?: () => string;
   sendBeacon: (url: string, data?: BodyInit | null) => boolean;
   onPageHide: (handler: () => void) => void;
 }
@@ -37,6 +40,7 @@ export class ScreenShareControllerImpl {
   private startReservation: number | null = null;
   private activeStart: StartRun | null = null;
   private expiresBarTotalSeconds = 0;
+  private reuseDisabled = false;
   constructor(
     root: HTMLElement,
     private readonly deps: ScreenShareDependencies
@@ -119,8 +123,15 @@ export class ScreenShareControllerImpl {
   private async createAndPublish(run: StartRun): Promise<StartedStream | null> {
     let created;
     try {
-      created = await this.api.create(run.startToken, reusableStreamIdForSearch(currentSearch()));
+      created = await this.api.create(
+        run.startToken,
+        this.reuseDisabled ? undefined : reusableStreamIdForSearch(this.search())
+      );
     } catch (error) {
+      if (isStreamIdNotReusableError(error)) {
+        // 同じ query を再送して 409 を繰り返さず、次の Retry は新しい URL を発行する。
+        this.reuseDisabled = true;
+      }
       this.cancelStart(run);
       throw error;
     }
@@ -143,9 +154,9 @@ export class ScreenShareControllerImpl {
         stream: run.capture.media,
         streamId: created.id,
         publishToken: created.publishToken,
-        keyframeRequestIntervalMs: keyframeRequestIntervalForSearch(currentSearch()),
+        keyframeRequestIntervalMs: keyframeRequestIntervalForSearch(this.search()),
         audioProfile: currentAudioProfile(),
-        videoSettings: resolveScreenShareVideoSettingsForSearch(currentSearch()),
+        videoSettings: resolveScreenShareVideoSettingsForSearch(this.search()),
       });
       stream = new LiveStreamSession(created, publisher, run);
       if (!this.isActiveRun(run)) return this.discardInactiveRun(stream, run);
@@ -366,7 +377,16 @@ export class ScreenShareControllerImpl {
   }
 
   private showError(error: unknown): void {
-    this.view.showError(messageKeyForError(error), Boolean(this.live), isStreamAlreadyLiveError(error));
+    this.view.showError(
+      messageKeyForError(error),
+      Boolean(this.live),
+      isStreamAlreadyLiveError(error),
+      retryAfterSecondsForError(error)
+    );
+  }
+
+  private search(): string {
+    return this.deps.search?.() ?? currentSearch();
   }
 }
 function currentSearch(): string {
