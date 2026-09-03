@@ -44,8 +44,10 @@ export function displayMediaConstraints(profile: AudioProfile): MediaStreamConst
 }
 
 /**
- * 画面選択後もこのページにフォーカスを留めて getDisplayMedia を呼ぶ。
- * Chrome はタブ共有時に共有先タブをアクティブにするため、CaptureController が使える時だけ抑止する。
+ * 共有種別に応じて開始直後のフォーカスを制御しつつ getDisplayMedia を呼ぶ。
+ * window 共有は別 OS ウィンドウが描画を続けるため WebScreen にフォーカスを留める。タブ共有は共有先タブを
+ * 背面のままにすると映像フレーム（キーフレーム）が出ず配信が始まらない（#214 の回帰 → #216）ため、
+ * Chrome 既定（タブを前面化）に任せる。MDN の例も browser には focus-captured-surface を使う。
  */
 export async function getDisplayMediaKeepingFocus(
   constraints: DisplayMediaStreamOptions,
@@ -57,7 +59,7 @@ export async function getDisplayMediaKeepingFocus(
   const stream = await getDisplayMedia({ ...constraints, controller });
   // setFocusBehavior は Promise 解決直後の短い窓でしか受け付けず、monitor 共有では InvalidStateError になる。
   const displaySurface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
-  if (displaySurface === 'browser' || displaySurface === 'window') {
+  if (displaySurface === 'window') {
     try {
       controller.setFocusBehavior('no-focus-change');
     } catch (error) {
