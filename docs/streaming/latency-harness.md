@@ -1,5 +1,7 @@
 # 配信遅延ハーネス
 
+VRChat 実機での A/B（人の手順と固定コマンド）は [vrchat-ab-runbook.md](vrchat-ab-runbook.md) を先に見る。
+
 `web/scripts/latency-probe.ts` は、実Mac Chromeの画面共有を自動開始し、配信元→RTSPT出口を時系列で記録する。計測方法の背景と低遅延入力設定は [I19](verification.md#i19-約3秒に見えた-rtspt-遅延を配信経路と受信側に分離2026-09-01) を参照。
 
 ```bash
