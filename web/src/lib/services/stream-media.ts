@@ -10,7 +10,10 @@ export function createStreamMediaMtxClient(config: {
 
 export interface StreamMediaMtxClients {
   ingress: MediaMtxClient;
+  /** origin egress。health API はこの client だけを使う。 */
   egress: MediaMtxClient;
+  /** viewer 判定で観測する origin を含むすべての read egress。 */
+  egresses: MediaMtxClient[];
 }
 
 export interface StreamMediaMtxSettings {
@@ -20,9 +23,10 @@ export interface StreamMediaMtxSettings {
   ingressApiToken?: string;
   egressApiUrl?: string;
   egressApiToken?: string;
+  readEgressApiUrls?: string;
 }
 
-/** ingress / egress 優先、旧単一 Control API をfallbackにして client を組み立てる。 */
+/** ingress / read egress 優先、旧単一 Control API をfallbackにして client を組み立てる。 */
 export function createStreamMediaMtxClients(
   settings: StreamMediaMtxSettings,
   createClient: (config: { apiUrl: string; apiToken: string }) => MediaMtxClient =
@@ -32,17 +36,42 @@ export function createStreamMediaMtxClients(
     settings.ingressApiUrl ||
       settings.ingressApiToken ||
       settings.egressApiUrl ||
-      settings.egressApiToken
+      settings.egressApiToken ||
+      settings.readEgressApiUrls
   );
   if (usesSplitEndpoints) {
+    const ingress = createEndpoint(
+      settings.ingressApiUrl,
+      settings.ingressApiToken,
+      'INGRESS',
+      createClient
+    );
+    const egresses = settings.readEgressApiUrls
+      ? createReadEgresses(settings.readEgressApiUrls, settings.egressApiToken, createClient)
+      : [createEndpoint(settings.egressApiUrl, settings.egressApiToken, 'EGRESS', createClient)];
     return {
-      ingress: createEndpoint(settings.ingressApiUrl, settings.ingressApiToken, 'INGRESS', createClient),
-      egress: createEndpoint(settings.egressApiUrl, settings.egressApiToken, 'EGRESS', createClient),
+      ingress,
+      egress: egresses[0] as MediaMtxClient,
+      egresses,
     };
   }
   if (!settings.legacyApiUrl && !settings.legacyApiToken) return undefined;
   const legacy = createEndpoint(settings.legacyApiUrl, settings.legacyApiToken, 'legacy', createClient);
-  return { ingress: legacy, egress: legacy };
+  return { ingress: legacy, egress: legacy, egresses: [legacy] };
+}
+
+function createReadEgresses(
+  value: string,
+  apiToken: string | undefined,
+  createClient: (config: { apiUrl: string; apiToken: string }) => MediaMtxClient
+): MediaMtxClient[] {
+  const apiUrls = value.split(',').map((apiUrl) => apiUrl.trim());
+  if (apiUrls.length === 0 || apiUrls.some((apiUrl) => apiUrl.length === 0)) {
+    throw new Error('MEDIAMTX_READ_EGRESS_API_URLS must contain one or more URLs');
+  }
+  return [...new Set(apiUrls)].map((apiUrl) =>
+    createEndpoint(apiUrl, apiToken, 'READ_EGRESS', createClient)
+  );
 }
 
 function createEndpoint(

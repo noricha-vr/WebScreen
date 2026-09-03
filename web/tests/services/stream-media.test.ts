@@ -29,7 +29,32 @@ describe('MediaMTX endpoint wiring', () => {
       }
     );
     expect(clients?.ingress).not.toBe(clients?.egress);
+    expect(clients?.egresses).toHaveLength(1);
     expect(configured).toEqual(['https://ingress.example', 'https://egress.example']);
+  });
+
+  it('read egress一覧を個別clientへ展開し、先頭をorigin egressとして返す', () => {
+    const configured: string[] = [];
+    const clients = createStreamMediaMtxClients(
+      {
+        ingressApiUrl: 'https://ingress.example',
+        ingressApiToken: 'ingress-token',
+        egressApiToken: 'egress-token',
+        readEgressApiUrls: 'https://origin.example, https://replica.example',
+      },
+      (config) => {
+        configured.push(config.apiUrl);
+        return fakeClient();
+      }
+    );
+
+    expect(clients?.egress).toBe(clients?.egresses[0]);
+    expect(clients?.egresses).toHaveLength(2);
+    expect(configured).toEqual([
+      'https://ingress.example',
+      'https://origin.example',
+      'https://replica.example',
+    ]);
   });
 
   it('split endpointが未設定なら旧単一endpointを両roleへ互換利用する', () => {
@@ -38,5 +63,7 @@ describe('MediaMTX endpoint wiring', () => {
       () => fakeClient()
     );
     expect(clients?.ingress).toBe(clients?.egress);
+    expect(clients?.egresses).toHaveLength(1);
+    expect(clients?.egresses[0]).toBe(clients?.egress);
   });
 });

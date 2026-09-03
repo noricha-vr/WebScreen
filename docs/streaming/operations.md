@@ -57,7 +57,8 @@ versioned 設定、VPS → Worker の cutover、Worker / VPS 一体 rollback は
 - `wrangler tail` は scheduled イベントを取りこぼす（実測）。**tail の沈黙を「動いていない」証拠にしない**
 - 確実な検証: heartbeat 失効済みの合成 live 行を D1 に INSERT → 1〜2 分で `ended / heartbeat_lost` になれば cron・判定・API 呼び出しが一括で実証される（終わったら行を DELETE）
 - cron トリガーを追加したデプロイの後は、CI ログの `schedule:` 表示を信用せず実効を確かめる。不発なら `bunx wrangler triggers deploy -c cron/wrangler.jsonc` の再実行で直った実績あり
-- cron は ingress client で publisher を kick し、egress client で viewer / path を観測する。片側だけの疎通確認で完了にしない
+- cron は ingress client で publisher を kick し、`MEDIAMTX_READ_EGRESS_API_URLS` の全 read egress で viewer / path を観測する。origin を含め、増設時はカンマ区切りで URL を追加する
+- いずれかの read egress が未観測の回は `no_viewers` と `kick_pending` の解除を見送る。`stream_lifecycle_completed` の `egressObserved` / `egressUnobserved` で観測状態を確認する
 
 ## サーバーを移設・増設するとき
 

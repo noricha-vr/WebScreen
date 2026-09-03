@@ -214,6 +214,72 @@ describe('配信セッション lifecycle', () => {
     expect(row(second)).toMatchObject({ status: 'live', last_viewer_at: NOW.toISOString() });
   });
 
+  it('replicaだけのRTSP readerも合計してviewer猶予を更新する', async () => {
+    const database = await createStreamDatabase();
+    await insertLive(database, {
+      extendAt: '2026-09-01T04:00:00.000Z',
+      viewerAt: '2026-09-01T01:50:00.000Z',
+    });
+    const summary = await runStreamLifecycle({
+      database,
+      ingressMediaMtx: new FakeMediaMtx(),
+      egressMediaMtxs: [
+        new FakeMediaMtx(),
+        new FakeMediaMtx([{ name: 'live/AbCdEf123456', publisherId: null, rtspReaders: 1 }]),
+      ],
+      settings: SETTINGS,
+      now: NOW,
+    });
+
+    expect(row(database)).toMatchObject({ status: 'live', last_viewer_at: NOW.toISOString() });
+    expect(summary).toMatchObject({ viewersObserved: 1, egressObserved: 2, egressUnobserved: 0 });
+  });
+
+  it('read egressが未観測の回はno_viewersを発火せず件数を残す', async () => {
+    const database = await createStreamDatabase();
+    await insertLive(database, {
+      extendAt: '2026-09-01T04:00:00.000Z',
+      viewerAt: '2026-09-01T01:50:00.000Z',
+    });
+    const summary = await runStreamLifecycle({
+      database,
+      ingressMediaMtx: new FakeMediaMtx(),
+      egressMediaMtxs: [new FakeMediaMtx(), new FakeMediaMtx([], new Error('replica unavailable'))],
+      settings: SETTINGS,
+      now: NOW,
+    });
+
+    expect(row(database)).toMatchObject({ status: 'live' });
+    expect(summary).toMatchObject({ endedByNoViewers: 0, egressObserved: 1, egressUnobserved: 1 });
+  });
+
+  it('read egressが未観測でもextendとheartbeatのD1停止判定は続ける', async () => {
+    const extendDatabase = await createStreamDatabase();
+    await insertLive(extendDatabase, { extendAt: NOW.toISOString() });
+    const heartbeatDatabase = await createStreamDatabase();
+    await insertLive(heartbeatDatabase, {
+      extendAt: '2026-09-01T04:00:00.000Z',
+      heartbeatAt: '2026-09-01T01:59:00.000Z',
+    });
+    const input = (database: StreamSqliteAdapter) => ({
+      database,
+      ingressMediaMtx: new FakeMediaMtx(),
+      egressMediaMtxs: [new FakeMediaMtx([], new Error('replica unavailable'))],
+      settings: SETTINGS,
+      now: NOW,
+    });
+
+    const [extendSummary, heartbeatSummary] = await Promise.all([
+      runStreamLifecycle(input(extendDatabase)),
+      runStreamLifecycle(input(heartbeatDatabase)),
+    ]);
+
+    expect(row(extendDatabase)).toMatchObject({ status: 'ended', end_reason: 'extend_timeout' });
+    expect(extendSummary).toMatchObject({ endedByExtendTimeout: 1, egressUnobserved: 1 });
+    expect(row(heartbeatDatabase)).toMatchObject({ status: 'ended', end_reason: 'heartbeat_lost' });
+    expect(heartbeatSummary).toMatchObject({ endedByHeartbeatLost: 1, egressUnobserved: 1 });
+  });
+
   it('ingressをkickした次のcronでegress path不在を確認してからpendingを解除する', async () => {
     const database = await createStreamDatabase();
     await insertLive(database, { extendAt: '2026-09-01T04:00:00.000Z' });
@@ -246,6 +312,27 @@ describe('配信セッション lifecycle', () => {
       now: NOW,
     });
     expect(row(database).kick_pending).toBe(0);
+  });
+
+  it('全read egressのどれかにpathが残る間はkick_pendingを解除しない', async () => {
+    const database = await createStreamDatabase();
+    await insertLive(database, { extendAt: '2026-09-01T04:00:00.000Z' });
+    database.sqlite
+      .query("UPDATE stream_sessions SET status='ended', ended_at=?, end_reason='user_stop', kick_pending=1")
+      .run(NOW.toISOString());
+
+    await runStreamLifecycle({
+      database,
+      ingressMediaMtx: new FakeMediaMtx(),
+      egressMediaMtxs: [
+        new FakeMediaMtx(),
+        new FakeMediaMtx([{ name: 'live/AbCdEf123456', publisherId: null, rtspReaders: 1 }]),
+      ],
+      settings: SETTINGS,
+      now: NOW,
+    });
+
+    expect(row(database).kick_pending).toBe(1);
   });
 
   it('閾値を30秒へ変更するとreaderゼロ30秒で終了する', async () => {
