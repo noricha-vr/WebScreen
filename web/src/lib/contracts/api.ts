@@ -22,7 +22,6 @@ export type {
 export const MAX_UPLOAD_BYTES = 52_428_800;
 /** abandon の JSON 本文上限。shortId 1 件に対し十分な余裕を持たせる。 */
 export const MAX_ABANDON_UPLOAD_BODY_BYTES = 4 * 1024;
-
 /** アップロード元の種別。ローカル入力は PDF / 画像、URL 変換は web に限定する。 */
 export const UPLOAD_KINDS = ['pdf', 'image', 'web'] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
@@ -75,6 +74,7 @@ export const ERROR_CODES = {
   streamCapacityReached: 'STREAM_CAPACITY_REACHED',
   streamCreateRateLimited: 'STREAM_CREATE_RATE_LIMITED',
   streamStartCancelled: 'STREAM_START_CANCELLED',
+  streamExtensionDisabled: 'STREAM_EXTENSION_DISABLED',
   streamEnded: 'STREAM_ENDED',
   captureFailed: 'CAPTURE_FAILED',
   pageTooLong: 'PAGE_TOO_LONG',

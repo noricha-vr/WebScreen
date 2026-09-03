@@ -40,6 +40,7 @@ function bindings(database: StreamSqliteAdapter): StreamApiBindings {
     SESSION_SIGNING_KEY: SESSION_SECRET,
     STREAM_JWT_PRIVATE_KEY: privateKey,
     STREAM_EXTENSION_SECONDS: '900',
+    STREAM_EXTENSION_ENABLED: 'false',
     STREAM_MAX_LIVE_PER_USER: '1',
     STREAM_CREATE_INTERVAL_SECONDS: '10',
   };
@@ -53,8 +54,11 @@ function request(authenticated = true): Request {
 }
 
 describe('stream API HTTP境界', () => {
-  it('延長サイクルの未設定既定値はベータ版の15分にする', () => {
-    expect(streamSettings({} as StreamApiBindings).extensionCycleSeconds).toBe(15 * 60);
+  it('延長サイクルは15分で、延長フラグの未設定既定値はfalseにする', () => {
+    const settings = streamSettings({} as StreamApiBindings);
+    expect(settings.extensionCycleSeconds).toBe(15 * 60);
+    expect(settings.extensionEnabled).toBe(false);
+    expect(streamSettings({ STREAM_EXTENSION_ENABLED: 'true' } as StreamApiBindings).extensionEnabled).toBe(true);
   });
 
   it('認証失敗を401 UNAUTHORIZEDへ変換する', async () => {
@@ -109,6 +113,20 @@ describe('stream API HTTP境界', () => {
   it('不正な設定値をaction実行前に500へ変換する', async () => {
     const invalid = bindings(await createStreamDatabase());
     invalid.STREAM_EXTENSION_SECONDS = '0';
+    const original = console.error;
+    console.error = () => {};
+    try {
+      const response = await runStreamApi(request(), invalid, async () => json({ unexpected: true }));
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ errorCode: ERROR_CODES.internalError });
+    } finally {
+      console.error = original;
+    }
+  });
+
+  it('不正な延長フラグをaction実行前に500へ変換する', async () => {
+    const invalid = bindings(await createStreamDatabase());
+    invalid.STREAM_EXTENSION_ENABLED = 'enabled';
     const original = console.error;
     console.error = () => {};
     try {

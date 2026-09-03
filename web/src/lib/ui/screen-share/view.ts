@@ -15,6 +15,7 @@ export function messageKeyForError(error: unknown): string {
     if (error.errorCode === ERROR_CODES.streamAlreadyLive) return 'msgStreamAlreadyLive';
     if (error.errorCode === ERROR_CODES.streamCapacityReached) return 'msgStreamCapacity';
     if (error.errorCode === ERROR_CODES.streamCreateRateLimited) return 'msgRateLimited';
+    if (error.errorCode === ERROR_CODES.streamExtensionDisabled) return 'msgStreamExtensionDisabled';
     if (error.errorCode === ERROR_CODES.streamEnded) return 'msgStreamEnded';
   }
   if (error instanceof StreamHealthError) return 'msgStreamUnhealthy';

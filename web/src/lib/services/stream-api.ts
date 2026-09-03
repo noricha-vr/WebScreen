@@ -16,6 +16,7 @@ export interface StreamApiBindings {
   SESSION_SIGNING_KEY: string;
   STREAM_JWT_PRIVATE_KEY: string;
   STREAM_EXTENSION_SECONDS?: string;
+  STREAM_EXTENSION_ENABLED?: string;
   STREAM_MAX_LIVE_PER_USER?: string;
   STREAM_MAX_LIVE?: string;
   STREAM_CREATE_INTERVAL_SECONDS?: string;
@@ -70,6 +71,7 @@ export function requireStreamId(value: string | undefined): string {
 export function streamSettings(bindings: StreamApiBindings): StreamSettings {
   return {
     extensionCycleSeconds: positiveInt(bindings.STREAM_EXTENSION_SECONDS, DEFAULT_EXTENSION_SECONDS),
+    extensionEnabled: booleanSetting(bindings.STREAM_EXTENSION_ENABLED, false),
     maxLiveStreamsPerUser: positiveInt(
       bindings.STREAM_MAX_LIVE_PER_USER,
       DEFAULT_MAX_LIVE_STREAMS
@@ -127,4 +129,11 @@ function positiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error('Invalid stream setting');
   return parsed;
+}
+
+function booleanSetting(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new Error('Invalid stream setting');
 }

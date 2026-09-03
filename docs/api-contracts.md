@@ -35,7 +35,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行 | 本人 | `CreateStreamResponse`。任意の `X-WebScreen-Start-Token` は UUIDv4。欠落は旧クライアント互換。本人の同時配信は 409 `STREAM_ALREADY_LIVE`、取り消し済み token は 409 `STREAM_START_CANCELLED`、全体 20 本到達は 429 `STREAM_CAPACITY_REACHED`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
 | `POST /api/streams/cancel-start/` | 配信開始操作を取り消す | 本人 | `application/json` の `{ "startToken": UUIDv4 }` だけを許可（余分なフィールド不可、本文 1024 byte 上限）。対象が未作成・作成済み・取り消し済みのいずれでも冪等 204 |
 | `POST /api/streams/stop-live/` | 本人の live 配信をすべて `user_stop` で終了し、cron の kick 対象にする | 本人 | `StopLiveStreamsResponse`（`stopped` と `retryAfterSeconds`）。冪等 200 |
-| `POST /api/streams/{id}/extend/` | 延長期限を更新し、同じ期限の新 publish JWT を発行 | 本人（所有者） | `ExtendStreamResponse`。終了済みは 409 `STREAM_ENDED` |
+| `POST /api/streams/{id}/extend/` | 延長期限を更新し、同じ期限の新 publish JWT を発行 | 本人（所有者） | `STREAM_EXTENSION_ENABLED=true` の時だけ `ExtendStreamResponse` を返す。`false`（既定）では期限・JWTを更新せず409 `STREAM_EXTENSION_DISABLED`。終了済みは409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/heartbeat/` | 配信ブラウザの生存時刻を更新 | 本人（所有者） | 成功は 204。終了済みは 409 `STREAM_ENDED` |
 | `POST /api/streams/{id}/stop/` | 配信を `user_stop` で終了し、cron の kick 対象にする | 本人（所有者） | 冪等 204 |
 | `GET /api/streams/{id}/` | 配信状態を取得 | 本人（所有者） | `StreamStatusResponse`、`Cache-Control: no-store` |
@@ -71,6 +71,7 @@ JWKSへ併載する後続対応が必要。
 | 設定キー | 初期値 / 投入先 |
 |---|---|
 | `STREAM_EXTENSION_SECONDS` | `900`（ベータ版は15分。画面の延長は無効）/ Web Worker vars |
+| `STREAM_EXTENSION_ENABLED` | `false`（`true` の時だけ延長 API が期限と publish JWT を更新）/ Web Worker vars |
 | `STREAM_MAX_LIVE_PER_USER` | `1` / Web Worker vars |
 | `STREAM_MAX_LIVE` | `20` / Web Worker vars |
 | `STREAM_CREATE_INTERVAL_SECONDS` | `10` / Web Worker vars |

@@ -102,6 +102,51 @@ describe('画面共有リデザインの状態', () => {
     }
   });
 
+  test('15分経過時は配信をローカル終了し、停止APIを呼んでidleへ戻る', async () => {
+    jest.useFakeTimers();
+    try {
+      let now = Date.parse('2026-09-01T00:00:00.000Z');
+      const page = fakePage();
+      const calls: string[] = [];
+      const stopped = { capture: 0, peerConnection: 0, whipResource: 0 };
+      const track = { addEventListener: () => undefined, stop: () => { stopped.capture += 1; } };
+      const media = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
+      const publisher: WhipPublisher = {
+        close: () => { stopped.peerConnection += 1; },
+        deleteResource: async () => { stopped.whipResource += 1; },
+        stop: async () => undefined,
+        republish: async () => publisher,
+        setPublishToken: () => undefined,
+      };
+      new ScreenShareController(page.root, dependencies({
+        now: () => now,
+        getDisplayMedia: async () => media,
+        startWhipPublisher: async () => publisher,
+        requestJson: (async (url: string) => {
+          calls.push(url);
+          if (url === '/api/streams/') {
+            return createResponse({
+              publishTokenExpiresAt: '2026-09-01T00:15:00.000Z',
+              extendExpiresAt: '2026-09-01T00:15:00.000Z',
+            });
+          }
+          return null;
+        }) as unknown as ScreenShareDependencies['requestJson'],
+      })).mount();
+
+      page.button('[data-screen-start]').click();
+      await waitFor(() => !page.step('live').hidden);
+      now += 15 * 60 * 1000;
+      jest.advanceTimersByTime(15 * 60 * 1000);
+      await waitFor(() => !page.step('idle').hidden);
+
+      expect(stopped).toEqual({ capture: 1, peerConnection: 1, whipResource: 1 });
+      expect(calls).toContain('/api/streams/Ab12Cd34Ef56/stop/');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('閉じたプレビューは、配信を止めて再開すると開いた状態に戻る', async () => {
     const page = fakePage();
     new ScreenShareController(page.root, dependencies()).mount();
@@ -135,12 +180,13 @@ function dependencies(overrides: Partial<ScreenShareDependencies> = {}): ScreenS
   };
 }
 
-function createResponse(): Record<string, unknown> {
+function createResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'Ab12Cd34Ef56', streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56', status: 'live',
     publishToken: 'token', publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',
     extendExpiresAt: '2026-09-01T01:00:00.000Z', startedAt: '2026-09-01T00:00:00.000Z',
     lastHeartbeatAt: '2026-09-01T00:00:00.000Z', endedAt: null, endReason: null,
+    ...overrides,
   };
 }
 

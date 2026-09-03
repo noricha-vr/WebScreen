@@ -19,6 +19,7 @@ import { createStreamDatabase } from './helpers/stream-db';
 const NOW = new Date('2026-09-01T00:00:00.000Z');
 const SETTINGS: StreamSettings = {
   extensionCycleSeconds: 900,
+  extensionEnabled: false,
   maxLiveStreamsPerUser: 1,
   maxLiveStreams: 20,
   createIntervalSeconds: 10,
@@ -252,7 +253,7 @@ describe('配信セッション service', () => {
     expect(second.streamUrl).toBe('rtspt://webscreen.tv/live/ZyXwVu987654');
   });
 
-  it('延長操作は期限を15分後へ更新し同じexpの新publish JWTを返す', async () => {
+  it('延長フラグ有効時は期限を15分後へ更新し同じexpの新publish JWTを返す', async () => {
     const database = await createStreamDatabase();
     await createStream(input(database, 'AbCdEf123456'));
     const extendedAt = new Date('2026-09-01T00:10:00.789Z');
@@ -261,6 +262,7 @@ describe('配信セッション service', () => {
     const response = await extendStream({
       ...input(database, 'ignored00000', extendedAt),
       id: 'AbCdEf123456',
+      settings: { ...SETTINGS, extensionEnabled: true },
       signPublishToken: async ({ issuedAtSeconds, expiresAtSeconds }) => {
         signedIssued = issuedAtSeconds;
         signedExpiry = expiresAtSeconds;
@@ -276,6 +278,16 @@ describe('配信セッション service', () => {
     ).toEqual({ extend_expires_at: response.extendExpiresAt });
     expect(signedIssued * 1000).toBe(Date.parse('2026-09-01T00:10:00.000Z'));
     expect(signedExpiry * 1000).toBe(Date.parse(response.extendExpiresAt));
+  });
+
+  it('延長フラグ無効時は期限もpublish JWTも更新せず409で拒否する', async () => {
+    const database = await createStreamDatabase();
+    await createStream(input(database, 'AbCdEf123456'));
+    const before = database.sqlite.query('SELECT extend_expires_at FROM stream_sessions').get();
+    let signerCalls = 0;
+    await expect(extendStream({ ...input(database, 'ignored00000', new Date('2026-09-01T00:10:00.000Z')), id: 'AbCdEf123456', signPublishToken: async () => { signerCalls += 1; return 'unexpected-token'; } })).rejects.toMatchObject({ status: 409, errorCode: ERROR_CODES.streamExtensionDisabled });
+    expect(database.sqlite.query('SELECT extend_expires_at FROM stream_sessions').get()).toEqual(before);
+    expect(signerCalls).toBe(0);
   });
 
   it('1ユーザーのlive 2本目を409で拒否する', async () => {
@@ -358,6 +370,7 @@ describe('配信セッション service', () => {
       extendStream({
         ...input(database, 'ignored00000', new Date('2026-09-01T02:00:00.000Z')),
         id: 'AbCdEf123456',
+        settings: { ...SETTINGS, extensionEnabled: true },
       })
     ).rejects.toMatchObject({ status: 409, errorCode: ERROR_CODES.streamEnded });
   });

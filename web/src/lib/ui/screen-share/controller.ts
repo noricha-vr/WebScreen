@@ -236,15 +236,19 @@ export class ScreenShareControllerImpl {
   }
 
   private updateClock(): void {
-    if (!this.live) return;
+    const live = this.live;
+    if (!live) return;
     const now = this.deps.now();
+    const remaining = secondsUntil(live.extendExpiresAt, now);
     this.view.updateClock(
-      this.live.startedAt,
+      live.startedAt,
       now,
-      secondsUntil(this.live.extendExpiresAt, now),
-      isExpiryWarning(this.live.extendExpiresAt, now),
+      remaining,
+      isExpiryWarning(live.extendExpiresAt, now),
       this.expiresBarTotalSeconds
     );
+    // cron の kick を待たず、期限ちょうどでこのブラウザの capture と PeerConnection を閉じる。
+    if (remaining === 0) void this.stop();
   }
 
   private handleStartError(error: unknown): void {

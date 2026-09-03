@@ -1,6 +1,5 @@
 import type {
   CreateStreamResponse,
-  ExtendStreamResponse,
   StopLiveStreamsResponse,
   StreamHealthResponse,
 } from '../../contracts/streams';
@@ -16,7 +15,6 @@ type BeaconSender = (url: string, data?: BodyInit | null) => boolean;
 /** 画面共有 controller が利用する stream HTTP 境界。 */
 export interface StreamApi {
   create(startToken: string): Promise<CreateStreamResponse>;
-  extend(id: string, signal: AbortSignal): Promise<ExtendStreamResponse>;
   stopLive(signal: AbortSignal): Promise<StopLiveStreamsResponse>;
   heartbeat(id: string, signal: AbortSignal): Promise<void>;
   waitForReady(id: string, signal?: AbortSignal): Promise<boolean>;
@@ -38,9 +36,6 @@ export function createStreamApi(
         method: 'POST',
         headers: { [STREAM_START_TOKEN_HEADER]: startToken },
       }));
-    },
-    async extend(id, signal) {
-      return asExtendStream(await request(streamPath(id, 'extend'), { method: 'POST', signal }));
     },
     async stopLive(signal) {
       return asStopLiveStreams(await request('/api/streams/stop-live/', { method: 'POST', signal }));
@@ -106,7 +101,7 @@ function queueBeacon(sendBeacon: BeaconSender, url: string, body?: string): bool
   }
 }
 
-function streamPath(id: string, operation: 'extend' | 'heartbeat' | 'health' | 'stop'): string {
+function streamPath(id: string, operation: 'heartbeat' | 'health' | 'stop'): string {
   return `/api/streams/${encodeURIComponent(id)}/${operation}/`;
 }
 
@@ -118,15 +113,6 @@ function asCreateStream(value: unknown): CreateStreamResponse {
     throw new Error('Invalid create stream response');
   }
   return value as unknown as CreateStreamResponse;
-}
-
-function asExtendStream(value: unknown): ExtendStreamResponse {
-  if (!isRecord(value) || !hasStringFields(value, [
-    'id', 'publishToken', 'publishTokenExpiresAt', 'extendExpiresAt',
-  ]) || value.status !== 'live') {
-    throw new Error('Invalid extend stream response');
-  }
-  return value as unknown as ExtendStreamResponse;
 }
 
 function asStopLiveStreams(value: unknown): StopLiveStreamsResponse {
