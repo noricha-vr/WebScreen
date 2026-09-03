@@ -80,7 +80,8 @@ export function latencyFromSecondBoundary(observedAtMs: number): number {
 
 /** 最初の30秒と1分単位の集計をMarkdown表へ整形する。 */
 export function formatSummary(
-  outlet: readonly LatencySample[], player: readonly LatencySample[] | null, startedAtMs: number, sender: readonly SenderSample[] | null = null
+  outlet: readonly LatencySample[], player: readonly LatencySample[] | null, startedAtMs: number, sender: readonly SenderSample[] | null = null,
+  profileSwitches: readonly ProfileSwitch[] | null = null,
 ): string {
   const sections = [formatSeries('RTSPT 出口', outlet, startedAtMs)];
   if (player) sections.push(formatSeries('VRChat プレイヤー', player, startedAtMs));
@@ -88,7 +89,115 @@ export function formatSummary(
     // sender.csvはrun中の生counterを保存し、summaryは再集計可能な差分値だけを追加する。
     sections.push(formatSenderSummary(sender));
   }
+  if (profileSwitches) sections.push(formatProfileIntervals(outlet, player, sender, profileSwitches));
   return ['# 遅延計測サマリー', '', ...sections].join('\n');
+}
+
+function formatProfileIntervals(
+  outlet: readonly LatencySample[], player: readonly LatencySample[] | null, sender: readonly SenderSample[] | null,
+  switches: readonly ProfileSwitch[]
+): string {
+  const outletSegments = splitByProfile(outlet, switches, 15);
+  const playerSegments = player ? splitByProfile(player, switches, 15) : null;
+  const senderSegments = sender ? splitByProfile(sender, switches, 15) : null;
+  const rows = outletSegments.map((segment, index) => formatProfileRow(
+    profileIntervalLabel(segment, index), segment.samples, playerSegments?.[index]?.samples ?? null, senderSegments?.[index]?.samples ?? null,
+  ));
+  for (const profile of ['quality', 'realtime'] as const) {
+    const pooledSenderSegments = senderSegments?.filter((segment) => segment.profile === profile) ?? null;
+    rows.push(formatProfileRow(
+      `${profile}（プール）`, poolProfileSegments(outletSegments, profile), playerSegments ? poolProfileSegments(playerSegments, profile) : null,
+      pooledSenderSegments ? poolProfileSegments(pooledSenderSegments, profile) : null,
+      pooledSenderSegments ? summarizeSenderSegments(pooledSenderSegments) : null,
+    ));
+  }
+  return [
+    '## プロファイル区間別', '', '- 各切替直後の15秒はWebRTC送出設定の過渡として除外しています。',
+    '| 区間 | RTSPT median / p95 / n | VRChat median / p95 / n | 送出 fps | 平均ビットレート bps | 平均 QP | 最頻解像度 |',
+    '|---|---|---|---:|---:|---:|---|', ...rows, '',
+  ].join('\n');
+}
+
+function profileIntervalLabel(segment: ProfileSegment<LatencySample>, index: number): string {
+  const start = segment.startedAtMs === null ? '-' : new Date(segment.startedAtMs).toISOString();
+  const end = segment.endedAtMs === null ? '終了' : new Date(segment.endedAtMs).toISOString();
+  return `${index + 1}. ${segment.profile} (${start} 〜 ${end})`;
+}
+
+function formatProfileRow(
+  label: string, outlet: readonly LatencySample[], player: readonly LatencySample[] | null, sender: readonly SenderSample[] | null,
+  senderStatsOverride: SenderIntervalStats | null = null,
+): string {
+  const outletStats = summarizeLatency(outlet);
+  const playerStats = player ? summarizeLatency(player) : null;
+  const senderStats = senderStatsOverride ?? (sender ? summarizeSenderInterval(sender) : null);
+  return `| ${label} | ${formatLatencyStats(outletStats)} | ${playerStats ? formatLatencyStats(playerStats) : 'なし'} | ${formatDecimal(senderStats?.framesPerSecond, 2)} | ${formatDecimal(senderStats?.bitrateBps, 0)} | ${formatDecimal(senderStats?.averageQp, 2)} | ${senderStats?.resolution ?? 'n/a'} |`;
+}
+
+function formatLatencyStats(stats: LatencyStats): string {
+  return `${formatValue(stats.medianMs)} / ${formatValue(stats.p95Ms)} / ${stats.count}`;
+}
+
+interface SenderIntervalStats { framesPerSecond: number | null; bitrateBps: number | null; averageQp: number | null; resolution: string | null }
+
+function summarizeSenderInterval(samples: readonly SenderSample[]): SenderIntervalStats {
+  if (samples.length < 2) return { framesPerSecond: null, bitrateBps: null, averageQp: null, resolution: modeResolution(samples) };
+  const ordered = [...samples].sort((left, right) => left.observedAtMs - right.observedAtMs);
+  const first = ordered[0]!;
+  const last = ordered.at(-1)!;
+  const elapsedSeconds = (last.observedAtMs - first.observedAtMs) / 1_000;
+  const frames = last.framesEncoded - first.framesEncoded;
+  if (elapsedSeconds <= 0 || frames < 0 || last.bytesSent < first.bytesSent || last.qpSum < first.qpSum) {
+    return { framesPerSecond: null, bitrateBps: null, averageQp: null, resolution: modeResolution(samples) };
+  }
+  return {
+    framesPerSecond: frames / elapsedSeconds,
+    bitrateBps: (last.bytesSent - first.bytesSent) * 8 / elapsedSeconds,
+    averageQp: frames > 0 ? (last.qpSum - first.qpSum) / frames : null,
+    resolution: modeResolution(samples),
+  };
+}
+
+function summarizeSenderSegments(segments: readonly ProfileSegment<SenderSample>[]): SenderIntervalStats {
+  const summaries = segments.map((segment) => ({ samples: segment.samples, stats: summarizeSenderInterval(segment.samples) }));
+  const valid = summaries.filter(({ stats }) => stats.framesPerSecond !== null && stats.bitrateBps !== null);
+  const elapsedSeconds = valid.reduce((total, { samples }) => total + senderElapsedSeconds(samples), 0);
+  const frames = valid.reduce((total, { samples }) => total + senderFrames(samples), 0);
+  const bytes = valid.reduce((total, { samples }) => total + senderBytes(samples), 0);
+  const qp = valid.reduce((total, { samples }) => total + senderQp(samples), 0);
+  return {
+    framesPerSecond: elapsedSeconds > 0 ? frames / elapsedSeconds : null,
+    bitrateBps: elapsedSeconds > 0 ? bytes * 8 / elapsedSeconds : null,
+    averageQp: frames > 0 ? qp / frames : null,
+    resolution: modeResolution(summaries.flatMap(({ samples }) => samples)),
+  };
+}
+
+function senderElapsedSeconds(samples: readonly SenderSample[]): number {
+  if (samples.length < 2) return 0;
+  const ordered = [...samples].sort((left, right) => left.observedAtMs - right.observedAtMs);
+  return Math.max(0, (ordered.at(-1)!.observedAtMs - ordered[0]!.observedAtMs) / 1_000);
+}
+
+function senderFrames(samples: readonly SenderSample[]): number { return senderCounterDelta(samples, 'framesEncoded'); }
+function senderBytes(samples: readonly SenderSample[]): number { return senderCounterDelta(samples, 'bytesSent'); }
+function senderQp(samples: readonly SenderSample[]): number { return senderCounterDelta(samples, 'qpSum'); }
+function senderCounterDelta(samples: readonly SenderSample[], field: 'framesEncoded' | 'bytesSent' | 'qpSum'): number {
+  const ordered = [...samples].sort((left, right) => left.observedAtMs - right.observedAtMs);
+  return samples.length < 2 ? 0 : ordered.at(-1)![field] - ordered[0]![field];
+}
+
+function modeResolution(samples: readonly SenderSample[]): string | null {
+  const counts = new Map<string, number>();
+  for (const sample of samples) if (sample.frameWidth !== null && sample.frameHeight !== null) {
+    const resolution = `${sample.frameWidth}x${sample.frameHeight}`;
+    counts.set(resolution, (counts.get(resolution) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] ?? null;
+}
+
+function formatDecimal(value: number | null | undefined, digits: number): string {
+  return value === null || value === undefined || !Number.isFinite(value) ? 'n/a' : value.toFixed(digits);
 }
 
 function formatSeries(name: string, samples: readonly LatencySample[], startedAtMs: number): string {
@@ -140,3 +249,4 @@ function formatValue(value: number | null): string {
   return value === null ? '' : value.toFixed(3);
 }
 import { formatSenderSummary, type SenderSample } from './latency-probe-quality';
+import { poolProfileSegments, splitByProfile, type ProfileSegment, type ProfileSwitch } from './latency-probe-profile-analysis';

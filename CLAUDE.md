@@ -74,6 +74,7 @@ main への push で GitHub Actions が本番へ反映する（`.github/workflow
 | ローカル開発・E2E（ポート分離・サンドボックス） | [docs/local-dev.md](docs/local-dev.md) |
 | ライブ配信の設計・検証 | [docs/streaming/](docs/streaming/) |
 | 配信サーバーの本番構成・運用（サーバー実体・secrets・移設・cron 検証） | [docs/streaming/operations.md](docs/streaming/operations.md) |
+| VRChat 実機で配信設定を A/B するときの手順・固定値（配信元 URL・通知先・コマンド） | [docs/streaming/vrchat-ab-runbook.md](docs/streaming/vrchat-ab-runbook.md) |
 
 ## 気をつけること
 

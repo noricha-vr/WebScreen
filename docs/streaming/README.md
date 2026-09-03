@@ -5,6 +5,7 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 本番の実構成は [operations.md](operations.md) が正本。
 
 [配信遅延ハーネス](latency-harness.md) — 実Macの画面共有からRTSPT出口を時系列計測するCLI。
+[VRChat 実機 A/B の手順](vrchat-ab-runbook.md) — URL を 1 回貼るだけで設定候補を往復比較するコピペ用手順。
 
 現行の変換（アップロード → MP4 → R2 配信）とは別系統の機能で、既存の動作には影響しない。
 
