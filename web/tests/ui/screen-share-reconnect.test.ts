@@ -138,7 +138,7 @@ function publisher(republish: () => Promise<WhipPublisher> = async () => {
 function fakePage(): { root: HTMLElement; button: (selector: string) => FakeElement; step: (phase: string) => FakeElement; url: FakeElement } {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
-    '[data-screen-start]', '[data-screen-copy]', '[data-screen-extend]',
+    '[data-screen-start]', '[data-screen-copy]',
     '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]', '[data-screen-preview]',
     '[data-screen-expiry-warning]', '[data-screen-error-message]',
     '[data-screen-audio-status]', '[data-screen-stop-others]',

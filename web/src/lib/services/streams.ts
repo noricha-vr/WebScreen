@@ -22,6 +22,7 @@ export interface StreamDatabaseStatement {
 }
 export interface StreamSettings {
   extensionCycleSeconds: number;
+  extensionEnabled: boolean;
   maxLiveStreamsPerUser: number;
   maxLiveStreams: number;
   createIntervalSeconds: number;
@@ -99,6 +100,10 @@ export async function extendStream(
 ): Promise<ExtendStreamResponse> {
   const current = await requireOwnedStream(input.database, input.userId, input.id);
   if (current.status === 'ended') throw endedError();
+  // JWT の発行前に拒否し、無効期間に期限・publish token を更新しない。
+  if (!input.settings.extensionEnabled) {
+    throw new StreamError(409, ERROR_CODES.streamExtensionDisabled, 'このベータ版では延長できません');
+  }
 
   const now = truncateToSeconds(input.now ?? new Date());
   if (current.extend_expires_at <= now.toISOString()) throw endedError();

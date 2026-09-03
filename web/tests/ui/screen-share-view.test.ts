@@ -179,8 +179,7 @@ function fakePage(): {
 } {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
-    '[data-screen-start]', '[data-screen-copy]',
-    '[data-screen-extend]', '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
+    '[data-screen-start]', '[data-screen-copy]', '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
     '[data-screen-preview]', '[data-screen-elapsed]', '[data-screen-expires]',
     '[data-screen-expiry-warning]', '[data-screen-error-message]',
     '[data-screen-audio-status]', '[data-screen-stop-others]', '[data-screen-audio-chip]',
@@ -193,8 +192,7 @@ function fakePage(): {
   });
   const root = {
     dataset: {
-      labelStart: 'start', labelSelecting: 'selecting', labelCopy: 'copy', labelCopied: 'copied',
-      labelExtend: 'extend', labelExtending: 'extending', labelRetry: 'retry',
+      labelStart: 'start', labelSelecting: 'selecting', labelCopy: 'copy', labelCopied: 'copied', labelRetry: 'retry',
       labelReconnect: 'reconnect', labelReconnecting: 'reconnecting', labelStopOthers: 'stop-others',
       msgGeneric: 'error', msgAudioIncluded: 'audio-included', msgVideoOnly: 'video-only',
       audioOn: 'audio-on', audioOff: 'audio-off',

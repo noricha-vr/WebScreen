@@ -14,15 +14,13 @@ describe('画面共有 stream API のHTTP契約', () => {
     }]);
   });
 
-  test('extend・stop-live・heartbeatはPOSTとsignalを固定しIDをencodeする', async () => {
+  test('stop-live・heartbeatはPOSTとsignalを固定しIDをencodeする', async () => {
     const state = recordingApi();
     const signal = new AbortController().signal;
-    await state.api.extend('Ab/12', signal);
     await state.api.stopLive(signal);
     await state.api.heartbeat('Ab/12', signal);
 
     expect(state.calls).toEqual([
-      { url: '/api/streams/Ab%2F12/extend/', init: { method: 'POST', signal } },
       { url: '/api/streams/stop-live/', init: { method: 'POST', signal } },
       { url: '/api/streams/Ab%2F12/heartbeat/', init: { method: 'POST', signal } },
     ]);
@@ -89,12 +87,6 @@ describe('画面共有 stream API の応答検証', () => {
     await expect(api.create(START_TOKEN)).rejects.toThrow('Invalid create stream response');
   });
 
-  test('extendの不正応答を拒否する', async () => {
-    const api = apiReturning({ extendExpiresAt: '2026-09-01T02:00:00.000Z', publishToken: 'token' });
-    await expect(api.extend('Ab12Cd34Ef56', new AbortController().signal))
-      .rejects.toThrow('Invalid extend stream response');
-  });
-
   test.each([
     { stopped: -1, retryAfterSeconds: 3 },
     { stopped: 1, retryAfterSeconds: 1.5 },
@@ -133,7 +125,6 @@ function recordingApi(options: { beaconResult?: boolean } = {}) {
   const request = (async (url: string, init: RequestInit) => {
     calls.push({ url, init });
     if (url === '/api/streams/') return createResponse();
-    if (url.endsWith('/extend/')) return extendResponse();
     if (url === '/api/streams/stop-live/') return { stopped: 1, retryAfterSeconds: 3 };
     if (url.endsWith('/health/')) {
       healthCalls += 1;
@@ -174,15 +165,5 @@ function createResponse(): Record<string, unknown> {
     lastHeartbeatAt: '2026-09-01T00:00:00.000Z',
     endedAt: null,
     endReason: null,
-  };
-}
-
-function extendResponse(): Record<string, unknown> {
-  return {
-    id: 'Ab/12',
-    status: 'live',
-    publishToken: 'extended-token',
-    publishTokenExpiresAt: '2026-09-01T02:00:00.000Z',
-    extendExpiresAt: '2026-09-01T02:00:00.000Z',
   };
 }

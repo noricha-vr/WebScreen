@@ -15,6 +15,7 @@ export function messageKeyForError(error: unknown): string {
     if (error.errorCode === ERROR_CODES.streamAlreadyLive) return 'msgStreamAlreadyLive';
     if (error.errorCode === ERROR_CODES.streamCapacityReached) return 'msgStreamCapacity';
     if (error.errorCode === ERROR_CODES.streamCreateRateLimited) return 'msgRateLimited';
+    if (error.errorCode === ERROR_CODES.streamExtensionDisabled) return 'msgStreamExtensionDisabled';
     if (error.errorCode === ERROR_CODES.streamEnded) return 'msgStreamEnded';
   }
   if (error instanceof StreamHealthError) return 'msgStreamUnhealthy';
@@ -35,12 +36,6 @@ export class ScreenShareView {
 
   onClick(selector: string, listener: () => void): void {
     this.button(selector)?.addEventListener('click', listener);
-  }
-
-  onModeClick(listener: (mode: HTMLElement) => void): void {
-    for (const mode of this.root.querySelectorAll<HTMLElement>('[data-screen-mode]')) {
-      mode.addEventListener('click', () => listener(mode));
-    }
   }
 
   show(phase: ScreenSharePhase): void {
@@ -86,16 +81,6 @@ export class ScreenShareView {
     const toggle = this.button('[data-screen-preview-toggle]');
     if (!toggle) return;
     this.setPreviewOpen(toggle.getAttribute('aria-expanded') !== 'true');
-  }
-
-  selectMode(selected: HTMLElement): void {
-    // 表示のみ。実際の配信設定への反映は Issue #177 の検証結果を待つ。
-    for (const mode of this.root.querySelectorAll<HTMLElement>('[data-screen-mode]')) {
-      const checked = mode === selected;
-      mode.dataset['checked'] = String(checked);
-      const input = mode.querySelector<HTMLInputElement>('input');
-      if (input) input.checked = checked;
-    }
   }
 
   setUrl(url: string): void {

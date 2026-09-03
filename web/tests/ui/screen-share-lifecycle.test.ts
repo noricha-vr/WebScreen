@@ -100,54 +100,6 @@ describe('画面共有 controller', () => {
     expect(page.step('error').hidden).toBe(true);
   });
 
-  test('停止後に遅延した延長失敗が届いても error カードへ戻さない', async () => {
-    const page = fakeScreenSharePage();
-    const calls: string[] = [];
-    const delayedExtend = deferred<never>();
-    let closed = 0;
-    let deleted = 0;
-    let stopped = 0;
-    const publisher: WhipPublisher = {
-      close: () => { closed += 1; },
-      deleteResource: async () => { deleted += 1; },
-      stop: async () => undefined,
-      republish: async () => { throw new Error('not used'); },
-      setPublishToken: () => undefined,
-    };
-    const track = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
-    const media = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
-    const dependencies: ScreenShareDependencies = {
-      requestJson: ((path: string) => {
-        calls.push(path);
-        if (path === '/api/streams/') return Promise.resolve(createResponse());
-        if (path.endsWith('/extend/')) return delayedExtend.promise;
-        return Promise.resolve(null);
-      }) as unknown as ScreenShareDependencies['requestJson'],
-      startWhipPublisher: async () => publisher,
-      waitForStreamReady: async () => true,
-      getDisplayMedia: async () => media,
-      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
-      sendBeacon: () => true,
-      onPageHide: () => undefined,
-    };
-    const controller = new ScreenShareController(page.root, dependencies);
-    controller.mount();
-    page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('live').hidden);
-    page.button('[data-screen-extend]').click();
-    await waitFor(() => calls.some((path) => path.endsWith('/extend/')));
-
-    page.button('[data-screen-stop]').click();
-    delayedExtend.reject(new Error('late failure'));
-    await flushMicrotasks();
-
-    expect(page.step('idle').hidden).toBe(false);
-    expect(page.step('error').hidden).toBe(true);
-    expect(closed).toBe(1);
-    expect(deleted).toBe(1);
-    expect(stopped).toBe(1);
-  });
-
   test('pagehide が画面選択中でも後から取得された track を即座に停止する', async () => {
     const page = fakeScreenSharePage();
     const pendingMedia = deferred<MediaStream>();
@@ -205,7 +157,7 @@ function fakeScreenSharePage(): {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
     '[data-screen-start]', '[data-screen-copy]',
-    '[data-screen-extend]', '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
+    '[data-screen-stop]', '[data-screen-retry]', '[data-screen-url]',
     '[data-screen-preview]', '[data-screen-elapsed]', '[data-screen-expires]',
     '[data-screen-expiry-warning]', '[data-screen-error-message]',
     '[data-screen-audio-status]',
@@ -223,7 +175,7 @@ function fakeScreenSharePage(): {
   const root = {
     dataset: {
       labelStart: 'start', labelSelecting: 'selecting', labelCopy: 'copy', labelCopied: 'copied',
-      labelExtend: 'extend', labelExtending: 'extending', labelStop: 'stop', labelStopping: 'stopping',
+      labelStop: 'stop', labelStopping: 'stopping',
       labelRetry: 'retry', labelReconnect: 'reconnect', labelReconnecting: 'reconnecting',
       msgGeneric: 'error', msgH264: 'h264', msgWhip: 'whip', msgDisplayDenied: 'denied',
       msgStreamAlreadyLive: 'already-live', msgStreamCapacity: 'capacity', msgRateLimited: 'rate-limited',

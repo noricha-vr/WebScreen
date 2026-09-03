@@ -359,7 +359,7 @@ function fakePage(): {
     '[data-screen-error-message]', '[data-screen-flow-item]', '[data-screen-preview-toggle]',
     '[data-screen-preview-body]', '[data-screen-switch-track]', '[data-screen-switch-knob]',
     '[data-screen-expires-bar]', '[data-screen-audio-chip]', '[data-screen-audio-icon]',
-    '[data-screen-audio-label]', '[data-screen-mode]',
+    '[data-screen-audio-label]',
   ]) elements.set(selector, new FakeElement());
   const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
     const step = new FakeElement();
