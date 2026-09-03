@@ -14,28 +14,28 @@ describe('画面選択後のフォーカス維持', () => {
     expect(passed).toEqual([{ video: true }]);
   });
 
-  test('window 共有では解決直後に no-focus-change を設定する', async () => {
-    const controller = fakeController();
-    let passedController: unknown;
-    await getDisplayMediaKeepingFocus(
-      constraints,
-      async (options) => { passedController = options.controller; return fakeStream('window'); },
-      () => controller.instance
-    );
-
-    expect(passedController).toBe(controller.instance);
-    expect(controller.calls).toEqual(['no-focus-change']);
-  });
-
-  test.each(['browser', 'monitor'])(
-    '%s 共有では setFocusBehavior を呼ばない（タブは前面化が必要・monitor は不可）',
+  test.each(['browser', 'window'])(
+    '%s 共有では解決直後に no-focus-change を設定し WebScreen に留まる',
     async (surface) => {
       const controller = fakeController();
-      await getDisplayMediaKeepingFocus(constraints, async () => fakeStream(surface), () => controller.instance);
+      let passedController: unknown;
+      await getDisplayMediaKeepingFocus(
+        constraints,
+        async (options) => { passedController = options.controller; return fakeStream(surface); },
+        () => controller.instance
+      );
 
-      expect(controller.calls).toEqual([]);
+      expect(passedController).toBe(controller.instance);
+      expect(controller.calls).toEqual(['no-focus-change']);
     }
   );
+
+  test('monitor 共有では setFocusBehavior を呼ばない（画面全体はフォーカス対象にできない）', async () => {
+    const controller = fakeController();
+    await getDisplayMediaKeepingFocus(constraints, async () => fakeStream('monitor'), () => controller.instance);
+
+    expect(controller.calls).toEqual([]);
+  });
 
   test('setFocusBehavior が拒否されても stream は返す', async () => {
     const controller = fakeController(() => { throw new DOMException('late', 'InvalidStateError'); });

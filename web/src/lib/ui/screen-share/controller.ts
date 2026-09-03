@@ -194,7 +194,12 @@ export class ScreenShareControllerImpl {
       return null;
     }
     if (ready) return { live: stream, ready: true };
-    const replacement = await stream.publisher.republish();
+    // 復旧 republish が失敗した publisher は PeerConnection を閉じ失敗 Promise をキャッシュし再接続不能。
+    // WHIP エラー（サーバー接続不可）で誤誘導せず StreamHealthError（映像未到達）で破棄し、再選択へ導く。
+    const replacement = await stream.publisher.republish().catch((error: unknown) => {
+      console.warn('Screen share republish during health verify failed', error);
+      throw new StreamHealthError();
+    });
     if (!this.isActiveRun(run) || !this.isActiveLive(stream)) {
       await releasePublisher(replacement);
       this.discardInactiveRun(stream, run);

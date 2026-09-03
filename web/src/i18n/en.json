@@ -337,7 +337,7 @@
         "rateLimited": "A new stream cannot be created yet. Wait a moment and try again.",
         "streamExtensionDisabled": "Extensions are unavailable during beta. Streams end automatically after 15 minutes.",
         "streamEnded": "This stream has ended. Start a new stream instead.",
-        "streamUnhealthy": "Video has not reached the streaming server. You can reconnect without choosing the screen again.",
+        "streamUnhealthy": "No video is reaching the streaming server from your browser. Restart your browser (e.g. Chrome) or try another browser (Safari).",
         "whip": "We could not connect to the streaming server. Check your network and try again.",
         "generic": "Something went wrong while preparing the stream. Try again."
       }

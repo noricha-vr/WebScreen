@@ -31,6 +31,32 @@ describe('画面共有の再接続', () => {
     expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
   });
 
+  test('初回healthが失敗し復旧のrepublishも失敗したら、WHIPエラーではなく映像未到達（unhealthy）を表示しやり直しへ導く', async () => {
+    const page = fakePage();
+    let selections = 0;
+    const healthy = publisher();
+    const broken = publisher(async () => { throw new Error('republish failed'); });
+    let call = 0;
+    new ScreenShareController(page.root, dependencies({
+      // 1回目: republish が失敗する publisher。2回目のやり直しでは health が通る publisher。
+      startWhipPublisher: async () => (++call === 1 ? broken : healthy),
+      waitForStreamReady: async () => call >= 2,
+      getDisplayMedia: async () => { selections += 1; return media(); },
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('error').hidden);
+    // 初回 publish は成立しているので「サーバーに接続できない」ではなく映像未到達を案内する。
+    expect(page.button('[data-screen-error-message]').textContent).toBe('unhealthy');
+    // 死んだ publisher を残さないので再接続ではなく、画面を選び直すやり直しに導く。
+    expect(page.button('[data-screen-retry]').textContent).toBe('retry');
+    expect(selections).toBe(1);
+
+    page.button('[data-screen-retry]').click();
+    await waitFor(() => !page.step('live').hidden);
+    expect(selections).toBe(2);
+  });
+
   test('再接続中のpagehideはlate publisherも解放し、error表示へ戻さない', async () => {
     const page = fakePage();
     const pending = deferred<WhipPublisher>();
