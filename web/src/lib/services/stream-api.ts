@@ -143,7 +143,11 @@ function booleanSetting(value: string | undefined, fallback: boolean): boolean {
 
 function requiredOrigin(value: string | undefined): string {
   if (value === undefined) throw new Error('Missing stream setting');
-  const origin = new URL(value);
-  if (origin.origin !== value || origin.protocol !== 'https:') throw new Error('Invalid stream setting');
-  return value;
+  try {
+    const origin = new URL(value);
+    if (origin.origin !== value || origin.protocol !== 'https:') throw new Error('Invalid stream setting');
+    return value;
+  } catch {
+    throw new Error('Invalid stream setting');
+  }
 }

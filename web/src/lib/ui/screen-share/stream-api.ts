@@ -132,10 +132,21 @@ function asCreateStream(value: unknown): CreateStreamResponse {
   if (!isRecord(value) || !hasStringFields(value, [
     'id', 'streamUrl', 'whipUrl', 'publishToken', 'publishTokenExpiresAt', 'extendExpiresAt',
     'startedAt', 'lastHeartbeatAt',
-  ]) || value.status !== 'live' || value.endedAt !== null || value.endReason !== null) {
+  ]) || !isWhipUrl(value.whipUrl, value.id) || value.status !== 'live' || value.endedAt !== null || value.endReason !== null) {
     throw new Error('Invalid create stream response');
   }
   return value as unknown as CreateStreamResponse;
+}
+
+function isWhipUrl(value: unknown, id: unknown): boolean {
+  if (typeof value !== 'string' || typeof id !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.username === '' && url.password === '' &&
+      url.pathname === `/live/${encodeURIComponent(id)}/whip`;
+  } catch {
+    return false;
+  }
 }
 
 function asStopLiveStreams(value: unknown): StopLiveStreamsResponse {

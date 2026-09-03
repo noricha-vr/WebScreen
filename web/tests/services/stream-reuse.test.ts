@@ -6,7 +6,7 @@ import { createStreamDatabase } from './helpers/stream-db';
 
 const NOW = new Date('2026-09-01T00:00:00.000Z');
 const SETTINGS: StreamSettings = {
-  whipOrigin: 'https://webscreen.tv',
+  whipOrigin: 'https://whip.example',
   extensionCycleSeconds: 7200,
   maxLiveStreamsPerUser: 1,
   maxLiveStreams: 20,
@@ -43,6 +43,7 @@ describe('配信 ID の再利用', () => {
 
     expect(response).toMatchObject({
       id: 'AbCdEf123456', streamUrl: 'rtspt://webscreen.tv/live/AbCdEf123456',
+      whipUrl: 'https://whip.example/live/AbCdEf123456/whip',
       startedAt: resumedAt.toISOString(), publishToken: `token-exp-${Date.parse(response.extendExpiresAt) / 1000}`,
     });
     expect(

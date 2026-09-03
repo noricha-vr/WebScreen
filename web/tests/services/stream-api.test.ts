@@ -66,6 +66,17 @@ describe('stream API HTTP境界', () => {
     } as StreamApiBindings).extensionEnabled).toBe(true);
   });
 
+  it.each([
+    'http://webscreen.tv',
+    'https://webscreen.tv/',
+    'https://webscreen.tv/live',
+    'https://user:pw@webscreen.tv',
+    '',
+  ])('不正な WHIP origin を拒否する: %s', (origin) => {
+    expect(() => streamSettings({ STREAM_WHIP_ORIGIN: origin } as StreamApiBindings))
+      .toThrow('Invalid stream setting');
+  });
+
   it('認証失敗を401 UNAUTHORIZEDへ変換する', async () => {
     const response = await runStreamApi(
       request(false),

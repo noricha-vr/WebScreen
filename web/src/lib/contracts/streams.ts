@@ -51,8 +51,6 @@ export interface CreateStreamResponse extends StreamStatusResponse {
 export interface ExtendStreamResponse {
   id: string;
   status: 'live';
-  /** 配信開始時と同じ WHIP endpoint。再接続先を Worker 設定で切り替えられるよう返す。 */
-  whipUrl: string;
   publishToken: string;
   publishTokenExpiresAt: string;
   extendExpiresAt: string;

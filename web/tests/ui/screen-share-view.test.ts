@@ -128,7 +128,7 @@ describe('画面共有の表示契約', () => {
         frameRate: { ideal: 30, max: 30 },
       },
     });
-    expect(publishedInput?.whipUrl).toBe('https://webscreen.tv/live/Ab12Cd34Ef56/whip');
+    expect(publishedInput?.whipUrl).toBe('https://whip.example/live/Ab12Cd34Ef56/whip');
     expect(publishedInput?.audioProfile).toBe('raw');
     expect(publishedInput?.videoSettings).toMatchObject({
       maxBitrate: 1_200_000,
@@ -151,7 +151,7 @@ function createResponse(): Record<string, unknown> {
   return {
     id: 'Ab12Cd34Ef56',
     streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56',
-    whipUrl: 'https://webscreen.tv/live/Ab12Cd34Ef56/whip',
+    whipUrl: 'https://whip.example/live/Ab12Cd34Ef56/whip',
     status: 'live',
     publishToken: 'initial-token',
     publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',

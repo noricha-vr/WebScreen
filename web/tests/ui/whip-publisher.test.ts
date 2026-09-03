@@ -228,6 +228,7 @@ describe('WHIP publisher', () => {
       expect(requests[1]?.init.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
       expect(requests[2]?.init.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
       expect(requests[3]?.init.headers).toMatchObject({ Authorization: 'Bearer extended-token' });
+      expect(requests.map(({ init }) => init.redirect)).toEqual(['error', 'error', 'error', 'error']);
       expect(requests).toHaveLength(4);
       expect(closed).toBe(3);
       expect(keyframeRequests).toBe(0);

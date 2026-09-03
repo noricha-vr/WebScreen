@@ -131,7 +131,6 @@ export async function extendStream(
   return {
     id: input.id,
     status: 'live',
-    whipUrl: whipUrl(input.settings.whipOrigin, input.id),
     publishToken,
     publishTokenExpiresAt: expiresAt.toISOString(),
     extendExpiresAt: expiresAt.toISOString(),

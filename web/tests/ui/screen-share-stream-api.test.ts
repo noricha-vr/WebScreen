@@ -98,6 +98,10 @@ describe('画面共有 stream API の応答検証', () => {
     null,
     { id: 'Ab12Cd34Ef56' },
     { ...createResponse(), whipUrl: null },
+    { ...createResponse(), whipUrl: 'http://webscreen.tv/live/Ab12Cd34Ef56/whip' },
+    { ...createResponse(), whipUrl: 'https://webscreen.tv/live/OtherId12345/whip' },
+    { ...createResponse(), whipUrl: 'https://user:pw@webscreen.tv/live/Ab12Cd34Ef56/whip' },
+    { ...createResponse(), whipUrl: 'https://webscreen.tv/live/Ab12Cd34Ef56/other' },
     { ...createResponse(), status: 'ended' },
     { ...createResponse(), endedAt: '2026-09-01T00:01:00.000Z' },
   ])('createの不正応答を拒否する', async (response) => {

@@ -238,6 +238,7 @@ async function publishOffer(
       'Content-Type': 'application/sdp',
     },
     body: peerConnection.localDescription?.sdp,
+    redirect: 'error',
   });
   if (response.status !== 201) throw new WhipPublishError('WHIP_REQUEST_FAILED');
 
@@ -254,7 +255,11 @@ async function deleteWhipResource(
   fetchImpl: typeof fetch
 ): Promise<void> {
   try {
-    await fetchImpl(resourceUrl, { method: 'DELETE', headers: { Authorization: `Bearer ${publishToken}` } });
+    await fetchImpl(resourceUrl, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${publishToken}` },
+      redirect: 'error',
+    });
   } catch {
     // 元の publish 失敗を隠さず、PeerConnection は必ず閉じる。
   }
@@ -283,6 +288,7 @@ function publisherFor(
       deletePromise = fetchImpl(resourceUrl, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${currentPublishToken}` },
+        redirect: 'error',
       }).then((response) => {
         if (!response.ok) throw new WhipPublishError('WHIP_REQUEST_FAILED');
       });

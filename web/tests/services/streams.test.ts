@@ -18,7 +18,7 @@ import { createStreamDatabase } from './helpers/stream-db';
 
 const NOW = new Date('2026-09-01T00:00:00.000Z');
 const SETTINGS: StreamSettings = {
-  whipOrigin: 'https://webscreen.tv',
+  whipOrigin: 'https://whip.example',
   extensionCycleSeconds: 900,
   extensionEnabled: false,
   maxLiveStreamsPerUser: 1,
@@ -252,7 +252,7 @@ describe('配信セッション service', () => {
 
     expect(first.id).not.toBe(second.id);
     expect(second.streamUrl).toBe('rtspt://webscreen.tv/live/ZyXwVu987654');
-    expect(second.whipUrl).toBe('https://webscreen.tv/live/ZyXwVu987654/whip');
+    expect(second.whipUrl).toBe('https://whip.example/live/ZyXwVu987654/whip');
   });
 
   it('延長フラグ有効時は期限を15分後へ更新し同じexpの新publish JWTを返す', async () => {
@@ -274,7 +274,6 @@ describe('配信セッション service', () => {
 
     expect(response.extendExpiresAt).toBe('2026-09-01T00:25:00.000Z');
     expect(response.publishTokenExpiresAt).toBe(response.extendExpiresAt);
-    expect(response.whipUrl).toBe('https://webscreen.tv/live/AbCdEf123456/whip');
     expect(response.publishToken).toBe(`token-exp-${Date.parse(response.extendExpiresAt) / 1000}`);
     expect(
       database.sqlite.query('SELECT extend_expires_at FROM stream_sessions').get()
