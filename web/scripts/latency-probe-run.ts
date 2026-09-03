@@ -10,7 +10,7 @@ import {
 } from './latency-probe-observe';
 import { recordWindowsPlayer, type PlayerResult } from './latency-probe-player';
 import { captureSenderConfig, collectOutletQuality, collectSenderStats, parseSenderCsv, peerConnectionTrackerInitScript } from './latency-probe-quality';
-import { cycleVideoProfiles, startVideoProfileCycle } from './latency-probe-profile';
+import { cycleVideoProfiles, startVideoProfileCycle, validateProfileCycleSeconds, validateVideoProfile, videoProfileEvaluator } from './latency-probe-profile';
 import type { ProfileSwitch } from './latency-probe-profile-analysis';
 import { screenShareUrl, stopSharingBeforeClose } from './latency-probe-screen-share';
 
@@ -19,6 +19,12 @@ export { screenShareUrl } from './latency-probe-screen-share';
 const SOURCE_TITLE = 'WebScreen Latency Source';
 const ACTIVE_FILE = resolve('..', 'docs', 'tmp', 'latency', '.active.json');
 const SOURCE_FILE = Bun.file(new URL('./latency-source.html', import.meta.url));
+const PREVIOUS_RUN_ARTIFACTS = [
+  'cleanup-error.md', 'outlet-audio.csv', 'outlet-audio.json', 'outlet-audio.wav', 'outlet-decode.log', 'outlet-ffmpeg.log',
+  'outlet-quality.csv', 'outlet-quality.log', 'outlet-quality.md', 'outlet.csv', 'player-error.md', 'player-recording.md',
+  'player.csv', 'profile-switches.csv', 'recording.mp4', 'sender-config.json', 'sender-error.md', 'sender.csv', 'server-snap.md',
+  'server-snap', 'summary.md', 'frames',
+] as const;
 
 /** 実行時に固定する遅延ハーネスの引数。 */
 export interface RunOptions {
@@ -34,10 +40,12 @@ function browserLogTail(): string { return browserLog.length ? `\nbrowser consol
 
 /** 実Chromeの画面共有、出口プローブ、出力保存を同じcleanup境界で実行する。 */
 export async function runLatencyProbe(options: RunOptions): Promise<void> {
+  validateRunOptions(options);
   rejectRepositoryProfile(options.profileDir);
   requireCommands(options.player);
   await mkdir(options.outDir, { recursive: true, mode: 0o700 });
   await chmod(options.outDir, 0o700);
+  await clearPreviousRunArtifacts(options.outDir);
   const sourceServer = startSourceServer();
   const state: ControllerState = { sourcePage: null, sourceUrl: sourceServer.url.href, sourceServerUrl: sourceServer.url.href };
   const controllerServer = startControllerServer(state);
@@ -90,8 +98,9 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     if (options.abCycleSeconds !== null) {
       if (options.maxBitrate === null) throw new Error('--ab-cycle requires --max-bitrate for realtime intervals');
       // 初期プロファイルの反映・読み戻しに失敗した場合は、出口計測を始めずにrunを失敗させる。
-      const initialProfileSwitch = await startVideoProfileCycle(sharingPage, options.outDir, startedAtMs, options.videoProfile, options.maxBitrate);
-      profileSwitchPump = cycleVideoProfiles(sharingPage, options.outDir, startedAtMs, until, initialProfileSwitch, options.maxBitrate, options.abCycleSeconds, measurementAbort.signal);
+      const evaluator = videoProfileEvaluator(sharingPage);
+      const initialProfileSwitch = await startVideoProfileCycle(evaluator, options.outDir, startedAtMs, options.videoProfile, options.maxBitrate);
+      profileSwitchPump = cycleVideoProfiles(evaluator, options.outDir, startedAtMs, until, initialProfileSwitch, options.maxBitrate, options.abCycleSeconds, measurementAbort.signal);
     }
     senderPump = collectSenderStats(sharingPage, options.outDir, until, measurementAbort.signal);
     outletQualityPump = collectOutletQuality(rtspUrl, options.outDir, startedAtMs, until, options.outletQualitySeconds, measurementAbort.signal);
@@ -179,7 +188,26 @@ export async function analyzeDirectory(directory: string): Promise<void> {
   const switchesPath = join(directory, 'profile-switches.csv');
   const { parseProfileSwitchesCsv } = await import('./latency-probe-profile-analysis');
   const profileSwitches = await Bun.file(switchesPath).exists() ? parseProfileSwitchesCsv(await readFile(switchesPath, 'utf8')) : null;
+  if (profileSwitches && (!Number.isFinite(startedAtMs) || Math.abs(profileSwitches[0]!.observedAtMs - startedAtMs) > 60_000)) {
+    throw new Error('profile-switches.csv initial timestamp must be within 60 seconds of the outlet.csv inferred start time');
+  }
   await writeFile(join(directory, 'summary.md'), formatSummary([...video, ...(audio ?? outlet.filter((sample) => sample.audioLatencyMs !== null || sample.audioLatencyPhaseMs !== null))], player, startedAtMs, sender, profileSwitches));
+}
+
+/** 前回runの解析対象成果物を消し、`--out` 再利用時の混在を防ぐ。 */
+export async function clearPreviousRunArtifacts(outDir: string): Promise<void> {
+  await Promise.all(PREVIOUS_RUN_ARTIFACTS.map((artifact) => rm(join(outDir, artifact), { recursive: true, force: true })));
+}
+
+/** runの公開境界でプロファイル関連値を検証し、副作用の前に不正入力を拒否する。 */
+export function validateRunOptions(options: RunOptions): void {
+  if (options.videoProfile !== 'quality' && options.videoProfile !== 'realtime') throw new Error('videoProfile must be quality or realtime');
+  if (options.maxBitrate !== null) validateVideoProfile(options.videoProfile, options.maxBitrate);
+  if (options.videoProfile === 'realtime' && options.maxBitrate === null) throw new Error('realtime videoProfile requires maxBitrate');
+  if (options.abCycleSeconds !== null) {
+    validateProfileCycleSeconds(options.abCycleSeconds);
+    if (options.maxBitrate === null) throw new Error('--ab-cycle requires --max-bitrate for realtime intervals');
+  }
 }
 
 async function persistResults(outDir: string, outlet: LatencySample[], startedAtMs: number, player: PlayerResult | null, sender: Parameters<typeof formatSummary>[3], profileSwitches: Parameters<typeof formatSummary>[4]): Promise<void> {

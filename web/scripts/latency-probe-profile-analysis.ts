@@ -4,6 +4,10 @@ export interface ProfileSwitch {
   elapsedSeconds: number;
   profile: 'quality' | 'realtime';
   maxBitrate: number;
+  /** 切替か、sender の差し替え後に同じ設定を再適用したか。 */
+  action?: 'applied' | 'reapplied';
+  /** 実行中だけsenderの差し替えを検出するための識別子。CSVには保存しない。 */
+  senderIdentity?: string;
 }
 
 /** プロファイル区間へ分けた時系列標本。 */
@@ -17,25 +21,28 @@ export interface ProfileSegment<T extends { observedAtMs: number }> {
 /** profile-switches.csvを読み、壊れた切替履歴を明示的に拒否する。 */
 export function parseProfileSwitchesCsv(csv: string): ProfileSwitch[] {
   const rows = csv.trim().split(/\r?\n/);
-  if (!rows.length || rows[0] !== 'timestamp_utc,elapsed_s,profile,max_bitrate') throw new Error('unexpected profile switches CSV header');
+  const legacyHeader = 'timestamp_utc,elapsed_s,profile,max_bitrate';
+  const currentHeader = `${legacyHeader},action`;
+  if (!rows.length || (rows[0] !== legacyHeader && rows[0] !== currentHeader)) throw new Error('unexpected profile switches CSV header');
   if (rows.length < 2 || !rows[1]) throw new Error('profile switches CSV must include an initial profile');
   let previousAtMs = Number.NEGATIVE_INFINITY;
   return rows.slice(1).filter(Boolean).map((row, index) => {
-    const [timestamp, elapsed, profile, maxBitrate] = row.split(',');
+    const [timestamp, elapsed, profile, maxBitrate, action = 'applied'] = row.split(',');
     const observedAtMs = Date.parse(timestamp ?? '');
     const elapsedSeconds = Number(elapsed);
     const parsedMaxBitrate = Number(maxBitrate);
     if (!Number.isFinite(observedAtMs) || !Number.isFinite(elapsedSeconds) || !Number.isInteger(parsedMaxBitrate) || parsedMaxBitrate <= 0) throw new Error(`invalid profile switch at row ${index + 2}`);
     if (profile !== 'quality' && profile !== 'realtime') throw new Error(`invalid profile at row ${index + 2}`);
+    if (action !== 'applied' && action !== 'reapplied') throw new Error(`invalid profile action at row ${index + 2}`);
     if (observedAtMs <= previousAtMs) throw new Error(`profile switches must be strictly chronological at row ${index + 2}`);
     previousAtMs = observedAtMs;
-    return { observedAtMs, elapsedSeconds, profile, maxBitrate: parsedMaxBitrate };
+    return { observedAtMs, elapsedSeconds, profile, maxBitrate: parsedMaxBitrate, action };
   });
 }
 
 /** profile-switches.csv本文を作る。 */
 export function formatProfileSwitchesCsv(switches: readonly ProfileSwitch[]): string {
-  return ['timestamp_utc,elapsed_s,profile,max_bitrate', ...switches.map((item) => [new Date(item.observedAtMs).toISOString(), item.elapsedSeconds.toFixed(3), item.profile, item.maxBitrate].join(','))].join('\n') + '\n';
+  return ['timestamp_utc,elapsed_s,profile,max_bitrate,action', ...switches.map((item) => [new Date(item.observedAtMs).toISOString(), item.elapsedSeconds.toFixed(3), item.profile, item.maxBitrate, item.action ?? 'applied'].join(','))].join('\n') + '\n';
 }
 
 /** 切替履歴で標本を区間化し、実際の切替後だけ過渡標本を除外する。 */

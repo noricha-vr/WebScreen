@@ -77,6 +77,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
   if (videoProfile !== 'quality' && videoProfile !== 'realtime') throw new Error('--video-profile must be quality or realtime');
   const abCycleSeconds = values['ab-cycle'] === undefined ? null : Number(values['ab-cycle']);
   if (abCycleSeconds !== null && (!Number.isInteger(abCycleSeconds) || abCycleSeconds < 60 || abCycleSeconds > 600)) throw new Error('--ab-cycle must be an integer between 60 and 600');
+  if (abCycleSeconds !== null && minutes * 60 <= abCycleSeconds + 15) throw new Error('--minutes must exceed --ab-cycle plus the 15-second transient exclusion');
   if (videoProfile === 'quality' && values['max-bitrate'] !== undefined && abCycleSeconds === null) throw new Error('--max-bitrate is only valid with --video-profile realtime');
   if (abCycleSeconds !== null && values['max-bitrate'] === undefined) throw new Error('--ab-cycle requires --max-bitrate for realtime intervals');
   const maxBitrate = values['max-bitrate'] === undefined ? (videoProfile === 'realtime' ? 1_500_000 : null) : Number(values['max-bitrate']);
