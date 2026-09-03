@@ -83,6 +83,55 @@ describe('配信開始token API境界', () => {
     });
   });
 
+  test.each([
+    ['content-length: 0 の空文字本文', { 'content-length': '0' }, ''],
+    ['長さ宣言なしの空ストリーム本文', {}, new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } })],
+  ])('Content-Type なしでも実本文が空なら新規発行する（workerd の body なし POST）: %s', async (_name, headers, body) => {
+    const database = await createStreamDatabase();
+    setBindings(database);
+    const response = await callCreate(
+      new Request('https://web-screen.net/api/streams/', {
+        method: 'POST',
+        headers: authHeaders(headers),
+        body,
+        duplex: 'half',
+      } as RequestInit)
+    );
+
+    expect(response.status).toBe(201);
+  });
+
+  test('Content-Type なしで実本文がある時は content-length: 0 を宣言していても拒否する', async () => {
+    const database = await createStreamDatabase();
+    setBindings(database);
+    const response = await callCreate(
+      new Request('https://web-screen.net/api/streams/', {
+        method: 'POST',
+        headers: authHeaders({ 'content-length': '0' }),
+        body: JSON.stringify({ id: 'AbCdEf123456' }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ errorCode: 'INVALID_REQUEST' });
+    expect(database.sqlite.query('SELECT COUNT(*) AS count FROM stream_sessions').get()).toEqual({
+      count: 0,
+    });
+  });
+
+  test('body が null なら Content-Type: application/json 付きでも従来どおり新規発行する', async () => {
+    const database = await createStreamDatabase();
+    setBindings(database);
+    const response = await callCreate(
+      new Request('https://web-screen.net/api/streams/', {
+        method: 'POST',
+        headers: authHeaders({ 'content-type': 'application/json' }),
+      })
+    );
+
+    expect(response.status).toBe(201);
+  });
+
   test.each(['', '   \n\t  '])('空白だけのcreate本文は従来どおり新規発行する: %p', async (body) => {
     const database = await createStreamDatabase();
     setBindings(database);
