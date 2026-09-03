@@ -156,6 +156,53 @@ describe('画面共有の再接続', () => {
     expect(reports).toEqual([{ stage: 'stream', errorCode: 'streamStatsUnavailable' }]);
   });
 
+  test('自動republish後のhealthがreadyでも現publisherの映像が0バイトならreadyを送らない', async () => {
+    const page = fakePage();
+    const analytics: string[] = [];
+    const replacement = Object.assign(publisher(), {
+      videoStats: async () => ({ bytesSent: 0, framesEncoded: 0 }),
+    });
+    const original = Object.assign(publisher(async () => replacement), {
+      videoStats: async () => ({ bytesSent: 100, framesEncoded: 1 }),
+    });
+    let healthChecks = 0;
+    new ScreenShareController(page.root, dependencies({
+      startWhipPublisher: async () => original,
+      waitForStreamReady: async () => ++healthChecks === 2,
+      trackAnalytics: (event) => analytics.push(event),
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('error').hidden);
+
+    expect(page.step('live').hidden).toBe(true);
+    expect(analytics).toEqual(['screen_share_start']);
+  });
+
+  test('手動retryのhealthがreadyでも現publisherの映像が0バイトならreadyを送らない', async () => {
+    const page = fakePage();
+    const analytics: string[] = [];
+    const replacement = Object.assign(publisher(), {
+      videoStats: async () => ({ bytesSent: 0, framesEncoded: 0 }),
+    });
+    const original = Object.assign(publisher(async () => replacement), {
+      videoStats: async () => ({ bytesSent: 0, framesEncoded: 0 }),
+    });
+    new ScreenShareController(page.root, dependencies({
+      startWhipPublisher: async () => original,
+      waitForStreamReady: async () => true,
+      trackAnalytics: (event) => analytics.push(event),
+    })).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('error').hidden);
+    page.button('[data-screen-retry]').click();
+    await flushMicrotasks();
+
+    expect(page.step('live').hidden).toBe(true);
+    expect(analytics).toEqual(['screen_share_start']);
+  });
+
   test('videoStats待機中に停止したら idle 維持・error 非表示・publisher解放（復活させない）', async () => {
     const page = fakePage();
     const pendingStats = deferred<{ bytesSent: number; framesEncoded: number }>();

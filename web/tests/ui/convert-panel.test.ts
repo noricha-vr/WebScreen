@@ -127,6 +127,41 @@ async function flushPromises(): Promise<void> {
 }
 
 describe('mountConvertPanel', () => {
+  test('URLとファイルは受理されて変換状態へ入った時だけstartを送る', async () => {
+    const browser = installBrowserFakes();
+    const events: string[] = [];
+
+    try {
+      const input = new FakeFileInput();
+      const panel = new FakePanel(input, 'https://example.com/articles/latest');
+      mountConvertPanel(panel as unknown as HTMLElement, {
+        trackAnalytics: (event, kind) => events.push(`${event}:${kind}`),
+      });
+
+      panel.urlForm.dispatch('submit');
+      await flushPromises();
+      expect(events).toEqual(['convert_start:web']);
+
+      panel.abortButton.dispatch('click');
+      input.files = [new File(
+        [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+        'slide.png',
+        { type: 'image/png' }
+      )];
+      input.dispatch('change');
+      await flushPromises();
+      expect(events).toEqual(['convert_start:web', 'convert_start:image']);
+
+      panel.abortButton.dispatch('click');
+      input.files = [new File(['unsupported'], 'README.txt', { type: 'text/plain' })];
+      input.dispatch('change');
+      await flushPromises();
+      expect(events).toEqual(['convert_start:web', 'convert_start:image']);
+    } finally {
+      browser.restore();
+    }
+  });
+
   test('遅い1件目のpreflight完了は後続ファイルの状態と変換開始を上書きしない', async () => {
     const browser = installBrowserFakes();
 

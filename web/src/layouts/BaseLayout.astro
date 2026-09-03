@@ -185,11 +185,23 @@ const GA_TRACKED_HOST = 'web-screen.net';
           // 静的ページはビルド時に生成されるためサーバー側でホストを判定できない。描画時に見る。
           if (location.hostname === gaTrackedHost) {
             window.dataLayer = window.dataLayer || [];
-            function gtag() {
+            window.gtag = function () {
               window.dataLayer.push(arguments);
+            };
+            window.gtag('js', new Date());
+            let pageReferrer = '';
+            try {
+              const referrer = new URL(document.referrer);
+              if (referrer.origin === location.origin) {
+                pageReferrer = referrer.origin + referrer.pathname;
+              }
+            } catch {
+              // 空・不正・外部 referrer は送らない。
             }
-            gtag('js', new Date());
-            gtag('config', gaMeasurementId);
+            window.gtag('config', gaMeasurementId, {
+              page_location: location.origin + location.pathname,
+              page_referrer: pageReferrer,
+            });
 
             // COEP: credentialless 下でも no-cors のサブリソースは読めるため crossorigin を
             // 付けない（付けると CORS モードになり、gtag.js 側が ACAO を返さず逆に落ちる）。
