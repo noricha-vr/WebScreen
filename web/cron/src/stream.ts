@@ -67,8 +67,6 @@ export async function runStreamCron(
         cron,
         event: 'stream_lifecycle_completed',
         summary,
-        egressObserved: summary.egressObserved,
-        egressUnobserved: summary.egressUnobserved,
         durationMs: Date.now() - startedAt,
       })
     );

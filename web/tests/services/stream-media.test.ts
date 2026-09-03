@@ -57,6 +57,45 @@ describe('MediaMTX endpoint wiring', () => {
     ]);
   });
 
+  it('MEDIAMTX_EGRESS_API_URL があれば read 一覧の順序に関わらず origin egress として優先し重複を除く', () => {
+    const configured: string[] = [];
+    const clients = createStreamMediaMtxClients(
+      {
+        ingressApiUrl: 'https://ingress.example',
+        ingressApiToken: 'ingress-token',
+        egressApiUrl: 'https://origin.example',
+        egressApiToken: 'egress-token',
+        readEgressApiUrls: 'https://replica.example, https://origin.example/',
+      },
+      (config) => {
+        configured.push(config.apiUrl);
+        return fakeClient();
+      }
+    );
+
+    expect(clients?.egress).toBe(clients?.egresses[0]);
+    expect(clients?.egresses).toHaveLength(2);
+    expect(configured).toEqual([
+      'https://ingress.example',
+      'https://origin.example',
+      'https://replica.example',
+    ]);
+  });
+
+  it('read 一覧の空要素（末尾カンマ）は位置付きで拒否する', () => {
+    expect(() =>
+      createStreamMediaMtxClients(
+        {
+          ingressApiUrl: 'https://ingress.example',
+          ingressApiToken: 'ingress-token',
+          egressApiToken: 'egress-token',
+          readEgressApiUrls: 'https://origin.example,',
+        },
+        () => fakeClient()
+      )
+    ).toThrow('empty entry at index 1');
+  });
+
   it('split endpointが未設定なら旧単一endpointを両roleへ互換利用する', () => {
     const clients = createStreamMediaMtxClients(
       { legacyApiUrl: 'https://legacy.example', legacyApiToken: 'legacy-token' },

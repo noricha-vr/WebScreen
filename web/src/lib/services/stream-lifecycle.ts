@@ -124,12 +124,28 @@ async function collectEgressSnapshots(
       // 旧単一 endpoint は ingress の同じ snapshot を再利用し、余計な API 呼び出しをしない。
       const paths = egress === ingress ? ingressPaths : await egress.listPaths();
       snapshots.push(new Map(paths.map((path) => [path.name, path])));
-    } catch {
-      // read node の一時障害は D1 の期限判定を止めない。件数は summary で必ず記録する。
+    } catch (error) {
+      // read node の一時障害は D1 の期限判定を止めない。件数は summary、種別はログに必ず残す。
       failures += 1;
+      logEgressSnapshotFailure(error);
     }
   }
   return { paths: snapshots, failures };
+}
+
+/** 取得失敗の種別だけを 1 行 JSON で残す（URL・token・message は出さない）。 */
+function logEgressSnapshotFailure(error: unknown): void {
+  console.warn(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      source: 'webscreen-beta-cron',
+      severity: 'warn',
+      kind: 'event',
+      event: 'read_egress_snapshot_failed',
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      summary: 'read egress listPaths failed; no_viewers and kick_pending clearing are deferred this run.',
+    })
+  );
 }
 
 async function applyViewerChecks(

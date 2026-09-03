@@ -46,32 +46,34 @@ export function createStreamMediaMtxClients(
       'INGRESS',
       createClient
     );
-    const egresses = settings.readEgressApiUrls
-      ? createReadEgresses(settings.readEgressApiUrls, settings.egressApiToken, createClient)
-      : [createEndpoint(settings.egressApiUrl, settings.egressApiToken, 'EGRESS', createClient)];
-    return {
-      ingress,
-      egress: egresses[0] as MediaMtxClient,
-      egresses,
-    };
+    // origin egress は MEDIAMTX_EGRESS_API_URL が正。read 一覧はそれに replica を足したもので、
+    // 一覧だけが設定された場合のみ先頭を origin と見なす（health API が replica を見る誤配線を防ぐ）。
+    const readApiUrls = settings.readEgressApiUrls
+      ? parseReadEgressApiUrls(settings.readEgressApiUrls)
+      : [];
+    const originApiUrl = settings.egressApiUrl ?? readApiUrls[0];
+    const egress = createEndpoint(originApiUrl, settings.egressApiToken, 'EGRESS', createClient);
+    const egresses = [
+      egress,
+      ...readApiUrls
+        .filter((apiUrl) => apiUrl !== originApiUrl)
+        .map((apiUrl) => createEndpoint(apiUrl, settings.egressApiToken, 'READ_EGRESS', createClient)),
+    ];
+    return { ingress, egress, egresses };
   }
   if (!settings.legacyApiUrl && !settings.legacyApiToken) return undefined;
   const legacy = createEndpoint(settings.legacyApiUrl, settings.legacyApiToken, 'legacy', createClient);
   return { ingress: legacy, egress: legacy, egresses: [legacy] };
 }
 
-function createReadEgresses(
-  value: string,
-  apiToken: string | undefined,
-  createClient: (config: { apiUrl: string; apiToken: string }) => MediaMtxClient
-): MediaMtxClient[] {
-  const apiUrls = value.split(',').map((apiUrl) => apiUrl.trim());
-  if (apiUrls.length === 0 || apiUrls.some((apiUrl) => apiUrl.length === 0)) {
-    throw new Error('MEDIAMTX_READ_EGRESS_API_URLS must contain one or more URLs');
+/** カンマ区切りの read egress URL を、空要素（末尾カンマ等）を拒否して重複なしで返す。 */
+function parseReadEgressApiUrls(value: string): string[] {
+  const apiUrls = value.split(',').map((apiUrl) => apiUrl.trim().replace(/\/+$/, ''));
+  const emptyIndex = apiUrls.findIndex((apiUrl) => apiUrl.length === 0);
+  if (emptyIndex !== -1) {
+    throw new Error(`MEDIAMTX_READ_EGRESS_API_URLS has an empty entry at index ${emptyIndex}`);
   }
-  return [...new Set(apiUrls)].map((apiUrl) =>
-    createEndpoint(apiUrl, apiToken, 'READ_EGRESS', createClient)
-  );
+  return [...new Set(apiUrls)];
 }
 
 function createEndpoint(

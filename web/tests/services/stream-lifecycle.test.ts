@@ -335,6 +335,26 @@ describe('配信セッション lifecycle', () => {
     expect(row(database).kick_pending).toBe(1);
   });
 
+  it('read egressの取得に失敗した回はkick_pendingを解除しない', async () => {
+    const database = await createStreamDatabase();
+    await insertLive(database, { extendAt: '2026-09-01T04:00:00.000Z' });
+    database.sqlite
+      .query("UPDATE stream_sessions SET status='ended', ended_at=?, end_reason='user_stop', kick_pending=1")
+      .run(NOW.toISOString());
+
+    const summary = await runStreamLifecycle({
+      database,
+      ingressMediaMtx: new FakeMediaMtx(),
+      egressMediaMtxs: [new FakeMediaMtx(), new FakeMediaMtx([], new Error('unreachable'))],
+      settings: SETTINGS,
+      now: NOW,
+    });
+
+    expect(summary.egressUnobserved).toBe(1);
+    expect(summary.kickPendingCleared).toBe(0);
+    expect(row(database).kick_pending).toBe(1);
+  });
+
   it('閾値を30秒へ変更するとreaderゼロ30秒で終了する', async () => {
     const database = await createStreamDatabase();
     await insertLive(database, {
