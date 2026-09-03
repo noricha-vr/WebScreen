@@ -10,6 +10,7 @@ const SETTINGS: StreamSettings = {
   maxLiveStreamsPerUser: 1,
   maxLiveStreams: 20,
   createIntervalSeconds: 10,
+  extensionEnabled: false,
 };
 const START_TOKEN = '22222222-2222-4222-9222-222222222222';
 const signer = async ({ expiresAtSeconds }: { expiresAtSeconds: number }) => `token-exp-${expiresAtSeconds}`;
