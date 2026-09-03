@@ -6,7 +6,7 @@ import { requireUser, type AuthDatabase } from './auth';
 import { createStreamJwtKeySet } from './stream-jwt';
 import { StreamError, type StreamDatabase, type StreamJwtSigner, type StreamSettings } from './streams';
 
-const DEFAULT_EXTENSION_SECONDS = 2 * 60 * 60;
+const DEFAULT_EXTENSION_SECONDS = 15 * 60;
 const DEFAULT_MAX_LIVE_STREAMS = 1;
 const DEFAULT_MAX_TOTAL_LIVE_STREAMS = 20;
 const DEFAULT_CREATE_INTERVAL_SECONDS = 10;

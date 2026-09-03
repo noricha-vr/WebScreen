@@ -276,37 +276,6 @@ describe('他の配信を終了して開始', () => {
     expect(page.step('error').hidden).toBe(true);
   });
 
-  test('extend待機中の停止はsession signalをabortして遅延UIを復活させない', async () => {
-    const page = fakePage();
-    const pendingExtend = deferred<Record<string, unknown>>();
-    let extendSignal: AbortSignal | undefined;
-    new ScreenShareController(page.root, dependencies({
-      requestJson: async (path, init) => {
-        if (path === '/api/streams/') return createResponse();
-        if (path.endsWith('/extend/')) {
-          extendSignal = init.signal as AbortSignal | undefined;
-          return pendingExtend.promise;
-        }
-        return null;
-      },
-    })).mount();
-
-    page.button('[data-screen-start]').click();
-    await waitFor(() => !page.step('live').hidden);
-    page.button('[data-screen-extend]').click();
-    await waitFor(() => extendSignal !== undefined);
-    page.button('[data-screen-stop]').click();
-
-    expect(extendSignal?.aborted).toBe(true);
-    pendingExtend.resolve({
-      extendExpiresAt: '2026-09-01T02:00:00.000Z',
-      publishToken: 'late-token',
-    });
-    await flushMicrotasks();
-    expect(page.step('idle').hidden).toBe(false);
-    expect(page.step('error').hidden).toBe(true);
-  });
-
   test('stop-live API の失敗時は取得済み画面を停止してエラー表示へ戻る', async () => {
     const page = fakePage();
     let selections = 0;
@@ -393,13 +362,12 @@ function fakePage(): {
   const elements = new Map<string, FakeElement>();
   for (const selector of [
     '[data-screen-start]', '[data-screen-stop-others]', '[data-screen-retry]',
-    '[data-screen-extend]', '[data-screen-stop]',
+    '[data-screen-stop]',
     '[data-screen-error-message]', '[data-screen-url]', '[data-screen-audio-status]',
     '[data-screen-preview]', '[data-screen-expiry-warning]',
     '[data-screen-flow-item]', '[data-screen-preview-toggle]', '[data-screen-preview-body]',
     '[data-screen-switch-track]', '[data-screen-switch-knob]', '[data-screen-expires-bar]',
     '[data-screen-audio-chip]', '[data-screen-audio-icon]', '[data-screen-audio-label]',
-    '[data-screen-mode]',
   ]) elements.set(selector, new FakeElement());
   const steps = ['idle', 'login', 'live', 'error'].map((phase) => {
     const step = new FakeElement();

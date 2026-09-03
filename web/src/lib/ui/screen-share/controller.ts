@@ -53,12 +53,10 @@ export class ScreenShareControllerImpl {
     // getDisplayMedia はクリック起点で直接呼び、user activation を失わない。
     this.view.onClick('[data-screen-start]', () => void this.beginStart(false));
     this.view.onClick('[data-screen-copy]', () => void this.copyUrl());
-    this.view.onClick('[data-screen-extend]', () => void this.extend());
     this.view.onClick('[data-screen-stop]', () => void this.stop());
     this.view.onClick('[data-screen-retry]', () => void this.retry());
     this.view.onClick('[data-screen-stop-others]', () => void this.beginStart(true));
     this.view.onClick('[data-screen-preview-toggle]', () => this.view.togglePreview());
-    this.view.onModeClick((mode) => this.view.selectMode(mode));
     this.deps.onPageHide(() => this.stopForPageHide());
     this.view.show('idle');
   }
@@ -219,26 +217,6 @@ export class ScreenShareControllerImpl {
       if (stopped) await this.notifyRemoteStop(stopped);
     } finally {
       this.view.setBusy('[data-screen-retry]', false, this.live ? 'labelReconnect' : 'labelRetry');
-    }
-  }
-
-  private async extend(): Promise<void> {
-    const live = this.live;
-    if (!live || this.stopping) return;
-    this.view.setBusy('[data-screen-extend]', true, 'labelExtending');
-    try {
-      const response = await this.api.extend(live.id, live.abortController.signal);
-      if (this.stopping || this.live !== live) return;
-      live.extendExpiresAt = response.extendExpiresAt;
-      live.publishToken = response.publishToken;
-      live.publishTokenExpiresAt = response.publishTokenExpiresAt;
-      live.publisher.setPublishToken(response.publishToken);
-      this.expiresBarTotalSeconds = durationUntil(response.extendExpiresAt, this.deps.now());
-      this.updateClock();
-    } catch (error) {
-      if (!this.stopping && this.live === live) this.handleRuntimeError(error);
-    } finally {
-      this.view.setBusy('[data-screen-extend]', false, 'labelExtend');
     }
   }
 

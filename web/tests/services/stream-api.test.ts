@@ -10,6 +10,7 @@ import {
   json,
   noContent,
   runStreamApi,
+  streamSettings,
   streamJwksResponse,
   type StreamApiBindings,
 } from '../../src/lib/services/stream-api';
@@ -38,7 +39,7 @@ function bindings(database: StreamSqliteAdapter): StreamApiBindings {
     DB: database as unknown as StreamApiBindings['DB'],
     SESSION_SIGNING_KEY: SESSION_SECRET,
     STREAM_JWT_PRIVATE_KEY: privateKey,
-    STREAM_EXTENSION_SECONDS: '7200',
+    STREAM_EXTENSION_SECONDS: '900',
     STREAM_MAX_LIVE_PER_USER: '1',
     STREAM_CREATE_INTERVAL_SECONDS: '10',
   };
@@ -52,6 +53,10 @@ function request(authenticated = true): Request {
 }
 
 describe('stream API HTTP境界', () => {
+  it('延長サイクルの未設定既定値はベータ版の15分にする', () => {
+    expect(streamSettings({} as StreamApiBindings).extensionCycleSeconds).toBe(15 * 60);
+  });
+
   it('認証失敗を401 UNAUTHORIZEDへ変換する', async () => {
     const response = await runStreamApi(
       request(false),

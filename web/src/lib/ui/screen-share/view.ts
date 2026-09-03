@@ -37,12 +37,6 @@ export class ScreenShareView {
     this.button(selector)?.addEventListener('click', listener);
   }
 
-  onModeClick(listener: (mode: HTMLElement) => void): void {
-    for (const mode of this.root.querySelectorAll<HTMLElement>('[data-screen-mode]')) {
-      mode.addEventListener('click', () => listener(mode));
-    }
-  }
-
   show(phase: ScreenSharePhase): void {
     for (const step of this.root.querySelectorAll<HTMLElement>('[data-screen-step]')) {
       step.hidden = step.dataset['screenStep'] !== phase;
@@ -86,16 +80,6 @@ export class ScreenShareView {
     const toggle = this.button('[data-screen-preview-toggle]');
     if (!toggle) return;
     this.setPreviewOpen(toggle.getAttribute('aria-expanded') !== 'true');
-  }
-
-  selectMode(selected: HTMLElement): void {
-    // 表示のみ。実際の配信設定への反映は Issue #177 の検証結果を待つ。
-    for (const mode of this.root.querySelectorAll<HTMLElement>('[data-screen-mode]')) {
-      const checked = mode === selected;
-      mode.dataset['checked'] = String(checked);
-      const input = mode.querySelector<HTMLInputElement>('input');
-      if (input) input.checked = checked;
-    }
   }
 
   setUrl(url: string): void {

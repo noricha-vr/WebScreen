@@ -16,7 +16,7 @@ VRChat --rtspt(TCP 554)--------------------------> egress(RTSP :554 / API 127.0.
 cron Worker --別 Bearer client--> ingress（publisher kick）/ egress（viewer・path 観測）
 ```
 
-- **制限の実体は kick ではなく publish JWT の exp**（= 延長サイクル 2h。kick は再接続で迂回できるが、exp が切れたトークンでは再接続できない。Issue #127）
+- **制限の実体は kick ではなく publish JWT の exp**（ベータ版は15分。kick は再接続で迂回できるが、exp が切れたトークンでは再接続できない。画面の延長はインフラ準備完了まで無効。Issue #127）
 - 視聴（read）は無認証・公開。保護は 12 文字ランダム path のみ（動画と同じ思想）
 
 ## サーバー実体（どこに何があるか）

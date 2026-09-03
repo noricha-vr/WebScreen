@@ -63,14 +63,14 @@ JWKS取得と ingress / egress の再読込を確認してから配信APIを利�
 旧 `MEDIAMTX_API_*` を fallback として利用できる。fallback が有効なのは split の URL / token を **1 つも設定していない環境だけ**。
 split の 4 値を設定した版は移行完了後の構成であり、旧単一 service へ自動で戻らない。
 
-現在のJWKSは単一鍵で、publish JWTは最大で延長サイクル（初期2時間）有効なため、鍵の即時切替は
+現在のJWKSは単一鍵で、publish JWTは最大でベータ版の配信上限（15分）有効なため、鍵の即時切替は
 active JWTとの互換を保てない。ローテーションは配信停止メンテナンスとして、secret投入 →
 JWKS取得とMediaMTX再読込の確認 → API再開、の順で行う。無停止ローテーションにはprevious keyを
 JWKSへ併載する後続対応が必要。
 
 | 設定キー | 初期値 / 投入先 |
 |---|---|
-| `STREAM_EXTENSION_SECONDS` | `7200` / Web Worker vars |
+| `STREAM_EXTENSION_SECONDS` | `900`（ベータ版は15分。画面の延長は無効）/ Web Worker vars |
 | `STREAM_MAX_LIVE_PER_USER` | `1` / Web Worker vars |
 | `STREAM_MAX_LIVE` | `20` / Web Worker vars |
 | `STREAM_CREATE_INTERVAL_SECONDS` | `10` / Web Worker vars |

@@ -18,7 +18,7 @@ import { createStreamDatabase } from './helpers/stream-db';
 
 const NOW = new Date('2026-09-01T00:00:00.000Z');
 const SETTINGS: StreamSettings = {
-  extensionCycleSeconds: 7200,
+  extensionCycleSeconds: 900,
   maxLiveStreamsPerUser: 1,
   maxLiveStreams: 20,
   createIntervalSeconds: 10,
@@ -231,7 +231,7 @@ describe('配信セッション service', () => {
       .get() as { started_at: string; extend_expires_at: string };
 
     expect(response.startedAt).toBe('2026-09-01T00:00:00.000Z');
-    expect(response.extendExpiresAt).toBe('2026-09-01T02:00:00.000Z');
+    expect(response.extendExpiresAt).toBe('2026-09-01T00:15:00.000Z');
     expect(stored).toEqual({
       started_at: response.startedAt,
       extend_expires_at: response.extendExpiresAt,
@@ -252,10 +252,10 @@ describe('配信セッション service', () => {
     expect(second.streamUrl).toBe('rtspt://webscreen.tv/live/ZyXwVu987654');
   });
 
-  it('延長操作は期限を2時間後へ更新し同じexpの新publish JWTを返す', async () => {
+  it('延長操作は期限を15分後へ更新し同じexpの新publish JWTを返す', async () => {
     const database = await createStreamDatabase();
     await createStream(input(database, 'AbCdEf123456'));
-    const extendedAt = new Date('2026-09-01T01:00:00.789Z');
+    const extendedAt = new Date('2026-09-01T00:10:00.789Z');
     let signedIssued = 0;
     let signedExpiry = 0;
     const response = await extendStream({
@@ -268,13 +268,13 @@ describe('配信セッション service', () => {
       },
     });
 
-    expect(response.extendExpiresAt).toBe('2026-09-01T03:00:00.000Z');
+    expect(response.extendExpiresAt).toBe('2026-09-01T00:25:00.000Z');
     expect(response.publishTokenExpiresAt).toBe(response.extendExpiresAt);
     expect(response.publishToken).toBe(`token-exp-${Date.parse(response.extendExpiresAt) / 1000}`);
     expect(
       database.sqlite.query('SELECT extend_expires_at FROM stream_sessions').get()
     ).toEqual({ extend_expires_at: response.extendExpiresAt });
-    expect(signedIssued * 1000).toBe(Date.parse('2026-09-01T01:00:00.000Z'));
+    expect(signedIssued * 1000).toBe(Date.parse('2026-09-01T00:10:00.000Z'));
     expect(signedExpiry * 1000).toBe(Date.parse(response.extendExpiresAt));
   });
 
