@@ -18,6 +18,8 @@ export interface StreamCronEnv {
   MEDIAMTX_INGRESS_API_TOKEN?: string;
   MEDIAMTX_EGRESS_API_URL?: string;
   MEDIAMTX_EGRESS_API_TOKEN?: string;
+  /** origin を含む全 read egress の Control API URL（カンマ区切り）。 */
+  MEDIAMTX_READ_EGRESS_API_URLS?: string;
   STREAM_NO_VIEWER_SECONDS?: string;
   STREAM_HEARTBEAT_SECONDS?: string;
 }
@@ -37,11 +39,13 @@ export async function runStreamCron(
       ingressApiToken: env.MEDIAMTX_INGRESS_API_TOKEN,
       egressApiUrl: env.MEDIAMTX_EGRESS_API_URL,
       egressApiToken: env.MEDIAMTX_EGRESS_API_TOKEN,
+      readEgressApiUrls: env.MEDIAMTX_READ_EGRESS_API_URLS,
     });
     const summary = await runStreamLifecycle({
       database: env.DB,
       ingressMediaMtx: mediaMtx?.ingress,
       egressMediaMtx: mediaMtx?.egress,
+      egressMediaMtxs: mediaMtx?.egresses,
       now: new Date(scheduledTime),
       settings: {
         noViewerTimeoutSeconds: positiveInt(

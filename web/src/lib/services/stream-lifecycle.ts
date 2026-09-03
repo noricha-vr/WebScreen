@@ -21,6 +21,8 @@ export interface StreamLifecycleSummary {
   endedByHeartbeatLost: number;
   endedByNoViewers: number;
   viewersObserved: number;
+  egressObserved: number;
+  egressUnobserved: number;
   publishersKicked: number;
   kickPendingCleared: number;
 }
@@ -41,6 +43,7 @@ export async function runStreamLifecycle(input: {
   mediaMtx?: MediaMtxClient;
   ingressMediaMtx?: MediaMtxClient;
   egressMediaMtx?: MediaMtxClient;
+  egressMediaMtxs?: MediaMtxClient[];
   settings: StreamLifecycleSettings;
   now: Date;
 }): Promise<StreamLifecycleSummary> {
@@ -88,15 +91,61 @@ export async function runStreamLifecycle(input: {
   if (!mediaMtx) throw new Error('MediaMTX configuration is required for active streams');
 
   const ingressPaths = await mediaMtx.ingress.listPaths();
-  const egressPaths =
-    mediaMtx.egress === mediaMtx.ingress
-      ? ingressPaths
-      : await mediaMtx.egress.listPaths();
   const ingressByName = new Map(ingressPaths.map((path) => [path.name, path]));
-  const egressByName = new Map(egressPaths.map((path) => [path.name, path]));
-  await applyViewerChecks(input, rowsAfterD1Checks, egressByName, summary, newlyEnded);
-  await processPendingKicks(input, mediaMtx.ingress, ingressByName, egressByName, newlyEnded, summary);
+  const egressSnapshots = await collectEgressSnapshots(
+    mediaMtx.egresses,
+    mediaMtx.ingress,
+    ingressPaths
+  );
+  summary.egressObserved = egressSnapshots.paths.length;
+  summary.egressUnobserved = egressSnapshots.failures;
+  await applyViewerChecks(input, rowsAfterD1Checks, egressSnapshots.paths, summary, newlyEnded);
+  await processPendingKicks(
+    input,
+    mediaMtx.ingress,
+    ingressByName,
+    egressSnapshots.paths,
+    summary.egressUnobserved,
+    newlyEnded,
+    summary
+  );
   return summary;
+}
+
+async function collectEgressSnapshots(
+  egresses: MediaMtxClient[],
+  ingress: MediaMtxClient,
+  ingressPaths: MediaPath[]
+): Promise<{ paths: Array<Map<string, MediaPath>>; failures: number }> {
+  const snapshots: Array<Map<string, MediaPath>> = [];
+  let failures = 0;
+  for (const egress of egresses) {
+    try {
+      // 旧単一 endpoint は ingress の同じ snapshot を再利用し、余計な API 呼び出しをしない。
+      const paths = egress === ingress ? ingressPaths : await egress.listPaths();
+      snapshots.push(new Map(paths.map((path) => [path.name, path])));
+    } catch (error) {
+      // read node の一時障害は D1 の期限判定を止めない。件数は summary、種別はログに必ず残す。
+      failures += 1;
+      logEgressSnapshotFailure(error);
+    }
+  }
+  return { paths: snapshots, failures };
+}
+
+/** 取得失敗の種別だけを 1 行 JSON で残す（URL・token・message は出さない）。 */
+function logEgressSnapshotFailure(error: unknown): void {
+  console.warn(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      source: 'webscreen-beta-cron',
+      severity: 'warn',
+      kind: 'event',
+      event: 'read_egress_snapshot_failed',
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      summary: 'read egress listPaths failed; no_viewers and kick_pending clearing are deferred this run.',
+    })
+  );
 }
 
 async function applyViewerChecks(
@@ -106,7 +155,7 @@ async function applyViewerChecks(
     now: Date;
   },
   rows: LifecycleRow[],
-  paths: Map<string, MediaPath>,
+  snapshots: Array<Map<string, MediaPath>>,
   summary: StreamLifecycleSummary,
   newlyEnded: Set<string>
 ): Promise<void> {
@@ -116,8 +165,8 @@ async function applyViewerChecks(
   ).toISOString();
   for (const row of rows) {
     if (row.status !== 'live') continue;
-    const path = paths.get(`live/${row.id}`);
-    if ((path?.rtspReaders ?? 0) > 0) {
+    const pathName = `live/${row.id}`;
+    if (totalRtspReaders(snapshots, pathName) > 0) {
       const result = await input.database
         .prepare(
           `UPDATE stream_sessions SET last_viewer_at = ?
@@ -128,6 +177,8 @@ async function applyViewerChecks(
       summary.viewersObserved += result.meta.changes;
       continue;
     }
+    // どれか 1 台でも未観測なら reader 0 を確定できないため、no_viewers を延期する。
+    if (summary.egressUnobserved > 0) continue;
     if (row.last_viewer_at > viewerCutoff) continue;
     const ended = await endStream(
       input.database,
@@ -146,7 +197,8 @@ async function processPendingKicks(
   },
   ingress: MediaMtxClient,
   ingressPaths: Map<string, MediaPath>,
-  egressPaths: Map<string, MediaPath>,
+  egressSnapshots: Array<Map<string, MediaPath>>,
+  egressUnobserved: number,
   newlyEnded: Set<string>,
   summary: StreamLifecycleSummary
 ): Promise<void> {
@@ -164,7 +216,14 @@ async function processPendingKicks(
       summary.publishersKicked += 1;
       continue;
     }
-    if (newlyEnded.has(row.id) || ingressPath || egressPaths.has(pathName)) continue;
+    if (
+      newlyEnded.has(row.id) ||
+      ingressPath ||
+      egressUnobserved > 0 ||
+      egressSnapshots.some((paths) => paths.has(pathName))
+    ) {
+      continue;
+    }
     const cleared = await input.database
       .prepare(
         `UPDATE stream_sessions SET kick_pending = 0
@@ -180,12 +239,20 @@ function resolveMediaMtx(input: {
   mediaMtx?: MediaMtxClient;
   ingressMediaMtx?: MediaMtxClient;
   egressMediaMtx?: MediaMtxClient;
-}): { ingress: MediaMtxClient; egress: MediaMtxClient } | undefined {
-  if (input.ingressMediaMtx && input.egressMediaMtx) {
-    return { ingress: input.ingressMediaMtx, egress: input.egressMediaMtx };
+  egressMediaMtxs?: MediaMtxClient[];
+}): { ingress: MediaMtxClient; egresses: MediaMtxClient[] } | undefined {
+  if (input.ingressMediaMtx && (input.egressMediaMtx || input.egressMediaMtxs)) {
+    return {
+      ingress: input.ingressMediaMtx,
+      egresses: input.egressMediaMtxs ?? [input.egressMediaMtx as MediaMtxClient],
+    };
   }
-  if (input.mediaMtx) return { ingress: input.mediaMtx, egress: input.mediaMtx };
+  if (input.mediaMtx) return { ingress: input.mediaMtx, egresses: [input.mediaMtx] };
   return undefined;
+}
+
+function totalRtspReaders(snapshots: Array<Map<string, MediaPath>>, pathName: string): number {
+  return snapshots.reduce((total, paths) => total + (paths.get(pathName)?.rtspReaders ?? 0), 0);
 }
 
 async function endStream(
@@ -235,6 +302,8 @@ function emptySummary(): StreamLifecycleSummary {
     endedByHeartbeatLost: 0,
     endedByNoViewers: 0,
     viewersObserved: 0,
+    egressObserved: 0,
+    egressUnobserved: 0,
     publishersKicked: 0,
     kickPendingCleared: 0,
   };
