@@ -29,10 +29,46 @@ import {
 import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
 import { requirePipe, resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
 import { applyVideoProfile, cycleVideoProfiles, type VideoProfileEvaluator } from '../../scripts/latency-probe-profile';
-import { analyzeDirectory, clearPreviousRunArtifacts, headersForRewrittenBody, rewriteWhipUrlHost, screenShareUrl, syntheticHealthBody, validateReadHost, validateRunOptions } from '../../scripts/latency-probe-run';
+import { analyzeDirectory, clearPreviousRunArtifacts, headersForRewrittenBody, rewriteWhipUrlHost, screenShareUrl, startControllerServer, syntheticHealthBody, validateReadHost, validateRunOptions } from '../../scripts/latency-probe-run';
 import { NOTIFY_COMMAND_ENV, NOTIFY_STDERR_TRUNCATED_SUFFIX, buildNotifyArgv, notifyCommandTemplate, notifyStdinJson, notifyStreamUrl, parseCommandLine, warnNotifyCommandMissing, type NotifyChild, type NotifySpawn } from '../../scripts/latency-probe-notify';
 import { parseFreezeLog, type SenderSample } from '../../scripts/latency-probe-quality';
 import { recordingDeadlineSeconds } from '../../scripts/latency-probe-player';
+
+const CONTROLLER_TOKEN = 'a'.repeat(64);
+
+function controllerState(sourcePage: import('@playwright/test').Page | null = null) {
+  return { sourcePage, sourceUrl: 'http://127.0.0.1:4321/', sourceServerUrl: 'http://127.0.0.1:4321/' };
+}
+
+describe('latency probe controller', () => {
+  test.each([
+    ['トークンなし', { 'Content-Type': 'application/json' }, JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }), 401],
+    ['不一致トークン', { Authorization: 'Bearer wrong', 'Content-Type': 'application/json' }, JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }), 401],
+    ['text/plain', { Authorization: `Bearer ${CONTROLLER_TOKEN}`, 'Content-Type': 'text/plain' }, JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }), 400],
+    ['4 KB超', { Authorization: `Bearer ${CONTROLLER_TOKEN}`, 'Content-Type': 'application/json' }, 'x'.repeat(4 * 1024 + 1), 400],
+  ])('%sの要求を拒否する', async (_caseName, headers, body, expectedStatus) => {
+    const server = startControllerServer(controllerState(), CONTROLLER_TOKEN);
+    try {
+      const response = await fetch(new URL('/source', server.url), { method: 'POST', headers, body });
+      expect(response.status).toBe(expectedStatus);
+    } finally { server.stop(true); }
+  });
+
+  test('正しいトークンとJSONなら共有タブを切り替える', async () => {
+    const navigations: string[] = [];
+    const sourcePage = { goto: async (url: string) => { navigations.push(url); return null; } } as unknown as import('@playwright/test').Page;
+    const server = startControllerServer(controllerState(sourcePage), CONTROLLER_TOKEN);
+    try {
+      const response = await fetch(new URL('/source', server.url), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${CONTROLLER_TOKEN}`, 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }),
+      });
+      expect(response.status).toBe(200);
+      expect(navigations).toEqual(['http://127.0.0.1:4321/next']);
+    } finally { server.stop(true); }
+  });
+});
 
 function rasterize(timestampMs: number, cell = 20): { rgb: Uint8Array; width: number; height: number } {
   const width = BLOCK_GRID_SIZE * cell + 40;
