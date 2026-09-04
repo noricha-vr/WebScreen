@@ -355,8 +355,8 @@ describe('配信中パネルの延長', () => {
     // 録画は取りこぼさずに一覧へ積んでから閉じる。
     expect(recorders.last().stopCalls).toBe(1);
     expect(page.button('[data-screen-record-list]').children.length).toBe(1);
-    // サーバー側は終了済みなので、停止通知は投げ直さない。
-    expect(stops).toEqual([]);
+    // サーバー側は終了済みでも D1 行は live のまま残りうるので、冪等な停止通知を 1 回送る。
+    expect(stops).toHaveLength(1);
   });
 });
 
