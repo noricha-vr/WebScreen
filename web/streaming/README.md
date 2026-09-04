@@ -23,11 +23,14 @@ After publishing to the candidate environment, run `./verify-codecs.sh rtspt://y
 
 `mediamtx-egress.yml` and `mediamtx-egress-replica.yml` cap each live path at 60 readers. `nftables-egress.nft` separately caps all new TCP 554 connections on one node at 505 while retaining `policy accept` for every other packet.
 
-1. Run `nft -c -f nftables-egress.nft` from the selected release, then install it at `/etc/webscreen/streaming/nftables-egress.nft`.
-2. Add `include "/etc/webscreen/streaming/nftables-egress.nft"` once to `/etc/nftables.conf`, then run `systemctl enable --now nftables`.
-3. Confirm `nft list table inet webscreen_egress`; repeat it while refusing excess readers to see the rule counter increase.
+1. Save the current rules with `sudo nft list ruleset > /root/nftables-before-$(date +%F).txt`, and confirm they are empty because no other firewall manager is active.
+2. Run `nft -c -f nftables-egress.nft` from the selected release, then install it at `/etc/webscreen/streaming/nftables-egress.nft`.
+3. Ubuntu's standard `/etc/nftables.conf` contains `flush ruleset`; inspect that parent file before adding `include "/etc/webscreen/streaming/nftables-egress.nft"` and running `systemctl enable --now nftables`.
+4. Confirm `nft list table inet webscreen_egress`; repeat it while refusing excess readers to see the rule counter increase.
 
 To remove the cap, delete the include and run `nft delete table inet webscreen_egress`. Before reapplying an updated file, run that same delete command, then load the new file with `nft -f /etc/webscreen/streaming/nftables-egress.nft`.
+
+This is bandwidth self-protection, not SYN flood protection: SYN-only connections also consume a slot.
 
 ## Candidate test, production promotion, and rollback
 

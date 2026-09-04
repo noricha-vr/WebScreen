@@ -4,6 +4,7 @@ import type { MediaMtxClient, MediaMtxPublisher } from '../../src/lib/infra/medi
 import {
   recordNodeEgressUsage,
   type NodeEgressUsageDatabase,
+  type NodeEgressUsageStatement,
 } from '../../src/lib/services/node-egress-usage';
 
 const NOW = new Date('2026-09-04T03:00:00.000Z');
@@ -11,6 +12,7 @@ const NODE = 'egress.example';
 
 interface Sample {
   bytesSent: number;
+  name?: string;
 }
 
 interface StoredDaily {
@@ -22,18 +24,43 @@ interface StoredDaily {
 class FakeNodeEgressDatabase implements NodeEgressUsageDatabase {
   readonly samples = new Map<string, number>();
   readonly daily = new Map<string, StoredDaily>();
+  private failDailyBatchOnce = false;
 
   prepare(query: string) {
     return {
-      bind: (...values: unknown[]) => ({
-        all: async <T>(): Promise<{ results: T[] }> => ({
-          results: this.select(query, values) as T[],
-        }),
+      bind: (...values: unknown[]): FakeNodeEgressStatement => ({
+        query,
+        values,
+        all: async <T>(): Promise<{ results: T[] }> => ({ results: this.select(query, values) as T[] }),
         run: async (): Promise<{ meta: { changes: number } }> => ({
           meta: { changes: this.run(query, values) },
         }),
       }),
     };
+  }
+
+  /** 次のbatchの日次加算を失敗させ、途中変更がcommitされないことを検証する。 */
+  failNextDailyBatch(): void {
+    this.failDailyBatchOnce = true;
+  }
+
+  async batch(
+    statements: NodeEgressUsageStatement[]
+  ): Promise<Array<{ meta: { changes: number } }>> {
+    const batchStatements = statements.map((statement) => {
+      if (!isFakeNodeEgressStatement(statement)) throw new Error('Unknown test database statement');
+      return statement;
+    });
+    const samples = new Map(this.samples);
+    const daily = new Map([...this.daily].map(([key, row]) => [key, { ...row }]));
+    const results = batchStatements.map((statement) => ({
+      meta: { changes: this.run(statement.query, statement.values, samples, daily, true) },
+    }));
+    this.samples.clear();
+    this.daily.clear();
+    samples.forEach((value, key) => this.samples.set(key, value));
+    daily.forEach((value, key) => this.daily.set(key, value));
+    return results;
   }
 
   private select(query: string, values: unknown[]): unknown[] {
@@ -52,19 +79,29 @@ class FakeNodeEgressDatabase implements NodeEgressUsageDatabase {
     return [];
   }
 
-  private run(query: string, values: unknown[]): number {
+  private run(
+    query: string,
+    values: unknown[],
+    samples: Map<string, number> = this.samples,
+    daily: Map<string, StoredDaily> = this.daily,
+    inBatch: boolean = false
+  ): number {
     if (query.includes('INSERT INTO node_egress_samples')) {
-      this.samples.set(sampleKey(values[0] as string, values[1] as string), values[2] as number);
+      samples.set(sampleKey(values[0] as string, values[1] as string), values[2] as number);
       return 1;
     }
     if (query.includes('DELETE FROM node_egress_samples')) {
-      return this.samples.delete(sampleKey(values[0] as string, values[1] as string)) ? 1 : 0;
+      return samples.delete(sampleKey(values[0] as string, values[1] as string)) ? 1 : 0;
     }
     if (query.includes('INSERT INTO node_egress_daily')) {
       const key = dailyKey(values[0] as string, values[1] as string);
-      const existing = this.daily.get(key);
+      if (inBatch && this.failDailyBatchOnce) {
+        this.failDailyBatchOnce = false;
+        throw new Error('daily write failed');
+      }
+      const existing = daily.get(key);
       const bytesAdded = values[2] as number;
-      this.daily.set(key, {
+      daily.set(key, {
         bytesSent: (existing?.bytesSent ?? 0) + bytesAdded,
         alertedLevel: existing?.alertedLevel ?? 0,
       });
@@ -73,13 +110,30 @@ class FakeNodeEgressDatabase implements NodeEgressUsageDatabase {
     if (query.includes('UPDATE node_egress_daily SET alerted_level')) {
       const level = values[0] as number;
       const key = dailyKey(values[1] as string, values[2] as string);
-      const row = this.daily.get(key);
-      if (row === undefined || row.alertedLevel >= (values[3] as number)) return 0;
+      const row = daily.get(key);
+      if (row === undefined) return 0;
+      if (query.includes('alerted_level <') && row.alertedLevel >= (values[3] as number)) {
+        return 0;
+      }
+      if (query.includes('AND alerted_level=?') && row.alertedLevel !== (values[3] as number)) {
+        return 0;
+      }
       row.alertedLevel = level;
       return 1;
     }
     return 0;
   }
+}
+
+interface FakeNodeEgressStatement extends NodeEgressUsageStatement {
+  query: string;
+  values: unknown[];
+}
+
+function isFakeNodeEgressStatement(
+  statement: NodeEgressUsageStatement
+): statement is FakeNodeEgressStatement {
+  return 'query' in statement && 'values' in statement;
 }
 
 function sampleKey(nodeKey: string, path: string): string {
@@ -90,13 +144,17 @@ function dailyKey(nodeKey: string, day: string): string {
   return `${nodeKey}\u0000${day}`;
 }
 
+function pathName(index: number): string {
+  return `live/AbCdEf12345${index}`;
+}
+
 function client(samples: Sample[] | Error): MediaMtxClient {
   return {
     getPath: async () => undefined,
     listPaths: async () => {
       if (samples instanceof Error) throw samples;
       return samples.map((sample, index) => ({
-        name: `live/path${index}`,
+        name: sample.name ?? pathName(index),
         publisherId: null,
         rtspReaders: 0,
         bytesSent: sample.bytesSent,
@@ -126,7 +184,13 @@ describe('node egress usage', () => {
 
     const summary = await record(database, [{ bytesSent: 120 }]);
 
-    expect(summary).toEqual({ nodesSampled: 1, nodesFailed: 0, bytesAdded: 120, alertsSent: 0 });
+    expect(summary).toEqual({
+      nodesSampled: 1,
+      nodesFailed: 0,
+      bytesAdded: 120,
+      alertsSent: 0,
+      pathsSkipped: 0,
+    });
     expect(database.daily.get(dailyKey(NODE, '2026-09-04'))?.bytesSent).toBe(120);
   });
 
@@ -154,7 +218,7 @@ describe('node egress usage', () => {
 
     await record(database, []);
 
-    expect(database.samples.has(sampleKey(NODE, 'live/path0'))).toBe(false);
+    expect(database.samples.has(sampleKey(NODE, pathName(0)))).toBe(false);
   });
 
   it('70%を一度だけ送り、85%到達で次の通知を送る', async () => {
@@ -193,13 +257,19 @@ describe('node egress usage', () => {
         dailyLimitBytes: 1_000,
         notify: async () => true,
       });
-      expect(summary).toEqual({ nodesSampled: 1, nodesFailed: 1, bytesAdded: 40, alertsSent: 0 });
+      expect(summary).toEqual({
+        nodesSampled: 1,
+        nodesFailed: 1,
+        bytesAdded: 40,
+        alertsSent: 0,
+        pathsSkipped: 0,
+      });
     } finally {
       console.error = original;
     }
   });
 
-  it('通知に失敗してもalerted levelを戻さず再通知しない', async () => {
+  it('通知に失敗したらalerted levelを戻して次回に再送する', async () => {
     const database = new FakeNodeEgressDatabase();
     let calls = 0;
     const original = console.warn;
@@ -221,7 +291,38 @@ describe('node egress usage', () => {
       console.warn = original;
     }
 
-    expect(calls).toBe(1);
-    expect(database.daily.get(dailyKey(NODE, '2026-09-04'))?.alertedLevel).toBe(70);
+    expect(calls).toBe(2);
+    expect(database.daily.get(dailyKey(NODE, '2026-09-04'))?.alertedLevel).toBe(0);
+  });
+
+  it('無効なpath名またはsafe integerでないカウンタを集計から除外する', async () => {
+    const database = new FakeNodeEgressDatabase();
+    const original = console.warn;
+    console.warn = () => {};
+    try {
+      const summary = await record(database, [
+        { name: 'other/path', bytesSent: 40 },
+        { bytesSent: Number.MAX_SAFE_INTEGER + 1 },
+      ]);
+      expect(summary).toEqual({
+        nodesSampled: 1,
+        nodesFailed: 0,
+        bytesAdded: 0,
+        alertsSent: 0,
+        pathsSkipped: 2,
+      });
+    } finally {
+      console.warn = original;
+    }
+  });
+
+  it('batch途中の日次加算失敗ではsample更新もcommitしない', async () => {
+    const database = new FakeNodeEgressDatabase();
+    database.failNextDailyBatch();
+
+    await expect(record(database, [{ bytesSent: 120 }])).rejects.toThrow('daily write failed');
+
+    expect(database.samples.size).toBe(0);
+    expect(database.daily.size).toBe(0);
   });
 });

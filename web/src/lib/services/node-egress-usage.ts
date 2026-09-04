@@ -4,14 +4,19 @@ import type { CronAlertNotifier } from './cron-health';
 const SOURCE = 'webscreen-node-egress-usage';
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const BYTE_PER_GB = 1_000_000_000;
+const LIVE_PATH = /^live\/[A-Za-z0-9]{12}$/;
 
 export interface NodeEgressUsageDatabase {
   prepare(query: string): {
-    bind(...values: unknown[]): {
-      all<T>(): Promise<{ results: T[] }>;
-      run(): Promise<{ meta: { changes: number } }>;
-    };
+    bind(...values: unknown[]): NodeEgressUsageStatement;
   };
+  batch(statements: NodeEgressUsageStatement[]): Promise<Array<{ meta: { changes: number } }>>;
+}
+
+/** D1PreparedStatement の、このserviceが使う最小操作面。 */
+export interface NodeEgressUsageStatement {
+  all<T>(): Promise<{ results: T[] }>;
+  run(): Promise<{ meta: { changes: number } }>;
 }
 
 export interface NodeEgressUsageSummary {
@@ -19,6 +24,7 @@ export interface NodeEgressUsageSummary {
   nodesFailed: number;
   bytesAdded: number;
   alertsSent: number;
+  pathsSkipped: number;
 }
 
 interface SampleRow {
@@ -48,6 +54,7 @@ export async function recordNodeEgressUsage(input: {
     nodesFailed: 0,
     bytesAdded: 0,
     alertsSent: 0,
+    pathsSkipped: 0,
   };
   const day = jstDay(input.now);
 
@@ -65,6 +72,7 @@ export async function recordNodeEgressUsage(input: {
     summary.nodesSampled += 1;
     summary.bytesAdded += result.bytesAdded;
     summary.alertsSent += result.alertSent ? 1 : 0;
+    summary.pathsSkipped += result.pathsSkipped;
   }
 
   return summary;
@@ -78,22 +86,38 @@ async function recordNode(input: {
   day: string;
   dailyLimitBytes: number;
   notify: CronAlertNotifier;
-}): Promise<{ bytesAdded: number; alertSent: boolean }> {
+}): Promise<{ bytesAdded: number; alertSent: boolean; pathsSkipped: number }> {
   const samples = await input.database
     .prepare('SELECT path, bytes_sent FROM node_egress_samples WHERE node_key = ?')
     .bind(input.node.nodeKey)
     .all<SampleRow>();
   const previousByPath = new Map(samples.results.map((sample) => [sample.path, sample.bytes_sent]));
-  const currentByPath = new Map(
-    input.paths.map((path) => [path.name, Math.floor(path.bytesSent ?? 0)])
-  );
+  const currentByPath = new Map<string, number>();
+  let pathsSkipped = 0;
+  for (const path of input.paths) {
+    const bytesSent = path.bytesSent;
+    if (
+      !LIVE_PATH.test(path.name) ||
+      typeof bytesSent !== 'number' ||
+      !Number.isSafeInteger(bytesSent) ||
+      bytesSent < 0
+    ) {
+      pathsSkipped += 1;
+      continue;
+    }
+    currentByPath.set(path.name, bytesSent);
+  }
+  if (pathsSkipped > 0) logInvalidPathsSkipped(pathsSkipped, input.now);
   let bytesAdded = 0;
+  const statements: NodeEgressUsageStatement[] = [];
 
   for (const [path, bytesSent] of currentByPath) {
     const previous = previousByPath.get(path);
     // MediaMTXは再起動・path再生成で生涯カウンタを0へ戻すため、下がった値は新しい累積値として足す。
+    // 誤差は1分未満で、導入初回はpath生涯値（本番は最長15分）を当日分に加算する。
     bytesAdded += previous === undefined || bytesSent < previous ? bytesSent : bytesSent - previous;
-    await input.database
+    statements.push(
+      input.database
       .prepare(
         `INSERT INTO node_egress_samples (node_key, path, bytes_sent, sampled_at)
          VALUES (?, ?, ?, ?)
@@ -102,28 +126,30 @@ async function recordNode(input: {
            sampled_at = excluded.sampled_at`
       )
       .bind(input.node.nodeKey, path, bytesSent, input.now.toISOString())
-      .run();
+    );
   }
 
   for (const sample of samples.results) {
     if (currentByPath.has(sample.path)) continue;
     // 消えたpathの最後の1分未満は観測できないため、その分は意図して捨てる。
-    await input.database
-      .prepare('DELETE FROM node_egress_samples WHERE node_key = ? AND path = ?')
-      .bind(input.node.nodeKey, sample.path)
-      .run();
+    statements.push(
+      input.database
+        .prepare('DELETE FROM node_egress_samples WHERE node_key = ? AND path = ?')
+        .bind(input.node.nodeKey, sample.path)
+    );
   }
 
-  await input.database
-    .prepare(
+  statements.push(
+    input.database.prepare(
       `INSERT INTO node_egress_daily (node_key, day, bytes_sent, alerted_level, updated_at)
        VALUES (?, ?, ?, 0, ?)
        ON CONFLICT(node_key, day) DO UPDATE SET
          bytes_sent = node_egress_daily.bytes_sent + excluded.bytes_sent,
          updated_at = excluded.updated_at`
-    )
-    .bind(input.node.nodeKey, input.day, bytesAdded, input.now.toISOString())
-    .run();
+    ).bind(input.node.nodeKey, input.day, bytesAdded, input.now.toISOString())
+  );
+  // Cloudflareは同一分のscheduled cronを二重起動しない前提で、1ノード分を1 batchに閉じる。
+  await input.database.batch(statements);
 
   const daily = await input.database
     .prepare(
@@ -135,7 +161,9 @@ async function recordNode(input: {
   if (row === undefined) throw new Error('Node egress daily row was not recorded');
 
   const level = alertLevel(row.bytes_sent, input.dailyLimitBytes);
-  if (level === 0 || level <= row.alerted_level) return { bytesAdded, alertSent: false };
+  if (level === 0 || level <= row.alerted_level) {
+    return { bytesAdded, alertSent: false, pathsSkipped };
+  }
 
   const claimed = await input.database
     .prepare(
@@ -144,16 +172,26 @@ async function recordNode(input: {
     )
     .bind(level, input.node.nodeKey, input.day, level)
     .run();
-  if (claimed.meta.changes !== 1) return { bytesAdded, alertSent: false };
+  if (claimed.meta.changes !== 1) return { bytesAdded, alertSent: false, pathsSkipped };
 
-  // 連投で通知先を埋めるより、送信失敗時の一度の取りこぼしを選ぶ。
+  // 送信成功が確認できた時だけ確定。失敗時は巻き戻して翌分に再試行する。
+  // webhook未設定なら毎分warnが出るが、それは設定漏れを可視化する意図である。
   const delivered = await notifyAlert(input.notify, buildAlertMessage({
     nodeKey: input.node.nodeKey,
     day: input.day,
     bytesSent: row.bytes_sent,
     dailyLimitBytes: input.dailyLimitBytes,
   }), input.now);
-  return { bytesAdded, alertSent: delivered };
+  if (!delivered) {
+    await input.database
+      .prepare(
+        `UPDATE node_egress_daily SET alerted_level = ?
+         WHERE node_key = ? AND day = ? AND alerted_level=?`
+      )
+      .bind(row.alerted_level, input.node.nodeKey, input.day, level)
+      .run();
+  }
+  return { bytesAdded, alertSent: delivered, pathsSkipped };
 }
 
 function alertLevel(bytesSent: number, dailyLimitBytes: number): 0 | 70 | 85 | 95 {
@@ -206,6 +244,20 @@ function logNodeSampleFailure(error: unknown, now: Date): void {
   );
 }
 
+function logInvalidPathsSkipped(pathsSkipped: number, now: Date): void {
+  console.warn(
+    JSON.stringify({
+      timestamp: now.toISOString(),
+      source: SOURCE,
+      severity: 'warn',
+      kind: 'event',
+      event: 'node_egress_paths_skipped',
+      pathsSkipped,
+      summary: 'Invalid MediaMTX path counters were excluded from node egress usage.',
+    })
+  );
+}
+
 function logAlertDeliveryFailure(errorName: string, now: Date): void {
   console.warn(
     JSON.stringify({
@@ -215,7 +267,7 @@ function logAlertDeliveryFailure(errorName: string, now: Date): void {
       kind: 'event',
       event: 'node_egress_alert_delivery_failed',
       errorName,
-      summary: 'A node egress alert was not delivered; its claimed level remains recorded to prevent repeated alerts.',
+      summary: 'A node egress alert was not delivered; its claim was rolled back for the next run.',
     })
   );
 }
