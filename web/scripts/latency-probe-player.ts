@@ -21,6 +21,8 @@ export async function recordWindowsPlayer(outDir: string, until: number): Promis
   const log = `"$env:TEMP\\webscreen-latency-${runId}\\ffmpeg.log"`;
   const started = `"$env:TEMP\\webscreen-latency-${runId}\\started.txt"`;
   const done = `"$env:TEMP\\webscreen-latency-${runId}\\done.txt"`;
+  // run ごとに一意な名前にして、前回の残骸や並行実行と衝突しないようにする（finally で必ず止めて消す）
+  const taskName = `WebScreenLatencyHarness-${runId}`;
   const ffmpeg = 'C:\\Users\\win\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1.1-full_build\\bin\\ffmpeg.exe';
   let diagnostics = '';
   try {
@@ -29,14 +31,14 @@ export async function recordWindowsPlayer(outDir: string, until: number): Promis
     // 300 秒までは通る）、長い無出力セッションが途中で切れると録画が丸ごと失われるため。
     // 一時ディレクトリは Windows 側で $env:TEMP を展開してから __ROOT__ に差し込む（単一引用符リテラル内では展開されない）
     const taskScript = `$recorded=[DateTime]::UtcNow; Set-Content -LiteralPath '__ROOT__\\started.txt' -Value $recorded.ToString('o') -NoNewline; & '${ffmpeg}' -y -f gdigrab -framerate 30 -i desktop -t ${seconds} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p '__ROOT__\\recording.mp4' 2>&1 | Set-Content -LiteralPath '__ROOT__\\ffmpeg.log'; $code=$LASTEXITCODE; Set-Content -LiteralPath '__ROOT__\\done.txt' -Value ($code.ToString() + ' ' + [DateTime]::UtcNow.ToString('o')) -NoNewline; exit $code`;
-    const startCommand = `$ErrorActionPreference='Stop'; $root=${remoteDir}; $task='WebScreenLatencyHarness'; Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path $root -Force | Out-Null; $taskScript=${powerShellLiteral(taskScript)}.Replace('__ROOT__', $root); $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskScript)); $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -EncodedCommand $encoded"; $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null; Start-ScheduledTask -TaskName $task; Write-Output 'task_started'`;
+    const startCommand = `$ErrorActionPreference='Stop'; $root=${remoteDir}; $task=${powerShellLiteral(taskName)}; Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path $root -Force | Out-Null; $taskScript=${powerShellLiteral(taskScript)}.Replace('__ROOT__', $root.Replace("'", "''")); $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskScript)); $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -EncodedCommand $encoded"; $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null; Start-ScheduledTask -TaskName $task; Write-Output 'task_started'`;
     console.info(`[player] 録画タスク起動（${seconds} 秒、done 待ち期限 ${recordingDeadlineSeconds(seconds)} 秒）`);
     const startResult = await runTextProcess(sshPowerShell(startCommand), 60_000);
     diagnostics = formatProcessDiagnostics('Windows Scheduled Task 起動', startResult);
     if (startResult.exitCode !== 0 || !startResult.stdout.includes('task_started')) return { samples: [], warning: 'Windows録画タスクを起動できませんでした。player-error.mdのSSH出力を確認してください。', diagnostics };
     const doneMarker = await waitForDoneMarker(done, recordingDeadlineSeconds(seconds));
     diagnostics += `\n## done マーカー待ち\n\n${doneMarker.diagnostics}\n`;
-    const finish = await runTextProcess(sshPowerShell(`$ErrorActionPreference='Continue'; Stop-ScheduledTask -TaskName 'WebScreenLatencyHarness' -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName 'WebScreenLatencyHarness' -Confirm:$false -ErrorAction SilentlyContinue; if(Test-Path -LiteralPath ${started}){ Write-Output ('recording_started_utc=' + (Get-Content -Raw -LiteralPath ${started}).Trim()) }; Write-Output 'ffmpeg_log_begin'; if(Test-Path -LiteralPath ${log}){ Get-Content -Raw -LiteralPath ${log} }; Write-Output 'ffmpeg_log_end'`), 60_000);
+    const finish = await runTextProcess(sshPowerShell(`$ErrorActionPreference='Continue'; Stop-ScheduledTask -TaskName ${powerShellLiteral(taskName)} -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName ${powerShellLiteral(taskName)} -Confirm:$false -ErrorAction SilentlyContinue; if(Test-Path -LiteralPath ${started}){ Write-Output ('recording_started_utc=' + (Get-Content -Raw -LiteralPath ${started}).Trim()) }; Write-Output 'ffmpeg_log_begin'; if(Test-Path -LiteralPath ${log}){ Get-Content -Raw -LiteralPath ${log} }; Write-Output 'ffmpeg_log_end'`), 60_000);
     const recording = { stdout: finish.stdout, stderr: finish.stderr, exitCode: doneMarker.exitCode };
     console.info(`[player] 録画完了 exit=${recording.exitCode} started=${parseUtcMarker(recording.stdout, 'recording_started_utc')}`);
     diagnostics += formatProcessDiagnostics('Windows Scheduled Task 録画', recording);
@@ -63,7 +65,7 @@ export async function recordWindowsPlayer(outDir: string, until: number): Promis
     catch (error) { return { samples: [], warning: `Windows録画の復号に失敗しました: ${String(error)}`, diagnostics }; }
   } finally {
     // 起動 ssh が切れた後にタスクだけ残ると次回の Register -Force と衝突するので、成否に関わらず必ず止めて消す
-    const cleanup = await runTextProcess(sshPowerShell(`$ErrorActionPreference='Continue'; Stop-ScheduledTask -TaskName 'WebScreenLatencyHarness' -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName 'WebScreenLatencyHarness' -Confirm:$false -ErrorAction SilentlyContinue; Remove-Item -LiteralPath ${remoteDir} -Recurse -Force -ErrorAction Stop`), 30_000).catch((error) => ({ stdout: '', stderr: String(error), exitCode: -1 }));
+    const cleanup = await runTextProcess(sshPowerShell(`$ErrorActionPreference='Continue'; Stop-ScheduledTask -TaskName ${powerShellLiteral(taskName)} -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName ${powerShellLiteral(taskName)} -Confirm:$false -ErrorAction SilentlyContinue; Remove-Item -LiteralPath ${remoteDir} -Recurse -Force -ErrorAction Stop`), 30_000).catch((error) => ({ stdout: '', stderr: String(error), exitCode: -1 }));
     if (cleanup.exitCode !== 0) console.warn(`Windows一時ディレクトリcleanupに失敗しました: ${cleanup.stderr}`);
   }
 }
