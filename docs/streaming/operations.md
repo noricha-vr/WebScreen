@@ -65,9 +65,7 @@ versioned 設定、VPS → Worker の cutover、Worker / VPS 一体 rollback は
 - 確実な検証: heartbeat 失効済みの合成 live 行を D1 に INSERT → 1〜2 分で `ended / heartbeat_lost` になれば cron・判定・API 呼び出しが一括で実証される（終わったら行を DELETE）
 - cron トリガーを追加したデプロイの後は、CI ログの `schedule:` 表示を信用せず実効を確かめる。不発なら `bunx wrangler triggers deploy -c cron/wrangler.jsonc` の再実行で直った実績あり
 - cron は ingress client で publisher を kick し、`MEDIAMTX_READ_EGRESS_API_URLS` の全 read egress で viewer / path を観測する。origin を含め、増設時はカンマ区切りで URL を追加する
-- 転送量通知は日付をJST仮定で指定し、70%超の合成行を `bunx wrangler d1 execute webscreen-beta-db --remote --command "INSERT INTO node_egress_daily (node_key, day, bytes_sent, alerted_level, updated_at) VALUES ('test-node', 'YYYY-MM-DD', 112000000000, 0, datetime('now'))"` で作る。
-- 次の毎分cronでDiscord通知が届くことを確認する。
-- 確認後は `bunx wrangler d1 execute webscreen-beta-db --remote --command "DELETE FROM node_egress_daily WHERE node_key = 'test-node' AND day = 'YYYY-MM-DD'"` で合成行を削除する。
+- 転送量通知（`node_egress_daily`）の検証: 通知判定は cron が実在ノードを集計した時にしか走るので、`node_key` は **実ノードの Control API の host**（例 `stream.web-screen.net`）、`day` は **JST の今日**にする。70% 超の合成行を `bunx wrangler d1 execute webscreen-beta-db --remote -c wrangler.jsonc --command "INSERT INTO node_egress_daily (node_key, day, bytes_sent, alerted_level, updated_at) VALUES ('stream.web-screen.net', 'YYYY-MM-DD', 112000000000, 0, datetime('now')) ON CONFLICT(node_key, day) DO UPDATE SET bytes_sent = 112000000000, alerted_level = 0"` で入れ、次の毎分 cron で Discord に `[警告] egress ...` が届くことを確認する。確認後は同じ行を `DELETE FROM node_egress_daily WHERE node_key = 'stream.web-screen.net' AND day = 'YYYY-MM-DD'` で消す（その日の実集計もリセットされる。翌日から正常）
 - いずれかの read egress が未観測の回は `no_viewers` と `kick_pending` の解除を見送る。`stream_lifecycle_completed` の `egressObserved` / `egressUnobserved` で観測状態を確認する
 
 ## origin を別ノードへ移す（Indigo → Cherry など）
