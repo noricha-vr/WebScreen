@@ -122,8 +122,10 @@ function parsePath(value: unknown): MediaPath {
     publisherId,
     publisherSessionType: publisherId ? publisherSessionType : null,
     rtspReaders,
-    bytesReceived: nonNegativeNumber(value.bytesReceived),
-    bytesSent: nonNegativeNumber(value.bytesSent),
+    // v1.20 で bytesReceived / bytesSent は deprecated になり inboundBytes / outboundBytes が後継。
+    // 後継を優先し、無い（旧版）時だけ旧フィールドを読む。
+    bytesReceived: nonNegativeNumber(value.inboundBytes ?? value.bytesReceived),
+    bytesSent: nonNegativeNumber(value.outboundBytes ?? value.bytesSent),
   };
 }
 

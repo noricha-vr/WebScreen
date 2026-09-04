@@ -59,6 +59,36 @@ describe('MediaMTX Control API adapter', () => {
     expect(requests.every((request) => request.authorization === 'Bearer test-token')).toBe(true);
   });
 
+  it('転送量は後継の outboundBytes / inboundBytes を優先し、無ければ deprecated の bytesSent / bytesReceived を読む', async () => {
+    const fetchImpl = async () =>
+      Response.json({
+        pageCount: 1,
+        items: [
+          {
+            name: 'live/AbCdEf123456',
+            source: null,
+            readers: [],
+            bytesSent: 10,
+            bytesReceived: 20,
+            outboundBytes: 1000,
+            inboundBytes: 2000,
+          },
+          { name: 'live/ZyXwVu987654', source: null, readers: [], bytesSent: 30, bytesReceived: 40 },
+        ],
+      });
+    const client = createMediaMtxClient({
+      apiUrl: 'https://media.example',
+      apiToken: 'test-token',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const paths = await client.listPaths();
+    expect(paths.map((path) => [path.bytesSent, path.bytesReceived])).toEqual([
+      [1000, 2000],
+      [30, 40],
+    ]);
+  });
+
   it('kickはpublisher IDをpathへ入れ、非2xxを例外にする', async () => {
     const fetchImpl = async () => new Response(null, { status: 503 });
     const client = createMediaMtxClient({
