@@ -62,7 +62,8 @@ export async function recordWindowsPlayer(outDir: string, until: number): Promis
     try { return { samples: await decodePlayerRecording(local, startedAt, offset.valueMs), warning: durationWarning, diagnostics }; }
     catch (error) { return { samples: [], warning: `Windows録画の復号に失敗しました: ${String(error)}`, diagnostics }; }
   } finally {
-    const cleanup = await runTextProcess(sshPowerShell(`Remove-Item -LiteralPath ${remoteDir} -Recurse -Force -ErrorAction Stop`), 30_000).catch((error) => ({ stdout: '', stderr: String(error), exitCode: -1 }));
+    // 起動 ssh が切れた後にタスクだけ残ると次回の Register -Force と衝突するので、成否に関わらず必ず止めて消す
+    const cleanup = await runTextProcess(sshPowerShell(`$ErrorActionPreference='Continue'; Stop-ScheduledTask -TaskName 'WebScreenLatencyHarness' -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName 'WebScreenLatencyHarness' -Confirm:$false -ErrorAction SilentlyContinue; Remove-Item -LiteralPath ${remoteDir} -Recurse -Force -ErrorAction Stop`), 30_000).catch((error) => ({ stdout: '', stderr: String(error), exitCode: -1 }));
     if (cleanup.exitCode !== 0) console.warn(`Windows一時ディレクトリcleanupに失敗しました: ${cleanup.stderr}`);
   }
 }
@@ -78,6 +79,7 @@ async function waitForDoneMarker(donePath: string, deadlineSeconds: number, poll
   const deadline = Date.now() + deadlineSeconds * 1_000;
   let polls = 0;
   let sshFailures = 0;
+  let invalidMarkers = 0;
   while (Date.now() < deadline) {
     polls += 1;
     const result = await runTextProcess(sshPowerShell(`if(Test-Path -LiteralPath ${donePath}){ Get-Content -Raw -LiteralPath ${donePath} } else { Write-Output 'pending' }`), 45_000);
@@ -85,14 +87,14 @@ async function waitForDoneMarker(donePath: string, deadlineSeconds: number, poll
     else {
       const text = result.stdout.trim();
       const match = /^(-?\d+)\s+(\S+)$/.exec(text);
-      if (match) {
-        const endedAtMs = Date.parse(match[2]!);
-        return { exitCode: Number(match[1]), endedAtMs: Number.isFinite(endedAtMs) ? endedAtMs : null, diagnostics: `- polls: ${polls}\n- ssh failures: ${sshFailures}\n- marker: ${text}` };
-      }
+      const endedAtMs = match ? Date.parse(match[2]!) : Number.NaN;
+      // 形式は "<exit code> <ended UTC ISO>"。時刻が読めないマーカーは書きかけ・破損とみなし、次のポーリングで読み直す
+      if (match && Number.isFinite(endedAtMs)) return { exitCode: Number(match[1]), endedAtMs, diagnostics: `- polls: ${polls}\n- ssh failures: ${sshFailures}\n- marker: ${text}` };
+      if (text !== 'pending') invalidMarkers += 1;
     }
     await Bun.sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())));
   }
-  return { exitCode: -1, endedAtMs: null, diagnostics: `- polls: ${polls}\n- ssh failures: ${sshFailures}\n- marker: (timed out after ${deadlineSeconds} s)` };
+  return { exitCode: -1, endedAtMs: null, diagnostics: `- polls: ${polls}\n- ssh failures: ${sshFailures}\n- invalid markers: ${invalidMarkers}\n- marker: (timed out after ${deadlineSeconds} s)` };
 }
 
 async function remoteFileSize(path: string): Promise<number> {
