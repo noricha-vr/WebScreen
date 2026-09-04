@@ -92,11 +92,18 @@ stream-paths: ## ingress / egress の MediaMTX path 一覧を表示
 	@ssh "$(STREAM_HOST)" 'curl -fsS http://127.0.0.1:9998/v3/paths/list | jq'
 
 latency-probe: MIN ?= 5
+# 変数はレシピ文字列へ展開せず環境変数で渡す（Make 変数にシェル記号が入ってもコマンドにならない）
+latency-probe: export MIN := $(MIN)
+latency-probe: export SOURCE := $(SOURCE)
+latency-probe: export PLAYER := $(PLAYER)
+latency-probe: export NOTIFY_DISCORD := $(NOTIFY_DISCORD)
+latency-probe: export SERVER_SNAP := $(SERVER_SNAP)
+latency-probe: export NODE_HOST := $(NODE_HOST)
 latency-probe: ## 遅延測定を実行（MIN=5 SOURCE=URL、PLAYER=win2022、NOTIFY_DISCORD=ID、SERVER_SNAP=HOST、NODE_HOST=HOST）
 	@script="$(WEB_DIR)/scripts/latency-probe.ts"; \
 	if [[ ! -f "$$script" ]]; then echo 'feat/latency-harness をマージしてください' >&2; exit 1; fi; \
-	if [[ -z "$(SOURCE)" ]]; then echo 'SOURCE=URL を指定してください' >&2; exit 64; fi; \
-	cd "$(WEB_DIR)" && bun scripts/latency-probe.ts run --minutes "$(MIN)" --source "$(SOURCE)" $(if $(PLAYER),--player "$(PLAYER)") $(if $(NOTIFY_DISCORD),--notify-discord "$(NOTIFY_DISCORD)") $(if $(SERVER_SNAP),--server-snap "$(SERVER_SNAP)") $(if $(NODE_HOST),--node-host "$(NODE_HOST)")
+	if [[ -z "$$SOURCE" ]]; then echo 'SOURCE=URL を指定してください' >&2; exit 64; fi; \
+	cd "$(WEB_DIR)" && bun scripts/latency-probe.ts run --minutes "$$MIN" --source "$$SOURCE" $${PLAYER:+--player "$$PLAYER"} $${NOTIFY_DISCORD:+--notify-discord "$$NOTIFY_DISCORD"} $${SERVER_SNAP:+--server-snap "$$SERVER_SNAP"} $${NODE_HOST:+--node-host "$$NODE_HOST"}
 
 stream-source: ## 遅延測定中の配信元タブの表示先を切り替える（URL=URL）
 	@script="$(WEB_DIR)/scripts/latency-probe.ts"; \

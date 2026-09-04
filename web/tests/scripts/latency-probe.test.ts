@@ -29,7 +29,7 @@ import {
 import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
 import { resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
 import { applyVideoProfile, cycleVideoProfiles, type VideoProfileEvaluator } from '../../scripts/latency-probe-profile';
-import { analyzeDirectory, clearPreviousRunArtifacts, rewriteWhipUrlHost, screenShareUrl, validateRunOptions } from '../../scripts/latency-probe-run';
+import { analyzeDirectory, clearPreviousRunArtifacts, headersForRewrittenBody, rewriteWhipUrlHost, screenShareUrl, syntheticHealthBody, validateRunOptions } from '../../scripts/latency-probe-run';
 import { parseFreezeLog, type SenderSample } from '../../scripts/latency-probe-quality';
 
 function rasterize(timestampMs: number, cell = 20): { rgb: Uint8Array; width: number; height: number } {
@@ -350,8 +350,10 @@ describe('latency probe CLI contract', () => {
     expect(enabled).toMatchObject({ options: { nodeHost: null } });
     const node = parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--node-host', 'chi1.web-screen.net']);
     expect(node).toMatchObject({ command: 'run', options: { nodeHost: 'chi1.web-screen.net' } });
-    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--node-host', 'https://chi1.web-screen.net'])).toThrow('DNS host');
-    expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--node-host', '-bad'])).toThrow('DNS host');
+    for (const bad of ['https://chi1.web-screen.net', '-bad', 'attacker.example', 'localhost', '127.0.0.1', 'a.b.web-screen.net', 'web-screen.net', 'chi1.web-screen.net.evil.example']) {
+      expect(() => parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--node-host', bad])).toThrow('web-screen.net');
+    }
+    expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: null, abCycleSeconds: null, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null, streamId: null, nodeHost: 'evil.example' })).toThrow('web-screen.net');
     expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--video-profile', 'realtime', '--max-bitrate', '1500000', '--scroll', '240'])).toMatchObject({ command: 'run', options: { videoProfile: 'realtime', maxBitrate: 1_500_000, scrollPixelsPerSecond: 240 } });
     expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--ab-cycle', '60', '--max-bitrate', '1500000'])).toMatchObject({ command: 'run', options: { videoProfile: 'quality', abCycleSeconds: 60, maxBitrate: 1_500_000 } });
     expect(parseLatencyProbeArgs(['run', '--minutes', '2', '--source', 'https://example.test', '--stream-id', 'Ab12Cd34Ef56'])).toMatchObject({ command: 'run', options: { streamId: 'Ab12Cd34Ef56' } });
@@ -419,6 +421,18 @@ describe('latency probe node host routing', () => {
     expect(rewritten.whipUrl).toBe('https://chi1.web-screen.net/live/AbCdEf123456/whip');
     expect(rewritten.streamUrl).toBe('rtspt://webscreen.tv/live/AbCdEf123456');
     expect(rewritten.status).toBe('live');
+  });
+
+  test('合成 health は呼ばれるごとに egress が増える ready を返す', () => {
+    const first = JSON.parse(syntheticHealthBody(0)) as { state: string; egressBytes: number };
+    const second = JSON.parse(syntheticHealthBody(1)) as { state: string; egressBytes: number };
+    expect(first.state).toBe('ready');
+    expect(second.egressBytes).toBeGreaterThan(first.egressBytes);
+  });
+
+  test('書き換え応答のヘッダーから圧縮・長さ・validator を落とす', () => {
+    const headers = headersForRewrittenBody({ 'Content-Type': 'application/json', 'Content-Encoding': 'br', 'content-length': '123', etag: 'W/"x"', 'cache-control': 'no-store' });
+    expect(headers).toEqual({ 'Content-Type': 'application/json', 'cache-control': 'no-store' });
   });
 
   test('whipUrl を持たない応答と JSON でない本文はそのまま返す', () => {
