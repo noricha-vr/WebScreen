@@ -61,7 +61,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
   if (command === 'player-check') {
     rejectUnknown(values, ['seconds', 'out']);
     const seconds = values.seconds === undefined ? 15 : Number(values.seconds);
-    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 300) throw new Error('--seconds must be an integer between 5 and 300');
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 900) throw new Error('--seconds must be an integer between 5 and 900');
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     return { command, seconds, outDir: values.out ?? resolve('..', 'docs', 'tmp', 'latency', `player-check-${stamp}`) };
   }

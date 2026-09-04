@@ -62,7 +62,49 @@
       context.fillStyle = cells[row][column] ? '#fff' : '#000';
       context.fillRect(x + column * cell, y + row * cell, cell, cell);
     }
+    drawWallClock(now, x, y, size, cell);
     if (heavy) drawSyntheticCursor(now, x, y, size, cell);
+  }
+  // 人が目で読む時計。格子の左に秒針つきアナログ、右にミリ秒つきデジタル。復号用の格子（同期枠）とは
+  // 隔離矩形の外側に置き、heavy 素材でも同じ暗色の下地を敷く。
+  function pad(value, length) { return String(value).padStart(length, '0'); }
+  function drawWallClock(now, codeX, codeY, codeSize, cell) {
+    const date = new Date(now), centerY = codeY + codeSize / 2;
+    const side = Math.min((codeX - cell * 1.2) / 2, cell * 4.4);
+    if (side < cell * 2) return;
+    const backing = '#101827';
+    // 左: アナログ時計（秒針はミリ秒でなめらかに回す）
+    const radius = side - cell * 0.5, leftX = (codeX - cell * 1.2) / 2;
+    context.fillStyle = backing; context.fillRect(leftX - side, centerY - side, side * 2, side * 2);
+    context.strokeStyle = '#e5e7eb'; context.lineWidth = Math.max(2, cell * 0.08);
+    context.beginPath(); context.arc(leftX, centerY, radius, 0, Math.PI * 2); context.stroke();
+    for (let tick = 0; tick < 60; tick += 1) {
+      const angle = (tick / 60) * Math.PI * 2, major = tick % 5 === 0;
+      const inner = radius * (major ? 0.86 : 0.93);
+      context.lineWidth = major ? Math.max(2, cell * 0.1) : Math.max(1, cell * 0.04);
+      context.beginPath(); context.moveTo(leftX + Math.sin(angle) * inner, centerY - Math.cos(angle) * inner);
+      context.lineTo(leftX + Math.sin(angle) * radius, centerY - Math.cos(angle) * radius); context.stroke();
+    }
+    const seconds = date.getSeconds() + date.getMilliseconds() / 1000;
+    const minutes = date.getMinutes() + seconds / 60, hours = (date.getHours() % 12) + minutes / 60;
+    const hand = (value, unit, length, width, color) => {
+      const angle = (value / unit) * Math.PI * 2;
+      context.strokeStyle = color; context.lineWidth = width; context.lineCap = 'round';
+      context.beginPath(); context.moveTo(leftX, centerY); context.lineTo(leftX + Math.sin(angle) * radius * length, centerY - Math.cos(angle) * radius * length); context.stroke();
+    };
+    hand(hours, 12, 0.5, Math.max(4, cell * 0.22), '#e5e7eb');
+    hand(minutes, 60, 0.72, Math.max(3, cell * 0.15), '#e5e7eb');
+    hand(seconds, 60, 0.9, Math.max(2, cell * 0.07), '#f87171');
+    context.fillStyle = '#f87171'; context.beginPath(); context.arc(leftX, centerY, Math.max(3, cell * 0.12), 0, Math.PI * 2); context.fill();
+    // 右: ローカル時刻 HH:MM:SS.mmm
+    const rightStart = codeX + codeSize + cell * 1.2, rightRoom = innerWidth - rightStart, rightX = rightStart + rightRoom / 2;
+    const text = `${pad(date.getHours(), 2)}:${pad(date.getMinutes(), 2)}:${pad(date.getSeconds(), 2)}.${pad(date.getMilliseconds(), 3)}`;
+    // 12 文字の等幅で右側の余白に収まる大きさ（等幅 1 文字 ≒ 0.62 em）
+    context.font = `700 ${Math.max(20, Math.floor(Math.min(side * 0.42, (rightRoom - cell) / (text.length * 0.62))))}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    const width = context.measureText(text).width + cell;
+    context.fillStyle = backing; context.fillRect(rightX - width / 2, centerY - side * 0.5, width, side);
+    context.fillStyle = '#ffffff'; context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText(text, rightX, centerY);
+    context.textBaseline = 'alphabetic';
   }
   function drawHeavyBackground(now) {
     const width = innerWidth, height = innerHeight;
@@ -98,15 +140,24 @@
       setTimeout(() => {
         if (audioContext.currentTime >= startAt) { scheduleBeep(); return; }
         // 秒の 8 秒剰余を周波数に符号化する。受信側は 8 帯域を照合し、映像近接標本と組み合わせて絶対遅延を復元する。
+        // 立ち上がり・立ち下がりを傾斜させてクリック音を消す。受信側の検出窓は 50 ms なので
+        // 定常部 40 ms を残し、周波数（帯域）は変えない。
         const oscillator = audioContext.createOscillator(); oscillator.frequency.value = 600 + 100 * ((nextBoundaryMs / 1000) % 8);
-        oscillator.connect(gain); oscillator.start(startAt); oscillator.stop(startAt + 0.05);
+        const envelope = audioContext.createGain(); envelope.gain.setValueAtTime(0, startAt);
+        envelope.gain.linearRampToValueAtTime(0.55, startAt + 0.008); envelope.gain.setValueAtTime(0.55, startAt + 0.048);
+        envelope.gain.linearRampToValueAtTime(0, startAt + 0.075);
+        oscillator.connect(envelope).connect(gain); oscillator.start(startAt); oscillator.stop(startAt + 0.08);
         scheduleBeep();
       }, Math.max(0, (startAt - audioContext.currentTime) * 1000 - leadMs));
     };
     if (new URLSearchParams(location.search).get('tones') === '1') {
-      for (const [frequency, pan] of [[440, -1], [880, 1]]) {
-        const oscillator = audioContext.createOscillator(), stereo = audioContext.createStereoPanner();
-        oscillator.frequency.value = frequency; stereo.pan.value = pan; oscillator.connect(stereo).connect(gain); oscillator.start();
+      // 左右チャンネルの存在確認用。高い持続音は耳障りなので、低い 2 音を小さく、ゆっくり揺らして鳴らす。
+      const tremolo = audioContext.createOscillator(), depth = audioContext.createGain();
+      tremolo.frequency.value = 0.4; depth.gain.value = 0.08; tremolo.connect(depth); tremolo.start();
+      for (const [frequency, pan] of [[220, -1], [330, 1]]) {
+        const oscillator = audioContext.createOscillator(), stereo = audioContext.createStereoPanner(), level = audioContext.createGain();
+        oscillator.frequency.value = frequency; stereo.pan.value = pan; level.gain.value = 0.16; depth.connect(level.gain);
+        oscillator.connect(level).connect(stereo).connect(gain); oscillator.start();
       }
     }
     scheduleBeep();
