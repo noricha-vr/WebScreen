@@ -11,7 +11,7 @@ const NOW = new Date('2026-09-04T03:00:00.000Z');
 const NODE = 'egress.example';
 
 interface Sample {
-  bytesSent: number;
+  bytesSent: number | undefined;
   name?: string;
 }
 
@@ -100,7 +100,11 @@ class FakeNodeEgressDatabase implements NodeEgressUsageDatabase {
         throw new Error('daily write failed');
       }
       const existing = daily.get(key);
-      const bytesAdded = values[2] as number;
+      const bytesSent = values[2] as number;
+      const nodeKey = values[5] as string;
+      const path = values[6] as string;
+      const previous = samples.get(sampleKey(nodeKey, path));
+      const bytesAdded = previous === undefined || bytesSent < previous ? bytesSent : bytesSent - previous;
       daily.set(key, {
         bytesSent: (existing?.bytesSent ?? 0) + bytesAdded,
         alertedLevel: existing?.alertedLevel ?? 0,
@@ -115,7 +119,7 @@ class FakeNodeEgressDatabase implements NodeEgressUsageDatabase {
       if (query.includes('alerted_level <') && row.alertedLevel >= (values[3] as number)) {
         return 0;
       }
-      if (query.includes('AND alerted_level=?') && row.alertedLevel !== (values[3] as number)) {
+      if (query.includes('AND alerted_level = ?') && row.alertedLevel !== (values[3] as number)) {
         return 0;
       }
       row.alertedLevel = level;
@@ -201,6 +205,18 @@ describe('node egress usage', () => {
     await record(database, [{ bytesSent: 175 }]);
 
     expect(database.daily.get(dailyKey(NODE, '2026-09-04'))?.bytesSent).toBe(175);
+  });
+
+  it('並行する2実行でも同じ増分を二重加算しない', async () => {
+    const database = new FakeNodeEgressDatabase();
+
+    await Promise.all([
+      record(database, [{ bytesSent: 120 }]),
+      record(database, [{ bytesSent: 120 }]),
+    ]);
+
+    expect(database.daily.get(dailyKey(NODE, '2026-09-04'))?.bytesSent).toBe(120);
+    expect(database.samples.get(sampleKey(NODE, pathName(0)))).toBe(120);
   });
 
   it('カウンタが戻ったpathは再起動後の累積値を加算する', async () => {
@@ -314,6 +330,22 @@ describe('node egress usage', () => {
     } finally {
       console.warn = original;
     }
+  });
+
+  it('無効なcounterが一時的に返っても既存sampleを保持する', async () => {
+    const database = new FakeNodeEgressDatabase();
+    const original = console.warn;
+    console.warn = () => {};
+    try {
+      await record(database, [{ bytesSent: 120 }]);
+      await record(database, [{ bytesSent: undefined }]);
+      await record(database, [{ bytesSent: 175 }]);
+    } finally {
+      console.warn = original;
+    }
+
+    expect(database.daily.get(dailyKey(NODE, '2026-09-04'))?.bytesSent).toBe(175);
+    expect(database.samples.get(sampleKey(NODE, pathName(0)))).toBe(175);
   });
 
   it('batch途中の日次加算失敗ではsample更新もcommitしない', async () => {

@@ -93,8 +93,10 @@ async function recordNode(input: {
     .all<SampleRow>();
   const previousByPath = new Map(samples.results.map((sample) => [sample.path, sample.bytes_sent]));
   const currentByPath = new Map<string, number>();
+  const observedPathNames = new Set<string>();
   let pathsSkipped = 0;
   for (const path of input.paths) {
+    observedPathNames.add(path.name);
     const bytesSent = path.bytesSent;
     if (
       !LIVE_PATH.test(path.name) ||
@@ -118,19 +120,44 @@ async function recordNode(input: {
     bytesAdded += previous === undefined || bytesSent < previous ? bytesSent : bytesSent - previous;
     statements.push(
       input.database
-      .prepare(
-        `INSERT INTO node_egress_samples (node_key, path, bytes_sent, sampled_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(node_key, path) DO UPDATE SET
-           bytes_sent = excluded.bytes_sent,
-           sampled_at = excluded.sampled_at`
-      )
-      .bind(input.node.nodeKey, path, bytesSent, input.now.toISOString())
+        .prepare(
+          `INSERT INTO node_egress_daily (node_key, day, bytes_sent, alerted_level, updated_at)
+           VALUES (?, ?, (
+             SELECT CASE WHEN s.bytes_sent IS NULL OR ? < s.bytes_sent THEN ? ELSE ? - s.bytes_sent END
+             FROM (SELECT ? AS node_key) x
+             LEFT JOIN node_egress_samples s ON s.node_key = x.node_key AND s.path = ?
+           ), 0, ?)
+           ON CONFLICT(node_key, day) DO UPDATE SET
+             bytes_sent = node_egress_daily.bytes_sent + excluded.bytes_sent,
+             updated_at = excluded.updated_at`
+        )
+        .bind(
+          input.node.nodeKey,
+          input.day,
+          bytesSent,
+          bytesSent,
+          bytesSent,
+          input.node.nodeKey,
+          path,
+          input.now.toISOString()
+        )
+    );
+    // 差分は同じbatch内でsampleを更新する直前にSQLで計算し、並行実行でも二重加算を避ける。
+    statements.push(
+      input.database
+        .prepare(
+          `INSERT INTO node_egress_samples (node_key, path, bytes_sent, sampled_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(node_key, path) DO UPDATE SET
+             bytes_sent = excluded.bytes_sent,
+             sampled_at = excluded.sampled_at`
+        )
+        .bind(input.node.nodeKey, path, bytesSent, input.now.toISOString())
     );
   }
 
   for (const sample of samples.results) {
-    if (currentByPath.has(sample.path)) continue;
+    if (observedPathNames.has(sample.path)) continue;
     // 消えたpathの最後の1分未満は観測できないため、その分は意図して捨てる。
     statements.push(
       input.database
@@ -139,17 +166,10 @@ async function recordNode(input: {
     );
   }
 
-  statements.push(
-    input.database.prepare(
-      `INSERT INTO node_egress_daily (node_key, day, bytes_sent, alerted_level, updated_at)
-       VALUES (?, ?, ?, 0, ?)
-       ON CONFLICT(node_key, day) DO UPDATE SET
-         bytes_sent = node_egress_daily.bytes_sent + excluded.bytes_sent,
-         updated_at = excluded.updated_at`
-    ).bind(input.node.nodeKey, input.day, bytesAdded, input.now.toISOString())
-  );
-  // Cloudflareは同一分のscheduled cronを二重起動しない前提で、1ノード分を1 batchに閉じる。
+  if (statements.length === 0) return { bytesAdded, alertSent: false, pathsSkipped };
   await input.database.batch(statements);
+
+  if (currentByPath.size === 0) return { bytesAdded, alertSent: false, pathsSkipped };
 
   const daily = await input.database
     .prepare(
@@ -186,7 +206,7 @@ async function recordNode(input: {
     await input.database
       .prepare(
         `UPDATE node_egress_daily SET alerted_level = ?
-         WHERE node_key = ? AND day = ? AND alerted_level=?`
+         WHERE node_key = ? AND day = ? AND alerted_level = ?`
       )
       .bind(row.alerted_level, input.node.nodeKey, input.day, level)
       .run();
