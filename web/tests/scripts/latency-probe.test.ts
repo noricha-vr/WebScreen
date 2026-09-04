@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,6 +30,7 @@ import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
 import { resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
 import { applyVideoProfile, cycleVideoProfiles, type VideoProfileEvaluator } from '../../scripts/latency-probe-profile';
 import { analyzeDirectory, clearPreviousRunArtifacts, headersForRewrittenBody, rewriteWhipUrlHost, screenShareUrl, syntheticHealthBody, validateReadHost, validateRunOptions } from '../../scripts/latency-probe-run';
+import { NOTIFY_COMMAND_ENV, buildNotifyArgv, notifyCommandTemplate, notifyStdinJson, notifyStreamUrl, parseCommandLine, type NotifyChild } from '../../scripts/latency-probe-notify';
 import { parseFreezeLog, type SenderSample } from '../../scripts/latency-probe-quality';
 import { recordingDeadlineSeconds } from '../../scripts/latency-probe-player';
 
@@ -492,5 +493,111 @@ describe('latency probe windows recording deadline', () => {
     expect(recordingDeadlineSeconds(10)).toBe(45);
     expect(recordingDeadlineSeconds(480)).toBe(750);
     expect(recordingDeadlineSeconds(8)).toBe(42);
+  });
+});
+
+/** 通知コマンドを起こさずに argv と stdin だけを記録する差し替え先。 */
+function recordingSpawn(exitCode: number): { calls: { argv: string[]; stdin: string }[]; spawn: (argv: readonly string[], stdin: Uint8Array) => NotifyChild } {
+  const calls: { argv: string[]; stdin: string }[] = [];
+  return {
+    calls,
+    spawn: (argv, stdin) => {
+      calls.push({ argv: [...argv], stdin: new TextDecoder().decode(stdin) });
+      return {
+        exited: Promise.resolve(exitCode),
+        stderr: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('boom')); controller.close(); } }),
+        kill: () => undefined,
+      };
+    },
+  };
+}
+
+describe('latency probe notify command', () => {
+  test('空白区切りの argv を引用符つきで分解する', () => {
+    expect(parseCommandLine('bun notify.ts --target nori')).toEqual(['bun', 'notify.ts', '--target', 'nori']);
+    expect(parseCommandLine('  bun   notify.ts  ')).toEqual(['bun', 'notify.ts']);
+    expect(parseCommandLine(`cmd --message '配信を開始しました: {url}'`)).toEqual(['cmd', '--message', '配信を開始しました: {url}']);
+    expect(parseCommandLine('cmd --message "a b" --flag')).toEqual(['cmd', '--message', 'a b', '--flag']);
+    // 語の途中の引用符（--message='a b' 形式）と、引用符内の別種の引用符
+    expect(parseCommandLine(`cmd --message='a b' -x`)).toEqual(['cmd', '--message=a b', '-x']);
+    expect(parseCommandLine(`cmd "it's here"`)).toEqual(['cmd', "it's here"]);
+    // 空文字の引数は明示的に残す
+    expect(parseCommandLine(`cmd "" tail`)).toEqual(['cmd', '', 'tail']);
+  });
+
+  test('閉じていない引用符とコマンド名なしは env の読み込み時点で失敗する', () => {
+    expect(() => parseCommandLine(`cmd --message 'unterminated`)).toThrow(NOTIFY_COMMAND_ENV);
+    expect(() => notifyCommandTemplate(`cmd "unterminated`)).toThrow(NOTIFY_COMMAND_ENV);
+    expect(() => notifyCommandTemplate('"" --flag')).toThrow(NOTIFY_COMMAND_ENV);
+  });
+
+  test('未設定・空白のみの環境変数は null を返す', () => {
+    expect(notifyCommandTemplate(undefined)).toBeNull();
+    expect(notifyCommandTemplate('   ')).toBeNull();
+  });
+
+  test('{url} と {channel} を引数配列と stdin JSON へ反映する', async () => {
+    const template = notifyCommandTemplate(`bun /opt/notify.ts --message '配信: {url}' --channel-id {channel} --url={url}`);
+    expect(template).not.toBeNull();
+    expect(buildNotifyArgv(template ?? [], { url: 'rtspt://chi1.web-screen.net/live/AbCdEf123456', channel: '123456789012345678' })).toEqual([
+      'bun', '/opt/notify.ts', '--message', '配信: rtspt://chi1.web-screen.net/live/AbCdEf123456',
+      '--channel-id', '123456789012345678', '--url=rtspt://chi1.web-screen.net/live/AbCdEf123456',
+    ]);
+    const recorder = recordingSpawn(0);
+    const info = spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template, url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200, spawn: recorder.spawn });
+    } finally { info.mockRestore(); }
+    expect(recorder.calls).toHaveLength(1);
+    expect(recorder.calls[0]?.argv).toContain('配信: rtspt://host/live/AbCdEf123456');
+    expect(recorder.calls[0]?.argv).toContain('123456789012345678');
+    expect(JSON.parse(recorder.calls[0]?.stdin ?? '{}')).toEqual({ url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678' });
+    expect(notifyStdinJson({ url: 'u', channel: 'c' }).endsWith('\n')).toBe(true);
+  });
+
+  test('未設定なら警告だけ出して例外にせず計測を続行する', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template: null, url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200 });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain(NOTIFY_COMMAND_ENV);
+    } finally { warn.mockRestore(); }
+  });
+
+  test('非ゼロ終了は警告に落として run を止めない', async () => {
+    const recorder = recordingSpawn(3);
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template: ['notify'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200, spawn: recorder.spawn });
+      expect(String(warn.mock.calls[0]?.[0])).toContain('boom');
+    } finally { warn.mockRestore(); }
+  });
+
+  test('既定の spawn で実プロセスを起こし、成功を info で報告する', async () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template: ['echo', '{channel}', '{url}'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 5_000 });
+      expect(String(info.mock.calls[0]?.[0])).toContain('123456789012345678');
+    } finally { info.mockRestore(); }
+  });
+
+  // docs の注入例と同じ形（$HOME 展開後の絶対パス + 引用符つきメッセージ）が argv へ落ちることを確認する。
+  // 実パスは書かない（リポジトリに個人環境の固定パスを残さないのが本変更の目的）。
+  test('固まったコマンドはタイムアウトで kill して警告に落とす', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    const startedAt = Date.now();
+    try {
+      // stderr を先に await していると pipe が閉じずタイムアウトが始まらない（実プロセスでの回帰確認）
+      await notifyStreamUrl({ template: ['sleep', '30'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200 });
+      expect(String(warn.mock.calls[0]?.[0])).toContain('exit -1');
+    } finally { warn.mockRestore(); }
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+  });
+
+  test('docs の通知コマンド例が argv へ分解できる', () => {
+    const template = notifyCommandTemplate(`bun /Users/example/notify-discord.ts --message '遅延計測の配信を開始しました。VRChat に貼ってください: {url}' --target nori --channel-id {channel} --project-dir .`);
+    expect(template?.[0]).toBe('bun');
+    expect(template).toContain('遅延計測の配信を開始しました。VRChat に貼ってください: {url}');
+    expect(template?.slice(-4)).toEqual(['--channel-id', '{channel}', '--project-dir', '.']);
   });
 });

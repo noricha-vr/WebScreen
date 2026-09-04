@@ -33,7 +33,11 @@ run options:
   --outlet-quality-seconds N
                      出口画質の連続ffmpeg測定窓（5〜120秒、既定20）。遅延用の単発取得とは別系統
   --notify-discord CHANNEL_ID
-                     配信 URL を Discord の指定チャンネルへ投稿する（VRChat 側の PC で貼るため）
+                     配信 URL を外部へ通知する（VRChat 側の PC で貼るため）。実際に叩くコマンドは環境変数
+                     WEBSCREEN_LATENCY_NOTIFY_COMMAND で注入する（空白区切りの argv。'…' / "…" で空白を含む引数を囲める。
+                     シェルは介さないので ~ や $VAR は展開されない）。各引数の {url} は配信 URL、{channel} はこの
+                     CHANNEL_ID に置換し、stdin へ {"url":"...","channel":"..."} の JSON を 1 行渡す。
+                     未設定なら警告だけ出して計測は続行する。例と注入方法は docs/streaming/latency-harness.md
   --node-host HOST   配信先ノードを差し替える（web-screen.net 配下の 1 ラベルのみ、例 chi1.web-screen.net）。配信開始 API 応答の whipUrl のホストを HOST にして WHIP を
                      そのノードへ送り、出口計測と VRChat へ渡す URL も rtsp(t)://HOST/live/{id} にする
                      （本番の STREAM_WHIP_ORIGIN と DNS は変えずに別ノードを origin として測る用途）
