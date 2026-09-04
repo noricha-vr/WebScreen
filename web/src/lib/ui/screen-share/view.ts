@@ -221,11 +221,6 @@ export class ScreenShareView {
     return this.message('recordFilenameBase').replace('{number}', String(number));
   }
 
-  /** 保存ダイアログに出すファイル種別のラベル（辞書が正本）。 */
-  recordingFileTypeDescription(): string {
-    return this.message('recordFileType');
-  }
-
   /** 未ダウンロードで抱えている Blob の合計バイト数。 */
   pendingRecordingBytes(): number {
     return this.pendingBlobBytes;
@@ -240,7 +235,7 @@ export class ScreenShareView {
     item.append(this.recordingInfo(recording, number), this.recordingAction(recording));
     list.prepend(item);
     list.hidden = false;
-    if (recording.blob) this.pendingBlobBytes += recording.sizeBytes;
+    this.pendingBlobBytes += recording.sizeBytes;
     const empty = this.root.querySelector<HTMLElement>('[data-screen-record-empty]');
     if (empty) empty.hidden = true;
     // 配信終了後に完了した録画でも保存できるよう、セクションごと開く。
@@ -269,19 +264,17 @@ export class ScreenShareView {
     return info;
   }
 
-  /** 行の操作ボタン。ディスクへ直接書いた録画は既に保存済みなので、完了表示だけを出す。 */
+  /** 行の操作ボタン。録画は Blob なので、押されて初めてディスクへ落ちる。 */
   private recordingAction(recording: LocalRecording): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = RECORD_ACTION_CLASS;
-    const saved = recording.blob === null;
     const icon = document.createElement('i');
-    icon.className = saved ? 'fa-solid fa-circle-check' : 'fa-solid fa-download';
+    icon.className = 'fa-solid fa-download';
     icon.setAttribute('aria-hidden', 'true');
     const label = document.createElement('span');
-    label.textContent = this.message(saved ? 'labelRecordSaved' : 'labelRecordDownload');
+    label.textContent = this.message('labelRecordDownload');
     button.append(icon, label);
-    if (saved) return lockAsSaved(button);
     const row: RecordingRow = {
       filename: recording.filename,
       sizeBytes: recording.sizeBytes,
@@ -419,7 +412,7 @@ export class ScreenShareView {
   }
 }
 
-/** ダウンロード済み・保存済みの行を、押せない完了状態に固定する。 */
+/** ダウンロードを始めた行を、押せない完了状態に固定する。 */
 function lockAsSaved(button: HTMLButtonElement): HTMLButtonElement {
   button.disabled = true;
   button.dataset['saved'] = 'true';

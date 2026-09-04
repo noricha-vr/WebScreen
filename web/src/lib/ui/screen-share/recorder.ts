@@ -17,26 +17,8 @@ export interface LocalRecording {
   startedAt: number;
   durationSeconds: number;
   sizeBytes: number;
-  blob: Blob | null;
-  fileHandle: RecordingFileHandle | null;
-}
-
-export interface RecordingFileHandle {
-  createWritable(): Promise<RecordingWritable>;
-}
-
-export interface RecordingWritable {
-  write(data: Blob): Promise<void>;
-  /** 書き込んだ内容を対象ファイルへ反映して閉じる。完了した録画だけがここを通る。 */
-  close(): Promise<void>;
-  /** 変更を捨てて閉じる。中断・書き込み失敗で、ユーザーが選んだ既存ファイルを壊さないために使う。 */
-  abort(): Promise<void>;
-}
-
-/** 開き終えた保存先。pickFile が無い環境では両方 null（メモリ蓄積）。 */
-interface RecordingTarget {
-  fileHandle: RecordingFileHandle | null;
-  writable: RecordingWritable | null;
+  /** 録画の実体。ダウンロードするまでタブのメモリに載る。 */
+  blob: Blob;
 }
 
 export interface RecorderInstance {
@@ -54,21 +36,14 @@ export interface MediaRecorderConstructor {
   isTypeSupported(mimeType: string): boolean;
 }
 
-export interface RecordingPicker {
-  (options: { suggestedName: string; types: Array<{ description: string; accept: Record<string, string[]> }> }): Promise<RecordingFileHandle>;
-}
-
 export interface ScreenRecorderOptions {
   MediaRecorder: MediaRecorderConstructor | null;
-  pickFile?: RecordingPicker;
   now?: () => number;
   onError?: (error: RecorderError) => void;
   onElapsed?: (seconds: number) => void;
   onStateChange?: (state: RecorderState) => void;
   /** 完成した録画の唯一の受け渡し口。外部 stop・サイズ上限・エラー停止のどの経路でもここだけを通る。 */
   onRecordingComplete?: (recording: LocalRecording) => void;
-  /** 保存ダイアログのファイル種別ラベル。文言は辞書から渡す。 */
-  fileTypeDescription?: string;
   maxBytes?: number;
 }
 
@@ -81,23 +56,15 @@ const MIME_CANDIDATES = [
 /** MediaRecorder を配信停止から独立して扱うローカル録画機。 */
 export class ScreenRecorder {
   private state: RecorderState = 'idle';
-  // ファイル選択ダイアログの待機中。state は idle のままなので、再入と中断はこの旗で見る。
-  private opening = false;
-  private openAborted = false;
   private recorder: RecorderInstance | null = null;
-  private writable: RecordingWritable | null = null;
-  private fileHandle: RecordingFileHandle | null = null;
   private chunks: Blob[] = [];
   private sizeBytes = 0;
   private startedAt = 0;
   private filename = '';
   private mimeType = '';
   private extension = '';
-  private writeChain: Promise<void> = Promise.resolve();
   private completion: Promise<void> | null = null;
   private resolveCompletion: (() => void) | null = null;
-  // 完了処理は 1 回だけ。開始例外のように stop と complete が同時に走る経路でも close を二重にしない。
-  private completing = false;
   private failure: RecorderError | null = null;
   private elapsedTimer: ReturnType<typeof globalThis.setInterval> | null = null;
 
@@ -107,88 +74,46 @@ export class ScreenRecorder {
     return this.state;
   }
 
-  /** 停止すべき録画（ファイル選択の待機中も含む）を抱えているか。 */
+  /** 停止すべき録画を抱えているか。 */
   get isActive(): boolean {
-    return this.opening || this.state !== 'idle';
+    return this.state !== 'idle';
   }
 
-  /** 選んだ共有 stream を借用して、1 秒単位のチャンク録画を開始する。 */
-  async start(stream: MediaStream, filenameBase: string): Promise<void> {
+  /**
+   * 選んだ共有 stream を借用して、1 秒単位のチャンク録画を開始する。
+   * 開始は同期で完了させる。途中に await を挟むと、その待機中に届いた stop() を取りこぼして
+   * 「誰も止められない録画」ができるため、非同期の準備処理をここへ足さない。
+   */
+  start(stream: MediaStream, filenameBase: string): void {
     if (this.isActive) return;
     const candidate = this.selectMimeType();
     if (!candidate || !this.options.MediaRecorder) return this.failStart({ code: 'unsupported' });
 
-    const filename = `${filenameBase}.${candidate.extension}`;
-    this.opening = true;
-    this.openAborted = false;
-    let target: RecordingTarget | null;
-    try {
-      target = await this.openTarget(filename, candidate.mimeType);
-    } catch (error) {
-      this.opening = false;
-      // 待機中に配信が終わっていたら、ダイアログのキャンセル等を失敗として伝えない（録画は始まっていない）。
-      if (this.consumeAbort()) return;
-      return this.failStart({ code: 'writeFailed', cause: error });
-    }
-    this.opening = false;
-    // 選択中に配信が終わっていたら、止まった track で MediaRecorder を作らない。
-    if (!target) return;
-
-    this.fileHandle = target.fileHandle;
-    this.writable = target.writable;
-    this.reset(filename, candidate.mimeType, candidate.extension);
+    this.reset(`${filenameBase}.${candidate.extension}`, candidate.mimeType, candidate.extension);
     try {
       const recorder = new this.options.MediaRecorder(stream, { mimeType: candidate.mimeType });
       this.recorder = recorder;
       recorder.ondataavailable = (event) => this.receiveChunk(event.data);
       recorder.onerror = (event) => this.fail({ code: 'writeFailed', cause: event });
-      recorder.onstop = () => void this.complete();
+      recorder.onstop = () => this.complete();
       this.transition('recording');
       recorder.start(CHUNK_INTERVAL_MS);
       this.elapsedTimer = globalThis.setInterval(() => this.emitElapsed(), CHUNK_INTERVAL_MS);
       this.emitElapsed();
     } catch (error) {
-      // fail() が停止を始めているので、完了は stop() の待ち合わせに任せる（complete の二重実行を避ける）。
+      // fail() が停止と完了まで進めるので、ここでは何も待たない（complete の二重実行を避ける）。
       this.fail({ code: 'writeFailed', cause: error });
-      await this.stop();
     }
-  }
-
-  /**
-   * 保存先を開く。createWritable は close 時に対象ファイルへ反映されるため、中断済みなら
-   * writable を作らず、作った後の中断は close ではなく abort で捨てる（既存ファイルを壊さない）。
-   */
-  private async openTarget(filename: string, mimeType: string): Promise<RecordingTarget | null> {
-    const fileHandle = this.options.pickFile
-      ? await this.options.pickFile(filePickerOptions(filename, mimeType, this.options.fileTypeDescription ?? ''))
-      : null;
-    if (this.consumeAbort()) return null;
-    const writable = fileHandle ? await fileHandle.createWritable() : null;
-    if (this.consumeAbort()) {
-      await abortQuietly(writable);
-      return null;
-    }
-    return { fileHandle, writable };
-  }
-
-  /** 待機中に stop() が来ていたかを 1 度だけ受け取る。 */
-  private consumeAbort(): boolean {
-    if (!this.openAborted) return false;
-    this.openAborted = false;
-    return true;
   }
 
   /** 録画を止め、完了までを待つ。録画自体は onRecordingComplete で渡す。 */
   stop(): Promise<void> {
-    if (this.opening) {
-      this.openAborted = true;
-      return Promise.resolve();
-    }
     if (this.state === 'idle') return Promise.resolve();
     if (this.state === 'stopping') return this.completion ?? Promise.resolve();
     this.transition('stopping');
-    if (this.recorder?.state !== 'inactive') this.recorder?.stop();
-    else void this.complete();
+    // MediaRecorder を作れなかった経路でも完了させる（待ち手を宙づりにしない）。
+    if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop();
+    else this.complete();
     return this.completion ?? Promise.resolve();
   }
 
@@ -205,24 +130,18 @@ export class ScreenRecorder {
     this.extension = extension;
     this.startedAt = this.now();
     this.failure = null;
-    this.completing = false;
-    this.writeChain = Promise.resolve();
     this.completion = new Promise((resolve) => { this.resolveCompletion = resolve; });
   }
 
   private receiveChunk(chunk: Blob): void {
     if (this.state === 'idle' || chunk.size === 0 || this.failure) return;
-    // ファイルへ逐次書き込む経路はディスクが上限。メモリ蓄積の時だけ自動停止する。
-    if (!this.writable && this.sizeBytes + chunk.size > (this.options.maxBytes ?? MAX_RECORDING_BYTES)) {
+    // Blob はタブのメモリに積み上がるので、上限に達したらそこまでを残して自動停止する。
+    if (this.sizeBytes + chunk.size > (this.options.maxBytes ?? MAX_RECORDING_BYTES)) {
       this.fail({ code: 'sizeLimit' });
       return;
     }
     this.sizeBytes += chunk.size;
-    if (this.writable) {
-      this.writeChain = this.writeChain.then(() => this.writable?.write(chunk) ?? Promise.resolve()).catch((error) => {
-        this.fail({ code: 'writeFailed', cause: error });
-      });
-    } else this.chunks.push(chunk);
+    this.chunks.push(chunk);
   }
 
   private failStart(error: RecorderError): void {
@@ -237,23 +156,11 @@ export class ScreenRecorder {
     void this.stop();
   }
 
-  private async complete(): Promise<void> {
-    if (this.state === 'idle' || this.completing) return;
-    this.completing = true;
+  /** 停止の後始末。cleanup で state が idle になるので、二度目以降はここで止まる。 */
+  private complete(): void {
+    if (this.state === 'idle') return;
     if (this.state !== 'stopping') this.transition('stopping');
-    await this.writeChain;
-    const reported = this.failure;
-    // 保存物として残さない失敗は close せず abort する。File System Access は close で
-    // 対象ファイルへ反映するため、閉じるとユーザーが選んだ既存ファイルを壊す。
-    const discarded = this.failure !== null && this.failure.code !== 'sizeLimit';
-    try {
-      if (discarded) await this.writable?.abort();
-      else await this.writable?.close();
-    } catch (error) {
-      this.failure ??= { code: 'writeFailed', cause: error };
-      if (!reported) this.options.onError?.(this.failure);
-    }
-    // サイズ上限は「そこまでの録画を残して止める」失敗。保存できていないのは書き込み系だけ。
+    // サイズ上限は「そこまでの録画を残して止める」失敗。他の失敗は保存物として残さない。
     const recording = this.failure && this.failure.code !== 'sizeLimit' ? null : {
       filename: this.filename,
       extension: this.extension,
@@ -261,8 +168,7 @@ export class ScreenRecorder {
       startedAt: this.startedAt,
       durationSeconds: Math.max(1, Math.round((this.now() - this.startedAt) / 1000)),
       sizeBytes: this.sizeBytes,
-      blob: this.fileHandle ? null : new Blob(this.chunks, { type: this.mimeType }),
-      fileHandle: this.fileHandle,
+      blob: new Blob(this.chunks, { type: this.mimeType }),
     } satisfies LocalRecording;
     const finished = this.resolveCompletion;
     this.cleanup();
@@ -295,32 +201,7 @@ export class ScreenRecorder {
     // （抱えたままだとダウンロード後に Blob を解放してもメモリが戻らない）。
     this.chunks = [];
     this.recorder = null;
-    this.writable = null;
-    this.fileHandle = null;
     this.resolveCompletion = null;
     this.transition('idle');
-  }
-}
-
-function filePickerOptions(
-  filename: string,
-  mimeType: string,
-  description: string
-): Parameters<RecordingPicker>[0] {
-  return { suggestedName: filename, types: [{ description, accept: { [mimeType]: [`.${extensionForMimeType(mimeType)}`] } }] };
-}
-
-function extensionForMimeType(mimeType: string): string {
-  return mimeType === 'video/mp4' ? 'mp4' : 'webm';
-}
-
-/** 中断時の後始末。破棄に失敗しても配信は続くので、記録だけ残す。 */
-async function abortQuietly(writable: RecordingWritable | null): Promise<void> {
-  if (!writable) return;
-  try {
-    await writable.abort();
-  } catch (error) {
-    // ファイル名・ハンドル等が混ざらないよう、例外は種別だけをログに出す。
-    console.warn('Failed to discard the aborted recording file', error instanceof Error ? error.name : 'unknown');
   }
 }

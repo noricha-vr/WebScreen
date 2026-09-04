@@ -26,7 +26,6 @@ export type {
   RecorderError,
   RecorderErrorCode,
   RecorderState,
-  RecordingPicker,
 } from './recorder';
 
 const BROWSER_DEPENDENCIES: ScreenShareDependencies = {

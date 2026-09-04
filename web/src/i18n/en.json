@@ -325,10 +325,8 @@
         "stop": "Stop recording",
         "empty": "There are no recordings yet. Stopped recordings will appear here for download. Saved recordings cannot be pasted into VRChat video players.",
         "download": "Download",
-        "saved": "Saved",
         "downloadStarted": "Download started",
         "filenameBase": "Recording {number}",
-        "fileType": "Video",
         "details": "Started {time} · {duration} · {size} MB",
         "errors": {
           "unsupported": "This browser does not support a video format for recording.",
