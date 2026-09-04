@@ -181,6 +181,7 @@ describe('配信中パネルの録画', () => {
         createWritable: async () => ({
           write: async (data: Blob) => { written.push(data.size); },
           close: async () => undefined,
+          abort: async () => undefined,
         }),
       }),
     })).mount();

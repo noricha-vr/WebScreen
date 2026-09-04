@@ -27,7 +27,16 @@ export interface RecordingFileHandle {
 
 export interface RecordingWritable {
   write(data: Blob): Promise<void>;
+  /** 書き込んだ内容を対象ファイルへ反映して閉じる。完了した録画だけがここを通る。 */
   close(): Promise<void>;
+  /** 変更を捨てて閉じる。中断・書き込み失敗で、ユーザーが選んだ既存ファイルを壊さないために使う。 */
+  abort(): Promise<void>;
+}
+
+/** 開き終えた保存先。pickFile が無い環境では両方 null（メモリ蓄積）。 */
+interface RecordingTarget {
+  fileHandle: RecordingFileHandle | null;
+  writable: RecordingWritable | null;
 }
 
 export interface RecorderInstance {
@@ -112,30 +121,19 @@ export class ScreenRecorder {
     const filename = `${filenameBase}.${candidate.extension}`;
     this.opening = true;
     this.openAborted = false;
-    let fileHandle: RecordingFileHandle | null = null;
-    let writable: RecordingWritable | null = null;
+    let target: RecordingTarget | null;
     try {
-      fileHandle = this.options.pickFile
-        ? await this.options.pickFile(
-            filePickerOptions(filename, candidate.mimeType, this.options.fileTypeDescription ?? '')
-          )
-        : null;
-      writable = fileHandle ? await fileHandle.createWritable() : null;
+      target = await this.openTarget(filename, candidate.mimeType);
     } catch (error) {
       this.opening = false;
       return this.failStart({ code: 'writeFailed', cause: error });
     }
-    // 選択中に配信が終わっていたら、止まった track で MediaRecorder を作らずに閉じる。
-    if (this.openAborted) {
-      this.opening = false;
-      this.openAborted = false;
-      await closeQuietly(writable);
-      return;
-    }
     this.opening = false;
+    // 選択中に配信が終わっていたら、止まった track で MediaRecorder を作らない。
+    if (!target) return;
 
-    this.fileHandle = fileHandle;
-    this.writable = writable;
+    this.fileHandle = target.fileHandle;
+    this.writable = target.writable;
     this.reset(filename, candidate.mimeType, candidate.extension);
     try {
       const recorder = new this.options.MediaRecorder(stream, { mimeType: candidate.mimeType });
@@ -152,6 +150,30 @@ export class ScreenRecorder {
       this.fail({ code: 'writeFailed', cause: error });
       await this.stop();
     }
+  }
+
+  /**
+   * 保存先を開く。createWritable は close 時に対象ファイルへ反映されるため、中断済みなら
+   * writable を作らず、作った後の中断は close ではなく abort で捨てる（既存ファイルを壊さない）。
+   */
+  private async openTarget(filename: string, mimeType: string): Promise<RecordingTarget | null> {
+    const fileHandle = this.options.pickFile
+      ? await this.options.pickFile(filePickerOptions(filename, mimeType, this.options.fileTypeDescription ?? ''))
+      : null;
+    if (this.consumeAbort()) return null;
+    const writable = fileHandle ? await fileHandle.createWritable() : null;
+    if (this.consumeAbort()) {
+      await abortQuietly(writable);
+      return null;
+    }
+    return { fileHandle, writable };
+  }
+
+  /** 待機中に stop() が来ていたかを 1 度だけ受け取る。 */
+  private consumeAbort(): boolean {
+    if (!this.openAborted) return false;
+    this.openAborted = false;
+    return true;
   }
 
   /** 録画を止め、完了までを待つ。録画自体は onRecordingComplete で渡す。 */
@@ -219,8 +241,12 @@ export class ScreenRecorder {
     if (this.state !== 'stopping') this.transition('stopping');
     await this.writeChain;
     const reported = this.failure;
+    // 保存物として残さない失敗は close せず abort する。File System Access は close で
+    // 対象ファイルへ反映するため、閉じるとユーザーが選んだ既存ファイルを壊す。
+    const discarded = this.failure !== null && this.failure.code !== 'sizeLimit';
     try {
-      await this.writable?.close();
+      if (discarded) await this.writable?.abort();
+      else await this.writable?.close();
     } catch (error) {
       this.failure ??= { code: 'writeFailed', cause: error };
       if (!reported) this.options.onError?.(this.failure);
@@ -286,13 +312,13 @@ function extensionForMimeType(mimeType: string): string {
   return mimeType === 'video/mp4' ? 'mp4' : 'webm';
 }
 
-/** 中断時の後始末。閉じられなくても配信は続くので、記録だけ残す。 */
-async function closeQuietly(writable: RecordingWritable | null): Promise<void> {
+/** 中断時の後始末。破棄に失敗しても配信は続くので、記録だけ残す。 */
+async function abortQuietly(writable: RecordingWritable | null): Promise<void> {
   if (!writable) return;
   try {
-    await writable.close();
+    await writable.abort();
   } catch (error) {
     // ファイル名・ハンドル等が混ざらないよう、例外は種別だけをログに出す。
-    console.warn('Failed to close the aborted recording file', error instanceof Error ? error.name : 'unknown');
+    console.warn('Failed to discard the aborted recording file', error instanceof Error ? error.name : 'unknown');
   }
 }

@@ -123,7 +123,9 @@ describe('ローカル録画の失敗', () => {
 
     await harness.recorder.start(harness.stream, '録画 1');
 
-    expect(file.closed).toBe(1);
+    // 書き込み失敗として終わるので、既存ファイルへ反映せず破棄する。
+    expect(file.closed).toBe(0);
+    expect(file.aborted).toBe(1);
     expect(harness.states).toEqual(['recording', 'stopping', 'idle']);
     expect(harness.errors.map((error) => error.code)).toEqual(['writeFailed']);
     expect(harness.completed).toEqual([]);
@@ -217,9 +219,53 @@ describe('ローカル録画の保存先', () => {
 
     expect(harness.completed).toEqual([]);
     expect(harness.created).toBe(0);
-    expect(file.closed).toBe(1);
+    // 中断済みなら writable を作らない（作って閉じるとユーザーが選んだ既存ファイルを空にする）。
+    expect(file.opened).toBe(0);
+    expect(file.closed).toBe(0);
+    expect(file.aborted).toBe(0);
     expect(harness.recorder.currentState).toBe('idle');
     expect(harness.recorder.isActive).toBe(false);
+  });
+});
+
+describe('選んだファイルの保護', () => {
+  test('書き込みに失敗したら abort で変更を捨て、close しない', async () => {
+    const file = fakeFile({ writeError: new Error('disk full') });
+    const harness = recorder({ pickFile: () => Promise.resolve(file.handle) });
+
+    await harness.recorder.start(harness.stream, '録画 1');
+    harness.instance().emit(64);
+    await harness.recorder.stop();
+
+    expect(file.aborted).toBe(1);
+    expect(file.closed).toBe(0);
+    expect(harness.errors.map((error) => error.code)).toEqual(['writeFailed']);
+    expect(harness.completed).toEqual([]);
+  });
+
+  test('createWritable の待機中に配信が終わったら、開いた writable を abort する', async () => {
+    const opens: Array<(writable: RecordingWritable) => void> = [];
+    const state = { closed: 0, aborted: 0 };
+    const handle: RecordingFileHandle = {
+      createWritable: () => new Promise((resolve) => { opens.push(resolve); }),
+    };
+    const harness = recorder({ pickFile: () => Promise.resolve(handle) });
+
+    const started = harness.recorder.start(harness.stream, '録画 1');
+    await settle();
+    expect(opens.length).toBe(1);
+
+    await harness.recorder.stop();
+    opens[0]!({
+      write: async () => undefined,
+      close: async () => { state.closed += 1; },
+      abort: async () => { state.aborted += 1; },
+    });
+    await started;
+
+    expect(state).toEqual({ closed: 0, aborted: 1 });
+    expect(harness.created).toBe(0);
+    expect(harness.completed).toEqual([]);
   });
 });
 
@@ -347,23 +393,37 @@ function fakeStream(): { stream: MediaStream; stopped: number } {
   };
 }
 
-function fakeFile(options: { closeError?: Error } = {}): {
+function fakeFile(options: { closeError?: Error; writeError?: Error } = {}): {
   handle: RecordingFileHandle;
   written: number[];
   closed: number;
+  aborted: number;
+  opened: number;
 } {
-  const state = { written: [] as number[], closed: 0 };
+  const state = { written: [] as number[], closed: 0, aborted: 0, opened: 0 };
   const writable: RecordingWritable = {
-    write: async (data) => { state.written.push(data.size); },
+    write: async (data) => {
+      if (options.writeError) throw options.writeError;
+      state.written.push(data.size);
+    },
     close: async () => {
       state.closed += 1;
       if (options.closeError) throw options.closeError;
     },
+    abort: async () => { state.aborted += 1; },
   };
   return {
-    handle: { createWritable: async () => writable },
+    handle: {
+      createWritable: async () => {
+        state.opened += 1;
+        return writable;
+      },
+    },
     get written(): number[] { return state.written; },
     get closed(): number { return state.closed; },
+    get aborted(): number { return state.aborted; },
+    // createWritable の呼び出し回数。呼んだ時点で対象ファイルへ触れる権利を握る。
+    get opened(): number { return state.opened; },
   };
 }
 
