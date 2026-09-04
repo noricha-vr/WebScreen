@@ -11,15 +11,15 @@
 | 役割 | 選定 | 状態 | 採用理由・条件 |
 |---|---|---|---|
 | 現在の origin / read node | **WebARENA Indigo 8GB** | 採用済み（2026-09-01 に構成・実測を記録） | 6 vCPU・1 Gbps の低価格構成で、WHIP の UDP、RTSPT、持続帯域、VRChat 実機再生まで検証済み |
-| 直近の増設 | **Indigo 8GB の read replica を 1 台追加** | 決定済み・未実施（[scale-plan.md](scale-plan.md) M1） | origin を動かさず出口容量を増やせる。origin 1 + replica 1 を常設し、急負荷前のヘッドルームを持つ |
+| 直近の増設 | **Cherry Servers Chicago Cloud VDS 2 を read replica（origin 機能つき）として構築** | 構築済み・`webscreen.tv` の A レコードには未登録（2026-09-04。[operations.md](operations.md)「サーバー実体」、実測は [verification.md](verification.md) I26 / I27） | origin を動かさず出口容量を増やせる。replica の取り寄せは MediaMTX ネイティブ `source` で、ホップ遅延は 1 ms 未満（I27）。Indigo 8GB を 2 台目にする案は Cherry 契約で置き換えた |
 | 上位ティア | **Cherry Servers 東京 bare metal を候補に維持** | 候補・未採用 | 10 Gbps と大きな月間転送枠が必要になる段階の候補。転送枠の書面確認と 72 時間負荷試験を通すまで採用確定にしない |
 | 一時 edge | **自宅・会社回線は read replica に限定** | 任意候補・未採用 | 会社回線は管理者の明示承認を前提とし、専用セグメントまたは専用回線を使う。MediaMTX Control API の listen は loopback に限定し、cron 用 Control API だけを認証付き Caddy 経由で公開する。FW は配信と Caddy に必要なポートだけを許可し、publisher を受ける origin にはしない |
 
 したがって「最初から大きいサーバーを 1 台買う」のではなく、**Indigo で実測済みの構成を維持し、
 read replica で水平拡張した後、転送量が支配的になった時だけ上位ティアへ origin を移す**。
 視聴 URL のホスト名 `webscreen.tv` は VRChat の allowlist のため凍結し、**視聴 URL のホスト名変更だけを**
-A レコードの向き先変更で回避する。origin 移設では A レコードに加え、全 read node の `ORIGINS` と
-Worker の `STREAM_WHIP_ORIGIN` を [scale-plan.md](scale-plan.md) の順序で切り替える。
+A レコードの向き先変更で回避する。origin 移設では A レコードに加え、replica の取り寄せ先 `stream.web-screen.net` の A レコードと
+Worker の `STREAM_WHIP_ORIGIN` を切り替える（順序は `source` 方式での再設計待ち。[#252](https://github.com/noricha-vr/WebScreen/issues/252)）。
 
 ## サーバー選定戦略
 
