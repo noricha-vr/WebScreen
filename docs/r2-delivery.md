@@ -25,6 +25,7 @@ WebScreen では VRChat のワールド内で複数人が同時に同じ動画�
 | R2 Custom Domain | ダッシュボード | バケット `webscreen` に `cdn.web-screen.net` を接続（Active） |
 | Transform Rule `cdn: noindex for media` | ダッシュボード | `http.host eq "cdn.web-screen.net"` のとき `X-Robots-Tag: noindex` を付与 |
 | **R2 の CORS** | **`web/r2-cors.json`** | 下記「CORS」節 |
+| R2 S3 API credentials | ダッシュボード + Worker secrets | Object Read & Write、対象バケット `webscreen`。`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` を同一 token の組で管理 |
 
 ダッシュボード管理のものは変更したらこの表も更新すること。
 
@@ -46,6 +47,24 @@ bunx wrangler r2 bucket cors list webscreen   # 確認
 **サイトのオリジンが増減したら必ずここも直す。** 2026-08-27 の本番ドメイン切替では、`https://web-screen.net` の登録漏れで変換が全滅した（`presign` は 200 を返すのに R2 への PUT だけが CORS エラーになるため、原因が分かりにくい）。
 
 `AllowedMethods` に `PUT` が要るのはアップロードのため、`GET` / `HEAD` は動画再生のため。`ExposeHeaders` の `ETag` はアップロード完了の検証に使う。
+
+### CORS に見える R2 API 権限エラー
+
+署名 URL を作る `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` は、対象バケット `webscreen` に対する **Object Read & Write** 権限が必要。対象バケットを限定した token を使う場合は、許可対象に `webscreen` が含まれていることも確認する。CORS と S3 API 権限は別の設定で、CORS が正しくても token に書き込み権限が無ければ署名付き PUT は 403 になる。
+
+R2 が 403 応答へ `Access-Control-Allow-Origin` を付けない場合、ブラウザは応答本文と元の status を JavaScript へ渡さない。画面側では `TypeError: Failed to fetch`、Console では `No 'Access-Control-Allow-Origin' header` と見えるため、表示だけでは「CORS 設定不足」と「署名・権限エラー」を区別できない。2026-09-04 の本番障害は後者で、R2 API token の対象バケット書き込み権限不足だった。
+
+切り分けは次の順序で行う。
+
+1. `wrangler r2 bucket cors list webscreen` で、`https://web-screen.net`、`PUT`、`Content-Type` が許可されていることを確認する。
+2. ブラウザの Network で署名付き PUT 自体を確認する。unsigned `OPTIONS` の成功だけでは、署名と Object Write 権限は検証できない。
+3. Cloudflare の R2 API token 管理画面で、設定中の access key に Object Read & Write と対象バケット `webscreen` が付いていることを確認する。秘密値はログや Issue に貼らない。
+4. token を作り直した場合は、同一 token の `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` を同じ入力から `wrangler secret bulk` で一括更新し、その後 Worker を再デプロイする。秘密値をコマンド引数、git 管理ファイル、ログへ載せない。
+5. ログイン済み画面で実ファイルを変換し、署名付き PUT の成功、`/api/uploads/commit/` の成功、公開プレビューへの遷移を一続きで確認する。
+
+権限確認では実際の署名付き PUT まで通すこと。CORS の一覧と preflight だけを見て復旧扱いにしない。
+
+ローカル E2E は deploy CI のゲートではなく、「別オリジンの 403 応答がブラウザでは CORS 失敗として隠れる」画面契約と、200 応答時の変換フローを固定するもので、Cloudflare 上の token 権限や実署名を検査しない。権限事故の再発検出・復旧判定には、本番と同じ R2 API 資格情報で発行した署名 URL への実 PUT smoke が必要。資格情報を CI に追加して自動化する場合は秘密値の保管・最小権限・probe object の確実な削除を別途設計し、今回は手動 smoke とする。
 
 `X-Robots-Tag` は、プレビューページの `noindex` メタタグだけでは防げない「動画ファイル本体がクローラに直接収集される」経路を塞ぐためのもの（HTML の noindex はその HTML を検索結果から外すだけで、`<video src>` の先には効かない）。
 
