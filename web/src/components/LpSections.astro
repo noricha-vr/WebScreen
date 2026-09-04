@@ -32,7 +32,7 @@ interface Section {
   /**
    * 用途別ページへの内部リンク。sitemap だけだとクロールの優先度が上がらないので、
    * トップから各ページへ辿れる導線を持たせる。対応するページが無い項目は付けない。
-   * 配布先が外部サイトの項目（拡張機能の GitHub Releases など）は external を立てる。
+   * 配布先が外部サイトの項目（拡張機能の Chrome ウェブストアなど）は external を立てる。
    */
   link?: { href: string; label: string; external?: boolean };
 }
@@ -54,7 +54,7 @@ const sections: Section[] = [
     // 拡張機能の紹介画像だけは自ホストに置く（GCS の紹介メディアと違い、旧 LP から引き継いだ資産ではない）。
     media: { kind: 'image', src: '/lp/extension.png' },
     link: {
-      href: 'https://github.com/noricha-vr/web-screen-extension/releases/latest',
+      href: 'https://chromewebstore.google.com/detail/webscreen-extension/nlfpcbmgllhopmjmodddegheeoolhnip',
       label: t.lp.extensionLink,
       external: true,
     },

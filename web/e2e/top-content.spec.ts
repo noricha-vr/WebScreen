@@ -68,7 +68,7 @@ test.describe('サービス紹介', () => {
     const download = page.getByRole('link', { name: ja.lp.extensionLink });
     await expect(download).toHaveAttribute(
       'href',
-      'https://github.com/noricha-vr/web-screen-extension/releases/latest'
+      'https://chromewebstore.google.com/detail/webscreen-extension/nlfpcbmgllhopmjmodddegheeoolhnip'
     );
     await expect(download).toHaveAttribute('target', '_blank');
     await expect(download).toHaveAttribute('rel', 'noopener');
