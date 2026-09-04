@@ -40,7 +40,7 @@
     "MEDIAMTX_INGRESS_API_URL": "https://stream.web-screen.net",
     "MEDIAMTX_EGRESS_API_URL": "https://stream.web-screen.net",
     // origin を含む全 read egress。2 台目追加時はカンマ区切りで URL を増やす。
-    "MEDIAMTX_READ_EGRESS_API_URLS": "https://stream.web-screen.net"
+    "MEDIAMTX_READ_EGRESS_API_URLS": "https://stream.web-screen.net,https://chi1.web-screen.net"
   },
   "d1_databases": [
     {

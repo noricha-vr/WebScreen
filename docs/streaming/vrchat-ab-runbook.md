@@ -45,6 +45,23 @@ bun scripts/latency-probe.ts run --minutes 12 --ab-cycle 120 \
 - `--ab-cycle 120` で quality → realtime → … を 2 分ごとに切り替える（6 区間）。`--max-bitrate` は realtime 区間の上限
 - 単一プロファイルで測る時は `--ab-cycle` を外し、`--video-profile quality` または `--video-profile realtime --max-bitrate 1500000`
 
+## ノード比較（Indigo origin と Cherry origin）
+
+Cherry（`chi1.web-screen.net` / `ssh webscreen-cherry`）を origin にした経路を測る時は、通常 run と `--node-host` run を同じ素材で交互に取る（[latency-harness.md](latency-harness.md)「別ノードを origin にして測る」）。
+
+| run | コマンドの差分 | VRChat に貼る URL | 分かること |
+|---|---|---|---|
+| A（基準） | 通常（`--server-snap webscreen-indigo-poc`） | `rtspt://webscreen.tv/live/{id}` | 現行 Indigo の値 |
+| B | `--node-host chi1.web-screen.net --server-snap webscreen-cherry` | Discord に届く `rtspt://chi1.web-screen.net/live/{id}` | ブラウザ → Chicago → VRChat の本命経路 |
+| C | 通常 run のまま、URL だけ Cherry を指定 | `rtspt://88.216.73.71/live/{id}` | Indigo origin + Cherry replica ホップの増分 |
+
+```bash
+cd web
+bun scripts/latency-probe.ts run --minutes 8 --source 'http://127.0.0.1:0/latency-source.html?tones=1' \
+  --video-profile quality --player win2022 --notify-discord 1380914078100488334 \
+  --node-host chi1.web-screen.net --server-snap webscreen-cherry
+```
+
 ## 落とし穴
 
 - run ごとに配信 URL は変わる。古い URL は再生できない

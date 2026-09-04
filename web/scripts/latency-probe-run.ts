@@ -30,6 +30,8 @@ const PREVIOUS_RUN_ARTIFACTS = [
 export interface RunOptions {
   minutes: number; source: string; player: 'win2022' | null; profileDir: string; outDir: string; videoProfile: 'quality' | 'realtime'; maxBitrate: number | null;
   abCycleSeconds: number | null; scrollPixelsPerSecond: number; outletQualitySeconds: number; notifyDiscordChannelId: string | null; serverSnapHost: string | null; streamId: string | null;
+  /** 配信先ノードのホスト名。null なら本番既定（API 応答の whipUrl と webscreen.tv）を使う。 */
+  nodeHost: string | null;
 }
 interface ActiveController { endpoint: string; sourceUrl: string }
 interface ControllerState { sourcePage: import('@playwright/test').Page | null; sourceUrl: string; sourceServerUrl: string }
@@ -68,17 +70,19 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     // 共有ページだけに限定する（context 全体に掛けると計測対象外のページの RTCPeerConnection まで置換される）
     await sharingPage.addInitScript(peerConnectionTrackerInitScript());
     attachBrowserLog(sharingPage);
+    if (options.nodeHost) await routeWhipToNode(sharingPage, options.nodeHost);
     await sharingPage.goto(screenShareUrl(options), { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const streamId = await startScreenShare(sharingPage, options.profileDir);
-    await writeFile(join(options.outDir, 'sender-config.json'), JSON.stringify(await captureSenderConfig(sharingPage), null, 2) + '\n');
+    const readHost = options.nodeHost ?? 'webscreen.tv';
+    await writeFile(join(options.outDir, 'sender-config.json'), JSON.stringify({ ...await captureSenderConfig(sharingPage), harnessNodeHost: options.nodeHost, harnessReadHost: readHost }, null, 2) + '\n');
     const target = resolveSourceUrl(options.source, sourceServer.url);
     if (target !== sourceServer.url.href) await sourcePage.goto(target, { waitUntil: 'domcontentloaded' });
     await applyAutoScroll(sourcePage, target, sourceServer.url.href, options.scrollPixelsPerSecond);
     await sourcePage.bringToFront();
-    const rtspUrl = `rtsp://webscreen.tv/live/${streamId}`;
+    const rtspUrl = `rtsp://${readHost}/live/${streamId}`;
     // VRChat へ貼る URL を人に渡す経路（クリップボードと固定ファイル）。run はこの後ブロックするため、
     // 標準出力だけだと貼るタイミングで URL を伝えられない
-    const viewerUrl = `rtspt://webscreen.tv/live/${streamId}`;
+    const viewerUrl = `rtspt://${readHost}/live/${streamId}`;
     console.info(`配信 URL: ${viewerUrl}`);
     await writeFile(join(options.profileDir, 'current-stream-url.txt'), `${viewerUrl}\n`).catch(() => undefined);
     if (process.platform === 'darwin') {
@@ -208,6 +212,31 @@ export function validateRunOptions(options: RunOptions): void {
     validateProfileCycleSeconds(options.abCycleSeconds);
     if (options.maxBitrate === null) throw new Error('--ab-cycle requires --max-bitrate for realtime intervals');
   }
+}
+
+/**
+ * 配信開始 / 再利用 API の応答に含まれる whipUrl のホストだけを差し替える。
+ * パス `/live/{id}/whip` と https は維持するので、画面側の whipUrl 検証（isWhipUrl）はそのまま通る。
+ * whipUrl を持たない応答（エラー・停止 API）は触らず返す。
+ */
+export function rewriteWhipUrlHost(body: string, nodeHost: string): string {
+  let parsed: unknown;
+  try { parsed = JSON.parse(body); } catch { return body; }
+  if (typeof parsed !== 'object' || parsed === null || typeof (parsed as { whipUrl?: unknown }).whipUrl !== 'string') return body;
+  const whip = new URL((parsed as { whipUrl: string }).whipUrl);
+  whip.host = nodeHost;
+  return JSON.stringify({ ...(parsed as Record<string, unknown>), whipUrl: whip.href });
+}
+
+/** 本番 Worker と DNS を変えずに、このブラウザの WHIP だけを指定ノードへ向ける（計測専用）。 */
+async function routeWhipToNode(page: import('@playwright/test').Page, nodeHost: string): Promise<void> {
+  await page.route('**/api/streams/**', async (route) => {
+    const response = await route.fetch();
+    if (!(response.headers()['content-type'] ?? '').includes('application/json')) { await route.fulfill({ response }); return; }
+    const rewritten = rewriteWhipUrlHost(await response.text(), nodeHost);
+    await route.fulfill({ response, body: rewritten, headers: { ...response.headers(), 'content-length': String(Buffer.byteLength(rewritten)) } });
+  });
+  pushBrowserLog(`[harness] whipUrl host -> ${nodeHost}`);
 }
 
 async function persistResults(outDir: string, outlet: LatencySample[], startedAtMs: number, player: PlayerResult | null, sender: Parameters<typeof formatSummary>[3], profileSwitches: Parameters<typeof formatSummary>[4]): Promise<void> {
