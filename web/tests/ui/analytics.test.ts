@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   ANALYTICS_EVENT_NAMES,
   analyticsPageConfig,
+  containsPublicId,
   dispatchAnalyticsEvent,
   pageContext,
   type AnalyticsEventName,
@@ -30,8 +31,37 @@ describe('GA4 製品イベント契約', () => {
 
   test('外部・不正referrerはGA4へ渡さない', () => {
     const page = { origin: 'https://web-screen.net', pathname: '/en/' };
-    expect(analyticsPageConfig(page, 'https://example.com/private?q=secret').page_referrer).toBe('');
-    expect(analyticsPageConfig(page, 'not a url').page_referrer).toBe('');
+    expect(analyticsPageConfig(page, 'https://example.com/private?q=secret')?.page_referrer).toBe('');
+    expect(analyticsPageConfig(page, 'not a url')?.page_referrer).toBe('');
+  });
+
+  test('公開IDを含む同一origin referrerは空文字で上書きする', () => {
+    // 省略すると gtag が document.referrer を自動収集し、公開 URL がそのまま Google へ渡る。
+    const page = { origin: 'https://web-screen.net', pathname: '/ja/' };
+    expect(analyticsPageConfig(page, 'https://web-screen.net/Ab12Cd34Ef56/')).toEqual({
+      page_location: 'https://web-screen.net/ja/',
+      page_referrer: '',
+    });
+    expect(
+      analyticsPageConfig(page, 'https://web-screen.net/ja/screen-share/')?.page_referrer
+    ).toBe('https://web-screen.net/ja/screen-share/');
+  });
+
+  test('公開IDを含む現在パスでは初期設定自体を送らない', () => {
+    expect(analyticsPageConfig(
+      { origin: 'https://web-screen.net', pathname: '/Ab12Cd34Ef56/' },
+      ''
+    )).toBeNull();
+  });
+
+  test.each([
+    ['/ja/', false],
+    ['/ja/screen-share/', false],
+    ['/en/video-player/', false],
+    ['/Ab12Cd34Ef56/', true],
+    ['/ja/Ab12Cd34Ef56', true],
+  ])('%s の公開ID判定は %s', (pathname, expected) => {
+    expect(containsPublicId(pathname)).toBe(expected);
   });
 
   test('イベント固有でないパラメータは型として受け付けない', () => {
@@ -114,6 +144,37 @@ describe('GA4 製品イベント契約', () => {
     });
 
     expect(calls).toEqual([]);
+  });
+
+  test('イベント名とパラメータ以外の引数を持つ呼び出しを拒否する', () => {
+    const calls: unknown[][] = [];
+    const environment = {
+      hostname: 'web-screen.net',
+      gtag: ((...args: unknown[]) => calls.push(args)) as AnalyticsGtag,
+    };
+    const unsafeDispatch = dispatchAnalyticsEvent as unknown as (
+      target: typeof environment,
+      ...eventCall: unknown[]
+    ) => void;
+
+    unsafeDispatch(environment, 'convert_complete', PARAMETERS, { send_to: 'G-OTHER' });
+    unsafeDispatch(environment, 'convert_complete');
+
+    expect(calls).toEqual([]);
+  });
+
+  test('送信するパラメータは検証済みフィールドから組み直す', () => {
+    const calls: unknown[][] = [];
+    const environment = {
+      hostname: 'web-screen.net',
+      gtag: ((...args: unknown[]) => calls.push(args)) as AnalyticsGtag,
+    };
+
+    dispatchAnalyticsEvent(environment, 'convert_complete', PARAMETERS);
+
+    expect(calls[0][2]).toEqual(PARAMETERS);
+    // 呼び出し元のオブジェクトをそのまま渡すと、後から生えたキーが GA4 へ素通りする。
+    expect(calls[0][2]).not.toBe(PARAMETERS);
   });
 
   test('gtag不在・例外でも呼び出し元へ例外を返さない', () => {

@@ -185,9 +185,11 @@ export async function uploadMp4(
     const committed = asCommitResponse(
       await requestUploadApi('/api/uploads/commit/', { shortId: presign.shortId })
     );
-    dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
+    // 計測は遷移より先に送る。uploaded で完了画面へ切り替わった直後に離脱されると、
+    // 送信が始まる前にページが差し替わって成功が記録されない。
     try { onComplete?.(); }
     catch { /* 計測 observer の失敗で完了済み変換を失敗扱いにしない。 */ }
+    dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
   } catch (error) {
     // サーバーが 4xx / 5xx を返した時だけ取り消す。通信断や、200 なのに本文が
     // 壊れている応答では commit が成功して ready になっている可能性があり、

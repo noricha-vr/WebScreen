@@ -38,6 +38,34 @@ describe('uploadMp4 analytics', () => {
     }
   });
 
+  test('completeを送ってから画面遷移させる', async () => {
+    // 遷移が先だと、離脱の速い利用者で送信前にページが差し替わる。
+    const originalFetch = globalThis.fetch;
+    const order: string[] = [];
+    Object.assign(globalThis, { fetch: async (url: string) => {
+      if (url === '/api/uploads/presign/') return Response.json(PRESIGN);
+      if (url === '/api/uploads/commit/') return Response.json(COMMIT);
+      return new Response(null, { status: 200 });
+    } });
+
+    try {
+      await uploadMp4(
+        new Blob(['mp4']),
+        'slide.mp4',
+        'image',
+        (action) => order.push(action.type),
+        1,
+        undefined,
+        () => order.push('complete')
+      );
+
+      expect(order.indexOf('complete')).toBeGreaterThan(-1);
+      expect(order.indexOf('complete')).toBeLessThan(order.indexOf('uploaded'));
+    } finally {
+      Object.assign(globalThis, { fetch: originalFetch });
+    }
+  });
+
   test('計測observerが失敗してもcommit済み変換は成功のまま返す', async () => {
     const originalFetch = globalThis.fetch;
     Object.assign(globalThis, { fetch: async (url: string) => {
