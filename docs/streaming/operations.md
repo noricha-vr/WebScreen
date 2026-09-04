@@ -24,7 +24,7 @@ cron Worker --別 Bearer client--> ingress（publisher kick）/ egress（viewer�
 | ノード | 役割 | 実体 | 常駐 unit |
 |---|---|---|---|
 | Indigo | **origin**（WHIP 受け + relay + read） | WebARENA Indigo `161.34.34.128`（SSH: `ssh webscreen-indigo-poc`、鍵は ~/.ssh/config 参照）。ufw は inactive で、ポート開放は WebARENA ポータルの FW で行う | `webscreen-mediamtx-ingress` / `webscreen-mediamtx-egress` |
-| Cherry | **read replica + origin 機能**（構築中。2026-09-04 契約） | Cherry Servers Cloud VDS 2（Chicago, US）`88.216.73.71`（SSH: `ssh webscreen-cherry`、root、Ed25519 鍵は ~/.ssh/config 参照）。ポータル名 `webscreen-chicago-01` / Resource #988436。4 vCore / 16 GB / NVMe 100 GB / 1 Gbps / 月 10 TB 込み / €29 月（次回請求 2026-10-04）。Ubuntu 24.04。FW は ufw（ポータル FW の有無は構築時に確認）。ノード用ホスト `chi1.web-screen.net` | `webscreen-mediamtx-egress-replica` + `webscreen-mediamtx-ingress`（ingress は単体計測・origin 切替用。WHIP を向けるまで待機） |
+| Cherry | **read replica + origin 機能**（構築済み 2026-09-04。`webscreen.tv` の A レコードには未登録、WHIP も未割当。計測は [verification.md](verification.md) I26） | Cherry Servers Cloud VDS 2（Chicago, US）`88.216.73.71`（SSH: `ssh webscreen-cherry`、root、Ed25519 鍵は ~/.ssh/config 参照）。ポータル名 `webscreen-chicago-01` / Resource #988436。4 vCore / 16 GB / NVMe 100 GB / 1 Gbps / 月 10 TB 込み / €29 月（次回請求 2026-10-04）。Ubuntu 24.04。ufw active（22 / 80 / 443 / 554 tcp + 8189 udp）、ポータル側 FW なし。TCP 554 の接続数上限は unit `webscreen-egress-cap`（nftables）。ノード用ホスト `chi1.web-screen.net`（Caddy = `web/streaming/Caddyfile.node`、アクセスログ有効）。relay は **Indigo 稼働中の AAC 版を複製**（`/opt/webscreen/streaming/releases/indigo-prod-aac-2026-09-04`。リポの `relay.sh` は MP3 候補なので入れない） | `webscreen-mediamtx-ingress`（`webrtcAdditionalHosts` は自 IP）+ `webscreen-mediamtx-egress-replica`（`ORIGINS=161.34.34.128`）+ `webscreen-egress-cap` |
 
 origin ノードの中身:
 
