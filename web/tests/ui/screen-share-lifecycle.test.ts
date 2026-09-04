@@ -7,6 +7,11 @@ import type { WhipPublisher } from '../../src/lib/ui/whip-publisher';
 describe('画面共有 controller', () => {
   test('フローは常時表示され、開始後は配信ステップを現在地にする', async () => {
     const page = fakeScreenSharePage();
+    const analytics: string[] = [];
+    let livePublisher: WhipPublisher;
+    livePublisher = Object.assign(publisherStub(async () => livePublisher), {
+      videoStats: async () => ({ bytesSent: 1024, framesEncoded: 1 }),
+    });
     const track = { addEventListener: () => undefined, stop: () => undefined };
     const media = {
       getTracks: () => [track],
@@ -15,13 +20,14 @@ describe('画面共有 controller', () => {
     } as unknown as MediaStream;
     new ScreenShareController(page.root, {
       requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
-      startWhipPublisher: async () => publisherStub(),
+      startWhipPublisher: async () => livePublisher,
       waitForStreamReady: async () => true,
       getDisplayMedia: async () => media,
       previewPreference: { load: () => null, save: () => undefined },
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
       onPageHide: () => undefined,
+      trackAnalytics: (event) => analytics.push(event),
     }).mount();
 
     expect(page.currentFlowItems()).toEqual(['1']);
@@ -30,6 +36,79 @@ describe('画面共有 controller', () => {
     await waitFor(() => !page.step('live').hidden);
 
     expect(page.currentFlowItems()).toEqual(['2']);
+    expect(analytics).toEqual(['screen_share_start', 'screen_share_ready']);
+
+    // 同じ配信の再接続成功では ready を再送しない。
+    page.button('[data-screen-retry]').click();
+    await flushMicrotasks();
+    expect(analytics).toEqual(['screen_share_start', 'screen_share_ready']);
+  });
+
+  test('共有URLのclipboard書き込み成功後だけcopyを送る', async () => {
+    const page = fakeScreenSharePage();
+    const analytics: string[] = [];
+    const originalNavigator = globalThis.navigator;
+    let failCopy = false;
+    Object.assign(globalThis, {
+      navigator: { clipboard: { writeText: async () => {
+        if (failCopy) throw new Error('clipboard denied');
+      } } },
+    });
+
+    try {
+      new ScreenShareController(page.root, {
+        requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
+        startWhipPublisher: async () => publisherStub(),
+        waitForStreamReady: async () => true,
+        getDisplayMedia: async () => mediaStub(),
+        previewPreference: { load: () => null, save: () => undefined },
+        now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+        sendBeacon: () => true,
+        onPageHide: () => undefined,
+        trackAnalytics: (event) => analytics.push(event),
+      }).mount();
+
+      page.button('[data-screen-start]').click();
+      await waitFor(() => !page.step('live').hidden);
+      page.button('[data-screen-copy]').click();
+      await flushMicrotasks();
+
+      expect(analytics).toEqual([
+        'screen_share_start',
+        'screen_share_ready',
+        'screen_share_url_copy',
+      ]);
+
+      failCopy = true;
+      page.button('[data-screen-copy]').click();
+      await flushMicrotasks();
+      expect(analytics).toEqual([
+        'screen_share_start',
+        'screen_share_ready',
+        'screen_share_url_copy',
+      ]);
+    } finally {
+      Object.assign(globalThis, { navigator: originalNavigator });
+    }
+  });
+
+  test('計測observerが失敗しても配信開始からlive表示まで継続する', async () => {
+    const page = fakeScreenSharePage();
+    new ScreenShareController(page.root, {
+      requestJson: (async () => createResponse()) as unknown as ScreenShareDependencies['requestJson'],
+      startWhipPublisher: async () => publisherStub(),
+      waitForStreamReady: async () => true,
+      getDisplayMedia: async () => mediaStub(),
+      previewPreference: { load: () => null, save: () => undefined },
+      now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+      sendBeacon: () => true,
+      onPageHide: () => undefined,
+      trackAnalytics: () => { throw new Error('analytics blocked'); },
+    }).mount();
+
+    page.button('[data-screen-start]').click();
+    await waitFor(() => !page.step('live').hidden);
+    expect(page.url.value).toBe('rtspt://webscreen.tv/live/Ab12Cd34Ef56');
   });
 
   test('ピッカー選択中は開始・再試行を無効化し、ラベルは span だけ差し替えてアイコンを保つ', async () => {
@@ -111,6 +190,7 @@ describe('画面共有 controller', () => {
     let stopped = 0;
     let createRequests = 0;
     let publisherStarts = 0;
+    const analytics: string[] = [];
     const track = { addEventListener: () => undefined, stop: () => { stopped += 1; } };
     const media = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
     const dependencies: ScreenShareDependencies = {
@@ -128,6 +208,7 @@ describe('画面共有 controller', () => {
       now: () => Date.parse('2026-09-01T00:00:00.000Z'),
       sendBeacon: () => true,
       onPageHide: (handler) => { pageHide = handler; },
+      trackAnalytics: (event) => analytics.push(event),
     };
     new ScreenShareController(page.root, dependencies).mount();
 
@@ -139,6 +220,7 @@ describe('画面共有 controller', () => {
     expect(stopped).toBe(1);
     expect(createRequests).toBe(0);
     expect(publisherStarts).toBe(0);
+    expect(analytics).toEqual([]);
   });
 
 });
@@ -150,6 +232,15 @@ function createResponse(): Record<string, unknown> {
     extendExpiresAt: '2026-09-01T01:00:00.000Z', startedAt: '2026-09-01T00:00:00.000Z',
     lastHeartbeatAt: '2026-09-01T00:00:00.000Z', endedAt: null, endReason: null,
   };
+}
+
+function mediaStub(): MediaStream {
+  const track = { addEventListener: () => undefined, stop: () => undefined };
+  return {
+    getTracks: () => [track],
+    getVideoTracks: () => [track],
+    getAudioTracks: () => [],
+  } as unknown as MediaStream;
 }
 
 function fakeScreenSharePage(): {
@@ -211,6 +302,7 @@ class FakeElement {
   paused = false;
   pause(): void { this.paused = true; }
   play(): Promise<void> { this.paused = false; return Promise.resolve(); }
+  select(): void {}
   srcObject: MediaProvider | null = null;
   textContent = '';
   value = '';

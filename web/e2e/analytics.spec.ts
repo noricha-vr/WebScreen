@@ -32,6 +32,18 @@ test('プレビューページには計測タグ自体を出力しない', async
   expect(html).not.toContain('googletagmanager.com');
 });
 
+test('GA4初期設定はpage locationと同一origin referrerのquery/hashを送らない', async ({ request }) => {
+  const response = await request.get('/ja/?stream-id=Secret123456');
+  const html = await response.text();
+
+  expect(response.status()).toBe(200);
+  expect(html).toContain('page_location: location.origin + location.pathname');
+  expect(html).toContain('pageReferrer = referrer.origin + referrer.pathname');
+  expect(html).toContain("let pageReferrer = ''");
+  expect(html).not.toContain('page_location: location.href');
+  expect(html).not.toContain('page_referrer: document.referrer');
+});
+
 test('計測タグを足しても cross-origin isolation は維持される', async ({ page }) => {
   // FFmpeg.wasm の SharedArrayBuffer が動く前提そのもの。外部スクリプトの追加で
   // COEP を緩めると、ヘッダーのテストは通ったまま変換だけが壊れる。
