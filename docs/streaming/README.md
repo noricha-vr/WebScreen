@@ -37,6 +37,7 @@ Web ページを**リアルタイムに** VRChat のビデオプレイヤーへ�
 | [MediaMTX relay 運用手順](../../web/streaming/README.md) | **リポジトリ同梱の versioned 設定と具体的な cutover / rollback 手順** | `operations.md` に沿って更新・復旧する時 |
 | [server-plan.md](server-plan.md) | **サーバーの推奨と段階計画・見積もり** | サーバーを選ぶ時・契約する時 |
 | [scale-plan.md](scale-plan.md) | **複数ノード化の決定・段階（M1〜M4）・origin 移設手順・edge 追加条件** | 2 台目を足す時・Cherry へ移す時・自宅回線を足す時 |
+| [region-and-traffic-plan.md](region-and-traffic-plan.md) | **どのリージョンに置くか・転送量枠の買い方（Cherry の課金モデル）** | 移設先を選ぶ時・転送量が枠に近づいた時 |
 | [capacity.md](capacity.md) | 収容人数の計算式と事業者の一覧 | 数字を自分で計算し直す時 |
 | [vrchat-constraints.md](vrchat-constraints.md) | 受信側（VRChat）の制約。動かせない前提 | 「なぜこの形しか取れないのか」を確認する時 |
 | [verification.md](verification.md) | 実測の結果と手順。何を確かめ、何を確かめていないか | 数字の根拠を辿る時 |
