@@ -111,10 +111,13 @@ export class ScreenRecorder {
     if (this.state === 'idle') return Promise.resolve();
     if (this.state === 'stopping') return this.completion ?? Promise.resolve();
     this.transition('stopping');
+    // onstop → complete → onRecordingComplete が同期で走り、その中で次の start() が
+    // this.completion を差し替えうるので、今回の完了 Promise は先に退避して返す。
+    const completion = this.completion ?? Promise.resolve();
     // MediaRecorder を作れなかった経路でも完了させる（待ち手を宙づりにしない）。
     if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop();
     else this.complete();
-    return this.completion ?? Promise.resolve();
+    return completion;
   }
 
   private selectMimeType(): (typeof MIME_CANDIDATES)[number] | null {

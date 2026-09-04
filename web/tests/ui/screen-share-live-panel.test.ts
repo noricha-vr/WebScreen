@@ -291,6 +291,7 @@ describe('配信中パネルの延長', () => {
     // onstop は非同期。待たずに閉じると最後の録画を落とす。
     const recorders = fakeRecorders({ asyncStop: true });
     const stops: string[] = [];
+    deleteResourceCalls = 0;
     new ScreenShareController(page.root, dependencies({
       MediaRecorder: recorders.Constructor,
       requestJson: (async (url: string) => {
@@ -316,8 +317,9 @@ describe('配信中パネルの延長', () => {
     // 録画は取りこぼさずに一覧へ積んでから閉じる。
     expect(recorders.last().stopCalls).toBe(1);
     expect(page.button('[data-screen-record-list]').children.length).toBe(1);
-    // サーバー側は終了済みでも D1 行は live のまま残りうるので、冪等な停止通知を 1 回送る。
+    // サーバー側は終了済みでも D1 行は live のまま残りうるので、冪等な停止通知と WHIP DELETE を 1 回ずつ送る。
     expect(stops).toHaveLength(1);
+    expect(deleteResourceCalls).toBe(1);
   });
 });
 
@@ -362,10 +364,12 @@ function createResponse(): Record<string, unknown> {
   };
 }
 
+let deleteResourceCalls = 0;
+
 function publisher(tokens: string[]): WhipPublisher {
   return {
     close: () => undefined,
-    deleteResource: async () => undefined,
+    deleteResource: async () => { deleteResourceCalls += 1; },
     stop: async () => undefined,
     republish: async () => publisher(tokens),
     setPublishToken: (token: string) => { tokens.push(token); },

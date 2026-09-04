@@ -24,6 +24,22 @@ describe('ローカル録画のステートマシン', () => {
     expect(harness.completed[0]?.blob.size).toBe(1024);
   });
 
+  test('完了通知の中で次の録画を同期に始めても、最初の stop() は解決する', async () => {
+    const harness = recorder({ onComplete: (h) => { if (h.completed.length === 1) h.recorder.start(h.stream, '録画 2'); } });
+
+    harness.recorder.start(harness.stream, '録画 1');
+    harness.instance().emit(512);
+    const settled = await Promise.race([
+      harness.recorder.stop().then(() => 'resolved' as const),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 200)),
+    ]);
+
+    expect(settled).toBe('resolved');
+    expect(harness.completed.map((recording) => recording.filename)).toEqual(['録画 1.webm']);
+    expect(harness.recorder.currentState).toBe('recording');
+    expect(harness.created).toBe(2);
+  });
+
   test('配信の track は借用するだけで停止しない', async () => {
     const harness = recorder();
 
@@ -201,6 +217,8 @@ function recorder(options: {
   maxBytes?: number;
   startError?: Error;
   constructError?: Error;
+  /** 完了通知の中で次の操作を同期に行う（再入の検証用）。 */
+  onComplete?: (harness: RecorderHarness) => void;
 } = {}): RecorderHarness {
   const instances: FakeMediaRecorder[] = [];
   const supported = options.supported ?? ['video/webm'];
@@ -228,7 +246,7 @@ function recorder(options: {
       onStateChange: (state) => harness.states.push(state),
       onError: (error) => harness.errors.push({ code: error.code }),
       onElapsed: (seconds) => harness.elapsed.push(seconds),
-      onRecordingComplete: (recording) => harness.completed.push(recording),
+      onRecordingComplete: (recording) => { harness.completed.push(recording); options.onComplete?.(harness); },
     }),
     stream: media.stream,
     states: [],
