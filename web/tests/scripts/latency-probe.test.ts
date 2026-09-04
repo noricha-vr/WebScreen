@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -40,10 +41,22 @@ function controllerState(sourcePage: import('@playwright/test').Page | null = nu
   return { sourcePage, sourceUrl: 'http://127.0.0.1:4321/', sourceServerUrl: 'http://127.0.0.1:4321/' };
 }
 
+function rawHttpRequest(port: number, request: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let response = '';
+    const socket = createConnection({ host: '127.0.0.1', port }, () => socket.write(request));
+    socket.setEncoding('utf8');
+    socket.setTimeout(2_000, () => socket.destroy(new Error('raw controller request timed out')));
+    socket.on('data', (chunk) => { response += chunk; });
+    socket.on('close', () => resolve(response));
+    socket.on('error', reject);
+  });
+}
+
 describe('latency probe controller', () => {
   test.each([
-    ['トークンなし', { 'Content-Type': 'application/json' }, JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }), 401],
-    ['不一致トークン', { Authorization: 'Bearer wrong', 'Content-Type': 'application/json' }, JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }), 401],
+    ['単純POSTでトークンなし', { 'Content-Type': 'application/x-www-form-urlencoded' }, 'url=http%3A%2F%2F127.0.0.1%3A4321%2Fnext', 401],
+    ['同じ長さの不一致トークン', { Authorization: `Bearer ${'b'.repeat(64)}`, 'Content-Type': 'application/json' }, JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }), 401],
     ['text/plain', { Authorization: `Bearer ${CONTROLLER_TOKEN}`, 'Content-Type': 'text/plain' }, JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }), 400],
     ['4 KB超', { Authorization: `Bearer ${CONTROLLER_TOKEN}`, 'Content-Type': 'application/json' }, 'x'.repeat(4 * 1024 + 1), 400],
   ])('%sの要求を拒否する', async (_caseName, headers, body, expectedStatus) => {
@@ -51,6 +64,39 @@ describe('latency probe controller', () => {
     try {
       const response = await fetch(new URL('/source', server.url), { method: 'POST', headers, body });
       expect(response.status).toBe(expectedStatus);
+      expect(await response.text()).not.toContain(CONTROLLER_TOKEN);
+    } finally { server.stop(true); }
+  });
+
+  test('Content-Lengthなしのchunked本文が4 KBを超えたら拒否する', async () => {
+    const server = startControllerServer(controllerState(), CONTROLLER_TOKEN);
+    const encoder = new TextEncoder();
+    try {
+      const body = new ReadableStream<Uint8Array>({ start(controller) {
+        controller.enqueue(encoder.encode('x'.repeat(4 * 1024)));
+        controller.enqueue(encoder.encode('x'));
+        controller.close();
+      } });
+      const response = await fetch(new URL('/source', server.url), { method: 'POST', headers: { Authorization: `Bearer ${CONTROLLER_TOKEN}`, 'Content-Type': 'application/json' }, body });
+      expect(response.status).toBe(400);
+      expect(await response.text()).not.toContain(CONTROLLER_TOKEN);
+    } finally { server.stop(true); }
+  });
+
+  test.each([
+    ['実本文より短い値', '1', '1x'],
+    ['数値でない値', 'invalid', '1'],
+  ])('偽装Content-Length（%s）を拒否する', async (_caseName, contentLength, body) => {
+    const server = startControllerServer(controllerState(), CONTROLLER_TOKEN);
+    try {
+      if (server.port === undefined) throw new Error('controller TCP port is unavailable');
+      const request = [
+        'POST /source HTTP/1.1', `Host: 127.0.0.1:${server.port}`, `Authorization: Bearer ${CONTROLLER_TOKEN}`,
+        'Content-Type: application/json', `Content-Length: ${contentLength}`, 'Connection: close', '', body,
+      ].join('\r\n');
+      const response = await rawHttpRequest(server.port, request);
+      expect(response).toMatch(/^HTTP\/1\.1 400 /);
+      expect(response).not.toContain(CONTROLLER_TOKEN);
     } finally { server.stop(true); }
   });
 
@@ -61,7 +107,7 @@ describe('latency probe controller', () => {
     try {
       const response = await fetch(new URL('/source', server.url), {
         method: 'POST',
-        headers: { Authorization: `Bearer ${CONTROLLER_TOKEN}`, 'Content-Type': 'application/json; charset=utf-8' },
+        headers: { Authorization: `bEaReR   ${CONTROLLER_TOKEN}`, 'Content-Type': 'application/json; charset=utf-8' },
         body: JSON.stringify({ url: 'http://127.0.0.1:4321/next', scrollPixelsPerSecond: 0 }),
       });
       expect(response.status).toBe(200);

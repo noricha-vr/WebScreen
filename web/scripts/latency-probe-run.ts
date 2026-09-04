@@ -1,6 +1,6 @@
 import { captureServerSnapshots, snapshotScheduleSeconds } from './latency-probe-server-snap';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
 import { formatLatencyCsv, formatSummary, type LatencySample } from './latency-probe-analysis';
@@ -61,8 +61,7 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
   const controllerToken = randomBytes(32).toString('hex');
   const controllerServer = startControllerServer(state, controllerToken);
   await mkdir(resolve('..', 'docs', 'tmp', 'latency'), { recursive: true });
-  await writeFile(ACTIVE_FILE, JSON.stringify({ endpoint: controllerServer.url.href, sourceUrl: sourceServer.url.href, token: controllerToken }), { mode: 0o600 });
-  await chmod(ACTIVE_FILE, 0o600);
+  await writeActiveController({ endpoint: controllerServer.url.href, sourceUrl: sourceServer.url.href, token: controllerToken });
   let startedAtMs = 0;
   const outlet: LatencySample[] = [];
   let browser: import('@playwright/test').BrowserContext | null = null;
@@ -333,11 +332,20 @@ export function startControllerServer(state: ControllerState, token: string): Re
 }
 
 function hasValidControllerToken(authorization: string | null, token: string): boolean {
-  const match = /^Bearer (.+)$/.exec(authorization ?? '');
+  const match = /^bearer\s+(\S+)$/i.exec(authorization ?? '');
   if (!match) return false;
   const supplied = new TextEncoder().encode(match[1]);
   const expected = new TextEncoder().encode(token);
   return supplied.byteLength === expected.byteLength && timingSafeEqual(supplied, expected);
+}
+
+async function writeActiveController(active: ActiveController): Promise<void> {
+  const temporaryFile = `${ACTIVE_FILE}.tmp-${process.pid}-${randomBytes(8).toString('hex')}`;
+  try {
+    await writeFile(temporaryFile, JSON.stringify(active), { flag: 'wx', mode: 0o600 });
+    await chmod(temporaryFile, 0o600);
+    await rename(temporaryFile, ACTIVE_FILE);
+  } finally { await rm(temporaryFile, { force: true }); }
 }
 
 async function readControllerBody(request: Request): Promise<string | null> {
