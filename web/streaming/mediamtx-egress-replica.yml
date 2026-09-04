@@ -30,6 +30,8 @@ authInternalUsers:
         path: "~^live/[A-Za-z0-9]{12}$"
 pathDefaults:
   overridePublisher: false
+  # One 40-person world plus headroom caps a single live path at about 83 Mbps.
+  maxReaders: 60
   # `runOnDemand` fires when a reader connects to a path that has no active publisher.
   # replica-pull.sh reads `MTX_PATH` (`live/{id}`) and pulls from ORIGINS in order.
   # `runOnDemandRestart: false` keeps a full-origin-exhausted failure surfaced (no silent retry loop);

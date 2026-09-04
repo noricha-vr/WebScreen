@@ -40,16 +40,12 @@ describe('MediaMTX Control API adapter', () => {
         publisherId: 'publisher-1',
         publisherSessionType: 'webRTCSession',
         rtspReaders: 1,
-        bytesReceived: 0,
-        bytesSent: 0,
       },
       {
         name: 'live/ZyXwVu987654',
         publisherId: null,
         publisherSessionType: null,
         rtspReaders: 0,
-        bytesReceived: 0,
-        bytesSent: 0,
       },
     ]);
     expect(requests.map((request) => request.url)).toEqual([
@@ -57,6 +53,39 @@ describe('MediaMTX Control API adapter', () => {
       'https://media.example/v3/paths/list?page=1',
     ]);
     expect(requests.every((request) => request.authorization === 'Bearer test-token')).toBe(true);
+  });
+
+  it('転送量は後継の outboundBytes / inboundBytes を優先し、無ければ deprecated の bytesSent / bytesReceived を読む', async () => {
+    const fetchImpl = async () =>
+      Response.json({
+        pageCount: 1,
+        items: [
+          {
+            name: 'live/AbCdEf123456',
+            source: null,
+            readers: [],
+            bytesSent: 10,
+            bytesReceived: 20,
+            outboundBytes: 1000,
+            inboundBytes: 2000,
+          },
+          { name: 'live/ZyXwVu987654', source: null, readers: [], bytesSent: 30, bytesReceived: 40 },
+          // 欠落・負数・非整数は 0 に潰さず undefined（0 は再起動直後の正当な値と区別が要る）
+          { name: 'live/QwErTy112233', source: null, readers: [], outboundBytes: -1, inboundBytes: 1.5 },
+        ],
+      });
+    const client = createMediaMtxClient({
+      apiUrl: 'https://media.example',
+      apiToken: 'test-token',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const paths = await client.listPaths();
+    expect(paths.map((path) => [path.bytesSent, path.bytesReceived])).toEqual([
+      [1000, 2000],
+      [30, 40],
+      [undefined, undefined],
+    ]);
   });
 
   it('kickはpublisher IDをpathへ入れ、非2xxを例外にする', async () => {

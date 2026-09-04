@@ -122,17 +122,23 @@ function parsePath(value: unknown): MediaPath {
     publisherId,
     publisherSessionType: publisherId ? publisherSessionType : null,
     rtspReaders,
-    bytesReceived: nonNegativeNumber(value.bytesReceived),
-    bytesSent: nonNegativeNumber(value.bytesSent),
+    // v1.20 で bytesReceived / bytesSent は deprecated になり inboundBytes / outboundBytes が後継。
+    // 後継を優先し、無い（旧版）時だけ旧フィールドを読む。
+    bytesReceived: byteCounter(value.inboundBytes ?? value.bytesReceived),
+    bytesSent: byteCounter(value.outboundBytes ?? value.bytesSent),
   };
+}
+
+/**
+ * 転送量カウンタ。欠落・負数・非整数は 0 に潰さず undefined で返す
+ * （0 は「再起動直後」の正当な値なので、不正値と区別できないと差分集計が壊れる）。
+ */
+function byteCounter(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 function sessionType(value: unknown): MediaMtxSessionType | null {
   return value === 'webRTCSession' || value === 'rtspSession' ? value : null;
-}
-
-function nonNegativeNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
 function normalizeBaseUrl(value: string): string {

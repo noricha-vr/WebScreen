@@ -28,5 +28,7 @@ authInternalUsers:
         path: "~^live/[A-Za-z0-9]{12}$"
 pathDefaults:
   overridePublisher: false
+  # One 40-person world plus headroom caps a single live path at about 83 Mbps.
+  maxReaders: 60
 paths:
   "~^live/[A-Za-z0-9]{12}$": {}
