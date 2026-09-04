@@ -1,5 +1,6 @@
 import type {
   CreateStreamResponse,
+  ExtendStreamResponse,
   StopLiveStreamsResponse,
   StreamHealthResponse,
 } from '../../contracts/streams';
@@ -30,6 +31,7 @@ export interface StreamApi {
   stopLive(signal: AbortSignal): Promise<StopLiveStreamsResponse>;
   heartbeat(id: string, signal: AbortSignal): Promise<void>;
   waitForReady(id: string, signal?: AbortSignal): Promise<boolean>;
+  extend(id: string): Promise<ExtendStreamResponse>;
   stop(id: string, preferBeacon?: boolean): Promise<void>;
   cancelStart(startToken: string, preferBeacon?: boolean): Promise<void>;
 }
@@ -61,6 +63,9 @@ export function createStreamApi(
     },
     waitForReady(id, signal) {
       return readyOverride?.(id, signal) ?? waitForStreamReady(id, request, wait, signal);
+    },
+    async extend(id) {
+      return asExtendStream(await request(streamPath(id, 'extend'), { method: 'POST' }));
     },
     async stop(id, preferBeacon = false) {
       const url = streamPath(id, 'stop');
@@ -124,8 +129,15 @@ function queueBeacon(sendBeacon: BeaconSender, url: string, body?: string): bool
   }
 }
 
-function streamPath(id: string, operation: 'heartbeat' | 'health' | 'stop'): string {
+function streamPath(id: string, operation: 'heartbeat' | 'health' | 'stop' | 'extend'): string {
   return `/api/streams/${encodeURIComponent(id)}/${operation}/`;
+}
+
+function asExtendStream(value: unknown): ExtendStreamResponse {
+  if (!isRecord(value) || !hasStringFields(value, [
+    'id', 'publishToken', 'publishTokenExpiresAt', 'extendExpiresAt',
+  ]) || value.status !== 'live') throw new Error('Invalid extend stream response');
+  return value as unknown as ExtendStreamResponse;
 }
 
 function asCreateStream(value: unknown): CreateStreamResponse {
