@@ -13,7 +13,7 @@
 | replica の取得 | egress の `runOnDemand` + 順序付き origin リスト（env `ORIGINS`）。origin の **egress**（AAC 変換済み）から `-c copy` | Worker / D1 に依存せず、origin 移設中の並存と origin 障害時の切替を同じ仕組みで吸収する |
 | 上限到達時の縮退 | **超過分を接続拒否**（egress path の `maxReaders`） | 制御面が全滅してもノード単体で守れる唯一の線。「全員が途切れる」より「超過分が拒否」 |
 | 常時ヘッドルーム | **2 台常設**（Indigo origin 1 + replica 1、+3,410 円/月） | autoscale は VM 作成 + bootstrap + DNS TTL 300 秒で分単位。バズの立ち上がりには間に合わない |
-| 上位ティア | **Cherry Servers 東京 bare metal**（10 Gbps・月 20 TB 保守値・€237/月）へ origin ごと移す | Indigo の 160 GB/日 は 40 人ワールド 1 つで約 6.4 時間。Cherry は転送量の壁が事実上消える |
+| 上位ティア | **Cherry Servers 東京 bare metal**（10 Gbps・月 20 TB 保守値・€237/月）へ origin ごと移す。**移設先は未決定**（[region-and-traffic-plan.md](region-and-traffic-plan.md) に Chicago Cloud VDS 2 €29/月 + 転送枠の追加購入という別案がある） | Indigo の 160 GB/日 は 40 人ワールド 1 つで約 6.4 時間。Cherry は転送量の壁が事実上消える |
 | 自宅・会社回線 | read edge として足せる（origin にはしない） | Worker / D1 変更なしで追加・撤去できる。一時的なしのぎ・コスト削減用 |
 
 ## 構成
