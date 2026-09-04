@@ -121,9 +121,14 @@ async function recordNode(input: {
     statements.push(
       input.database
         .prepare(
+          // 先頭の WHEN: 既に自分より新しい観測が sample に入っていれば（並行実行の後勝ち）加算しない
           `INSERT INTO node_egress_daily (node_key, day, bytes_sent, alerted_level, updated_at)
            VALUES (?, ?, (
-             SELECT CASE WHEN s.bytes_sent IS NULL OR ? < s.bytes_sent THEN ? ELSE ? - s.bytes_sent END
+             SELECT CASE
+               WHEN s.bytes_sent IS NOT NULL AND s.sampled_at >= ? THEN 0
+               WHEN s.bytes_sent IS NULL OR ? < s.bytes_sent THEN ?
+               ELSE ? - s.bytes_sent
+             END
              FROM (SELECT ? AS node_key) x
              LEFT JOIN node_egress_samples s ON s.node_key = x.node_key AND s.path = ?
            ), 0, ?)
@@ -134,6 +139,7 @@ async function recordNode(input: {
         .bind(
           input.node.nodeKey,
           input.day,
+          input.now.toISOString(),
           bytesSent,
           bytesSent,
           bytesSent,
@@ -143,6 +149,7 @@ async function recordNode(input: {
         )
     );
     // 差分は同じbatch内でsampleを更新する直前にSQLで計算し、並行実行でも二重加算を避ける。
+    // 古い観測（sampled_at が既存以下）は sample を巻き戻さない。
     statements.push(
       input.database
         .prepare(
@@ -150,7 +157,8 @@ async function recordNode(input: {
            VALUES (?, ?, ?, ?)
            ON CONFLICT(node_key, path) DO UPDATE SET
              bytes_sent = excluded.bytes_sent,
-             sampled_at = excluded.sampled_at`
+             sampled_at = excluded.sampled_at
+           WHERE excluded.sampled_at > node_egress_samples.sampled_at`
         )
         .bind(input.node.nodeKey, path, bytesSent, input.now.toISOString())
     );
