@@ -32,6 +32,18 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 
 制限: v1の必須範囲はRTSPT出口。Windows側はgdigrabの30 fpsフレーム番号から録画時刻を復元するベストエフォートで、dshow音声・ddagrabは未実装。外部URLへ切り替えた後は時刻ブロックがないため、出口遅延の標本は記録されない。
 
+## 別ノードを origin にして測る（`--node-host`）
+
+`--node-host chi1.web-screen.net` を付けると、本番 Worker の `STREAM_WHIP_ORIGIN` と DNS を変えずに、このハーネスの配信だけを指定ノードへ送る。
+
+- 配信開始 / 再利用 API の応答に含まれる `whipUrl` のホストだけを Playwright の `route` で差し替える（パス `/live/{id}/whip` と https は維持。publish JWT は本番 Worker が署名したものをそのまま使うので、ノード側の ingress は本番 JWKS を参照していれば受け付ける）
+- 指定できるのは `web-screen.net` 配下の 1 ラベル（`chi1.web-screen.net` 形式）だけ。本番 Worker が発行した publish JWT を送る先なので、自前ドメイン外・IP・localhost は拒否する
+- 画面の health 待機は本番 Worker が本番 origin（Indigo）の MediaMTX を見るため、別ノードへ publish すると永遠に starting のままになる。ハーネスは `/api/streams/{id}/health` を「呼ばれるごとに egress が増える ready」の合成応答に差し替え、実際の到達確認は出口 ffmpeg（`probeDimensionsFor` / 単発取得）が担う。出口が取れなければ run は失敗する
+- 出口計測（`ffmpeg` の単発取得・音声・画質）と Discord に流す視聴 URL も `rtsp(t)://<node-host>/live/{id}` になる。VRChat にはこの URL を貼る（`webscreen.tv` と同じく allowlist 外なので条件は同じ）
+- `--server-snap` は別指定（例 `--server-snap webscreen-cherry`）。ノードの SSH alias を渡す
+- 使った host は `sender-config.json` の `harnessNodeHost` / `harnessReadHost` に残る
+- ノード側の前提: ingress + relay が動き、Caddy がそのホストで WHIP ルートを持ち（`web/streaming/Caddyfile.node`）、cron の `MEDIAMTX_READ_EGRESS_API_URLS` にそのノードの Control API が入っていること。入っていないと本番 cron が「viewer 0」と判定し、`STREAM_NO_VIEWER_SECONDS`（600 秒）で配信を終了させる
+
 ## 既知の失敗と診断ファイル
 
 - 出口が止まっても指定時間まで待機し、`outlet-ffmpeg.log` と `outlet-decode.log` にffmpeg・復号状態を残す。

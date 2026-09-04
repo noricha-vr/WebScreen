@@ -30,6 +30,8 @@ const PREVIOUS_RUN_ARTIFACTS = [
 export interface RunOptions {
   minutes: number; source: string; player: 'win2022' | null; profileDir: string; outDir: string; videoProfile: 'quality' | 'realtime'; maxBitrate: number | null;
   abCycleSeconds: number | null; scrollPixelsPerSecond: number; outletQualitySeconds: number; notifyDiscordChannelId: string | null; serverSnapHost: string | null; streamId: string | null;
+  /** 配信先ノードのホスト名。null なら本番既定（API 応答の whipUrl と webscreen.tv）を使う。 */
+  nodeHost: string | null;
 }
 interface ActiveController { endpoint: string; sourceUrl: string }
 interface ControllerState { sourcePage: import('@playwright/test').Page | null; sourceUrl: string; sourceServerUrl: string }
@@ -68,17 +70,19 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     // 共有ページだけに限定する（context 全体に掛けると計測対象外のページの RTCPeerConnection まで置換される）
     await sharingPage.addInitScript(peerConnectionTrackerInitScript());
     attachBrowserLog(sharingPage);
+    if (options.nodeHost) await routeWhipToNode(sharingPage, options.nodeHost);
     await sharingPage.goto(screenShareUrl(options), { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const streamId = await startScreenShare(sharingPage, options.profileDir);
-    await writeFile(join(options.outDir, 'sender-config.json'), JSON.stringify(await captureSenderConfig(sharingPage), null, 2) + '\n');
+    const readHost = options.nodeHost ?? 'webscreen.tv';
+    await writeFile(join(options.outDir, 'sender-config.json'), JSON.stringify({ ...await captureSenderConfig(sharingPage), harnessNodeHost: options.nodeHost, harnessReadHost: readHost }, null, 2) + '\n');
     const target = resolveSourceUrl(options.source, sourceServer.url);
     if (target !== sourceServer.url.href) await sourcePage.goto(target, { waitUntil: 'domcontentloaded' });
     await applyAutoScroll(sourcePage, target, sourceServer.url.href, options.scrollPixelsPerSecond);
     await sourcePage.bringToFront();
-    const rtspUrl = `rtsp://webscreen.tv/live/${streamId}`;
+    const rtspUrl = `rtsp://${readHost}/live/${streamId}`;
     // VRChat へ貼る URL を人に渡す経路（クリップボードと固定ファイル）。run はこの後ブロックするため、
     // 標準出力だけだと貼るタイミングで URL を伝えられない
-    const viewerUrl = `rtspt://webscreen.tv/live/${streamId}`;
+    const viewerUrl = `rtspt://${readHost}/live/${streamId}`;
     console.info(`配信 URL: ${viewerUrl}`);
     await writeFile(join(options.profileDir, 'current-stream-url.txt'), `${viewerUrl}\n`).catch(() => undefined);
     if (process.platform === 'darwin') {
@@ -202,12 +206,70 @@ export async function clearPreviousRunArtifacts(outDir: string): Promise<void> {
 /** runの公開境界でプロファイル関連値を検証し、副作用の前に不正入力を拒否する。 */
 export function validateRunOptions(options: RunOptions): void {
   if (options.videoProfile !== 'quality' && options.videoProfile !== 'realtime') throw new Error('videoProfile must be quality or realtime');
+  if (options.nodeHost !== null) validateNodeHost(options.nodeHost);
   if (options.maxBitrate !== null) validateVideoProfile(options.videoProfile, options.maxBitrate);
   if (options.videoProfile === 'realtime' && options.maxBitrate === null) throw new Error('realtime videoProfile requires maxBitrate');
   if (options.abCycleSeconds !== null) {
     validateProfileCycleSeconds(options.abCycleSeconds);
     if (options.maxBitrate === null) throw new Error('--ab-cycle requires --max-bitrate for realtime intervals');
   }
+}
+
+/** ハーネスが配信先に選べるノードは自前ドメイン配下だけ（publish JWT を任意ホストへ送らせない）。 */
+export const NODE_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.web-screen\.net$/;
+
+export function validateNodeHost(nodeHost: string): void {
+  if (!NODE_HOST_PATTERN.test(nodeHost)) throw new Error('nodeHost must be a single label under web-screen.net (e.g. chi1.web-screen.net)');
+}
+
+/**
+ * 配信開始 / 再利用 API の応答に含まれる whipUrl のホストだけを差し替える。
+ * パス `/live/{id}/whip` と https は維持するので、画面側の whipUrl 検証（isWhipUrl）はそのまま通る。
+ * whipUrl を持たない応答（エラー・停止 API）は触らず返す。
+ */
+export function rewriteWhipUrlHost(body: string, nodeHost: string): string {
+  let parsed: unknown;
+  try { parsed = JSON.parse(body); } catch { return body; }
+  if (typeof parsed !== 'object' || parsed === null || typeof (parsed as { whipUrl?: unknown }).whipUrl !== 'string') return body;
+  const whip = new URL((parsed as { whipUrl: string }).whipUrl);
+  whip.host = nodeHost;
+  return JSON.stringify({ ...(parsed as Record<string, unknown>), whipUrl: whip.href });
+}
+
+/**
+ * 本番 Worker の health は本番 origin（Indigo）の MediaMTX しか見ないため、別ノードへ publish すると
+ * 永遠に starting のまま republish → 映像未到達エラーになる。ハーネスでは health を「呼ばれるごとに
+ * egress bytes が増える ready」に差し替え、実際の到達確認は出口 ffmpeg（probe / grab）に任せる。
+ */
+export function syntheticHealthBody(attempt: number): string {
+  return JSON.stringify({ state: 'ready', ingressBytes: 1_000 * (attempt + 1), egressBytes: 1_000 * (attempt + 1), audioDetected: null });
+}
+
+/** 本文を書き換えた応答用のヘッダー。圧縮・長さ・validator は元の本文のものなので落とす。 */
+export function headersForRewrittenBody(headers: Record<string, string>): Record<string, string> {
+  const dropped = new Set(['content-encoding', 'content-length', 'transfer-encoding', 'etag', 'last-modified']);
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => !dropped.has(name.toLowerCase())));
+}
+
+/** 本番 Worker と DNS を変えずに、このブラウザの WHIP だけを指定ノードへ向ける（計測専用）。 */
+async function routeWhipToNode(page: import('@playwright/test').Page, nodeHost: string): Promise<void> {
+  validateNodeHost(nodeHost);
+  let healthAttempt = 0;
+  await page.route('**/api/streams/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (/^\/api\/streams\/[A-Za-z0-9]{12}\/health\/?$/.test(url.pathname)) {
+      await route.fulfill({ status: 200, headers: { 'content-type': 'application/json; charset=utf-8' }, body: syntheticHealthBody(healthAttempt) });
+      healthAttempt += 1;
+      return;
+    }
+    const response = await route.fetch();
+    if (!(response.headers()['content-type'] ?? '').includes('application/json')) { await route.fulfill({ response }); return; }
+    const body = await response.text();
+    const rewritten = rewriteWhipUrlHost(body, nodeHost);
+    if (rewritten === body) { await route.fulfill({ response }); return; }
+    await route.fulfill({ status: response.status(), headers: headersForRewrittenBody(response.headers()), body: rewritten });
+  });
+  pushBrowserLog(`[harness] whipUrl host -> ${nodeHost}（health は合成応答）`);
 }
 
 async function persistResults(outDir: string, outlet: LatencySample[], startedAtMs: number, player: PlayerResult | null, sender: Parameters<typeof formatSummary>[3], profileSwitches: Parameters<typeof formatSummary>[4]): Promise<void> {

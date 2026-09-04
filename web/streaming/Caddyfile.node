@@ -1,0 +1,26 @@
+# Caddyfile for an additional node (read replica, or a node that may also act as origin).
+# The origin node (Indigo) uses ./Caddyfile; every other node installs this file as /etc/caddy/Caddyfile.
+# WEBSCREEN_NODE_HOST is the node-specific host (e.g. chi1.web-screen.net) that resolves to this node only.
+# Tokens are loaded from /etc/caddy/mediamtx-api.env by caddy.service (systemd drop-in EnvironmentFile),
+# and WEBSCREEN_NODE_HOST lives in the same env file.
+{$WEBSCREEN_NODE_HOST} {
+	# WHIP is served here so the node can act as origin when STREAM_WHIP_ORIGIN (or the latency
+	# harness --node-host) points at it. The route is inert while ingress has no publisher.
+	@whip path /live/*/whip /live/*/whip/*
+	handle @whip {
+		reverse_proxy 127.0.0.1:8889
+	}
+	@ingress header Authorization "Bearer {env.MEDIAMTX_API_TOKEN}"
+	handle @ingress {
+		header X-WebScreen-MediaMTX-Role ingress
+		reverse_proxy 127.0.0.1:9997
+	}
+	@egress header Authorization "Bearer {env.MEDIAMTX_EGRESS_API_TOKEN}"
+	handle @egress {
+		header X-WebScreen-MediaMTX-Role egress
+		reverse_proxy 127.0.0.1:9998
+	}
+	handle {
+		respond 401
+	}
+}

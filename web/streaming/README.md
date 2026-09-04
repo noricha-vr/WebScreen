@@ -53,6 +53,10 @@ If a VPS check fails before the Worker deploy, stop the split units and restore 
 
 ## Read replica node (delta from an origin node)
 
+Use `Caddyfile.node` instead of `Caddyfile` on every node other than the Indigo origin. It serves one node-specific host taken from `WEBSCREEN_NODE_HOST` (add `WEBSCREEN_NODE_HOST=chi1.web-screen.net` to `/etc/caddy/mediamtx-api.env`, which caddy.service reads through a systemd drop-in `EnvironmentFile=`). The host must resolve to this node only (never `webscreen.tv`, which resolves to every read node), so the cron worker can count readers per node and ACME challenges always reach the right machine. Public hostnames stay a single `webscreen.tv` for VRChat (see `docs/streaming/operations.md`, "ホスト名の役割").
+
+If the node also carries `mediamtx-ingress.yml` (so it can become origin), set `webrtcAdditionalHosts` to this node's public IP and open UDP 8189; `Caddyfile.node` already routes `/live/*/whip*` to the local ingress.
+
 A read replica serves the same `rtsp://host/live/{id}` paths without running ingress or the relay hook. When a reader hits a path that has no publisher, MediaMTX invokes `replica-pull.sh`, which walks an ordered `ORIGINS` list and pulls one stream with `ffmpeg -c copy` from that origin's egress (`:554`, TCP). If every origin fails the pull exits non-zero and MediaMTX surfaces the failure to the reader (no silent restart).
 
 Install differences from an origin node:

@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { analyzeDirectory, loginProfile, runLatencyProbe, switchSource, type RunOptions } from './latency-probe-run';
+import { analyzeDirectory, loginProfile, runLatencyProbe, switchSource, validateNodeHost, type RunOptions } from './latency-probe-run';
 import { checkWindowsRecording } from './latency-probe-player';
 
 const HELP = `Usage: bun scripts/latency-probe.ts <subcommand> [options]
@@ -13,7 +13,7 @@ WebScreen配信を実Mac Chromeから開始し、RTSPT出口と任意のWindows�
 Subcommands:
   login [--profile-dir PATH]
   player-check [--seconds N] [--out DIR]
-  run --minutes N --source URL [--stream-id ID] [--video-profile quality|realtime] [--max-bitrate 1200000|1500000|2000000] [--ab-cycle 60..600] [--scroll PX_PER_SECOND] [--outlet-quality-seconds N] [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST]
+  run --minutes N --source URL [--stream-id ID] [--video-profile quality|realtime] [--max-bitrate 1200000|1500000|2000000] [--ab-cycle 60..600] [--scroll PX_PER_SECOND] [--outlet-quality-seconds N] [--player win2022] [--profile-dir PATH] [--out DIR] [--notify-discord CHANNEL_ID] [--server-snap HOST] [--node-host HOST]
   source --url URL [--scroll PX_PER_SECOND]
   analyze DIR
 
@@ -34,6 +34,9 @@ run options:
                      出口画質の連続ffmpeg測定窓（5〜120秒、既定20）。遅延用の単発取得とは別系統
   --notify-discord CHANNEL_ID
                      配信 URL を Discord の指定チャンネルへ投稿する（VRChat 側の PC で貼るため）
+  --node-host HOST   配信先ノードを差し替える（web-screen.net 配下の 1 ラベルのみ、例 chi1.web-screen.net）。配信開始 API 応答の whipUrl のホストを HOST にして WHIP を
+                     そのノードへ送り、出口計測と VRChat へ渡す URL も rtsp(t)://HOST/live/{id} にする
+                     （本番の STREAM_WHIP_ORIGIN と DNS は変えずに別ノードを origin として測る用途）
 
 loginはハーネスが開くChromeで一度だけ人がログインするための待機です。player-checkは配信なしでWindows録画だけを試し、実測前に録画経路を確認します。sourceは実行中runの共有タブを切り替えます。analyzeは保存済みCSVからsummary.mdを再生成します。`;
 
@@ -68,8 +71,9 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
     return { command, url: requiredUrl(values.url, '--url'), scrollPixelsPerSecond: parseScroll(values.scroll) };
   }
   if (command !== 'run') throw new Error(`unknown subcommand: ${command}`);
-  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap', 'stream-id', 'video-profile', 'max-bitrate', 'ab-cycle', 'scroll', 'outlet-quality-seconds']);
+  rejectUnknown(values, ['minutes', 'source', 'player', 'profile-dir', 'out', 'notify-discord', 'server-snap', 'node-host', 'stream-id', 'video-profile', 'max-bitrate', 'ab-cycle', 'scroll', 'outlet-quality-seconds']);
   if (values['server-snap'] !== undefined && !isValidSshHost(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
+  if (values['node-host'] !== undefined) validateNodeHost(values['node-host']);
   if (values['notify-discord'] !== undefined && !/^\d{15,25}$/.test(values['notify-discord'])) throw new Error('--notify-discord must be a Discord channel id');
   if (values['stream-id'] !== undefined && !/^[A-Za-z0-9]{12}$/.test(values['stream-id'])) throw new Error('--stream-id must be a 12-character alphanumeric ID');
   const minutes = Number(values.minutes);
@@ -94,6 +98,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
       profileDir: values['profile-dir'] ?? join(homedir(), '.webscreen-harness', 'chrome-profile'),
       notifyDiscordChannelId: values['notify-discord'] ?? null,
       serverSnapHost: values['server-snap'] ?? null,
+      nodeHost: values['node-host'] ?? null,
       streamId: values['stream-id'] ?? null,
       outDir: values.out ?? resolve('..', 'docs', 'tmp', 'latency', timestamp),
     },
