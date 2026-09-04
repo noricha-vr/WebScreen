@@ -1,0 +1,11 @@
+#!/usr/sbin/nft -f
+# Load only this table; do not alter the host's other firewall rules.
+table inet webscreen_egress {
+  chain input {
+    type filter hook input priority filter; policy accept;
+
+    # This is a node-wide cap, not a per-source limit. Existing connections are
+    # unaffected; connections present before this rule was loaded are not counted.
+    tcp dport 554 ct state new ct count over 505 counter reject with tcp reset
+  }
+}

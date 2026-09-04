@@ -19,6 +19,16 @@ The `0.2.0-beta` runtime candidate copies H.264 video and maps optional audio to
 
 After publishing to the candidate environment, run `./verify-codecs.sh rtspt://your-host/live/AbCdEf123456` from the same release directory. It requires H.264 + MP3 at 48 kHz stereo; during the video-only shadow stage, append `--video-only`. The script converts VRChat's `rtspt://` spelling to `rtsp://` for ffprobe and always probes over TCP. This candidate smoke check is intentionally outside Worker requests; the health API only observes MediaMTX path/byte counters.
 
+## Egress connection caps
+
+`mediamtx-egress.yml` and `mediamtx-egress-replica.yml` cap each live path at 60 readers. `nftables-egress.nft` separately caps all new TCP 554 connections on one node at 505 while retaining `policy accept` for every other packet.
+
+1. Run `nft -c -f nftables-egress.nft` from the selected release, then install it at `/etc/webscreen/streaming/nftables-egress.nft`.
+2. Add `include "/etc/webscreen/streaming/nftables-egress.nft"` once to `/etc/nftables.conf`, then run `systemctl enable --now nftables`.
+3. Confirm `nft list table inet webscreen_egress`; repeat it while refusing excess readers to see the rule counter increase.
+
+To remove the cap, delete the include and run `nft delete table inet webscreen_egress`. Before reapplying an updated file, run that same delete command, then load the new file with `nft -f /etc/webscreen/streaming/nftables-egress.nft`.
+
 ## Candidate test, production promotion, and rollback
 
 Do not use the candidate test as production cutover approval. Stage and test `0.2.0-beta` away from the production service while production continues to use AAC. The 30-minute stability, capacity, and codec gates have passed; promotion still requires controlled PC and Quest audio listening, sub-second Quest playback, and an actual-Mac 24/30 fps comparison.
