@@ -92,13 +92,14 @@ stream-paths: ## ingress / egress の MediaMTX path 一覧を表示
 	@ssh "$(STREAM_HOST)" 'curl -fsS http://127.0.0.1:9998/v3/paths/list | jq'
 
 latency-probe: MIN ?= 5
-# 変数はレシピ文字列へ展開せず環境変数で渡す（Make 変数にシェル記号が入ってもコマンドにならない）
-latency-probe: export MIN := $(MIN)
-latency-probe: export SOURCE := $(SOURCE)
-latency-probe: export PLAYER := $(PLAYER)
-latency-probe: export NOTIFY_DISCORD := $(NOTIFY_DISCORD)
-latency-probe: export SERVER_SNAP := $(SERVER_SNAP)
-latency-probe: export NODE_HOST := $(NODE_HOST)
+# 変数はレシピ文字列へ展開せず環境変数で渡す（シェル記号が入ってもコマンドにならない）。
+# $(value) で生の文字列を取り、Make 自身の $(shell ...) 展開も起こさない
+latency-probe: export MIN := $(value MIN)
+latency-probe: export SOURCE := $(value SOURCE)
+latency-probe: export PLAYER := $(value PLAYER)
+latency-probe: export NOTIFY_DISCORD := $(value NOTIFY_DISCORD)
+latency-probe: export SERVER_SNAP := $(value SERVER_SNAP)
+latency-probe: export NODE_HOST := $(value NODE_HOST)
 latency-probe: ## 遅延測定を実行（MIN=5 SOURCE=URL、PLAYER=win2022、NOTIFY_DISCORD=ID、SERVER_SNAP=HOST、NODE_HOST=HOST）
 	@script="$(WEB_DIR)/scripts/latency-probe.ts"; \
 	if [[ ! -f "$$script" ]]; then echo 'feat/latency-harness をマージしてください' >&2; exit 1; fi; \
