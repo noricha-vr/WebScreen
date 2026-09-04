@@ -104,6 +104,9 @@ latency-probe: export LP_NOTIFY_DISCORD := $(value NOTIFY_DISCORD)
 latency-probe: export LP_SERVER_SNAP := $(value SERVER_SNAP)
 latency-probe: export LP_NODE_HOST := $(value NODE_HOST)
 latency-probe: export LP_READ_HOST := $(value READ_HOST)
+# NOTIFY_DISCORD を使う時は、実際に叩く通知コマンドを環境変数 WEBSCREEN_LATENCY_NOTIFY_COMMAND で
+# 渡す（make VAR= 経由では $ が Make に展開されるので、シェル側で export しておく）。
+# 値の書式と例: docs/streaming/latency-harness.md#配信-url-の通知コマンド
 latency-probe: ## 遅延測定を実行（MIN=5 SOURCE=URL、PLAYER=win2022、NOTIFY_DISCORD=ID、SERVER_SNAP=HOST、NODE_HOST=HOST、READ_HOST=HOST[:PORT]）
 	@script="$(WEB_DIR)/scripts/latency-probe.ts"; \
 	if [[ ! -f "$$script" ]]; then echo 'feat/latency-harness をマージしてください' >&2; exit 1; fi; \

@@ -64,11 +64,36 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - `--server-snap HOST` は run 中にサーバーへ SSH し、ingress（8554）と egress（554）を**並列起動**で単発取得して `server-snap.md` に出す。ingress の値が「配信元 → ingress」、egress との差が relay の寄与
 - 実測（2026-09-02、計測ページ 1150x720 / 250 ms 更新）: ingress 約 0.55 秒、egress 約 0.80 秒（上限値）、Mac からの出口単発取得 約 0.78 秒。開始直後から安定し、出口に「数秒 → 1 秒未満」の収束は無い
 - `?tones=1` の左右確認用定常音（現行 220/330 Hz、旧 440/880 Hz）は 50 ms 検出窓では秒識別ビープの 8 帯域へ漏れず、検出数・`secondMod8`・onset（±15 ms）を乱さない（回帰: `web/tests/scripts/latency-probe.test.ts` の test.each「定常音 … に重ねても8個の秒識別ビープを取り違えず検出する」。ただし 600〜1300 Hz の各帯域近傍に定常音を足すとグローバル閾値が持ち上がって検出が消えるため（実測: 890 / 900 / 905+1210 Hz で検出 0 件）、確認音の周波数はこの範囲外に置く）
-- `--notify-discord CHANNEL_ID` で配信 URL を Discord に投稿する（VRChat を動かす別 PC で貼るため）。`--player win2022` の録画は Scheduled Task 経由で、MacType 導入機では互換性ダイアログが出るが録画は継続する
+- `--notify-discord CHANNEL_ID` で配信 URL を外部へ通知する（VRChat を動かす別 PC で貼るため）。叩くコマンドは環境変数で注入する（[配信 URL の通知コマンド](#配信-url-の通知コマンド)）。`--player win2022` の録画は Scheduled Task 経由で、MacType 導入機では互換性ダイアログが出るが録画は継続する
+
+## 配信 URL の通知コマンド
+
+`--notify-discord CHANNEL_ID`（`make` では `NOTIFY_DISCORD=`）を付けると、配信開始時に外部コマンドへ配信 URL を渡す。
+どのコマンドを叩くかはリポジトリに持たず、環境変数 `WEBSCREEN_LATENCY_NOTIFY_COMMAND` で注入する（個人環境のスクリプトを固定パスで参照しないため）。
+
+- 値は**空白区切りの argv**。空白を含む引数は `'…'` または `"…"` で囲む。引用符は語の途中でも開閉できる（`--message='a b'`）
+- **シェルを介さない**ので `~` / `$VAR` / パイプ / リダイレクトは展開されない。`~` は literal のパスになり必ず失敗するため、`export` する側で `$HOME` を展開させる（下の例は外側を `"` で囲っているので shell が展開する）
+- 各引数の `{url}` は配信 URL（`rtspt://.../live/{id}`）、`{channel}` は `--notify-discord` に渡した値へ置換される
+- 加えて **stdin に `{"url":"...","channel":"..."}` の JSON を 1 行**渡す。引数を組み立てにくい CLI はこちらを読む
+- 未設定なら「通知コマンド未設定のため通知をスキップ」と警告を出すだけで、計測はそのまま続行する。値の引用符が閉じていない場合は配信を始める前に失敗する
+- 失敗・10 秒のタイムアウトも警告のみで run は止めない
+
+例 1: 個人の discord-mention スキル（旧ハードコードと同じ引数）
+
+```bash
+export WEBSCREEN_LATENCY_NOTIFY_COMMAND="bun $HOME/.claude/skills/discord-mention/scripts/notify-discord.ts --message '遅延計測の配信を開始しました。VRChat に貼ってください: {url}' --target nori --channel-id {channel} --project-dir ."
+```
+
+例 2: 任意の webhook CLI（stdin の JSON をそのまま送る。`{url}` / `{channel}` は使わない）
+
+```bash
+export WEBSCREEN_LATENCY_NOTIFY_COMMAND="curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- https://example.com/webhook/xxxx"
+```
 
 ## 実測前の確認手順（2026-09-02 追記）
 
 1. `bun scripts/latency-probe.ts login`（初回のみ。ハーネスが開く Chrome でログイン）
 2. `bun scripts/latency-probe.ts player-check --seconds 8`（配信なしで Windows 録画・回収だけを試す。`--seconds` は 900 まで。録画長が指定の 80% 以上で OK。フレームに PowerShell コンソールや MacType 警告が写らないこと）
-3. `make latency-probe MIN=4 SOURCE=... PLAYER=win2022 NOTIFY_DISCORD=<channel> SERVER_SNAP=<host>`
-4. Discord の URL を VRChat に貼り、**プレイヤーを正面に近い視点で**映し続ける（斜めになると復号できない）
+3. 通知を使うなら `WEBSCREEN_LATENCY_NOTIFY_COMMAND` を export（[配信 URL の通知コマンド](#配信-url-の通知コマンド)）
+4. `make latency-probe MIN=4 SOURCE=... PLAYER=win2022 NOTIFY_DISCORD=<channel> SERVER_SNAP=<host>`
+5. 通知された URL を VRChat に貼り、**プレイヤーを正面に近い視点で**映し続ける（斜めになると復号できない）
