@@ -586,9 +586,12 @@ Cherry Servers Chicago Cloud VDS 2（88.216.73.71、[operations.md](operations.m
 | A | Indigo origin → 日本の視聴者 | 0.55〜0.57 秒 | 0.79〜0.82 秒 | **0.776 秒** / 0.79 秒 | 基準 |
 | B | **Cherry origin** → 日本の視聴者 | 0.62 秒 | 0.87 秒 | **0.951 秒** / 0.96 秒 | **+0.18 秒** |
 | C | Indigo origin → **Cherry replica**（runOnDemand pull）→ 日本の視聴者 | （Indigo 側 0.55 秒） | Cherry egress **1.10〜1.11 秒**（サーバー内 3 round） | 未計測（推定 約 1.18 秒 = Cherry egress + 帰り約 0.08 秒） | **約 +0.4 秒**（推定） |
+| D | **Cherry origin → 同じ Chicago 内の replica**（同一ノードの別 MediaMTX、`ORIGINS=127.0.0.1`）→ 日本の視聴者 | 0.64 秒 | replica egress **1.14 秒**（origin egress は B と同じ 0.87 秒） | **1.206 秒** / 1.23 秒 | **+0.43 秒** |
 
 - **Cherry を origin にしても増分は日本 ⇄ Chicago の往復（約 0.18 秒）だけ**。行き（WHIP）が約 +0.07 秒、帰り（rtspt）が約 +0.08 秒で、ingress → egress の relay コスト（約 0.25 秒）は Indigo と同じ。8 分間の出口は 0.95〜0.97 秒で安定し、p95 のスパイクも A と同程度
-- **replica 経由は約 +0.4 秒**。Indigo egress → Cherry egress の pull 1 ホップで +0.31 秒（往復 0.18 秒 + ffmpeg の起動バッファ）。DNS 均等分散で日本の視聴者が Cherry を引いた時の遅延で、2 台構成の実コストはここに出る
+- **replica 経由は約 +0.4 秒**。Indigo egress → Cherry egress の pull 1 ホップで +0.31 秒。DNS 均等分散で日本の視聴者が Cherry を引いた時の遅延で、2 台構成の実コストはここに出る
+- **pull 1 ホップのコストはネットワーク距離ではなく ffmpeg の取り寄せバッファが主**。D（同一 DC、往復 1 ms 未満）でも +0.27 秒（server-snap の egress 差）で、C（日本 ⇄ Chicago 往復 0.18 秒込み）の +0.31 秒とほぼ同じ。`replica-pull.sh` の ffmpeg 入力側（probe / analyze / キーフレーム待ち）を詰めれば縮む余地がある
+- 想定する最終構成「日本 → Cherry origin → Chicago 内 replica → 日本」は **1.21 秒**（Indigo 直の 0.78 秒 + 0.43 秒）。D の計測は Cherry 上で origin egress を 5554、replica を 554 に一時入れ替えて行い（自宅回線から 5554 が届かなかったため）、計測後に戻した。生値: `docs/tmp/latency/2026-09-04T12-33-12-779Z`
 - replica の立ち上がり: 最初の視聴者が来てから path が ready になるまで 4〜6 秒（`runOnDemand` 起動 → ffmpeg 接続 → キーフレーム）。2 人目以降は即時。最後の視聴者が切れて 10 秒で pull は止まる
 - 測定境界の注意: C の出口は Mac ではなく Cherry サーバー内の単発取得（`--server-snap webscreen-cherry` の egress 値）で、日本への帰り分は B の「出口 − egress」（0.08 秒）を流用した推定。ハーネスに「publish 先と read 先を別ノードにする」オプションが無いため（`--node-host` は両方を同じノードにする）
 - VRChat プレイヤー側（`--player win2022`）は A で録画が期限切れになり標本 0。8 分の gdigrab 録画が VRChat 起動中に完走しない（短い録画は通る）。ultrafast 化と期限延長（#244）でも再現したため、B / C は Windows 録画なしで実施した。プレイヤー側のバッファは経路に依存しないので、経路間の差は出口の差で読む

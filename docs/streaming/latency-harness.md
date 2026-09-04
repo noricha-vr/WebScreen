@@ -42,6 +42,7 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - 出口計測（`ffmpeg` の単発取得・音声・画質）と Discord に流す視聴 URL も `rtsp(t)://<node-host>/live/{id}` になる。VRChat にはこの URL を貼る（`webscreen.tv` と同じく allowlist 外なので条件は同じ）
 - `--server-snap` は別指定（例 `--server-snap webscreen-cherry`）。ノードの SSH alias を渡す
 - 使った host は `sender-config.json` の `harnessNodeHost` / `harnessReadHost` に残る
+- `--read-host HOST[:PORT]` で視聴先だけを別に指定できる（`--node-host` と併用して「A に配信、B から視聴」を測る。web-screen.net 配下の 1 ラベル + 任意ポート）。ポート付きは自宅回線から届かないことがある（2026-09-04 に 5554 が不通。554 は通る）ので、届かない時はノード側でポートを入れ替える
 - ノード側の前提: ingress + relay が動き、Caddy がそのホストで WHIP ルートを持ち（`web/streaming/Caddyfile.node`）、cron の `MEDIAMTX_READ_EGRESS_API_URLS` にそのノードの Control API が入っていること。入っていないと本番 cron が「viewer 0」と判定し、`STREAM_NO_VIEWER_SECONDS`（600 秒）で配信を終了させる
 
 ## 既知の失敗と診断ファイル
