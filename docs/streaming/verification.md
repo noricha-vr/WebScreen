@@ -598,6 +598,25 @@ Cherry Servers Chicago Cloud VDS 2（88.216.73.71、[operations.md](operations.m
 - B の Cherry は音声が MP3 候補プロファイル（`web/streaming/relay.sh` の 0.2.0-beta）で動いていた。映像遅延には影響しないが VRChat PC では無音になりうる（I23）。計測後に Indigo 稼働中の AAC 版 relay を Cherry へ複製して切り替え済み（[operations.md](operations.md)）
 - 判断: Cherry は origin としても replica としても使える。遅延だけなら origin を Cherry に移す方が replica 経由より軽い。移設判断は [scale-plan.md](scale-plan.md)「origin 移設」の基準（転送量）と、この +0.18 秒を体感で許容できるかで決める
 
+### I27: replica-pull の +0.27 秒の正体は ffmpeg の H.264 パーサが 1 フレーム持ち越すこと（2026-09-04。Issue #247）
+
+I26 の「pull 1 ホップ +0.27 秒」を Mac 上の 2 プロセス構成（origin MediaMTX :8554 → replica MediaMTX :8555、`runOnDemand` に本リポの `replica-pull.sh`、`ORIGINS=127.0.0.1:8554`）で再現し、
+配信元の fps とオプションを変えて切り分けた。配信元は `ffmpeg -re testsrc2 + sine`（`libx264 -tune zerolatency -g 1 -bf 0`。GOP は本番と違うが、持ち越しはアクセスユニット単位なので結果に影響しない）。
+ホップ遅延は origin と replica を同時に読む 2 本の `ffmpeg -vf showinfo` で同じフレーム（checksum 一致）の到着時刻差を取った（各 25 秒、mediamtx v1.15.5 / ffmpeg 8.0.1）。
+
+| 条件 | ホップ遅延 中央値 / p95 |
+|---|---:|
+| 4 fps、現行 `replica-pull.sh`（`-rtsp_transport tcp -c copy`） | **250.7 ms** / 258 ms |
+| 30 fps、現行 | **34.0 ms** / 41 ms |
+| 4 fps、`-fflags nobuffer -flags low_delay` + 出力 `-flush_packets 1 -max_delay 0` | 250.7 ms / 257 ms（変化なし） |
+| 4 fps、`-fflags +noparse`（パーサ無効） | 配信不能（`dimensions not set` で出力ヘッダを書けない。`+nofillin` 併用も同じ） |
+| 4 fps、**MediaMTX の `source: rtsp://origin/live/$G1` + `sourceOnDemand`（ffmpeg を使わない）** | **0.3 ms** / 0.9 ms |
+
+- **ホップ遅延 = 配信元のフレーム間隔 1 つ分**。ffmpeg の RTSP 入力は H.264 を `AVSTREAM_PARSE_FULL` で扱い（`libavformat/rtpdec_h264.c`）、パーサは次のアクセスユニットの先頭 NAL が来るまで今のフレームを出さない（`PARSER_FLAG_COMPLETE_FRAMES` は RTSP では立たない。`libavformat/demux.c`）。`-c copy` でもこの経路を通るので、probe / analyze / バッファ系のオプションでは縮まない。CLI から回避する手段は `-fflags +noparse` だけだが、パーサ無しでは SPS の寸法が取れず出力を開始できない
+- I26 の run C / D が +0.27〜0.31 秒だったのは、計測ページ `latency-source.html` が Chrome から **4 fps** で送出されていたため（run D の summary: 479 秒で 1916 フレーム）。動きのある実配信（30 fps）では同じホップが **約 0.03 秒**で、I26 の「ffmpeg の取り寄せバッファが主」は原因の特定としては誤り（フレーム間隔依存）。同じ機構は origin の relay（ingress → egress の `relay.sh`、これも `-c:v copy`）にもあり、I26 の relay コスト約 0.25 秒も 4 fps 由来
+- MediaMTX 自身の RTSP source（gortsplib）は RTP のマーカービットでアクセスユニットを確定するため持ち越しが無い。replica の取り寄せを `runOnDemand` + ffmpeg から `source` に替えると、ホップ遅延はフレームレートに依らず 1 ms 未満になる。ただし `ORIGINS` の順序付きフォールバック（`replica-pull.sh`）は `source` に相当機能が無く、origin は 1 つの URL（またはホスト名の解決先）で決めることになる
+- 再現手順の要点: ローカルの mediamtx v1.15.5 は `mediamtx-egress-replica.yml` の `moq:` を知らず、`ips: [..., ::1/128]` を YAML エラーにする（本番 v1.20.1 では問題ない）。ローカル smoke では `moq:` を消し `"::1/128"` と引用する
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |
