@@ -88,7 +88,7 @@ NTTPC からは 2026-09-04 に「申告どおり（160 GB/日）の範囲で利�
 | 項目 | いま言えること | 確かめ方 |
 |---|---|---|
 | 1000 TB を超える枠を買えるか | ポータルの 1 注文上限が 1000 TB。ハード上限の公開記載はない | Cherry へ問い合わせ。ただし 1 Gbps × 1 台では月 324 TB が物理上限なので当面不要 |
-| Chicago の実 RTT（日本の自宅回線から） | 2026-09-04 に自宅 Mac から契約したサーバーへ ping 5 回で **平均 184 ms・ロス 0**（調査の引用値 125〜145 ms より大きい。暫定値） | ハーネス（[latency-harness.md](latency-harness.md)）で Cherry を origin にした配信と Indigo 配信を VRChat 実機で A/B し、体感遅延の差で判断する |
+| Chicago の実 RTT（日本の自宅回線から） | **実測済み（2026-09-04）**: ping 平均 184 ms。配信経路では Cherry origin で出口 +0.18 秒（0.776 → 0.951 秒）、Cherry replica 経由で約 +0.4 秒（[verification.md](verification.md) I26） | 体感の許容判断は VRChat 実機で行う（Windows 録画の不調で未取得） |
 | Chicago 実機の耐久 | 未実施 | 500 / 700 viewer、40 人 × 10〜15 配信、pps、72 時間連続 |
 | Cherry 東京の月間転送枠 | ページ上部 100 TB とプラン表 20 TB の表記混在（[#227](https://github.com/noricha-vr/WebScreen/issues/227)） | Chicago を採るなら判断に不要。東京を再検討する時だけ書面確認 |
 

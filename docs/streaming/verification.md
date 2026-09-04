@@ -574,6 +574,27 @@ bun scripts/latency-probe.ts run --minutes 4 --source 'http://127.0.0.1:0/latenc
 - 前の配信が終了した直後に新 URL を貼ると Player Error になり再貼付が要る（2 回再現）。ストリームの SPS / PPS は A / B で一致しており設定差ではない
 - 貼付漏れ・視点ずれで無効になった run が 5 本あり、人の操作が律速だった。URL 固定（#210）と 1 配信内の自動切替（#209）で次回からは 1 回貼るだけで済む
 
+### I26: Cherry Chicago（2 台目）を origin / replica にした時の遅延（2026-09-04）
+
+Cherry Servers Chicago Cloud VDS 2（88.216.73.71、[operations.md](operations.md)「サーバー実体」）を構築し、
+`latency-probe.ts` の `--node-host`（[latency-harness.md](latency-harness.md)）で本番設定を変えずに 3 経路を各 8 分計測した。
+配信元は ms25 の実 Chrome（東京・自宅回線）、計測ページは `latency-source.html?tones=1`、画質は quality 既定。
+自宅 Mac → Cherry の ping は平均 184 ms。生値は `docs/tmp/latency/2026-09-04T08-36-28-429Z`（A）/ `…T08-52-29-325Z`（B）/ `…T09-01-48-942Z`（C）（git 管理外）。
+
+| run | 経路 | 配信元 → ingress | 配信元 → egress（relay 後） | Mac からの出口（rtspt）中央値 / p95 | A との差 |
+|---|---|---:|---:|---:|---:|
+| A | Indigo origin → 日本の視聴者 | 0.55〜0.57 秒 | 0.79〜0.82 秒 | **0.776 秒** / 0.79 秒 | 基準 |
+| B | **Cherry origin** → 日本の視聴者 | 0.62 秒 | 0.87 秒 | **0.951 秒** / 0.96 秒 | **+0.18 秒** |
+| C | Indigo origin → **Cherry replica**（runOnDemand pull）→ 日本の視聴者 | （Indigo 側 0.55 秒） | Cherry egress **1.10〜1.11 秒**（サーバー内 3 round） | 未計測（推定 約 1.18 秒 = Cherry egress + 帰り約 0.08 秒） | **約 +0.4 秒**（推定） |
+
+- **Cherry を origin にしても増分は日本 ⇄ Chicago の往復（約 0.18 秒）だけ**。行き（WHIP）が約 +0.07 秒、帰り（rtspt）が約 +0.08 秒で、ingress → egress の relay コスト（約 0.25 秒）は Indigo と同じ。8 分間の出口は 0.95〜0.97 秒で安定し、p95 のスパイクも A と同程度
+- **replica 経由は約 +0.4 秒**。Indigo egress → Cherry egress の pull 1 ホップで +0.31 秒（往復 0.18 秒 + ffmpeg の起動バッファ）。DNS 均等分散で日本の視聴者が Cherry を引いた時の遅延で、2 台構成の実コストはここに出る
+- replica の立ち上がり: 最初の視聴者が来てから path が ready になるまで 4〜6 秒（`runOnDemand` 起動 → ffmpeg 接続 → キーフレーム）。2 人目以降は即時。最後の視聴者が切れて 10 秒で pull は止まる
+- 測定境界の注意: C の出口は Mac ではなく Cherry サーバー内の単発取得（`--server-snap webscreen-cherry` の egress 値）で、日本への帰り分は B の「出口 − egress」（0.08 秒）を流用した推定。ハーネスに「publish 先と read 先を別ノードにする」オプションが無いため（`--node-host` は両方を同じノードにする）
+- VRChat プレイヤー側（`--player win2022`）は A で録画が期限切れになり標本 0。8 分の gdigrab 録画が VRChat 起動中に完走しない（短い録画は通る）。ultrafast 化と期限延長（#244）でも再現したため、B / C は Windows 録画なしで実施した。プレイヤー側のバッファは経路に依存しないので、経路間の差は出口の差で読む
+- B の Cherry は音声が MP3 候補プロファイル（`web/streaming/relay.sh` の 0.2.0-beta）で動いていた。映像遅延には影響しないが VRChat PC では無音になりうる（I23）。計測後に Indigo 稼働中の AAC 版 relay を Cherry へ複製して切り替え済み（[operations.md](operations.md)）
+- 判断: Cherry は origin としても replica としても使える。遅延だけなら origin を Cherry に移す方が replica 経由より軽い。移設判断は [scale-plan.md](scale-plan.md)「origin 移設」の基準（転送量）と、この +0.18 秒を体感で許容できるかで決める
+
 ## 検証できていないこと
 
 | # | 項目 | 影響 |
