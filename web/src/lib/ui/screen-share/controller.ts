@@ -26,6 +26,7 @@ import {
 } from './controller-helpers';
 import {
   isStreamAlreadyLiveError,
+  isStreamEndedError,
   isStreamIdNotReusableError,
   messageKeyForError,
   retryAfterSecondsForError,
@@ -305,7 +306,11 @@ export class ScreenShareControllerImpl {
       this.expiresBarTotalSeconds = durationUntil(live.extendExpiresAt, this.deps.now());
       this.updateClock();
     } catch (error) {
-      if (this.isActiveLive(live)) this.view.setLiveError(messageKeyForError(error));
+      if (!this.isActiveLive(live)) return;
+      // サーバー側で終了済みの配信は延長も継続もできない。録画の完了を待ってから
+      // このブラウザの capture と PeerConnection も閉じ、終了理由を error 画面で伝える。
+      if (isStreamEndedError(error)) return void await this.finishLocally('error', error);
+      this.view.setLiveError(messageKeyForError(error));
     } finally {
       this.view.setBusy('[data-screen-extend]', false, 'labelExtend');
     }

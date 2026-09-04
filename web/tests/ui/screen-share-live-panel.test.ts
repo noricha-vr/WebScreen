@@ -150,7 +150,7 @@ describe('配信中パネルの録画', () => {
     await waitFor(() => recorders.instances.length === 2);
   });
 
-  test('ダウンロードした行は「保存しました」で固定する', async () => {
+  test('ダウンロードした行は「ダウンロードを開始しました」で固定する', async () => {
     const page = fakePage();
     const recorders = fakeRecorders();
     new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
@@ -168,7 +168,8 @@ describe('配信中パネルの録画', () => {
     await waitFor(() => download.disabled);
 
     expect(download.dataset.saved).toBe('true');
-    expect(download.labelSpan?.textContent).toBe('saved');
+    // anchor.click() が保証するのは開始要求まで。保存完了とは表示しない。
+    expect(download.labelSpan?.textContent).toBe('download-started');
   });
 
   test('保存先を選んだ録画はディスクにあるので、保存済み表示だけを出す', async () => {
@@ -203,6 +204,74 @@ describe('配信中パネルの録画', () => {
     // 時刻そのものは実行環境の TZ で変わるため、言語差（AM/PM の有無）だけを見る。
     expect(await recordOnce('en')).toMatch(/AM|PM/);
     expect(await recordOnce('ja')).not.toMatch(/AM|PM/);
+  });
+});
+
+describe('録画を失った時の表示', () => {
+  test('停止時の書き込み失敗は、idle へ戻った後も録画セクションに残す', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    const file = deferredFile();
+    new ScreenShareController(page.root, dependencies({
+      MediaRecorder: recorders.Constructor,
+      pickRecordingFile: async () => file.handle,
+    })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(1024);
+    // チャンクの write が呼ばれるまで進めてから、停止中に失敗させる。
+    await settle();
+
+    page.button('[data-screen-stop]').click();
+    await settle();
+    file.failWrite(new Error('disk full'));
+    await waitFor(() => !page.step('idle').hidden);
+
+    // 一覧へ積めていないので、セクションが消えると失敗そのものが伝わらなくなる。
+    expect(page.button('[data-screen-record-list]').children.length).toBe(0);
+    expect(page.button('[data-screen-record-section]').hidden).toBe(false);
+    expect(page.button('[data-screen-record-error]').hidden).toBe(false);
+    expect(page.button('[data-screen-record-error]').textContent).toBe('record-after-stop');
+    // 選んだファイルは書きかけを破棄して守る。
+    expect(file.aborted).toBe(1);
+    expect(file.closed).toBe(0);
+  });
+
+  test('待ちきれず idle へ戻った後に届いた失敗でも、録画セクションを開き直す', async () => {
+    const timers = installFakeTimeouts();
+    try {
+      const page = fakePage();
+      const recorders = fakeRecorders();
+      const file = deferredFile();
+      new ScreenShareController(page.root, dependencies({
+        MediaRecorder: recorders.Constructor,
+        pickRecordingFile: async () => file.handle,
+      })).mount();
+      await startLive(page);
+
+      page.button('[data-screen-record]').click();
+      await waitFor(() => recorders.instances.length === 1);
+      recorders.last().emit(1024);
+      await settle();
+
+      page.button('[data-screen-stop]').click();
+      await settle();
+      // 録画の完了を待ちきれずに配信を閉じる経路（3 秒の待ち上限）。
+      timers.tick(3000);
+      await waitFor(() => !page.step('idle').hidden);
+      expect(page.button('[data-screen-record-section]').hidden).toBe(true);
+
+      file.failWrite(new Error('disk full'));
+      await waitFor(() => !page.button('[data-screen-record-error]').hidden);
+
+      expect(page.button('[data-screen-record-section]').hidden).toBe(false);
+      expect(page.button('[data-screen-record-error]').textContent).toBe('record-after-stop');
+      expect(page.button('[data-screen-record-list]').children.length).toBe(0);
+    } finally {
+      timers.restore();
+    }
   });
 });
 
@@ -254,6 +323,40 @@ describe('配信中パネルの延長', () => {
     expect(page.step('live').hidden).toBe(false);
     expect(page.button('[data-screen-extend]').disabled).toBe(false);
     expect(page.button('[data-screen-extend]').labelSpan?.textContent).toBe('extend');
+  });
+
+  test('終了済みの配信への延長は、録画の完了を待って配信を閉じ理由を出す', async () => {
+    const page = fakePage();
+    // onstop は非同期。待たずに閉じると最後の録画を落とす。
+    const recorders = fakeRecorders({ asyncStop: true });
+    const stops: string[] = [];
+    new ScreenShareController(page.root, dependencies({
+      MediaRecorder: recorders.Constructor,
+      requestJson: (async (url: string) => {
+        if (url.endsWith('/extend/')) throw new JsonRequestError(409, ERROR_CODES.streamEnded);
+        if (url.endsWith('/stop/')) {
+          stops.push(url);
+          return null;
+        }
+        return createResponse();
+      }) as unknown as ScreenShareDependencies['requestJson'],
+    })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(1024);
+
+    page.button('[data-screen-extend]').click();
+    await waitFor(() => !page.step('error').hidden);
+
+    expect(page.button('[data-screen-error-message]').textContent).toBe('stream-ended');
+    expect(page.step('live').hidden).toBe(true);
+    // 録画は取りこぼさずに一覧へ積んでから閉じる。
+    expect(recorders.last().stopCalls).toBe(1);
+    expect(page.button('[data-screen-record-list]').children.length).toBe(1);
+    // サーバー側は終了済みなので、停止通知は投げ直さない。
+    expect(stops).toEqual([]);
   });
 });
 
@@ -391,6 +494,7 @@ function fakePage(options: { locale?: string } = {}): {
     '[data-screen-record-icon]', '[data-screen-record-timer]', '[data-screen-record-elapsed]',
     '[data-screen-record-error]', '[data-screen-record-empty]', '[data-screen-record-list]',
     '[data-screen-record-section]', '[data-screen-record-controls]',
+    '[data-screen-error-message]',
   ]) elements.set(selector, new FakeElement());
   for (const selector of ['[data-screen-extend]', '[data-screen-record]']) {
     elements.get(selector)!.labelSpan = new FakeElement();
@@ -405,12 +509,14 @@ function fakePage(options: { locale?: string } = {}): {
       labelStart: 'start', labelSelecting: 'selecting', labelStarting: 'starting', labelRetry: 'retry',
       labelExtend: 'extend', labelRecordStart: 'rec-start', labelRecordStop: 'rec-stop',
       labelRecordDownload: 'download', labelRecordSaved: 'saved',
+      labelRecordDownloadStarted: 'download-started',
       locale: options.locale ?? 'ja',
       recordFilenameBase: '録画 {number}', recordDetails: '{time} 開始 ・ {duration} ・ {size} MB',
       recordFileType: '動画',
       msgRecordUnsupported: 'record-unsupported', msgRecordWriteFailed: 'record-write-failed',
       msgRecordSizeLimit: 'record-size-limit', msgRecordTotalLimit: 'record-total-limit',
-      msgStreamExtensionDisabled: 'extension-disabled',
+      msgRecordAfterStop: 'record-after-stop',
+      msgStreamExtensionDisabled: 'extension-disabled', msgStreamEnded: 'stream-ended',
       msgVideoOnly: 'video', msgDisplayDenied: 'denied', audioOn: 'audio-on', audioOff: 'audio-off',
     },
     querySelector: (selector: string) => elements.get(selector) ?? null,
@@ -459,6 +565,62 @@ class FakeElement {
     return this.children.flatMap((child) => [child.textContent, ...child.descendantTexts()])
       .filter((text) => text.length > 0);
   }
+}
+
+/** 書き込みの成否をテストから決められる保存先。write は解決するまで保留する。 */
+function deferredFile(): {
+  handle: { createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void>; abort: () => Promise<void> }> };
+  failWrite: (error: Error) => void;
+  closed: number;
+  aborted: number;
+} {
+  const state = { closed: 0, aborted: 0 };
+  const pending: Array<(error: Error) => void> = [];
+  const writable = {
+    write: () => new Promise<void>((_resolve, reject) => { pending.push(reject); }),
+    close: async () => { state.closed += 1; },
+    abort: async () => { state.aborted += 1; },
+  };
+  return {
+    handle: { createWritable: async () => writable },
+    failWrite: (error) => { for (const reject of pending.splice(0)) reject(error); },
+    get closed(): number { return state.closed; },
+    get aborted(): number { return state.aborted; },
+  };
+}
+
+/** 録画停止の待ち上限（setTimeout）をテストから進めるための差し替え。 */
+function installFakeTimeouts(): { tick: (delay: number) => void; restore: () => void } {
+  const timeouts = new Map<number, { callback: () => void; delay: number }>();
+  let nextId = 1;
+  const original = globalThis.setTimeout;
+  const originalClear = globalThis.clearTimeout;
+  Reflect.set(globalThis, 'setTimeout', ((callback: () => void, delay = 0) => {
+    const id = nextId;
+    nextId += 1;
+    timeouts.set(id, { callback, delay });
+    return id as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout);
+  Reflect.set(globalThis, 'clearTimeout', ((id: ReturnType<typeof setTimeout>) => {
+    timeouts.delete(Number(id));
+  }) as typeof clearTimeout);
+  return {
+    tick(delay) {
+      const entry = [...timeouts.entries()].find(([, candidate]) => candidate.delay === delay);
+      if (!entry) throw new Error(`Expected a ${delay} ms timeout`);
+      timeouts.delete(entry[0]);
+      entry[1].callback();
+    },
+    restore() {
+      Reflect.set(globalThis, 'setTimeout', original);
+      Reflect.set(globalThis, 'clearTimeout', originalClear);
+    },
+  };
+}
+
+/** await 先が無い非同期処理を流し切る（microtask を数回回す）。 */
+async function settle(): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) await Promise.resolve();
 }
 
 async function waitFor(condition: () => boolean): Promise<void> {

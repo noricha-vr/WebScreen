@@ -51,6 +51,11 @@ export function isStreamIdNotReusableError(error: unknown): boolean {
   return error instanceof JsonRequestError && error.errorCode === ERROR_CODES.streamIdNotReusable;
 }
 
+/** サーバー側で終了済みの配信に対する操作エラーか判定する。 */
+export function isStreamEndedError(error: unknown): boolean {
+  return error instanceof JsonRequestError && error.errorCode === ERROR_CODES.streamEnded;
+}
+
 /** 再利用待ちの秒数だけを、表示用に取り出す。 */
 export function retryAfterSecondsForError(error: unknown): number | null {
   return error instanceof JsonRequestError ? error.retryAfterSeconds : null;
@@ -60,6 +65,9 @@ export function retryAfterSecondsForError(error: unknown): number | null {
 export class ScreenShareView {
   // 未ダウンロードの Blob 合計。ダウンロードで解放した分を差し引く。
   private pendingBlobBytes = 0;
+  private phase: ScreenSharePhase = 'idle';
+  // 表示中の録画エラー。配信終了後も保持し、録画を失ったことを画面に残す。
+  private recordingError: RecorderErrorCode | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -71,6 +79,7 @@ export class ScreenShareView {
   }
 
   show(phase: ScreenSharePhase): void {
+    this.phase = phase;
     for (const step of this.root.querySelectorAll<HTMLElement>('[data-screen-step]')) {
       step.hidden = step.dataset['screenStep'] !== phase;
     }
@@ -80,19 +89,22 @@ export class ScreenShareView {
         ? position === '1' ? 'done' : position === '2' ? 'current' : 'todo'
         : position === '1' ? 'current' : 'todo';
     }
-    this.syncRecordingSection(phase);
+    // 配信終了で文言の前提（「配信は続いています」）が変わるため、表示中のエラーを描き直す。
+    this.renderRecordingError();
+    this.syncRecordingSection();
     if (phase === 'live') this.setPreviewOpen(this.previewPreference.load() ?? true);
   }
 
   /**
-   * 録画セクションの表示を phase に合わせる。配信中は常に出し、配信終了後も録画が
-   * 残っていればダウンロードできるよう残す（開始ボタンと REC チップは配信中だけ）。
+   * 録画セクションの表示を phase に合わせる。配信中は常に出し、配信終了後も録画または
+   * 録画エラーが残っていれば残す（開始ボタンと REC チップは配信中だけ）。
    */
-  private syncRecordingSection(phase: ScreenSharePhase): void {
-    const live = phase === 'live';
+  private syncRecordingSection(): void {
+    const live = this.phase === 'live';
     const hasRecordings = this.recordingCount() > 0;
     const section = this.root.querySelector<HTMLElement>('[data-screen-record-section]');
-    if (section) section.hidden = !live && !hasRecordings;
+    // 録画を失った時に、セクションごと消えて失敗が伝わらないのを防ぐ。
+    if (section) section.hidden = !live && !hasRecordings && this.recordingError === null;
     const controls = this.root.querySelector<HTMLElement>('[data-screen-record-controls]');
     if (controls) controls.hidden = !live;
     const empty = this.root.querySelector<HTMLElement>('[data-screen-record-empty]');
@@ -179,12 +191,29 @@ export class ScreenShareView {
     this.text('[data-screen-record-elapsed]', formatDuration(seconds));
   }
 
-  /** 録画エラーを配信中パネルへ表示する。 */
+  /** 録画エラーを録画セクションへ表示する。エラーがある間はセクションごと表示する。 */
   setRecordingError(code: RecorderErrorCode | null): void {
+    this.recordingError = code;
+    this.renderRecordingError();
+    this.syncRecordingSection();
+  }
+
+  private renderRecordingError(): void {
     const error = this.root.querySelector<HTMLElement>('[data-screen-record-error]');
     if (!error) return;
+    const code = this.recordingError;
     error.hidden = code === null;
-    if (code !== null) error.textContent = this.message(`msgRecord${capitalize(code)}`);
+    if (code !== null) error.textContent = this.message(this.recordingErrorKey(code));
+  }
+
+  /**
+   * 配信終了後の writeFailed だけは専用文言にする（既存文言の「配信は続いています」が
+   * 嘘になるため）。他の code は録画が残る失敗なので、文言を差し替えない。
+   */
+  private recordingErrorKey(code: RecorderErrorCode): string {
+    return code === 'writeFailed' && this.phase !== 'live'
+      ? 'msgRecordAfterStop'
+      : `msgRecord${capitalize(code)}`;
   }
 
   /** ローカライズ済みの録画ファイル名の基底を返す。 */
@@ -380,11 +409,12 @@ export class ScreenShareView {
     } catch {
       return this.setRecordingError('writeFailed');
     }
-    // 保存できたら Blob を手放す。行は完了状態に固定し、再ダウンロードで抱え直さない。
+    // ダウンロード開始まで進んだら Blob を手放す。行は完了状態に固定し、再ダウンロードで抱え直さない。
     row.blob = null;
     this.pendingBlobBytes = Math.max(0, this.pendingBlobBytes - row.sizeBytes);
+    // anchor.click() が保証するのは開始要求までなので、保存完了とは言わない。
     const label = button.querySelector('span');
-    if (label) label.textContent = this.message('labelRecordSaved');
+    if (label) label.textContent = this.message('labelRecordDownloadStarted');
     lockAsSaved(button);
   }
 }

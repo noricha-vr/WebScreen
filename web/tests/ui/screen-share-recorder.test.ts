@@ -267,6 +267,24 @@ describe('選んだファイルの保護', () => {
     expect(harness.created).toBe(0);
     expect(harness.completed).toEqual([]);
   });
+
+  test('配信が終わった後のダイアログ中断は、録画の失敗として出さない', async () => {
+    const picks: Array<(error: Error) => void> = [];
+    const harness = recorder({
+      pickFile: () => new Promise((_resolve, reject) => { picks.push(reject); }),
+    });
+
+    const started = harness.recorder.start(harness.stream, '録画 1');
+    await harness.recorder.stop();
+    picks[0]!(new Error('picker canceled'));
+    await started;
+
+    // 録画は始まっていないので、失敗文言を出す相手がいない。
+    expect(harness.errors).toEqual([]);
+    expect(harness.states).toEqual([]);
+    expect(harness.created).toBe(0);
+    expect(harness.recorder.isActive).toBe(false);
+  });
 });
 
 describe('ローカル録画の多重停止', () => {

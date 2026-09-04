@@ -126,6 +126,8 @@ export class ScreenRecorder {
       target = await this.openTarget(filename, candidate.mimeType);
     } catch (error) {
       this.opening = false;
+      // 待機中に配信が終わっていたら、ダイアログのキャンセル等を失敗として伝えない（録画は始まっていない）。
+      if (this.consumeAbort()) return;
       return this.failStart({ code: 'writeFailed', cause: error });
     }
     this.opening = false;
