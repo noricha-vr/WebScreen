@@ -24,7 +24,7 @@ cron Worker --別 Bearer client--> ingress（publisher kick）/ egress（viewer�
 | ノード | 役割 | 実体 | 常駐 unit |
 |---|---|---|---|
 | Indigo | **origin**（WHIP 受け + relay + read） | WebARENA Indigo `161.34.34.128`（SSH: `ssh webscreen-indigo-poc`、鍵は ~/.ssh/config 参照）。ufw は inactive で、ポート開放は WebARENA ポータルの FW で行う | `webscreen-mediamtx-ingress` / `webscreen-mediamtx-egress` |
-| Cherry | **read replica + origin 機能**（構築済み 2026-09-04。`webscreen.tv` の A レコードには未登録、WHIP も未割当。計測は [verification.md](verification.md) I26） | Cherry Servers Cloud VDS 2（Chicago, US）`88.216.73.71`（SSH: `ssh webscreen-cherry`、root、Ed25519 鍵は ~/.ssh/config 参照）。ポータル名 `webscreen-chicago-01` / Resource #988436。4 vCore / 16 GB / NVMe 100 GB / 1 Gbps / 月 10 TB 込み / €29 月（次回請求 2026-10-04）。Ubuntu 24.04。ufw active（22 / 80 / 443 / 554 tcp + 8189 udp）、ポータル側 FW なし。TCP 554 の接続数上限は unit `webscreen-egress-cap`（nftables）。ノード用ホスト `chi1.web-screen.net`（Caddy = `web/streaming/Caddyfile.node`、アクセスログ有効）。relay は **Indigo 稼働中の AAC 版を複製**（`/opt/webscreen/streaming/releases/indigo-prod-aac-2026-09-04`。リポの `relay.sh` は MP3 候補なので入れない） | `webscreen-mediamtx-ingress`（`webrtcAdditionalHosts` は自 IP）+ `webscreen-mediamtx-egress-replica`（`ORIGINS=161.34.34.128`）+ `webscreen-egress-cap` |
+| Cherry | **read replica + origin 機能**（構築済み 2026-09-04。`webscreen.tv` の A レコードには未登録、WHIP も未割当。計測は [verification.md](verification.md) I26） | Cherry Servers Cloud VDS 2（Chicago, US）`88.216.73.71`（SSH: `ssh webscreen-cherry`、root、Ed25519 鍵は ~/.ssh/config 参照）。ポータル名 `webscreen-chicago-01` / Resource #988436。4 vCore / 16 GB / NVMe 100 GB / 1 Gbps / 月 10 TB 込み / €29 月（次回請求 2026-10-04）。Ubuntu 24.04。ufw active（22 / 80 / 443 / 554 tcp + 8189 udp）、ポータル側 FW なし。TCP 554 の接続数上限は unit `webscreen-egress-cap`（nftables）。ノード用ホスト `chi1.web-screen.net`（Caddy = `web/streaming/Caddyfile.node`、アクセスログ有効）。relay は **Indigo 稼働中の AAC 版を複製**（`/opt/webscreen/streaming/releases/indigo-prod-aac-2026-09-04`。リポの `relay.sh` は MP3 候補なので入れない） | `webscreen-mediamtx-ingress`（`webrtcAdditionalHosts` は自 IP）+ `webscreen-mediamtx-egress-replica`（リポの yml は MediaMTX の `source` で `stream.web-screen.net` = origin から pull する方式。**Cherry への反映は未**で、2026-09-04 時点は旧 ffmpeg 取り寄せのまま稼働中。反映は yml と unit を置き直し、サーバー側に残る旧 env ファイルと pull スクリプトを消して `readers` 0 で restart する。origin 機能を使う時は egress を `mediamtx-egress.yml` へ差し替える — `source` を持つ path は publisher を受け付けない）+ `webscreen-egress-cap` |
 
 origin ノードの中身:
 
@@ -111,7 +111,7 @@ WHIP を 8889 へ通すのは Caddy の `webscreen.tv` ブロックだけで（`
 
 ### 手順
 
-1. **新ノードを replica として構築する。** 新ノードの `ORIGINS` は現 origin。既存の replica がある場合は、その `ORIGINS` を「新 origin, 現 origin」の順に先回りで書いておくと手順 9 が掃除だけで済む（自ノードは `ORIGINS` に入れない）。
+1. **新ノードを replica として構築する。** 取り寄せ先は yml の `source` に書いた `stream.web-screen.net`（= 現 origin）で、ノードごとの設定値は無い。順序付きフォールバックは `source` に無いので、origin の切替は手順 9 の DNS 変更 1 箇所で行う。
    ```sh
    ssh <new-node> 'systemctl is-active webscreen-mediamtx-egress-replica'
    ssh <new-node> 'curl -fsS http://127.0.0.1:9998/v3/paths/list | jq'
@@ -130,48 +130,35 @@ WHIP を 8889 へ通すのは Caddy の `webscreen.tv` ブロックだけで（`
    # 配信中の ID を新ノード IP 直指定で引き、pull と再配信が成立することを見る
    ffprobe -v error -rtsp_transport tcp -show_entries stream=codec_name -of default=noprint_wrappers=1 rtsp://<新ノード IP>/live/<12文字>
    ```
-5. **新ノードに ingress + relay を入れて起動し、負荷試験を行う**（条件は scale-plan の手順 2）。egress は replica のまま（`runOnDemand` は publisher が居ない時だけ発火するので、relay の publish と共存する）。`mediamtx-ingress.yml` の `webrtcAdditionalHosts` は origin の IP 直書きなので**新ノードの IP に直す**。UDP 8189 の開放と、WHIP 用ホスト名の Caddy 証明書もここで揃える。
+5. **新ノードに ingress + relay を入れて起動し、負荷試験を行う**（条件は scale-plan の手順 2）。**egress を `mediamtx-egress.yml`（origin 版）へ差し替える**。`source` を持つ path は publisher を受け付けないため、replica の yml のままでは relay が publish できない（README「Read replica node」の制約）。差し替えの restart はそのノードの `readers` が 0 のときに行う。`mediamtx-ingress.yml` の `webrtcAdditionalHosts` は origin の IP 直書きなので**新ノードの IP に直す**。UDP 8189 の開放と、WHIP 用ホスト名の Caddy 証明書もここで揃える。
    ```sh
    ssh <new-node> 'systemctl is-active webscreen-mediamtx-ingress'
    ssh <new-node> 'curl -fsS http://127.0.0.1:9998/v3/paths/list | jq "[.items[] | {name, ready, readers: (.readers|length), bytesSent}]"'
    ssh <new-node> 'journalctl -u webscreen-mediamtx-ingress -u webscreen-mediamtx-egress-replica --since "-15 min"'
    ```
-6. **現 origin の egress にも `runOnDemand` + `ORIGINS` を入れる（未検証）。** 切替後に旧 origin を引いた視聴者へ、新 origin 発の配信を届けるために要る。`mediamtx-egress.yml` と `mediamtx-egress-replica.yml` の差は `pathDefaults` の 3 キーだけなので、次を足す形になる。
-   ```yaml
-   # /etc/webscreen/streaming/mediamtx-egress.yml の pathDefaults（未検証）
-   pathDefaults:
-     overridePublisher: false
-     runOnDemand: /opt/webscreen/streaming/replica-pull.sh
-     runOnDemandRestart: false
-     runOnDemandCloseAfter: 10s
-   ```
-   あわせて `replica-pull.sh` を `runOnDemand` に書いたパス（replica の yml と同じ `/opt/webscreen/streaming/replica-pull.sh`）へ置き、`/etc/webscreen/streaming/replica.env`（`ORIGINS` は新 origin、`SELF_HOSTS` は自ノード）を作る。`webscreen-mediamtx-egress.service` は `EnvironmentFile` を持たないので drop-in が要る。
-   ```sh
-   ssh webscreen-indigo-poc 'sudo systemctl edit webscreen-mediamtx-egress'   # [Service] EnvironmentFile=/etc/webscreen/streaming/replica.env
-   ssh webscreen-indigo-poc 'sudo systemctl show -p EnvironmentFiles webscreen-mediamtx-egress'
-   ```
-   - `ORIGINS` に `webscreen.tv` を書かない。複数ノードに解決するため自ノードを引きうるが、`SELF_HOSTS` の self-loop guard は文字列一致しか見ない
-   - 未検証の点: origin 自身の配信でも、relay が publish する前に reader が来ると自 path の `runOnDemand` が発火する（pull は失敗して非 0 終了、`runOnDemandRestart: false`）。その後のローカル publish との相互作用は確かめていない
+6. **現 origin を「自分でも publish しつつ他 origin から pull する」ノードにはできない（未解決）。** `source` を持つ path は publisher を受け付けないので、1 ノードの同じ path 正規表現で origin と replica を兼ねられない。そのため、切替中に旧 origin を引いた視聴者が新 origin 発の配信を再生できない問題は未解決のまま残る（[#252](https://github.com/noricha-vr/WebScreen/issues/252)）。
 7. **`STREAM_WHIP_ORIGIN` を新 origin へ切り替える。** `web/wrangler.jsonc` の var を変える PR → main マージ → Actions デプロイ（secret ではない）。以降の新規配信は新 origin、既存配信は旧 origin で継続する。
    ```sh
    # 反映後に配信を 1 本開始し、新 origin 側の ingress に path が立つことで確認する
    ssh <new-node> 'curl -fsS http://127.0.0.1:9997/v3/paths/list | jq "[.items[] | {name, ready}]"'
    ```
-8. **旧 origin の live が 0 になるまで待つ。** 本番は延長無効・15 分固定なので**最長 15 分**。判定は旧 origin の **ingress（:9997）の path が空**になること。手順 6 を入れた後は、新 origin 発の配信を pull した egress path が旧 origin にも立つので、egress は判定に使わない。
+8. **旧 origin の live が 0 になるまで待つ。** 本番は延長無効・15 分固定なので**最長 15 分**。判定は旧 origin の **ingress（:9997）の path が空**になること（egress は視聴側の path なので判定に使わない）。
    ```sh
    ssh webscreen-indigo-poc 'curl -fsS http://127.0.0.1:9997/v3/paths/list | jq "[.items[] | {name, ready}]"'
    cd web && bunx wrangler d1 execute webscreen-beta-db --remote -c wrangler.jsonc \
      --command "SELECT COUNT(*) AS live FROM stream_sessions WHERE status = 'live'"
    ```
    `stream_sessions` に origin 列が入るのは M3 以降なので、この件数は全 origin の合計（切替後は新 origin 発の配信も数える）。ノード単位の判定は上の ingress path を使う。
-9. **read 専用 replica の `ORIGINS` を新 origin 単独へ更新する。** 掃除なので急がない。restart は pull 中の視聴を切るため、そのノードの全 path の `readers` が 0 のときに行う（確認は「read edge を撤去する」の手順 2 と同じコマンド）。新 origin 自身の `ORIGINS`（旧 origin 向き）はそのまま残す — ローカル publisher がある path では発火せず、ロールバック時にそのまま効く。
+9. **`stream.web-screen.net` の A レコードを新 origin へ向ける。** これで全 replica の取り寄せ先が切り替わる（yml は各ノードで同じまま、restart も不要 — 次の pull から新しい解決先を使う）。既存の pull は繋ぎ替わらないので、切替が全ノードへ行き渡るのは各 path の視聴者が 0 になった後になる。
    ```sh
-   ssh <replica> 'sudo systemctl restart webscreen-mediamtx-egress-replica && systemctl is-active webscreen-mediamtx-egress-replica'
+   dig +short stream.web-screen.net @1.1.1.1     # 新 origin の IP だけが返ること
+   ssh <replica> 'curl -fsS http://127.0.0.1:9998/v3/paths/list | jq "[.items[] | {name, ready, source: .source.type, readers: (.readers|length)}]"'
    ```
-10. **旧 origin は replica として残す**（ロールバック先）。ingress だけ止める。手順 6 の設定が入っているので egress はそのまま read を続けられる。
+10. **旧 origin は replica として残す**（ロールバック先）。ingress を止め、egress を `mediamtx-egress-replica.yml` + `webscreen-mediamtx-egress-replica.service` へ差し替える（origin 版のままでは publisher が居ない path を pull できない）。差し替えの restart は旧 origin の `readers` が 0 のときに行う。
     ```sh
     ssh webscreen-indigo-poc 'sudo systemctl disable --now webscreen-mediamtx-ingress'
-    ssh webscreen-indigo-poc 'systemctl is-active webscreen-mediamtx-ingress || true'
+    ssh webscreen-indigo-poc 'sudo systemctl disable --now webscreen-mediamtx-egress && sudo systemctl enable --now webscreen-mediamtx-egress-replica'
+    ssh webscreen-indigo-poc 'systemctl is-active webscreen-mediamtx-egress-replica'
     ```
 
 ### ロールバック（逆順）
@@ -179,7 +166,7 @@ WHIP を 8889 へ通すのは Caddy の `webscreen.tv` ブロックだけで（`
 `wrangler rollback` は Worker のコードだけを戻すので、var の変更は必ず PR で戻す。
 
 1. 旧 origin の ingress を起動する（`sudo systemctl enable --now webscreen-mediamtx-ingress` → `systemctl is-active`）
-2. read 専用 replica の `ORIGINS` を「旧 origin, 新 origin」に戻して restart（WHIP を戻す前に。先に戻さないと、旧 origin 発の新規配信を pull できない replica が残る）
+2. `stream.web-screen.net` の A レコードを旧 origin へ戻す（WHIP を戻す前に。先に戻さないと、旧 origin 発の新規配信を pull できない replica が残る）。旧 origin の egress を手順 10 で replica 版に差し替えている場合は、ingress の起動とあわせて origin 版（`mediamtx-egress.yml`）へ戻す
 3. `STREAM_WHIP_ORIGIN` を旧 origin へ戻す PR → デプロイ（WHIP 用ホスト名を分けている場合は、その A レコードも旧 origin へ戻す）
 4. 新 origin の **ingress** path が空になるまで待つ（手順 8 と同じ確認。最長 15 分）
 5. 新ノードを畳むなら「read edge を撤去する」節の順序で外す

@@ -10,7 +10,7 @@
 | ノードの単位 | **origin 1 台 + read replica N 台** | 移すのが難しいのは WHIP を受ける origin だけ。replica は「MediaMTX + origin の URL + A レコード」で増減できる |
 | 視聴 URL | `rtspt://webscreen.tv/live/{id}` 固定のまま、A レコードを全 read ノードに張る | VRChat allowlist の制約（[requirements.md](requirements.md)）。ノード別サブドメインは作らない |
 | WHIP 先 | 配信開始 API の `whipUrl`（Worker env `STREAM_WHIP_ORIGIN` 由来）。Worker で proxy しない | allowlist は視聴 URL にしか効かない。proxy は Worker ホップと `Location` 書き換えが純粋なコスト |
-| replica の取得 | egress の `runOnDemand` + 順序付き origin リスト（env `ORIGINS`）。origin の **egress**（AAC 変換済み）から `-c copy` | Worker / D1 に依存せず、origin 移設中の並存と origin 障害時の切替を同じ仕組みで吸収する |
+| replica の取得 | egress path の MediaMTX ネイティブ `source` + `sourceOnDemand`。origin の **egress**（AAC 変換済み）を `stream.web-screen.net` 経由で pull | Worker / D1 に依存しない。ffmpeg 取り寄せ（`runOnDemand`）はホップごとにフレーム間隔 1 つ分の遅延を足すため不採用（[verification.md](verification.md) I27）。順序付きフォールバックは無く、origin は DNS で 1 つに決まる |
 | 上限到達時の縮退 | **超過分を接続拒否**（egress path の `maxReaders`） | 制御面が全滅してもノード単体で守れる唯一の線。「全員が途切れる」より「超過分が拒否」 |
 | 常時ヘッドルーム | **2 台常設**（Indigo origin 1 + replica 1、+3,410 円/月） | autoscale は VM 作成 + bootstrap + DNS TTL 300 秒で分単位。バズの立ち上がりには間に合わない |
 | 上位ティア | **Cherry Servers Chicago Cloud VDS 2**（1 Gbps・月 10 TB 込み・€0.50/TB で買い足し・€29/月。2026-09-04 契約、[region-and-traffic-plan.md](region-and-traffic-plan.md)）。まず replica、VRChat 実機で遅延を確認してから origin を移す。東京 bare metal（€237/月）案は却下表へ | Indigo の 160 GB/日 は 40 人ワールド 1 つで約 6.4 時間。Cherry は転送枠をプロジェクト単位で買い足せるので転送量の壁が事実上消える |
@@ -20,7 +20,7 @@
 
 ```
 配信者ブラウザ ── WHIP (whipUrl) ──▶ origin（ingress → relay → egress）
-                                          │ rtsp pull（配信ごとに 1 本、runOnDemand）
+                                          │ rtsp pull（配信ごとに 1 本、sourceOnDemand）
                         ┌─────────────────┼─────────────────┐
                         ▼                 ▼                 ▼
                    replica A         origin egress      replica B（自宅回線でも可）
@@ -40,7 +40,7 @@
 
 | 段 | 内容 | 急負荷への効き | 追跡 |
 |---|---|---|---|
-| M1 | replica 1 台（`runOnDemand` + `ORIGINS`）+ cron の複数 egress 集計 + `whipUrl` 契約 + A レコード 2 本 + runbook | viewer 容量・転送量が 2 倍。origin 移設の準備が整う | milestone「配信サーバーを origin 1 + replica 1 の 2 台構成にする」（#219 #220 #221 #222 #224） |
+| M1 | replica 1 台（`source` + `sourceOnDemand`）+ cron の複数 egress 集計 + `whipUrl` 契約 + A レコード 2 本 + runbook | viewer 容量・転送量が 2 倍。origin 移設の準備が整う | milestone「配信サーバーを origin 1 + replica 1 の 2 台構成にする」（#219 #220 #221 #222 #224） |
 | M2 | egress `maxReaders`（path 単位）+ TCP 554 の同時接続数上限（ノード単位）+ 転送量 160 GB/日 の日次監視と通知 | Worker / D1 / cron 全滅でも自衛できる | #223 |
 | M3 | D1 `media_nodes`（provider 列）+ `stream_sessions.origin_node_id` + 配置を既存の条件付き INSERT に統合 + `node_lost` end_reason + 容量不足の専用 error code | origin 2 台以上。origin 死でも新規配信可 | M1 の実機ゲート後に milestone 化 |
 | M4 | `node_scale_actions` Outbox + Provisioner（provider ごとのアダプタ）+ draining + DNS 自動更新 | 翌時間帯への備え | M3 の後 |
@@ -53,10 +53,10 @@
 
 1. Cherry を replica として A レコードに追加。この時点で視聴者の 1/N と転送量が Cherry へ流れる
 2. Cherry で ingress / relay を起動し、負荷試験（600 Mbps 連続 72 時間・reader 800 本・WHIP 20 本・UDP 8189）
-3. **Indigo（現 origin）の egress にも `runOnDemand` + `ORIGINS=cherry` を入れる**。origin 自身の配信はローカル path があるので発火せず、他 origin の配信だけ pull する。これが無いと切替後に Indigo を引いた視聴者は Cherry 発の配信を再生できない（DNS に両方が並ぶ間は全 read ノードが相互に replica を兼ねる）
+3. **旧 origin を「publish しつつ他 origin から pull する」ノードにはできない（未解決）**。`source` を持つ path は publisher を受け付けないため、1 ノードで origin と replica を兼ねられない。切替中に Indigo を引いた視聴者が Cherry 発の配信を再生できない問題は未解決（[#252](https://github.com/noricha-vr/WebScreen/issues/252)）
 4. Worker の `STREAM_WHIP_ORIGIN` を Cherry に切替。新規配信は Cherry が origin、既存配信は Indigo で継続
 5. 旧 origin の live が 0 になるまで待つ。本番は延長無効・15 分固定なので**最長 15 分**（延長を有効にした後は cron の origin 別 live 数で判定）
-6. 全 replica の `ORIGINS` を `cherry,indigo` → `cherry` に更新（1 の時点で `cherry,indigo` にしておけば 6 は掃除だけ）
+6. `stream.web-screen.net` の A レコードを Cherry へ向ける。これで全 replica の取り寄せ先が切り替わる（yml は共通のまま、restart 不要）
 7. Indigo は replica として残す（ロールバック先）。戻す時は 4〜6 を逆順
 
 移す判断基準（案）: 転送量の 7 日移動平均が 160 GB/日 の 70% 超。値は運用で確定する。
