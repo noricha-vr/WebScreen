@@ -182,14 +182,36 @@ const GA_TRACKED_HOST = 'web-screen.net';
           is:inline
           define:vars={{ gaMeasurementId: GA_MEASUREMENT_ID, gaTrackedHost: GA_TRACKED_HOST }}
         >
+          // 12 文字 base62 のセグメントは公開 ID（変換の shortId・配信 ID）。パスに含む URL を
+          // GA4 へ渡すと、公開 URL の唯一の保護である ID が Google 側に残る。
+          // 判定の正本は src/lib/ui/analytics.ts の containsPublicId（ここはインライン用の写し。
+          // インラインスクリプトは import できないため、規則を変える時は両方を直す）。
+          const containsPublicId = (pathname) =>
+            pathname.split('/').some((segment) => /^[0-9A-Za-z]{12}$/.test(segment));
+
           // 静的ページはビルド時に生成されるためサーバー側でホストを判定できない。描画時に見る。
-          if (location.hostname === gaTrackedHost) {
+          // 公開 ID を含むパスでは config ごと送らない（パラメータの省略では gtag が
+          // location.href を自動収集してしまい、逆にフル URL が渡る）。
+          if (location.hostname === gaTrackedHost && !containsPublicId(location.pathname)) {
             window.dataLayer = window.dataLayer || [];
-            function gtag() {
+            window.gtag = function () {
               window.dataLayer.push(arguments);
+            };
+            window.gtag('js', new Date());
+            // 空文字を明示して、gtag の document.referrer 自動収集を打ち消す。
+            let pageReferrer = '';
+            try {
+              const referrer = new URL(document.referrer);
+              if (referrer.origin === location.origin && !containsPublicId(referrer.pathname)) {
+                pageReferrer = referrer.origin + referrer.pathname;
+              }
+            } catch {
+              // 空・不正・外部 referrer は送らない。
             }
-            gtag('js', new Date());
-            gtag('config', gaMeasurementId);
+            window.gtag('config', gaMeasurementId, {
+              page_location: location.origin + location.pathname,
+              page_referrer: pageReferrer,
+            });
 
             // COEP: credentialless 下でも no-cors のサブリソースは読めるため crossorigin を
             // 付けない（付けると CORS モードになり、gtag.js 側が ACAO を返さず逆に落ちる）。

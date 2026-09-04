@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,9 +27,10 @@ import {
   encodeMonoWav,
 } from '../../scripts/latency-probe-codec';
 import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
-import { resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
+import { requirePipe, resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
 import { applyVideoProfile, cycleVideoProfiles, type VideoProfileEvaluator } from '../../scripts/latency-probe-profile';
 import { analyzeDirectory, clearPreviousRunArtifacts, headersForRewrittenBody, rewriteWhipUrlHost, screenShareUrl, syntheticHealthBody, validateReadHost, validateRunOptions } from '../../scripts/latency-probe-run';
+import { NOTIFY_COMMAND_ENV, NOTIFY_STDERR_TRUNCATED_SUFFIX, buildNotifyArgv, notifyCommandTemplate, notifyStdinJson, notifyStreamUrl, parseCommandLine, warnNotifyCommandMissing, type NotifyChild, type NotifySpawn } from '../../scripts/latency-probe-notify';
 import { parseFreezeLog, type SenderSample } from '../../scripts/latency-probe-quality';
 import { recordingDeadlineSeconds } from '../../scripts/latency-probe-player';
 
@@ -70,6 +71,33 @@ function scaleNearest(frame: { rgb: Uint8Array; width: number; height: number },
     rgb.set(frame.rgb.slice((sourceY * frame.width + sourceX) * 3, (sourceY * frame.width + sourceX + 1) * 3), (y * width + x) * 3);
   }
   return { rgb, width, height };
+}
+
+/** latency-source.html と同じ傾斜エンベロープ（8 ms 立ち上がり / 48 ms まで保持 / 75 ms で 0）。 */
+function beepEnvelope(elapsedSeconds: number): number {
+  if (elapsedSeconds < 0.008) return elapsedSeconds / 0.008;
+  if (elapsedSeconds <= 0.048) return 1;
+  return Math.max(0, (0.075 - elapsedSeconds) / 0.027);
+}
+
+/** 定常音（各 -20 dBFS）へ毎秒 1 回の秒識別ビープ（-20 dBFS）を重ねた 8 秒の 48 kHz モノラル PCM。 */
+function synthesizeBeepsOverSteadyTones(steadyHz: readonly number[]): { samples: Float32Array; onsets: number[] } {
+  const sampleRate = 48_000;
+  const amplitude = 0.1;
+  const samples = new Float32Array(sampleRate * 8);
+  for (const frequency of steadyHz) {
+    for (let index = 0; index < samples.length; index += 1) samples[index] += Math.sin(2 * Math.PI * frequency * index / sampleRate) * amplitude;
+  }
+  const onsets: number[] = [];
+  for (let secondMod8 = 0; secondMod8 < 8; secondMod8 += 1) {
+    // 検出の hop（10 ms）に揃えた位置へ置き、窓中心を onset とする既知のバイアスを 15 ms に固定する。
+    const onset = sampleRate / 2 + secondMod8 * sampleRate;
+    onsets.push(onset);
+    for (let index = 0; index < Math.round(sampleRate * 0.075); index += 1) {
+      samples[onset + index] += Math.sin(2 * Math.PI * (600 + 100 * secondMod8) * index / sampleRate) * amplitude * beepEnvelope(index / sampleRate);
+    }
+  }
+  return { samples, onsets };
 }
 
 function withLiveVideoSender(trackId = 'sender-a'): { evaluator: VideoProfileEvaluator; parameters: RTCRtpSendParameters; setReadbackMismatch(value: boolean): void; replaceSender(track: string): void; restore(): void } {
@@ -132,6 +160,8 @@ describe('latency probe video profiles', () => {
     await expect(applyVideoProfile(evaluator, 'other' as 'quality', 1_500_000, 1_000)).rejects.toThrow('video profile');
     expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: 999_999, abCycleSeconds: null, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null, streamId: null, nodeHost: null, readHost: null })).toThrow('maxBitrate');
     expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: 1_500_000, abCycleSeconds: 59, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null, streamId: null, nodeHost: null, readHost: null })).toThrow('cycleSeconds');
+    // CLI を通さず runLatencyProbe を直接呼ぶ経路でも、通知先 ID を CLI と同じ規則で弾く
+    expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: null, abCycleSeconds: null, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: '12345', serverSnapHost: null, streamId: null, nodeHost: null, readHost: null })).toThrow('notify-discord');
   });
 
   test('sender差し替え時は5秒ポーリングで同じプロファイルを再適用する', async () => {
@@ -210,6 +240,17 @@ describe('latency block code', () => {
     expect(detected.secondMod8).toBe(5);
     expect(detected.onset).toBeGreaterThanOrEqual(11_040);
     expect(detected.onset).toBeLessThanOrEqual(12_480);
+  });
+
+  test.each([
+    ['現行の 220/330 Hz', [220, 330]],
+    ['旧 440/880 Hz（倍音がビープ帯域に近い最悪ケース）', [440, 880]],
+  ] as const)('定常音 %s に重ねても8個の秒識別ビープを取り違えず検出する', (_label, steadyHz) => {
+    const { samples, onsets } = synthesizeBeepsOverSteadyTones(steadyHz);
+    const detected = detectIdentifiedBeeps(samples, 48_000);
+
+    expect(detected.map((beep) => beep.secondMod8)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    for (const [index, beep] of detected.entries()) expect(Math.abs(beep.onset - onsets[index]!)).toBeLessThanOrEqual(720);
   });
 
   test('映像近接標本で8秒内の音声送出秒を絶対遅延へ対応付ける', () => {
@@ -454,5 +495,159 @@ describe('latency probe windows recording deadline', () => {
     expect(recordingDeadlineSeconds(10)).toBe(45);
     expect(recordingDeadlineSeconds(480)).toBe(750);
     expect(recordingDeadlineSeconds(8)).toBe(42);
+  });
+});
+
+/** 通知コマンドを起こさずに argv と stdin だけを記録する差し替え先。 */
+function recordingSpawn(exitCode: number): { calls: { argv: string[]; stdin: string }[]; spawn: (argv: readonly string[], stdin: Uint8Array) => NotifyChild } {
+  const calls: { argv: string[]; stdin: string }[] = [];
+  return {
+    calls,
+    spawn: (argv, stdin) => {
+      calls.push({ argv: [...argv], stdin: new TextDecoder().decode(stdin) });
+      return {
+        exited: Promise.resolve(exitCode),
+        stderr: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('boom')); controller.close(); } }),
+        kill: () => undefined,
+      };
+    },
+  };
+}
+
+describe('latency probe notify command', () => {
+  test('空白区切りの argv を引用符つきで分解する', () => {
+    expect(parseCommandLine('bun notify.ts --target nori')).toEqual(['bun', 'notify.ts', '--target', 'nori']);
+    expect(parseCommandLine('  bun   notify.ts  ')).toEqual(['bun', 'notify.ts']);
+    expect(parseCommandLine(`cmd --message '配信を開始しました: {url}'`)).toEqual(['cmd', '--message', '配信を開始しました: {url}']);
+    expect(parseCommandLine('cmd --message "a b" --flag')).toEqual(['cmd', '--message', 'a b', '--flag']);
+    // 語の途中の引用符（--message='a b' 形式）と、引用符内の別種の引用符
+    expect(parseCommandLine(`cmd --message='a b' -x`)).toEqual(['cmd', '--message=a b', '-x']);
+    expect(parseCommandLine(`cmd "it's here"`)).toEqual(['cmd', "it's here"]);
+    // 空文字の引数は明示的に残す
+    expect(parseCommandLine(`cmd "" tail`)).toEqual(['cmd', '', 'tail']);
+  });
+
+  test('閉じていない引用符とコマンド名なしは env の読み込み時点で失敗する', () => {
+    expect(() => parseCommandLine(`cmd --message 'unterminated`)).toThrow(NOTIFY_COMMAND_ENV);
+    expect(() => notifyCommandTemplate(`cmd "unterminated`)).toThrow(NOTIFY_COMMAND_ENV);
+    expect(() => notifyCommandTemplate('"" --flag')).toThrow(NOTIFY_COMMAND_ENV);
+  });
+
+  test('未設定・空白のみの環境変数は null を返す', () => {
+    expect(notifyCommandTemplate(undefined)).toBeNull();
+    expect(notifyCommandTemplate('   ')).toBeNull();
+  });
+
+  test('{url} と {channel} を引数配列と stdin JSON へ反映する', async () => {
+    const template = notifyCommandTemplate(`bun /opt/notify.ts --message '配信: {url}' --channel-id {channel} --url={url}`);
+    expect(template).not.toBeNull();
+    expect(buildNotifyArgv(template ?? [], { url: 'rtspt://chi1.web-screen.net/live/AbCdEf123456', channel: '123456789012345678' })).toEqual([
+      'bun', '/opt/notify.ts', '--message', '配信: rtspt://chi1.web-screen.net/live/AbCdEf123456',
+      '--channel-id', '123456789012345678', '--url=rtspt://chi1.web-screen.net/live/AbCdEf123456',
+    ]);
+    const recorder = recordingSpawn(0);
+    const info = spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template: template ?? [], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200, spawn: recorder.spawn });
+    } finally { info.mockRestore(); }
+    expect(recorder.calls).toHaveLength(1);
+    expect(recorder.calls[0]?.argv).toContain('配信: rtspt://host/live/AbCdEf123456');
+    expect(recorder.calls[0]?.argv).toContain('123456789012345678');
+    expect(JSON.parse(recorder.calls[0]?.stdin ?? '{}')).toEqual({ url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678' });
+    expect(notifyStdinJson({ url: 'u', channel: 'c' }).endsWith('\n')).toBe(true);
+  });
+
+  test('未設定なら警告だけ出して例外にせず計測を続行する', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      warnNotifyCommandMissing();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain(NOTIFY_COMMAND_ENV);
+    } finally { warn.mockRestore(); }
+  });
+
+  test('非ゼロ終了は警告に落として run を止めない', async () => {
+    const recorder = recordingSpawn(3);
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template: ['notify'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200, spawn: recorder.spawn });
+      expect(String(warn.mock.calls[0]?.[0])).toContain('boom');
+    } finally { warn.mockRestore(); }
+  });
+
+  test('既定の spawn で実プロセスを起こし、成功を info で報告する', async () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template: ['echo', '{channel}', '{url}'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 5_000 });
+      expect(String(info.mock.calls[0]?.[0])).toContain('123456789012345678');
+    } finally { info.mockRestore(); }
+  });
+
+  test('固まったコマンドはタイムアウトで kill して警告に落とす', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    const startedAt = Date.now();
+    try {
+      // stderr を先に await していると pipe が閉じずタイムアウトが始まらない（実プロセスでの回帰確認）
+      await notifyStreamUrl({ template: ['sleep', '30'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200 });
+      expect(String(warn.mock.calls[0]?.[0])).toContain('exit -1');
+    } finally { warn.mockRestore(); }
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+  });
+
+  test('存在しないコマンドでも spawn の同期例外を警告に落として run を止めない', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      // Bun.spawn は実行ファイルが無いと同期で ENOENT を投げる（実プロセスでの回帰確認）
+      await notifyStreamUrl({ template: ['/nonexistent/webscreen-notify-xyz', '{channel}'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200 });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain('/nonexistent/webscreen-notify-xyz');
+      expect(String(warn.mock.calls[0]?.[0])).toContain('起動できませんでした');
+    } finally { warn.mockRestore(); }
+  });
+
+  test('SIGTERM を無視する子も期限内に打ち切り、SIGKILL まで上げて残さない', async () => {
+    const exits: Promise<number>[] = [];
+    const spawn: NotifySpawn = (argv, stdin) => {
+      const child = Bun.spawn([...argv], { stdin, stdout: 'ignore', stderr: 'pipe' });
+      exits.push(child.exited);
+      return { exited: child.exited, stderr: requirePipe(child.stderr, 'test notify stderr'), kill: (signal) => child.kill(signal) };
+    };
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    const startedAt = Date.now();
+    try {
+      await notifyStreamUrl({
+        template: [process.execPath, '-e', "process.on('SIGTERM', () => {}); setTimeout(() => {}, 30_000)"],
+        url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 300, spawn,
+      });
+      expect(String(warn.mock.calls[0]?.[0])).toContain('exit -1');
+    } finally { warn.mockRestore(); }
+    // 期限 + kill 猶予 + stderr 猶予の合計で返ること（stderr の EOF 待ちで 30 秒引きずらない）
+    expect(Date.now() - startedAt).toBeLessThan(3_000);
+    // 30 秒の孤児を残さない（SIGTERM だけでは死なないので SIGKILL まで上げられているか）
+    expect(await Promise.race([exits[0] ?? Promise.resolve(0), Bun.sleep(1_000).then(() => 'alive')])).not.toBe('alive');
+  });
+
+  test('stderr は上限で切り詰めて警告に載せる', async () => {
+    const noisy: NotifySpawn = () => ({
+      exited: Promise.resolve(1),
+      stderr: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('e'.repeat(10_000))); controller.close(); } }),
+      kill: () => undefined,
+    });
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template: ['notify'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200, spawn: noisy });
+      const message = String(warn.mock.calls[0]?.[0]);
+      expect(message.match(/e{2,}/)?.[0]).toHaveLength(4_096);
+      expect(message).toContain(NOTIFY_STDERR_TRUNCATED_SUFFIX);
+    } finally { warn.mockRestore(); }
+  });
+
+  // docs の注入例と同じ形（$HOME 展開後の絶対パス + 引用符つきメッセージ）が argv へ落ちることを確認する。
+  // 実パスは書かない（リポジトリに個人環境の固定パスを残さないのが本変更の目的）。
+  test('docs の通知コマンド例が argv へ分解できる', () => {
+    const template = notifyCommandTemplate(`bun /Users/example/notify-discord.ts --message '遅延計測の配信を開始しました。VRChat に貼ってください: {url}' --target nori --channel-id {channel} --project-dir .`);
+    expect(template?.[0]).toBe('bun');
+    expect(template).toContain('遅延計測の配信を開始しました。VRChat に貼ってください: {url}');
+    expect(template?.slice(-4)).toEqual(['--channel-id', '{channel}', '--project-dir', '.']);
   });
 });

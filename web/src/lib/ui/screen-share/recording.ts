@@ -3,6 +3,8 @@ import type { ScreenShareView } from './view';
 
 /** 未ダウンロードの録画が Blob としてタブに残る合計の上限。 */
 export const RECORDING_TOTAL_LIMIT_BYTES = 2 * 1024 * 1024 * 1024;
+/** 配信を閉じる前に録画完了を待つ上限。 */
+export const RECORDING_STOP_TIMEOUT_MS = 3_000;
 
 /** 録画に必要な外部境界。テストでは MediaRecorder を差し替える。 */
 export interface RecordingDependencies {
@@ -64,6 +66,20 @@ export class RecordingController {
   /** 録画を止め、完了（一覧への追加まで）を待つ。同時に呼ばれても二重に積まない。 */
   stop(): Promise<void> {
     return this.recorder.stop();
+  }
+
+  /** 録画を止め、完了を待つ。ただし配信停止を無期限には待たせない。 */
+  async awaitRecordingStop(): Promise<void> {
+    if (!this.isActive) return;
+    let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = globalThis.setTimeout(resolve, RECORDING_STOP_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([this.stop(), timeout]);
+    } finally {
+      if (timer !== undefined) globalThis.clearTimeout(timer);
+    }
   }
 }
 

@@ -239,7 +239,9 @@ export async function collectOutletGrabs(rtspUrl: string, until: number, output:
         await copyFile(pngPath, join(framesDir, 'last-decoded.png'));
       } else {
         logDecodeFailure(diagnostics, decoded.reason === 'checksum-mismatch' ? 'チェックサム不一致' : '同期パターン未検出', false);
-        await copyFile(pngPath, join(framesDir, 'last-failure.png'));
+        // ffmpeg が exit 0 でも PNG を書かないことがある（2026-09-04 に 8 分 run が 60 枚目でここの ENOENT で落ちた）。
+        // 失敗フレームの保存は診断用なので、無ければ run を止めずに続ける。
+        if (await Bun.file(pngPath).exists()) await copyFile(pngPath, join(framesDir, 'last-failure.png'));
       }
     }
     index += 1;

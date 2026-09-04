@@ -8,6 +8,7 @@
 |---|---|
 | 配信元（計測ページ） | `http://127.0.0.1:0/latency-source.html?tones=1`（ms 時刻のブロックコード + 毎秒ビープ。`?load=heavy` は帯域飢餓の最悪素材） |
 | 配信 URL の通知先 | Discord「通知」チャンネル `1380914078100488334`（skill `discord-mention` の既定） |
+| 通知コマンド | 環境変数 `WEBSCREEN_LATENCY_NOTIFY_COMMAND` で注入する（未 export だと `--notify-discord` を付けても警告のみで通知されない）。値の形と例: [latency-harness.md](latency-harness.md#配信-url-の通知コマンド) |
 | VRChat 側 | Windows `win2022`（SSH で gdigrab 録画）。プレイヤーのあるワールド（YamaStream）でプレイヤーを正面に映す |
 | 配信サーバー | `webscreen-indigo-poc`（`--server-snap` で ingress / egress を撮る） |
 | 出力 | `docs/tmp/latency/<UTC>/`（git 管理外）。`summary.md` の「VRChat プレイヤー」節と「プロファイル区間別」節を見る |

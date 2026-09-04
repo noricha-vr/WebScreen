@@ -5,6 +5,7 @@ import { waitForStreamReady } from './stream-api';
 import { startWhipPublisher } from '../whip-publisher';
 import { browserPreviewPreference } from './preview-preference';
 import { getDisplayMediaKeepingFocus } from './capture';
+import { trackScreenShareEvent } from '../analytics';
 
 export type { ScreenShareDependencies } from './controller';
 export {
@@ -43,6 +44,7 @@ const BROWSER_DEPENDENCIES: ScreenShareDependencies = {
   createStartToken: () => globalThis.crypto.randomUUID(),
   sendBeacon: (url, data) => navigator.sendBeacon(url, data),
   onPageHide: (handler) => window.addEventListener('pagehide', handler),
+  trackAnalytics: trackScreenShareEvent,
 };
 
 /** 既定のbrowser依存を備え、従来の1引数constructorを維持する公開Facade。 */

@@ -21,18 +21,31 @@ export async function recordWindowsPlayer(outDir: string, until: number): Promis
   const log = `"$env:TEMP\\webscreen-latency-${runId}\\ffmpeg.log"`;
   const started = `"$env:TEMP\\webscreen-latency-${runId}\\started.txt"`;
   const done = `"$env:TEMP\\webscreen-latency-${runId}\\done.txt"`;
+  // run ごとに一意な名前にして、前回の残骸や並行実行と衝突しないようにする（finally で必ず止めて消す）
+  const taskName = `WebScreenLatencyHarness-${runId}`;
   const ffmpeg = 'C:\\Users\\win\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1.1-full_build\\bin\\ffmpeg.exe';
   let diagnostics = '';
   try {
-    const command = `$ErrorActionPreference='Stop'; $ff='${ffmpeg}'; $root=${remoteDir}; $out=${remote}; $log=${log}; $startedPath=${started}; $donePath=${done}; $task='WebScreenLatencyHarness'; Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path $root -Force | Out-Null; $taskScript="\`$recorded=[DateTime]::UtcNow; Set-Content -LiteralPath '$startedPath' -Value \`$recorded.ToString('o') -NoNewline; & '$ff' -y -f gdigrab -framerate 30 -i desktop -t ${seconds} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p '$out' 2>&1 | Set-Content -LiteralPath '$log'; \`$code=\`$LASTEXITCODE; Set-Content -LiteralPath '$donePath' -Value \`$code -NoNewline; exit \`$code"; $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskScript)); $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -EncodedCommand $encoded"; $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null; try { Start-ScheduledTask -TaskName $task; $deadline=[DateTime]::UtcNow.AddSeconds(${recordingDeadlineSeconds(seconds)}); do { Start-Sleep -Seconds 1 } while(-not (Test-Path -LiteralPath $donePath) -and [DateTime]::UtcNow -lt $deadline); $ended=[DateTime]::UtcNow; if(-not (Test-Path -LiteralPath $donePath)){ Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; throw 'Scheduled Task recording timed out (done marker not written; task stopped)' }; if(-not(Test-Path -LiteralPath $startedPath)){ throw 'Scheduled Task did not write recording start time' }; $exitCode=(Get-Content -Raw -LiteralPath $donePath).Trim(); if($exitCode -notmatch '^-?\\d+$' -or [int]$exitCode -ne 0){ throw ('ffmpeg exited with code ' + $exitCode) }; $recorded=(Get-Content -Raw -LiteralPath $startedPath).Trim(); Write-Output ('recording_started_utc=' + $recorded); Write-Output ('recording_ended_utc=' + $ended.ToString('o')); Write-Output 'ffmpeg_log_begin'; if(Test-Path -LiteralPath $log){ Get-Content -Raw -LiteralPath $log }; Write-Output 'ffmpeg_log_end' } finally { Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue }`;
-    console.info(`[player] 録画コマンド送信（${seconds} 秒、期限 ${recordingDeadlineSeconds(seconds) + 45} 秒）`);
-    const recording = await runTextProcess(sshPowerShell(command), (recordingDeadlineSeconds(seconds) + 45) * 1_000);
-    console.info(`[player] 録画コマンド完了 exit=${recording.exitCode} stdout=${recording.stdout.trim().slice(0, 200)}`);
-    diagnostics = formatProcessDiagnostics('Windows Scheduled Task 録画', recording);
+    // Scheduled Task を起動する ssh と、done マーカーを待つ ssh を分ける。1 本の ssh セッションで
+    // 録画時間ぶん待つ方式は 8 分 run で stdout / stderr が空のまま exit 1 になり（2026-09-04、
+    // 300 秒までは通る）、長い無出力セッションが途中で切れると録画が丸ごと失われるため。
+    // 一時ディレクトリは Windows 側で $env:TEMP を展開してから __ROOT__ に差し込む（単一引用符リテラル内では展開されない）
+    const taskScript = `$recorded=[DateTime]::UtcNow; Set-Content -LiteralPath '__ROOT__\\started.txt' -Value $recorded.ToString('o') -NoNewline; & '${ffmpeg}' -y -f gdigrab -framerate 30 -i desktop -t ${seconds} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p '__ROOT__\\recording.mp4' 2>&1 | Set-Content -LiteralPath '__ROOT__\\ffmpeg.log'; $code=$LASTEXITCODE; Set-Content -LiteralPath '__ROOT__\\done.txt' -Value ($code.ToString() + ' ' + [DateTime]::UtcNow.ToString('o')) -NoNewline; exit $code`;
+    const startCommand = `$ErrorActionPreference='Stop'; $root=${remoteDir}; $task=${powerShellLiteral(taskName)}; Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path $root -Force | Out-Null; $taskScript=${powerShellLiteral(taskScript)}.Replace('__ROOT__', $root.Replace("'", "''")); $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskScript)); $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -EncodedCommand $encoded"; $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Force | Out-Null; Start-ScheduledTask -TaskName $task; Write-Output 'task_started'`;
+    console.info(`[player] 録画タスク起動（${seconds} 秒、done 待ち期限 ${recordingDeadlineSeconds(seconds)} 秒）`);
+    const startResult = await runTextProcess(sshPowerShell(startCommand), 60_000);
+    diagnostics = formatProcessDiagnostics('Windows Scheduled Task 起動', startResult);
+    if (startResult.exitCode !== 0 || !startResult.stdout.includes('task_started')) return { samples: [], warning: 'Windows録画タスクを起動できませんでした。player-error.mdのSSH出力を確認してください。', diagnostics };
+    const doneMarker = await waitForDoneMarker(done, recordingDeadlineSeconds(seconds));
+    diagnostics += `\n## done マーカー待ち\n\n${doneMarker.diagnostics}\n`;
+    const finish = await runTextProcess(sshPowerShell(`$ErrorActionPreference='Continue'; Stop-ScheduledTask -TaskName ${powerShellLiteral(taskName)} -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName ${powerShellLiteral(taskName)} -Confirm:$false -ErrorAction SilentlyContinue; if(Test-Path -LiteralPath ${started}){ Write-Output ('recording_started_utc=' + (Get-Content -Raw -LiteralPath ${started}).Trim()) }; Write-Output 'ffmpeg_log_begin'; if(Test-Path -LiteralPath ${log}){ Get-Content -Raw -LiteralPath ${log} }; Write-Output 'ffmpeg_log_end'`), 60_000);
+    const recording = { stdout: finish.stdout, stderr: finish.stderr, exitCode: doneMarker.exitCode };
+    console.info(`[player] 録画完了 exit=${recording.exitCode} started=${parseUtcMarker(recording.stdout, 'recording_started_utc')}`);
+    diagnostics += formatProcessDiagnostics('Windows Scheduled Task 録画', recording);
     if (recording.exitCode !== 0) return { samples: [], warning: 'Windows録画は失敗しました。Scheduled TaskのSSH/ffmpeg出力をplayer-error.mdで確認してください。', diagnostics };
     const startedAt = parseUtcMarker(recording.stdout, 'recording_started_utc');
     if (startedAt === null) return { samples: [], warning: 'Windows録画の実開始UTC時刻を取得できませんでした。', diagnostics };
-    const endedAt = parseUtcMarker(recording.stdout, 'recording_ended_utc') ?? Date.now();
+    const endedAt = doneMarker.endedAtMs ?? Date.now();
     const local = join(outDir, 'recording.mp4');
     const size = await remoteFileSize(remote);
     console.info(`[player] リモートサイズ ${size} bytes。回収開始`);
@@ -51,9 +64,39 @@ export async function recordWindowsPlayer(outDir: string, until: number): Promis
     try { return { samples: await decodePlayerRecording(local, startedAt, offset.valueMs), warning: durationWarning, diagnostics }; }
     catch (error) { return { samples: [], warning: `Windows録画の復号に失敗しました: ${String(error)}`, diagnostics }; }
   } finally {
-    const cleanup = await runTextProcess(sshPowerShell(`Remove-Item -LiteralPath ${remoteDir} -Recurse -Force -ErrorAction Stop`), 30_000).catch((error) => ({ stdout: '', stderr: String(error), exitCode: -1 }));
+    // 起動 ssh が切れた後にタスクだけ残ると次回の Register -Force と衝突するので、成否に関わらず必ず止めて消す
+    const cleanup = await runTextProcess(sshPowerShell(`$ErrorActionPreference='Continue'; Stop-ScheduledTask -TaskName ${powerShellLiteral(taskName)} -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName ${powerShellLiteral(taskName)} -Confirm:$false -ErrorAction SilentlyContinue; Remove-Item -LiteralPath ${remoteDir} -Recurse -Force -ErrorAction Stop`), 30_000).catch((error) => ({ stdout: '', stderr: String(error), exitCode: -1 }));
     if (cleanup.exitCode !== 0) console.warn(`Windows一時ディレクトリcleanupに失敗しました: ${cleanup.stderr}`);
   }
+}
+
+/** PowerShell の単一引用符リテラル（' を '' に二重化）。 */
+function powerShellLiteral(value: string): string { return `'${value.replace(/'/g, "''")}'`; }
+
+/**
+ * done マーカー（"<exit code> <ended UTC ISO>"）を短い ssh で定期的に読む。ssh の一時失敗は数えるだけで
+ * 待ちを続け、期限までにマーカーが出なければ exit -1 で返す。
+ */
+async function waitForDoneMarker(donePath: string, deadlineSeconds: number, pollMs = 20_000): Promise<{ exitCode: number; endedAtMs: number | null; diagnostics: string }> {
+  const deadline = Date.now() + deadlineSeconds * 1_000;
+  let polls = 0;
+  let sshFailures = 0;
+  let invalidMarkers = 0;
+  while (Date.now() < deadline) {
+    polls += 1;
+    const result = await runTextProcess(sshPowerShell(`if(Test-Path -LiteralPath ${donePath}){ Get-Content -Raw -LiteralPath ${donePath} } else { Write-Output 'pending' }`), 45_000);
+    if (result.exitCode !== 0) sshFailures += 1;
+    else {
+      const text = result.stdout.trim();
+      const match = /^(-?\d+)\s+(\S+)$/.exec(text);
+      const endedAtMs = match ? Date.parse(match[2]!) : Number.NaN;
+      // 形式は "<exit code> <ended UTC ISO>"。時刻が読めないマーカーは書きかけ・破損とみなし、次のポーリングで読み直す
+      if (match && Number.isFinite(endedAtMs)) return { exitCode: Number(match[1]), endedAtMs, diagnostics: `- polls: ${polls}\n- ssh failures: ${sshFailures}\n- marker: ${text}` };
+      if (text !== 'pending') invalidMarkers += 1;
+    }
+    await Bun.sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())));
+  }
+  return { exitCode: -1, endedAtMs: null, diagnostics: `- polls: ${polls}\n- ssh failures: ${sshFailures}\n- invalid markers: ${invalidMarkers}\n- marker: (timed out after ${deadlineSeconds} s)` };
 }
 
 async function remoteFileSize(path: string): Promise<number> {

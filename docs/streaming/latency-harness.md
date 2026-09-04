@@ -19,7 +19,8 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 ```
 
 - 初回だけ既定プロファイル `~/.webscreen-harness/chrome-profile` で `bun scripts/latency-probe.ts login` を実行し、開いたChromeでWebScreenへ手動ログインする。未ログイン時は開始せず終了する。
-- `--source` の `127.0.0.1:0` は起動時の空きポートへ置換される。`?tones=1` はステレオ定常トーンも加える。
+- `--source` の `127.0.0.1:0` は起動時の空きポートへ置換される。`?tones=1` は左右チャンネル確認用の小さな持続音（220 / 330 Hz、ゆっくり揺らぐ）も加える。
+- 計測ページは復号用の格子の左に秒針つきアナログ時計、右に `HH:MM:SS.mmm`（配信元 PC のローカル時刻）を描く。VRChat 実機で隣にブラウザの同じページ（または任意の時計）を並べれば、Windows 全画面録画のフレームから目視でも遅延を読める。どちらも格子の隔離矩形の外に描くので復号には影響しない（plain / heavy / 800x600 で確認済み）
 - 結果は `outlet.csv` と `summary.md`。送出側の生counterは `sender.csv`、共有ページで実際に使われたsender/track設定は `sender-config.json` に保存する。設定取得に失敗してもJSONに理由を残す。
 - 出口画質は遅延用の単発取得と別の連続ffmpegで測り、`outlet-quality.csv`（fps・解像度・freeze・実効ビットレートの窓別値）と `outlet-quality.md`（窓数・freeze・解像度変化の要約）を出す。既定の窓は20秒で、`--outlet-quality-seconds 5..120`で変えられる。失敗時は `outlet-quality.log` に理由を残しrunを失敗にする。
 - `--video-profile quality`（既定）は通常の共有ページを開く。`--video-profile realtime --max-bitrate 1200000|1500000|2000000` はproduction共有ページへ設定queryを渡す（省略時は1500000）。`--ab-cycle`なしで`--max-bitrate`をqualityと併用したり許可外の値を指定すると開始前に失敗する。
@@ -50,7 +51,7 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - 出口が止まっても指定時間まで待機し、`outlet-ffmpeg.log` と `outlet-decode.log` にffmpeg・復号状態を残す。
 - `frames/` の最初/最後の復号フレームと直近の失敗フレームで、配信映像を目視確認できる。
 - `outlet-audio.wav` と `outlet-audio.json` は `analyze` 時に再検出され、`outlet-audio.csv` と既存の映像行を結合して `summary.md` を再生成する。毎秒ビープは `600 + 100 * (UTC秒 mod 8)` Hz の8種類で、絶対遅延を映像近接標本から復元できない時は `audio_latency_phase_ms`（1秒位相）のみを残す。
-- Windows録画は対話セッションのScheduled Taskを使う。失敗時は `player-error.md`、成功時の時刻・`w32tm`補正は `player-recording.md` を見る。
+- Windows録画は対話セッションのScheduled Taskを使う。ssh はタスクの起動と、20 秒間隔の短い done マーカー読みだけに使う（1 本の ssh で録画時間ぶんブロックする方式は 8 分 run で出力なしの exit 1 になり録画を失った。2026-09-04）。失敗時は `player-error.md`、成功時の時刻・`w32tm`補正は `player-recording.md` を見る。
 - run 終了時は共有ページの停止ボタンを押してから Chrome を閉じる。`browser.close()` だけでは停止ビーコンが届かず配信がサーバーに残り、次の run が「既存の配信を終了」経路に入って不安定になる（2026-09-02 に連続 8 run 中 3 run が失敗）。Playwright がクラッシュして Chrome が残った時も同じ状態になるので、`pgrep -f webscreen-harness/chrome-profile` で残留を確認してから始める
 - `page.evaluate` に渡す関数はシリアライズされるため module scope の helper を参照できない（`ReferenceError` になり 1 秒標本が 0 件になる）。閉包内に定義する
 - ffmpeg の `-t` は直後の出力にしか効かない。出力を 2 本持つ画質計測では両方に付けないと終わらず run 全体が固まる
@@ -62,11 +63,37 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - 連続 ffmpeg（`-vf fps=5` や `-use_wallclock_as_timestamps`）は起動時の PTS ギャップと内部バッファで古さを引きずり、実遅延 0.8 秒が 2〜6 秒に見えた。映像の連続取得は使わない（音声は連続取得で WAV に保存し `analyze` で検出）
 - `--server-snap HOST` は run 中にサーバーへ SSH し、ingress（8554）と egress（554）を**並列起動**で単発取得して `server-snap.md` に出す。ingress の値が「配信元 → ingress」、egress との差が relay の寄与
 - 実測（2026-09-02、計測ページ 1150x720 / 250 ms 更新）: ingress 約 0.55 秒、egress 約 0.80 秒（上限値）、Mac からの出口単発取得 約 0.78 秒。開始直後から安定し、出口に「数秒 → 1 秒未満」の収束は無い
-- `--notify-discord CHANNEL_ID` で配信 URL を Discord に投稿する（VRChat を動かす別 PC で貼るため）。`--player win2022` の録画は Scheduled Task 経由で、MacType 導入機では互換性ダイアログが出るが録画は継続する
+- `?tones=1` の左右確認用定常音（現行 220/330 Hz、旧 440/880 Hz）は 50 ms 検出窓では秒識別ビープの 8 帯域へ漏れず、検出数・`secondMod8`・onset（±15 ms）を乱さない（回帰: `web/tests/scripts/latency-probe.test.ts` の test.each「定常音 … に重ねても8個の秒識別ビープを取り違えず検出する」。ただし 600〜1300 Hz の各帯域近傍に定常音を足すとグローバル閾値が持ち上がって検出が消えるため（実測: 890 / 900 / 905+1210 Hz で検出 0 件）、確認音の周波数はこの範囲外に置く）
+- `--notify-discord CHANNEL_ID` で配信 URL を外部へ通知する（VRChat を動かす別 PC で貼るため）。叩くコマンドは環境変数で注入する（[配信 URL の通知コマンド](#配信-url-の通知コマンド)）。`--player win2022` の録画は Scheduled Task 経由で、MacType 導入機では互換性ダイアログが出るが録画は継続する
+
+## 配信 URL の通知コマンド
+
+`--notify-discord CHANNEL_ID`（`make` では `NOTIFY_DISCORD=`）を付けると、配信開始時に外部コマンドへ配信 URL を渡す。
+どのコマンドを叩くかはリポジトリに持たず、環境変数 `WEBSCREEN_LATENCY_NOTIFY_COMMAND` で注入する（個人環境のスクリプトを固定パスで参照しないため）。
+
+- 値は**空白区切りの argv**。空白を含む引数は `'…'` または `"…"` で囲む。引用符は語の途中でも開閉できる（`--message='a b'`）
+- **シェルを介さない**ので `~` / `$VAR` / パイプ / リダイレクトは展開されない。`~` は literal のパスになり必ず失敗するため、`export` する側で `$HOME` を展開させる（下の例は外側を `"` で囲っているので shell が展開する）
+- 各引数の `{url}` は配信 URL（`rtspt://.../live/{id}`）、`{channel}` は `--notify-discord` に渡した値へ置換される
+- 加えて **stdin に `{"url":"...","channel":"..."}` の JSON を 1 行**渡す。引数を組み立てにくい CLI はこちらを読む
+- 未設定なら「通知コマンド未設定のため通知をスキップ」と警告を出すだけで、計測はそのまま続行する。値の引用符が閉じていない場合は配信を始める前に失敗する
+- 失敗・10 秒のタイムアウトも警告のみで run は止めない
+
+例 1: 個人の discord-mention スキル（旧ハードコードと同じ引数）
+
+```bash
+export WEBSCREEN_LATENCY_NOTIFY_COMMAND="bun $HOME/.claude/skills/discord-mention/scripts/notify-discord.ts --message '遅延計測の配信を開始しました。VRChat に貼ってください: {url}' --target nori --channel-id {channel} --project-dir ."
+```
+
+例 2: 任意の webhook CLI（stdin の JSON をそのまま送る。`{url}` / `{channel}` は使わない）
+
+```bash
+export WEBSCREEN_LATENCY_NOTIFY_COMMAND="curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- https://example.com/webhook/xxxx"
+```
 
 ## 実測前の確認手順（2026-09-02 追記）
 
 1. `bun scripts/latency-probe.ts login`（初回のみ。ハーネスが開く Chrome でログイン）
-2. `bun scripts/latency-probe.ts player-check --seconds 8`（配信なしで Windows 録画・回収だけを試す。録画長が指定の 80% 以上で OK。フレームに PowerShell コンソールや MacType 警告が写らないこと）
-3. `make latency-probe MIN=4 SOURCE=... PLAYER=win2022 NOTIFY_DISCORD=<channel> SERVER_SNAP=<host>`
-4. Discord の URL を VRChat に貼り、**プレイヤーを正面に近い視点で**映し続ける（斜めになると復号できない）
+2. `bun scripts/latency-probe.ts player-check --seconds 8`（配信なしで Windows 録画・回収だけを試す。`--seconds` は 900 まで。録画長が指定の 80% 以上で OK。フレームに PowerShell コンソールや MacType 警告が写らないこと）
+3. 通知を使うなら `WEBSCREEN_LATENCY_NOTIFY_COMMAND` を export（[配信 URL の通知コマンド](#配信-url-の通知コマンド)）
+4. `make latency-probe MIN=4 SOURCE=... PLAYER=win2022 NOTIFY_DISCORD=<channel> SERVER_SNAP=<host>`
+5. 通知された URL を VRChat に貼り、**プレイヤーを正面に近い視点で**映し続ける（斜めになると復号できない）

@@ -1,4 +1,3 @@
-import { homedir } from 'node:os';
 import { captureServerSnapshots, snapshotScheduleSeconds } from './latency-probe-server-snap';
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
@@ -9,6 +8,7 @@ import {
   collectOutletGrabs, decodeDurationSummary, probeDimensionsFor, readPipeText, requirePipe, scaledProbeDimensions, startAudioProbe, type VideoDiagnostics,
 } from './latency-probe-observe';
 import { recordWindowsPlayer, type PlayerResult } from './latency-probe-player';
+import { NOTIFY_COMMAND_ENV, notifyCommandTemplate, notifyStreamUrl, validateNotifyChannelId, warnNotifyCommandMissing } from './latency-probe-notify';
 import { captureSenderConfig, collectOutletQuality, collectSenderStats, parseSenderCsv, peerConnectionTrackerInitScript } from './latency-probe-quality';
 import { cycleVideoProfiles, startVideoProfileCycle, validateProfileCycleSeconds, validateVideoProfile, videoProfileEvaluator } from './latency-probe-profile';
 import type { ProfileSwitch } from './latency-probe-profile-analysis';
@@ -45,6 +45,7 @@ function browserLogTail(): string { return browserLog.length ? `\nbrowser consol
 /** 実Chromeの画面共有、出口プローブ、出力保存を同じcleanup境界で実行する。 */
 export async function runLatencyProbe(options: RunOptions): Promise<void> {
   validateRunOptions(options);
+  const notify = resolveNotifyTarget(options.notifyDiscordChannelId);
   rejectRepositoryProfile(options.profileDir);
   requireCommands(options.player);
   await mkdir(options.outDir, { recursive: true, mode: 0o700 });
@@ -93,7 +94,7 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
       pbcopy.stdin.end();
       await pbcopy.exited;
     }
-    if (options.notifyDiscordChannelId) await notifyDiscord(options.notifyDiscordChannelId, viewerUrl, options.minutes);
+    if (notify !== null) await notifyStreamUrl({ ...notify, url: viewerUrl });
     const dimensions = scaledProbeDimensions(await probeDimensionsFor(rtspUrl));
     audio = startAudioProbe(rtspUrl);
     const videoLog = Promise.resolve('(映像は単発取得方式のため連続 ffmpeg なし)');
@@ -208,6 +209,7 @@ export async function clearPreviousRunArtifacts(outDir: string): Promise<void> {
 /** runの公開境界でプロファイル関連値を検証し、副作用の前に不正入力を拒否する。 */
 export function validateRunOptions(options: RunOptions): void {
   if (options.videoProfile !== 'quality' && options.videoProfile !== 'realtime') throw new Error('videoProfile must be quality or realtime');
+  if (options.notifyDiscordChannelId !== null) validateNotifyChannelId(options.notifyDiscordChannelId);
   if (options.nodeHost !== null) validateNodeHost(options.nodeHost);
   if (options.readHost !== null) validateReadHost(options.readHost);
   if (options.maxBitrate !== null) validateVideoProfile(options.videoProfile, options.maxBitrate);
@@ -388,16 +390,16 @@ function rejectRepositoryProfile(profileDir: string): void {
   const path = relative(repository, candidate);
   if (path === '' || (path !== '..' && !path.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) && !path.startsWith('..'))) throw new Error('--profile-dir must not be inside the repository');
 }
-function requireCommands(player: RunOptions['player']): void { const required = player ? ['ffmpeg', 'ffprobe', 'ssh'] : ['ffmpeg', 'ffprobe']; const missing = required.filter((command) => Bun.which(command) === null); if (missing.length) throw new Error(`必要なコマンドがありません: ${missing.join(', ')}。macOSでは brew install ffmpeg、sshはXcode Command Line Toolsを確認してください。`); }
 
-const DISCORD_NOTIFY_SCRIPT = `${homedir()}/.claude/skills/discord-mention/scripts/notify-discord.ts`;
-
-/** VRChat を動かす別 PC で URL を拾えるよう、Discord のチャンネルへ配信 URL を投稿する（失敗は計測を止めない）。 */
-async function notifyDiscord(channelId: string, viewerUrl: string, minutes: number): Promise<void> {
-  const message = `遅延計測の配信を開始しました（${minutes} 分）。VRChat に貼ってください:\n${viewerUrl}`;
-  const child = Bun.spawn(['bun', DISCORD_NOTIFY_SCRIPT, '--message', message, '--target', 'nori', '--channel-id', channelId, '--project-dir', process.cwd()], { stdout: 'pipe', stderr: 'pipe' });
-  const stderr = await readPipeText(requirePipe(child.stderr, 'discord notify stderr'));
-  const exit = await Promise.race([child.exited, Bun.sleep(10_000).then(() => { child.kill(); return -1; })]);
-  if (exit !== 0) console.warn(`Discord 通知に失敗またはタイムアウトしました: ${stderr.trim()}`);
-  else console.info(`Discord へ配信 URL を投稿しました（channel ${channelId}）`);
+/**
+ * 通知先とコマンドを配信開始前に確定させる。構文エラーはここで投げ、未設定はここで警告して null にする
+ * （Chrome 起動・配信開始より後に出すと、計測ぶんの待機が無駄になる／警告に気づけない）。
+ */
+function resolveNotifyTarget(channel: string | null): { template: readonly string[]; channel: string } | null {
+  if (channel === null) return null;
+  const template = notifyCommandTemplate(process.env[NOTIFY_COMMAND_ENV]);
+  if (template === null) { warnNotifyCommandMissing(); return null; }
+  return { template, channel };
 }
+
+function requireCommands(player: RunOptions['player']): void { const required = player ? ['ffmpeg', 'ffprobe', 'ssh'] : ['ffmpeg', 'ffprobe']; const missing = required.filter((command) => Bun.which(command) === null); if (missing.length) throw new Error(`必要なコマンドがありません: ${missing.join(', ')}。macOSでは brew install ffmpeg、sshはXcode Command Line Toolsを確認してください。`); }

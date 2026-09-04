@@ -9,13 +9,9 @@ import {
   ERROR_CODES,
   MAX_CAPTURE_REQUESTS,
   MAX_UPLOAD_BYTES,
-  type CaptureResponse,
-  type CommitResponse,
   type ErrorCode,
-  type PresignResponse,
   type UploadKind,
 } from '../contracts/api';
-import { isShortId } from '../contracts/r2key';
 import { collectCaptures } from './capture-pages';
 import {
   clientErrorHttpStatus,
@@ -42,6 +38,12 @@ import { markAutoCopy } from './auto-copy';
 import { movieNameForFiles, movieNameForUrl } from './upload-name';
 import { renderConvertPanel } from './convert-panel-view';
 import { isUnauthorizedRequestError, JsonRequestError, requestJson } from './request-json';
+import {
+  trackConversionEvent,
+  type ConversionAnalyticsEvent,
+  type AnalyticsInputKind,
+} from './analytics';
+import { asCaptureResponse, asCommitResponse, asPresignResponse } from './convert-panel-responses';
 
 /** data-batch-name-suffix が無いときの接尾辞（ロケール非依存で読める形）。 */
 const DEFAULT_BATCH_NAME_SUFFIX = '+{count}';
@@ -62,57 +64,22 @@ const UPLOAD_STORED_RATIO = 0.8;
 
 type Dispatch = (event: UploadEvent, runGeneration?: number) => void;
 type Navigate = (url: string) => void;
+type EmittedConversionAnalyticsEvent = Extract<
+  ConversionAnalyticsEvent,
+  'convert_start' | 'convert_complete'
+>;
+type TrackConversionAnalytics = (
+  event: EmittedConversionAnalyticsEvent,
+  inputKind: AnalyticsInputKind
+) => void;
 
 export interface ConvertPanelOptions {
   navigate?: Navigate;
+  trackAnalytics?: TrackConversionAnalytics;
 }
 
 function element<T extends HTMLElement>(root: HTMLElement, selector: string): T | null {
   return root.querySelector<T>(selector);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function asPresignResponse(value: unknown): PresignResponse {
-  if (!isRecord(value) || typeof value.shortId !== 'string' || typeof value.uploadUrl !== 'string' || typeof value.publicUrl !== 'string') {
-    throw new Error('Invalid presign response');
-  }
-  return { shortId: value.shortId, uploadUrl: value.uploadUrl, publicUrl: value.publicUrl };
-}
-
-function asCommitResponse(value: unknown): CommitResponse {
-  if (
-    !isRecord(value) ||
-    typeof value.shortId !== 'string' ||
-    !isShortId(value.shortId) ||
-    typeof value.publicUrl !== 'string' ||
-    typeof value.sizeBytes !== 'number' ||
-    (typeof value.expiresAt !== 'string' && value.expiresAt !== null)
-  ) {
-    throw new Error('Invalid commit response');
-  }
-  return {
-    shortId: value.shortId,
-    publicUrl: value.publicUrl,
-    sizeBytes: value.sizeBytes,
-    expiresAt: value.expiresAt,
-  };
-}
-
-function asCaptureResponse(value: unknown): CaptureResponse {
-  if (!isRecord(value) || !Array.isArray(value.images) || value.images.some((image) => typeof image !== 'string')) {
-    throw new Error('Invalid capture response');
-  }
-  const images = value.images as string[];
-  // totalImages を返さないのは分割取得より前の web-capture。その版は長いページを
-  // PAGE_TOO_LONG で失敗させるので、返ってきた分がページ全体とみなして構わない。
-  if (value.totalImages === undefined) return { images, totalImages: images.length };
-  if (!Number.isSafeInteger(value.totalImages) || (value.totalImages as number) < 0) {
-    throw new Error('Invalid capture response');
-  }
-  return { images, totalImages: value.totalImages as number };
 }
 
 /**
@@ -181,7 +148,8 @@ export async function uploadMp4(
   kind: UploadKind,
   dispatch: Dispatch,
   runGeneration: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onComplete?: () => void
 ): Promise<void> {
   if (mp4.size > MAX_UPLOAD_BYTES) {
     reportClientError({ stage: 'upload', errorCode: 'tooLarge' });
@@ -217,6 +185,10 @@ export async function uploadMp4(
     const committed = asCommitResponse(
       await requestUploadApi('/api/uploads/commit/', { shortId: presign.shortId })
     );
+    // 計測は遷移より先に送る。uploaded で完了画面へ切り替わった直後に離脱されると、
+    // 送信が始まる前にページが差し替わって成功が記録されない。
+    try { onComplete?.(); }
+    catch { /* 計測 observer の失敗で完了済み変換を失敗扱いにしない。 */ }
     dispatch({ type: 'uploaded', publicUrl: committed.publicUrl, shortId: committed.shortId }, runGeneration);
   } catch (error) {
     // サーバーが 4xx / 5xx を返した時だけ取り消す。通信断や、200 なのに本文が
@@ -269,6 +241,9 @@ export function uploadErrorEstimatedImages(error: unknown): number | null {
 
 export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptions = {}): void {
   const navigate: Navigate = options.navigate ?? ((url) => window.location.assign(url));
+  const trackAnalytics: TrackConversionAnalytics = options.trackAnalytics ?? (
+    (event, inputKind) => trackConversionEvent(event, inputKind)
+  );
 
   let state = INITIAL_UPLOAD_STATE;
   let generation = 0;
@@ -301,11 +276,31 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
 
   let activeRun: AbortController | null = null;
 
+  const trackConversion = (
+    event: EmittedConversionAnalyticsEvent,
+    inputKind: AnalyticsInputKind
+  ): void => {
+    try { trackAnalytics(event, inputKind); }
+    catch { /* 計測 observer の失敗で変換を止めない。 */ }
+  };
+
   /** 新しい変換の世代と中止シグナルを起こす。前の変換が残っていれば道連れに止める。 */
   const startRun = (): { generation: number; signal: AbortSignal } => {
     activeRun?.abort();
     activeRun = new AbortController();
     return { generation: ++generation, signal: activeRun.signal };
+  };
+
+  /** 検査済み入力を running 状態へ進め、URL/ファイル共通の開始境界を一度だけ記録する。 */
+  const acceptConversion = (
+    event: UploadEvent,
+    inputKind: AnalyticsInputKind,
+    runGeneration: number
+  ): boolean => {
+    dispatch(event, runGeneration);
+    if (state.phase !== 'converting' || state.kind !== inputKind) return false;
+    trackConversion('convert_start', inputKind);
+    return true;
   };
 
   /** 進行中の変換を捨てて初期表示へ戻す。世代を進めるので遅れて届く報告も無視される。 */
@@ -365,13 +360,13 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       files: files.map((file) => ({ filename: file.name, sizeBytes: file.size })),
     };
     const next = reduceUpload(state, event);
-    dispatch(event, current);
+    const accepted = acceptConversion(event, preflight.kind, current);
     // 選択の時点で弾かれた入力（大きすぎる・種類が混ざっている等）も報告する。
     // 変換が始まらない失敗は console にすら残らず、運用側から完全に見えないため。
     if (next.phase === 'error' && next.errorCode !== null) {
       reportClientError({ stage: 'convert', errorCode: next.errorCode });
     }
-    if (next.phase !== 'converting' || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
+    if (!accepted || next.kind === null || next.kind === 'web' || next.kind !== preflight.kind) return;
     const kind = next.kind;
     void convertFilesToMp4(
       files,
@@ -391,7 +386,8 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
           kind,
           dispatch,
           current,
-          signal
+          signal,
+          () => trackConversion('convert_complete', kind)
         )
       )
       .catch((error: unknown) => {
@@ -436,7 +432,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (!url) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
     const { generation: current, signal } = startRun();
-    dispatch({ type: 'selectUrl', url }, current);
+    if (!acceptConversion({ type: 'selectUrl', url }, 'web', current)) return;
 
     let pseudoRatio = 0;
     const pseudoTimer = window.setInterval(() => {
@@ -468,7 +464,15 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       .then((images) => convertImageUrlsToMp4(images, (progress) => {
         dispatch({ type: 'stageProgress', ...progress }, current);
       }, signal))
-      .then((mp4) => uploadMp4(mp4, movieNameForUrl(url), 'web', dispatch, current, signal))
+      .then((mp4) => uploadMp4(
+        mp4,
+        movieNameForUrl(url),
+        'web',
+        dispatch,
+        current,
+        signal,
+        () => trackConversion('convert_complete', 'web')
+      ))
       .catch((error: unknown) => {
         // 中止は失敗ではない。cancelRun が既に初期表示へ戻している。
         if (signal.aborted) return;
