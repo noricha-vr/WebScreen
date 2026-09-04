@@ -37,3 +37,47 @@ After A12 passes, the VPS must be ready before any Worker version containing the
 6. Publish one browser stream and confirm ingress and egress bytes both increase. For audio, confirm H.264 + MP3 at 48 kHz stereo with `verify-codecs.sh`.
 
 If a VPS check fails before the Worker deploy, stop the split units and restore the backed-up old unit/config/Caddyfile. If the Worker has already switched to split, roll back the Worker and VPS as one operation; `wrangler rollback` changes only Worker code and does not restore systemd, Caddy, or MediaMTX configuration.
+
+## Read replica node (delta from an origin node)
+
+A read replica serves the same `rtsp://host/live/{id}` paths without running ingress or the relay hook. When a reader hits a path that has no publisher, MediaMTX invokes `replica-pull.sh`, which walks an ordered `ORIGINS` list and pulls one stream with `ffmpeg -c copy` from that origin's egress (`:554`, TCP). If every origin fails the pull exits non-zero and MediaMTX surfaces the failure to the reader (no silent restart).
+
+Install differences from an origin node:
+
+- Configs in `/etc/webscreen/streaming/`: **`mediamtx-egress-replica.yml`** (in place of `mediamtx-egress.yml`); do **not** install `mediamtx-ingress.yml`.
+- Runtime scripts in `/opt/webscreen/streaming/RELEASE/`: **`replica-pull.sh`** in place of `relay.sh`; `audio-profile.sh` and `verify-codecs.sh` are still useful for smoke checks but not sourced by `replica-pull.sh`.
+- Systemd units: enable only **`webscreen-mediamtx-egress-replica.service`**. Do not enable the ingress unit or the original egress unit.
+- Environment file `/etc/webscreen/streaming/replica.env` (root-owned, group `webscreen`, mode `0640`):
+
+  ```sh
+  # Ordered comma-separated `host` or `host:port` entries (default port 554).
+  # The list is walked top-to-bottom on every pull attempt.
+  ORIGINS="origin-a.example,origin-b.example"
+  # Optional: hostnames this replica answers to. If any ORIGINS host matches
+  # (case-insensitive, port ignored), the pull is refused (self-loop guard).
+  # Hostnames or IPv4 only; IPv6 literals are rejected with exit 64.
+  SELF_HOSTS="replica-1.example"
+  # Optional tuning (unsigned integers; anything else exits 64):
+  # REPLICA_SUSTAINED_PULL_SECONDS=5 REPLICA_MAX_RETRIES=3 REPLICA_BASE_BACKOFF_SECONDS=1
+  # RTSP_PORT is injected by MediaMTX (local egress port the pull publishes to; default 554).
+  ```
+
+- Do **not** include this node's own hostname in `ORIGINS`. The self-loop guard exits `64` if you do, but keep the config correct on the writing side.
+- Publicly open ports on a replica: `22/tcp`, `80/tcp`, `443/tcp` (for the Caddy fronted Control API used by the cron worker), and `554/tcp` (RTSP readers). WHIP (`8189`) is not needed because ingress is not installed.
+- The runtime preflight from the origin section still applies to `replica-pull.sh`:
+
+  ```sh
+  release_dir=/opt/webscreen/streaming/RELEASE
+  test -r "$release_dir/replica-pull.sh"
+  shellcheck "$release_dir/replica-pull.sh" || bash -n "$release_dir/replica-pull.sh"
+  ```
+
+Local smoke check (two MediaMTX processes on one machine):
+
+```sh
+# 1) start an origin egress (mediamtx-egress.yml) on :554 and publish a test stream to it
+# 2) start a replica egress (mediamtx-egress-replica.yml) on an alternate port with
+#    ORIGINS=127.0.0.1:554 and observe:
+ffprobe -rtsp_transport tcp rtsp://127.0.0.1:{replica-port}/live/AbCdEf123456
+# 3) stop the reader and confirm the pull process (replica-pull.sh + child ffmpeg) exits.
+```
