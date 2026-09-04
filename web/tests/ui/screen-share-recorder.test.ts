@@ -18,11 +18,11 @@ describe('ローカル録画のステートマシン', () => {
     await harness.recorder.start(harness.stream, '録画 1');
     expect(harness.recorder.currentState).toBe('recording');
     harness.instance().emit(1024);
-    const recording = await harness.recorder.stop();
+    await harness.recorder.stop();
 
     expect(harness.states).toEqual(['recording', 'stopping', 'idle']);
     expect(harness.recorder.currentState).toBe('idle');
-    expect(recording).toMatchObject({ filename: '録画 1.webm', sizeBytes: 1024 });
+    expect(harness.completed).toMatchObject([{ filename: '録画 1.webm', sizeBytes: 1024 }]);
   });
 
   test('配信の track は借用するだけで停止しない', async () => {
@@ -39,12 +39,14 @@ describe('ローカル録画のステートマシン', () => {
     const mp4 = recorder({ supported: ['video/mp4', 'video/webm;codecs=h264', 'video/webm'] });
     await mp4.recorder.start(mp4.stream, '録画 1');
     expect(mp4.instance().mimeType).toBe('video/mp4');
-    expect((await mp4.recorder.stop())?.filename).toBe('録画 1.mp4');
+    await mp4.recorder.stop();
+    expect(mp4.completed[0]?.filename).toBe('録画 1.mp4');
 
     const h264 = recorder({ supported: ['video/webm;codecs=h264', 'video/webm'] });
     await h264.recorder.start(h264.stream, '録画 1');
     expect(h264.instance().mimeType).toBe('video/webm;codecs=h264');
-    expect((await h264.recorder.stop())?.filename).toBe('録画 1.webm');
+    await h264.recorder.stop();
+    expect(h264.completed[0]?.filename).toBe('録画 1.webm');
   });
 
   test('1 秒ごとのチャンクを受け取り、経過秒を通知する', async () => {
@@ -106,10 +108,25 @@ describe('ローカル録画の失敗', () => {
 
     await harness.recorder.start(harness.stream, '録画 1');
     harness.instance().emit(64);
-    const recording = await harness.recorder.stop();
+    await harness.recorder.stop();
 
-    expect(recording).toBeNull();
+    expect(harness.completed).toEqual([]);
     expect(harness.errors.map((error) => error.code)).toEqual(['writeFailed']);
+  });
+
+  test('開始の例外でも完了は 1 度だけで、ファイルを二重に閉じない', async () => {
+    const file = fakeFile();
+    const harness = recorder({
+      pickFile: () => Promise.resolve(file.handle),
+      startError: new Error('start failed'),
+    });
+
+    await harness.recorder.start(harness.stream, '録画 1');
+
+    expect(file.closed).toBe(1);
+    expect(harness.states).toEqual(['recording', 'stopping', 'idle']);
+    expect(harness.errors.map((error) => error.code)).toEqual(['writeFailed']);
+    expect(harness.completed).toEqual([]);
   });
 
   test('MediaRecorder の onerror は録画を止めるが、配信は止めない', async () => {
@@ -124,17 +141,19 @@ describe('ローカル録画の失敗', () => {
     expect(harness.stoppedTracks).toBe(0);
   });
 
-  test('メモリ蓄積が上限に達したら自動停止し、そこまでの録画は残す', async () => {
+  test('メモリ蓄積が上限に達したら自動停止し、そこまでの録画を完了通知で渡す', async () => {
     const harness = recorder({ maxBytes: 100 });
 
     await harness.recorder.start(harness.stream, '録画 1');
     harness.instance().emit(80);
+    // 上限による自動停止。外から stop() を呼ばなくても完了通知が 1 件届く。
     harness.instance().emit(80);
-    const recording = await harness.recorder.stop();
+    await settle();
 
     expect(harness.errors).toEqual([{ code: 'sizeLimit' }]);
-    expect(recording?.sizeBytes).toBe(80);
-    expect(recording?.blob?.size).toBe(80);
+    expect(harness.completed.length).toBe(1);
+    expect(harness.completed[0]?.sizeBytes).toBe(80);
+    expect(harness.completed[0]?.blob?.size).toBe(80);
     expect(harness.recorder.currentState).toBe('idle');
   });
 
@@ -151,12 +170,31 @@ describe('ローカル録画の保存先', () => {
     await harness.recorder.start(harness.stream, '録画 1');
     harness.instance().emit(32);
     harness.instance().emit(16);
-    const recording = await harness.recorder.stop();
+    await harness.recorder.stop();
 
     expect(file.written).toEqual([32, 16]);
     expect(file.closed).toBe(1);
-    expect(recording).toMatchObject({ sizeBytes: 48, blob: null });
-    expect(recording?.fileHandle).toBe(file.handle);
+    expect(harness.completed[0]).toMatchObject({ sizeBytes: 48, blob: null });
+    expect(harness.completed[0]?.fileHandle).toBe(file.handle);
+  });
+
+  test('保存ダイアログのファイル種別は辞書から渡した文言を使う', async () => {
+    const file = fakeFile();
+    const descriptions: string[] = [];
+    const harness = recorder({
+      fileTypeDescription: '動画',
+      pickFile: (options) => {
+        for (const type of (options as { types: Array<{ description: string }> }).types) {
+          descriptions.push(type.description);
+        }
+        return Promise.resolve(file.handle);
+      },
+    });
+
+    await harness.recorder.start(harness.stream, '録画 1');
+    await harness.recorder.stop();
+
+    expect(descriptions).toEqual(['動画']);
   });
 
   test('保存先を選んでいる間の再入と、選択中の配信停止では録画を始めない', async () => {
@@ -172,11 +210,12 @@ describe('ローカル録画の保存先', () => {
     expect(harness.recorder.isActive).toBe(true);
 
     // 選択ダイアログを開いたまま配信が終わるケース。
-    await expect(harness.recorder.stop()).resolves.toBeNull();
+    await harness.recorder.stop();
     picks[0]!(file.handle);
     await first;
     await second;
 
+    expect(harness.completed).toEqual([]);
     expect(harness.created).toBe(0);
     expect(file.closed).toBe(1);
     expect(harness.recorder.currentState).toBe('idle');
@@ -185,23 +224,23 @@ describe('ローカル録画の保存先', () => {
 });
 
 describe('ローカル録画の多重停止', () => {
-  test('同時に停止しても MediaRecorder は一度だけ止め、同じ録画を返す', async () => {
+  test('同時に停止しても MediaRecorder は一度だけ止め、完了通知も 1 件だけ出す', async () => {
     const harness = recorder();
 
     await harness.recorder.start(harness.stream, '録画 1');
     harness.instance().emit(8);
-    const [first, second] = await Promise.all([harness.recorder.stop(), harness.recorder.stop()]);
+    await Promise.all([harness.recorder.stop(), harness.recorder.stop()]);
 
     expect(harness.instance().stopCalls).toBe(1);
-    expect(first).not.toBeNull();
-    expect(first).toBe(second as LocalRecording);
+    expect(harness.completed.length).toBe(1);
     expect(harness.states.filter((state) => state === 'stopping').length).toBe(1);
   });
 
-  test('録画していない時の停止は何も返さない', async () => {
+  test('録画していない時の停止は完了通知を出さない', async () => {
     const harness = recorder();
 
-    await expect(harness.recorder.stop()).resolves.toBeNull();
+    await harness.recorder.stop();
+    expect(harness.completed).toEqual([]);
     expect(harness.states).toEqual([]);
   });
 });
@@ -212,6 +251,7 @@ interface RecorderHarness {
   states: RecorderState[];
   errors: RecorderError[];
   elapsed: number[];
+  completed: LocalRecording[];
   created: number;
   stoppedTracks: number;
   instance: () => FakeMediaRecorder;
@@ -222,6 +262,8 @@ function recorder(options: {
   supported?: string[];
   pickFile?: (options: unknown) => Promise<RecordingFileHandle>;
   maxBytes?: number;
+  fileTypeDescription?: string;
+  startError?: Error;
 } = {}): RecorderHarness {
   const instances: FakeMediaRecorder[] = [];
   const supported = options.supported ?? ['video/webm'];
@@ -235,6 +277,10 @@ function recorder(options: {
       super(stream, init);
       instances.push(this);
     }
+    override start(timeslice?: number): void {
+      if (options.startError) throw options.startError;
+      super.start(timeslice);
+    }
   }
   const harness: RecorderHarness = {
     recorder: new ScreenRecorder({
@@ -242,14 +288,19 @@ function recorder(options: {
       ...(options.pickFile ? { pickFile: options.pickFile as never } : {}),
       ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
       now: () => now,
+      ...(options.fileTypeDescription === undefined
+        ? {}
+        : { fileTypeDescription: options.fileTypeDescription }),
       onStateChange: (state) => harness.states.push(state),
       onError: (error) => harness.errors.push({ code: error.code }),
       onElapsed: (seconds) => harness.elapsed.push(seconds),
+      onRecordingComplete: (recording) => harness.completed.push(recording),
     }),
     stream: media.stream,
     states: [],
     errors: [],
     elapsed: [],
+    completed: [],
     get created(): number { return instances.length; },
     get stoppedTracks(): number { return media.stopped; },
     instance: () => instances[instances.length - 1]!,
@@ -310,13 +361,15 @@ function fakeFile(options: { closeError?: Error } = {}): {
     },
   };
   return {
-    handle: {
-      createWritable: async () => writable,
-      getFile: async () => new File([], 'recording'),
-    },
+    handle: { createWritable: async () => writable },
     get written(): number[] { return state.written; },
     get closed(): number { return state.closed; },
   };
+}
+
+/** 自動停止のように await 先が無い完了処理を待つ（microtask を数回流す）。 */
+async function settle(): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) await Promise.resolve();
 }
 
 function installFakeIntervals(): { tick: (delay: number) => void; count: () => number; restore: () => void } {

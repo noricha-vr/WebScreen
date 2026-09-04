@@ -3,7 +3,7 @@ export const MAX_RECORDING_BYTES = 1024 * 1024 * 1024;
 const CHUNK_INTERVAL_MS = 1000;
 
 export type RecorderState = 'idle' | 'recording' | 'stopping';
-export type RecorderErrorCode = 'unsupported' | 'writeFailed' | 'sizeLimit';
+export type RecorderErrorCode = 'unsupported' | 'writeFailed' | 'sizeLimit' | 'totalLimit';
 
 export interface RecorderError {
   code: RecorderErrorCode;
@@ -23,7 +23,6 @@ export interface LocalRecording {
 
 export interface RecordingFileHandle {
   createWritable(): Promise<RecordingWritable>;
-  getFile(): Promise<File>;
 }
 
 export interface RecordingWritable {
@@ -57,6 +56,10 @@ export interface ScreenRecorderOptions {
   onError?: (error: RecorderError) => void;
   onElapsed?: (seconds: number) => void;
   onStateChange?: (state: RecorderState) => void;
+  /** 完成した録画の唯一の受け渡し口。外部 stop・サイズ上限・エラー停止のどの経路でもここだけを通る。 */
+  onRecordingComplete?: (recording: LocalRecording) => void;
+  /** 保存ダイアログのファイル種別ラベル。文言は辞書から渡す。 */
+  fileTypeDescription?: string;
   maxBytes?: number;
 }
 
@@ -82,8 +85,10 @@ export class ScreenRecorder {
   private mimeType = '';
   private extension = '';
   private writeChain: Promise<void> = Promise.resolve();
-  private completion: Promise<LocalRecording | null> | null = null;
-  private resolveCompletion: ((recording: LocalRecording | null) => void) | null = null;
+  private completion: Promise<void> | null = null;
+  private resolveCompletion: (() => void) | null = null;
+  // 完了処理は 1 回だけ。開始例外のように stop と complete が同時に走る経路でも close を二重にしない。
+  private completing = false;
   private failure: RecorderError | null = null;
   private elapsedTimer: ReturnType<typeof globalThis.setInterval> | null = null;
 
@@ -111,7 +116,9 @@ export class ScreenRecorder {
     let writable: RecordingWritable | null = null;
     try {
       fileHandle = this.options.pickFile
-        ? await this.options.pickFile(filePickerOptions(filename, candidate.mimeType))
+        ? await this.options.pickFile(
+            filePickerOptions(filename, candidate.mimeType, this.options.fileTypeDescription ?? '')
+          )
         : null;
       writable = fileHandle ? await fileHandle.createWritable() : null;
     } catch (error) {
@@ -141,23 +148,24 @@ export class ScreenRecorder {
       this.elapsedTimer = globalThis.setInterval(() => this.emitElapsed(), CHUNK_INTERVAL_MS);
       this.emitElapsed();
     } catch (error) {
+      // fail() が停止を始めているので、完了は stop() の待ち合わせに任せる（complete の二重実行を避ける）。
       this.fail({ code: 'writeFailed', cause: error });
-      await this.complete();
+      await this.stop();
     }
   }
 
-  /** 録画を止め、保存済みの録画情報を返す。同時呼び出しは同じ完了を待つ。 */
-  stop(): Promise<LocalRecording | null> {
+  /** 録画を止め、完了までを待つ。録画自体は onRecordingComplete で渡す。 */
+  stop(): Promise<void> {
     if (this.opening) {
       this.openAborted = true;
-      return Promise.resolve(null);
+      return Promise.resolve();
     }
-    if (this.state === 'idle') return Promise.resolve(null);
-    if (this.state === 'stopping') return this.completion ?? Promise.resolve(null);
+    if (this.state === 'idle') return Promise.resolve();
+    if (this.state === 'stopping') return this.completion ?? Promise.resolve();
     this.transition('stopping');
     if (this.recorder?.state !== 'inactive') this.recorder?.stop();
     else void this.complete();
-    return this.completion ?? Promise.resolve(null);
+    return this.completion ?? Promise.resolve();
   }
 
   private selectMimeType(): (typeof MIME_CANDIDATES)[number] | null {
@@ -173,6 +181,7 @@ export class ScreenRecorder {
     this.extension = extension;
     this.startedAt = this.now();
     this.failure = null;
+    this.completing = false;
     this.writeChain = Promise.resolve();
     this.completion = new Promise((resolve) => { this.resolveCompletion = resolve; });
   }
@@ -205,7 +214,8 @@ export class ScreenRecorder {
   }
 
   private async complete(): Promise<void> {
-    if (this.state === 'idle') return;
+    if (this.state === 'idle' || this.completing) return;
+    this.completing = true;
     if (this.state !== 'stopping') this.transition('stopping');
     await this.writeChain;
     const reported = this.failure;
@@ -226,8 +236,11 @@ export class ScreenRecorder {
       blob: this.fileHandle ? null : new Blob(this.chunks, { type: this.mimeType }),
       fileHandle: this.fileHandle,
     } satisfies LocalRecording;
-    this.resolveCompletion?.(recording);
+    const finished = this.resolveCompletion;
     this.cleanup();
+    // 一覧へ積んでから待ち合わせを解く（停止を待つ側が、積み終わった状態を見られるようにする）。
+    if (recording) this.options.onRecordingComplete?.(recording);
+    finished?.();
   }
 
   private transition(next: RecorderState): void {
@@ -254,8 +267,12 @@ export class ScreenRecorder {
   }
 }
 
-function filePickerOptions(filename: string, mimeType: string): Parameters<RecordingPicker>[0] {
-  return { suggestedName: filename, types: [{ description: 'Video', accept: { [mimeType]: [`.${extensionForMimeType(mimeType)}`] } }] };
+function filePickerOptions(
+  filename: string,
+  mimeType: string,
+  description: string
+): Parameters<RecordingPicker>[0] {
+  return { suggestedName: filename, types: [{ description, accept: { [mimeType]: [`.${extensionForMimeType(mimeType)}`] } }] };
 }
 
 function extensionForMimeType(mimeType: string): string {

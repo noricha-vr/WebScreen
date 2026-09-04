@@ -6,9 +6,16 @@ import type { LocalRecording, RecorderErrorCode, RecorderState } from './recorde
 
 export type ScreenSharePhase = 'idle' | 'login' | 'starting' | 'live' | 'error';
 
-/** ダウンロード後に「保存しました」を出しておく時間。 */
-const SAVED_LABEL_MS = 2400;
 const BYTES_PER_MEGABYTE = 1024 * 1024;
+const RECORD_ITEM_CLASS = 'flex flex-wrap items-center justify-between gap-2.5 rounded-[10px] border border-slate-200 bg-white px-3.5 py-3';
+const RECORD_ACTION_CLASS = 'inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3.5 py-1.5 text-[13px] font-bold text-brand-700 hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-500';
+
+/** 一覧の行が抱える保存物。ダウンロード後に blob を手放してタブの保持量を戻す。 */
+interface RecordingRow {
+  filename: string;
+  sizeBytes: number;
+  blob: Blob | null;
+}
 
 export class StreamHealthError extends Error {}
 
@@ -51,6 +58,9 @@ export function retryAfterSecondsForError(error: unknown): number | null {
 
 /** 画面共有カードの selector・表示状態・ラベル更新を所有する。 */
 export class ScreenShareView {
+  // 未ダウンロードの Blob 合計。ダウンロードで解放した分を差し引く。
+  private pendingBlobBytes = 0;
+
   constructor(
     private readonly root: HTMLElement,
     private readonly previewPreference: PreviewPreferenceStore
@@ -70,7 +80,27 @@ export class ScreenShareView {
         ? position === '1' ? 'done' : position === '2' ? 'current' : 'todo'
         : position === '1' ? 'current' : 'todo';
     }
+    this.syncRecordingSection(phase);
     if (phase === 'live') this.setPreviewOpen(this.previewPreference.load() ?? true);
+  }
+
+  /**
+   * 録画セクションの表示を phase に合わせる。配信中は常に出し、配信終了後も録画が
+   * 残っていればダウンロードできるよう残す（開始ボタンと REC チップは配信中だけ）。
+   */
+  private syncRecordingSection(phase: ScreenSharePhase): void {
+    const live = phase === 'live';
+    const hasRecordings = this.recordingCount() > 0;
+    const section = this.root.querySelector<HTMLElement>('[data-screen-record-section]');
+    if (section) section.hidden = !live && !hasRecordings;
+    const controls = this.root.querySelector<HTMLElement>('[data-screen-record-controls]');
+    if (controls) controls.hidden = !live;
+    const empty = this.root.querySelector<HTMLElement>('[data-screen-record-empty]');
+    if (empty) empty.hidden = hasRecordings || !live;
+  }
+
+  private recordingCount(): number {
+    return this.root.querySelector<HTMLElement>('[data-screen-record-list]')?.children.length ?? 0;
   }
 
   showError(
@@ -162,13 +192,34 @@ export class ScreenShareView {
     return this.message('recordFilenameBase').replace('{number}', String(number));
   }
 
-  /** 完了した録画の一覧行とダウンロード操作を追加する。 */
+  /** 保存ダイアログに出すファイル種別のラベル（辞書が正本）。 */
+  recordingFileTypeDescription(): string {
+    return this.message('recordFileType');
+  }
+
+  /** 未ダウンロードで抱えている Blob の合計バイト数。 */
+  pendingRecordingBytes(): number {
+    return this.pendingBlobBytes;
+  }
+
+  /** 完了した録画の一覧行と保存操作を追加する。配信終了後に届いた録画も受け取る。 */
   addRecording(recording: LocalRecording, number: number): void {
     const list = this.root.querySelector<HTMLUListElement>('[data-screen-record-list]');
     if (!list) return;
-    const empty = this.root.querySelector<HTMLElement>('[data-screen-record-empty]');
     const item = document.createElement('li');
-    item.className = 'flex flex-wrap items-center justify-between gap-2.5 rounded-[10px] border border-slate-200 bg-white px-3.5 py-3';
+    item.className = RECORD_ITEM_CLASS;
+    item.append(this.recordingInfo(recording, number), this.recordingAction(recording));
+    list.prepend(item);
+    list.hidden = false;
+    if (recording.blob) this.pendingBlobBytes += recording.sizeBytes;
+    const empty = this.root.querySelector<HTMLElement>('[data-screen-record-empty]');
+    if (empty) empty.hidden = true;
+    // 配信終了後に完了した録画でも保存できるよう、セクションごと開く。
+    const section = this.root.querySelector<HTMLElement>('[data-screen-record-section]');
+    if (section) section.hidden = false;
+  }
+
+  private recordingInfo(recording: LocalRecording, number: number): HTMLElement {
     const info = document.createElement('div');
     info.className = 'flex min-w-0 items-center gap-3';
     const badge = document.createElement('span');
@@ -181,25 +232,42 @@ export class ScreenShareView {
     const details = document.createElement('p');
     details.className = 'mt-0.5 text-xs text-slate-500';
     details.textContent = this.message('recordDetails')
-      .replace('{time}', new Date(recording.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      .replace('{time}', this.formatStartTime(recording.startedAt))
       .replace('{duration}', formatDuration(recording.durationSeconds))
       .replace('{size}', (recording.sizeBytes / BYTES_PER_MEGABYTE).toFixed(1));
     meta.append(name, details);
     info.append(badge, meta);
-    const download = document.createElement('button');
-    download.type = 'button';
-    download.className = 'inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3.5 py-1.5 text-[13px] font-bold text-brand-700 hover:bg-brand-50';
-    const downloadIcon = document.createElement('i');
-    downloadIcon.className = 'fa-solid fa-download';
-    downloadIcon.setAttribute('aria-hidden', 'true');
+    return info;
+  }
+
+  /** 行の操作ボタン。ディスクへ直接書いた録画は既に保存済みなので、完了表示だけを出す。 */
+  private recordingAction(recording: LocalRecording): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = RECORD_ACTION_CLASS;
+    const saved = recording.blob === null;
+    const icon = document.createElement('i');
+    icon.className = saved ? 'fa-solid fa-circle-check' : 'fa-solid fa-download';
+    icon.setAttribute('aria-hidden', 'true');
     const label = document.createElement('span');
-    label.textContent = this.message('labelRecordDownload');
-    download.append(downloadIcon, label);
-    download.addEventListener('click', () => void this.downloadRecording(recording, download));
-    item.append(info, download);
-    list.prepend(item);
-    list.hidden = false;
-    if (empty) empty.hidden = true;
+    label.textContent = this.message(saved ? 'labelRecordSaved' : 'labelRecordDownload');
+    button.append(icon, label);
+    if (saved) return lockAsSaved(button);
+    const row: RecordingRow = {
+      filename: recording.filename,
+      sizeBytes: recording.sizeBytes,
+      blob: recording.blob,
+    };
+    button.addEventListener('click', () => void this.downloadRecording(row, button));
+    return button;
+  }
+
+  /** 端末ロケールではなくページの言語で時刻を整形する。 */
+  private formatStartTime(startedAt: number): string {
+    return new Date(startedAt).toLocaleTimeString(this.root.dataset['locale'] ?? 'en', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 
   setUrl(url: string): void {
@@ -295,32 +363,37 @@ export class ScreenShareView {
     }
   }
 
-  private async downloadRecording(recording: LocalRecording, button: HTMLButtonElement): Promise<void> {
+  private async downloadRecording(row: RecordingRow, button: HTMLButtonElement): Promise<void> {
+    const blob = row.blob;
+    if (!blob) return;
     try {
-      const blob = recording.blob ?? await recording.fileHandle?.getFile();
-      if (!blob) throw new Error('Recording file is unavailable');
       const url = URL.createObjectURL(blob);
       try {
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = recording.filename;
+        anchor.download = row.filename;
         anchor.click();
       } finally {
         // click() 直後の同期 revoke はダウンロードを中断させるブラウザがあるため次タスクへ回す。
         globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
       }
-      const label = button.querySelector('span');
-      if (label) label.textContent = this.message('labelRecordSaved');
-      button.dataset['saved'] = 'true';
-      globalThis.setTimeout(() => {
-        button.dataset['saved'] = 'false';
-        const label = button.querySelector('span');
-        if (label) label.textContent = this.message('labelRecordDownload');
-      }, SAVED_LABEL_MS);
     } catch {
-      this.setRecordingError('writeFailed');
+      return this.setRecordingError('writeFailed');
     }
+    // 保存できたら Blob を手放す。行は完了状態に固定し、再ダウンロードで抱え直さない。
+    row.blob = null;
+    this.pendingBlobBytes = Math.max(0, this.pendingBlobBytes - row.sizeBytes);
+    const label = button.querySelector('span');
+    if (label) label.textContent = this.message('labelRecordSaved');
+    lockAsSaved(button);
   }
+}
+
+/** ダウンロード済み・保存済みの行を、押せない完了状態に固定する。 */
+function lockAsSaved(button: HTMLButtonElement): HTMLButtonElement {
+  button.disabled = true;
+  button.dataset['saved'] = 'true';
+  return button;
 }
 
 function formatDuration(seconds: number): string {
