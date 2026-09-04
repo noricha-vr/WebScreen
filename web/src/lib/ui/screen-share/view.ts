@@ -2,8 +2,13 @@ import { ERROR_CODES } from '../../contracts/api';
 import { JsonRequestError } from '../request-json';
 import { WhipPublishError } from '../whip-publisher';
 import type { PreviewPreferenceStore } from './preview-preference';
+import type { LocalRecording, RecorderErrorCode, RecorderState } from './recorder';
 
 export type ScreenSharePhase = 'idle' | 'login' | 'starting' | 'live' | 'error';
+
+/** ダウンロード後に「保存しました」を出しておく時間。 */
+const SAVED_LABEL_MS = 2400;
+const BYTES_PER_MEGABYTE = 1024 * 1024;
 
 export class StreamHealthError extends Error {}
 
@@ -115,6 +120,88 @@ export class ScreenShareView {
     this.previewPreference.save(open);
   }
 
+  /** 配信を止めずに、延長などの操作エラーを配信中パネルへ表示する。 */
+  setLiveError(messageKey: string | null): void {
+    const error = this.root.querySelector<HTMLElement>('[data-screen-live-error]');
+    if (!error) return;
+    error.hidden = messageKey === null;
+    if (messageKey !== null) error.textContent = this.message(messageKey);
+  }
+
+  /** 録画操作に対応して、トグルと REC チップを更新する。 */
+  setRecordingState(state: RecorderState): void {
+    const recording = state === 'recording';
+    const button = this.button('[data-screen-record]');
+    if (button) {
+      button.dataset['recording'] = String(recording);
+      button.setAttribute('aria-pressed', String(recording));
+      button.disabled = state === 'stopping';
+      this.setButtonLabel('[data-screen-record]', recording ? 'labelRecordStop' : 'labelRecordStart');
+    }
+    const icon = this.root.querySelector<HTMLElement>('[data-screen-record-icon]');
+    if (icon) icon.className = recording ? 'fa-solid fa-stop' : 'fa-solid fa-circle-dot';
+    const timer = this.root.querySelector<HTMLElement>('[data-screen-record-timer]');
+    if (timer) timer.hidden = !recording;
+  }
+
+  /** REC 経過時間を表示する。 */
+  setRecordingElapsed(seconds: number): void {
+    this.text('[data-screen-record-elapsed]', formatDuration(seconds));
+  }
+
+  /** 録画エラーを配信中パネルへ表示する。 */
+  setRecordingError(code: RecorderErrorCode | null): void {
+    const error = this.root.querySelector<HTMLElement>('[data-screen-record-error]');
+    if (!error) return;
+    error.hidden = code === null;
+    if (code !== null) error.textContent = this.message(`msgRecord${capitalize(code)}`);
+  }
+
+  /** ローカライズ済みの録画ファイル名の基底を返す。 */
+  recordingFilenameBase(number: number): string {
+    return this.message('recordFilenameBase').replace('{number}', String(number));
+  }
+
+  /** 完了した録画の一覧行とダウンロード操作を追加する。 */
+  addRecording(recording: LocalRecording, number: number): void {
+    const list = this.root.querySelector<HTMLUListElement>('[data-screen-record-list]');
+    if (!list) return;
+    const empty = this.root.querySelector<HTMLElement>('[data-screen-record-empty]');
+    const item = document.createElement('li');
+    item.className = 'flex flex-wrap items-center justify-between gap-2.5 rounded-[10px] border border-slate-200 bg-white px-3.5 py-3';
+    const info = document.createElement('div');
+    info.className = 'flex min-w-0 items-center gap-3';
+    const badge = document.createElement('span');
+    badge.className = 'inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-brand-50 text-[13px] font-bold text-brand-700';
+    badge.textContent = String(number);
+    const meta = document.createElement('div');
+    const name = document.createElement('p');
+    name.className = 'm-0 text-sm font-bold text-slate-900';
+    name.textContent = recording.filename;
+    const details = document.createElement('p');
+    details.className = 'mt-0.5 text-xs text-slate-500';
+    details.textContent = this.message('recordDetails')
+      .replace('{time}', new Date(recording.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      .replace('{duration}', formatDuration(recording.durationSeconds))
+      .replace('{size}', (recording.sizeBytes / BYTES_PER_MEGABYTE).toFixed(1));
+    meta.append(name, details);
+    info.append(badge, meta);
+    const download = document.createElement('button');
+    download.type = 'button';
+    download.className = 'inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3.5 py-1.5 text-[13px] font-bold text-brand-700 hover:bg-brand-50';
+    const downloadIcon = document.createElement('i');
+    downloadIcon.className = 'fa-solid fa-download';
+    downloadIcon.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.textContent = this.message('labelRecordDownload');
+    download.append(downloadIcon, label);
+    download.addEventListener('click', () => void this.downloadRecording(recording, download));
+    item.append(info, download);
+    list.prepend(item);
+    list.hidden = false;
+    if (empty) empty.hidden = true;
+  }
+
   setUrl(url: string): void {
     const input = this.root.querySelector<HTMLInputElement>('[data-screen-url]');
     if (input) input.value = url;
@@ -207,10 +294,37 @@ export class ScreenShareView {
       else video.pause();
     }
   }
+
+  private async downloadRecording(recording: LocalRecording, button: HTMLButtonElement): Promise<void> {
+    try {
+      const blob = recording.blob ?? await recording.fileHandle?.getFile();
+      if (!blob) throw new Error('Recording file is unavailable');
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = recording.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      const label = button.querySelector('span');
+      if (label) label.textContent = this.message('labelRecordSaved');
+      button.dataset['saved'] = 'true';
+      globalThis.setTimeout(() => {
+        button.dataset['saved'] = 'false';
+        const label = button.querySelector('span');
+        if (label) label.textContent = this.message('labelRecordDownload');
+      }, SAVED_LABEL_MS);
+    } catch {
+      this.setRecordingError('writeFailed');
+    }
+  }
 }
 
 function formatDuration(seconds: number): string {
   const rounded = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(rounded / 60);
   return `${minutes}:${String(rounded % 60).padStart(2, '0')}`;
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

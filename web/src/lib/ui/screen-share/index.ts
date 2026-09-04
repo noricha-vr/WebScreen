@@ -19,6 +19,15 @@ export {
   resolveScreenShareVideoSettingsForSearch,
   SCREEN_SHARE_VIDEO_SETTINGS,
 } from './video-profile';
+export { MAX_RECORDING_BYTES, ScreenRecorder } from './recorder';
+export type {
+  LocalRecording,
+  MediaRecorderConstructor,
+  RecorderError,
+  RecorderErrorCode,
+  RecorderState,
+  RecordingPicker,
+} from './recorder';
 
 const BROWSER_DEPENDENCIES: ScreenShareDependencies = {
   requestJson,

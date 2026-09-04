@@ -318,6 +318,22 @@
       "expires": "配信終了まで",
       "extend": "延長",
       "extensionUnavailable": "このベータ版では延長できません。配信は 15 分で自動終了します。",
+      "record": {
+        "heading": "録画",
+        "description": "配信中はいつでもローカルに録画できます。停止するたびに 1 本のファイルになります。保存した動画は VRChat に貼り付ける用途には使えません。",
+        "start": "録画を開始",
+        "stop": "録画を停止",
+        "empty": "まだ録画はありません。停止した録画がここに並び、ダウンロードできます。",
+        "download": "ダウンロード",
+        "saved": "保存しました",
+        "filenameBase": "録画 {number}",
+        "details": "{time} 開始 ・ {duration} ・ {size} MB",
+        "errors": {
+          "unsupported": "このブラウザでは録画に使える動画形式がありません。",
+          "writeFailed": "録画ファイルを保存できませんでした。配信は続いています。",
+          "sizeLimit": "録画が 1 GB に達したため停止しました。配信は続いています。"
+        }
+      },
       "stop": "配信を終了",
       "stopping": "終了しています…",
       "stopOthers": "他の配信を終了して開始",

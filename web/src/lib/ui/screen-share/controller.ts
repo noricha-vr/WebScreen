@@ -15,6 +15,8 @@ import {
 } from './diagnostics';
 import { resolveScreenShareVideoSettingsForSearch } from './video-profile';
 import type { PreviewPreferenceStore } from './preview-preference';
+import type { MediaRecorderConstructor, RecordingPicker } from './recorder';
+import { RecordingController } from './recording';
 import {
   currentSearch,
   delay,
@@ -44,6 +46,8 @@ export interface ScreenShareDependencies {
   search?: () => string;
   sendBeacon: (url: string, data?: BodyInit | null) => boolean;
   onPageHide: (handler: () => void) => void;
+  MediaRecorder?: MediaRecorderConstructor | null;
+  pickRecordingFile?: RecordingPicker;
   /** 失敗の匿名報告。既定は client-error-report の reportClientError。 */
   reportStreamFailure?: (report: ClientErrorReport) => void;
 }
@@ -65,6 +69,7 @@ export class ScreenShareControllerImpl {
   private lastStreamId: string | null = null;
   private lastVideoStats: VideoPublishStats | null = null;
   private lastDiagnostic: Record<string, unknown> | null = null;
+  private readonly recording: RecordingController;
   constructor(
     root: HTMLElement,
     private readonly deps: ScreenShareDependencies
@@ -77,12 +82,15 @@ export class ScreenShareControllerImpl {
       deps.delay,
       deps.waitForStreamReady
     );
+    this.recording = new RecordingController(this.view, deps);
   }
   mount(): void {
     // getDisplayMedia はクリック起点で直接呼び、user activation を失わない。
     this.view.onClick('[data-screen-start]', () => void this.beginStart(false));
     this.view.onClick('[data-screen-copy]', () => void this.copyUrl());
     this.view.onClick('[data-screen-copy-diagnostics]', () => void this.copyDiagnostics());
+    this.view.onClick('[data-screen-record]', () => void this.toggleRecording());
+    this.view.onClick('[data-screen-extend]', () => void this.extend());
     this.view.onClick('[data-screen-stop]', () => void this.stop());
     this.view.onClick('[data-screen-retry]', () => void this.retry());
     this.view.onClick('[data-screen-stop-others]', () => void this.beginStart(true));
@@ -277,6 +285,33 @@ export class ScreenShareControllerImpl {
     );
   }
 
+  /** 録画は配信中だけ操作できる。MediaStream は live session から借りる。 */
+  private toggleRecording(): Promise<void> {
+    const live = this.live;
+    return live ? this.recording.toggle(live.capture.media) : Promise.resolve();
+  }
+
+  private async extend(): Promise<void> {
+    const live = this.live;
+    if (!live || this.stopping) return;
+    this.view.setBusy('[data-screen-extend]', true, 'labelExtend');
+    this.view.setLiveError(null);
+    try {
+      const extended = await this.api.extend(live.id);
+      if (!this.isActiveLive(live)) return;
+      live.extendExpiresAt = extended.extendExpiresAt;
+      live.publishToken = extended.publishToken;
+      live.publishTokenExpiresAt = extended.publishTokenExpiresAt;
+      live.publisher.setPublishToken(extended.publishToken);
+      this.expiresBarTotalSeconds = durationUntil(live.extendExpiresAt, this.deps.now());
+      this.updateClock();
+    } catch (error) {
+      if (this.isActiveLive(live)) this.view.setLiveError(messageKeyForError(error));
+    } finally {
+      this.view.setBusy('[data-screen-extend]', false, 'labelExtend');
+    }
+  }
+
   private async retry(): Promise<void> {
     const live = this.live;
     if (!live) return this.beginStart(false);
@@ -352,6 +387,9 @@ export class ScreenShareControllerImpl {
   private markLiveSuccess(): void {
     this.lastDiagnostic = null;
     this.view.setDiagnosticsButtonVisible(false);
+    // 前回の配信で出した延長・録画の失敗文言を、新しい配信の画面へ持ち越さない。
+    this.view.setLiveError(null);
+    this.view.setRecordingError(null);
   }
 
   /**
@@ -394,6 +432,8 @@ export class ScreenShareControllerImpl {
     this.activeStart = null;
     run?.abortController.abort();
     const live = this.live;
+    // MediaStream の所有者は配信 session。track を止める前に録画を停止要求し、借用側に解放を任せる。
+    if (this.recording.isActive) void this.recording.stop();
     live?.abortController.abort();
     if (live) live.closeLocal();
     else run?.capture.dispose();

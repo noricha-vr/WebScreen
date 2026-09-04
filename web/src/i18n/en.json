@@ -318,6 +318,22 @@
       "expires": "Time remaining",
       "extend": "Extend",
       "extensionUnavailable": "Extensions are unavailable during beta. Streams end automatically after 15 minutes.",
+      "record": {
+        "heading": "Recording",
+        "description": "You can record locally at any time while streaming. Each stop creates one file. Saved recordings cannot be pasted into VRChat video players.",
+        "start": "Start recording",
+        "stop": "Stop recording",
+        "empty": "There are no recordings yet. Stopped recordings will appear here for download.",
+        "download": "Download",
+        "saved": "Saved",
+        "filenameBase": "Recording {number}",
+        "details": "Started {time} · {duration} · {size} MB",
+        "errors": {
+          "unsupported": "This browser does not support a video format for recording.",
+          "writeFailed": "The recording file could not be saved. Your stream is still live.",
+          "sizeLimit": "Recording stopped after reaching 1 GB. Your stream is still live."
+        }
+      },
       "stop": "End stream",
       "stopping": "Ending…",
       "stopOthers": "End other streams and start",
