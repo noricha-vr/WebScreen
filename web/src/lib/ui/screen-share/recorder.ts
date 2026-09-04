@@ -238,9 +238,13 @@ export class ScreenRecorder {
     } satisfies LocalRecording;
     const finished = this.resolveCompletion;
     this.cleanup();
-    // 一覧へ積んでから待ち合わせを解く（停止を待つ側が、積み終わった状態を見られるようにする）。
-    if (recording) this.options.onRecordingComplete?.(recording);
-    finished?.();
+    try {
+      // 一覧へ積んでから待ち合わせを解く（停止を待つ側が、積み終わった状態を見られるようにする）。
+      if (recording) this.options.onRecordingComplete?.(recording);
+    } finally {
+      // 通知が失敗しても停止の待ち合わせは必ず解く（配信停止を録画側で止めない）。
+      finished?.();
+    }
   }
 
   private transition(next: RecorderState): void {
@@ -259,6 +263,9 @@ export class ScreenRecorder {
   private cleanup(): void {
     if (this.elapsedTimer !== null) globalThis.clearInterval(this.elapsedTimer);
     this.elapsedTimer = null;
+    // 合成済みの Blob を complete() が持っているので、元のチャンクはここで手放す
+    // （抱えたままだとダウンロード後に Blob を解放してもメモリが戻らない）。
+    this.chunks = [];
     this.recorder = null;
     this.writable = null;
     this.fileHandle = null;
