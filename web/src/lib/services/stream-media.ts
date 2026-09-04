@@ -14,6 +14,8 @@ export interface StreamMediaMtxClients {
   egress: MediaMtxClient;
   /** viewer 判定で観測する origin を含むすべての read egress。 */
   egresses: MediaMtxClient[];
+  /** 日次転送量を集計する read egress。nodeKey は Control API URL の host。 */
+  readNodes: Array<{ nodeKey: string; client: MediaMtxClient }>;
 }
 
 export interface StreamMediaMtxSettings {
@@ -53,17 +55,36 @@ export function createStreamMediaMtxClients(
       : [];
     const originApiUrl = settings.egressApiUrl ?? readApiUrls[0];
     const egress = createEndpoint(originApiUrl, settings.egressApiToken, 'EGRESS', createClient);
-    const egresses = [
-      egress,
+    const readEndpoints = [
+      { apiUrl: originApiUrl, client: egress },
       ...readApiUrls
         .filter((apiUrl) => apiUrl !== originApiUrl)
-        .map((apiUrl) => createEndpoint(apiUrl, settings.egressApiToken, 'READ_EGRESS', createClient)),
+        .map((apiUrl) => ({
+          apiUrl,
+          client: createEndpoint(apiUrl, settings.egressApiToken, 'READ_EGRESS', createClient),
+        })),
     ];
-    return { ingress, egress, egresses };
+    return {
+      ingress,
+      egress,
+      egresses: readEndpoints.map((endpoint) => endpoint.client),
+      readNodes: readEndpoints.map((endpoint) => ({
+        nodeKey: new URL(endpoint.apiUrl).host,
+        client: endpoint.client,
+      })),
+    };
   }
   if (!settings.legacyApiUrl && !settings.legacyApiToken) return undefined;
+  if (!settings.legacyApiUrl || !settings.legacyApiToken) {
+    throw new Error('MediaMTX legacy API URL and token are both required');
+  }
   const legacy = createEndpoint(settings.legacyApiUrl, settings.legacyApiToken, 'legacy', createClient);
-  return { ingress: legacy, egress: legacy, egresses: [legacy] };
+  return {
+    ingress: legacy,
+    egress: legacy,
+    egresses: [legacy],
+    readNodes: [{ nodeKey: new URL(settings.legacyApiUrl).host, client: legacy }],
+  };
 }
 
 /** カンマ区切りの read egress URL を、空要素（末尾カンマ等）を拒否して重複なしで返す。 */

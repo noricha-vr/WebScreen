@@ -27,6 +27,8 @@ MEDIAMTX_INGRESS_API_URL=https://ingress-control.example.invalid
 MEDIAMTX_INGRESS_API_TOKEN=replace_with_ingress_control_token
 MEDIAMTX_EGRESS_API_URL=https://egress-control.example.invalid
 MEDIAMTX_EGRESS_API_TOKEN=replace_with_egress_control_token
+# 1 read egress nodeの日次転送量上限（bytes）。日付境界はJST仮定。
+NODE_EGRESS_DAILY_LIMIT_BYTES=160000000000
 
 # web-capture サービスの Bearer token
 WEBCAPTURE_TOKEN=replace_with_webcapture_token

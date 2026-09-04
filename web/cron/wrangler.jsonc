@@ -35,6 +35,8 @@
     "CLOUDFLARE_ZONE_ID": "2210192b51f9f0eb6761d70341ca09b0",
     "STREAM_NO_VIEWER_SECONDS": "600",
     "STREAM_HEARTBEAT_SECONDS": "60",
+    // 1 read egress nodeの1日上限（bytes）。日付境界はJST仮定で、Indigo側は未確認。
+    "NODE_EGRESS_DAILY_LIMIT_BYTES": "160000000000",
     "MEDIAMTX_INGRESS_API_URL": "https://stream.web-screen.net",
     "MEDIAMTX_EGRESS_API_URL": "https://stream.web-screen.net",
     // origin を含む全 read egress。2 台目追加時はカンマ区切りで URL を増やす。
