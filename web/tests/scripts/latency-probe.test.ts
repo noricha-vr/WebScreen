@@ -72,6 +72,33 @@ function scaleNearest(frame: { rgb: Uint8Array; width: number; height: number },
   return { rgb, width, height };
 }
 
+/** latency-source.html と同じ傾斜エンベロープ（8 ms 立ち上がり / 48 ms まで保持 / 75 ms で 0）。 */
+function beepEnvelope(elapsedSeconds: number): number {
+  if (elapsedSeconds < 0.008) return elapsedSeconds / 0.008;
+  if (elapsedSeconds <= 0.048) return 1;
+  return Math.max(0, (0.075 - elapsedSeconds) / 0.027);
+}
+
+/** 定常音（各 -20 dBFS）へ毎秒 1 回の秒識別ビープ（-20 dBFS）を重ねた 8 秒の 48 kHz モノラル PCM。 */
+function synthesizeBeepsOverSteadyTones(steadyHz: readonly number[]): { samples: Float32Array; onsets: number[] } {
+  const sampleRate = 48_000;
+  const amplitude = 0.1;
+  const samples = new Float32Array(sampleRate * 8);
+  for (const frequency of steadyHz) {
+    for (let index = 0; index < samples.length; index += 1) samples[index] += Math.sin(2 * Math.PI * frequency * index / sampleRate) * amplitude;
+  }
+  const onsets: number[] = [];
+  for (let secondMod8 = 0; secondMod8 < 8; secondMod8 += 1) {
+    // 検出の hop（10 ms）に揃えた位置へ置き、窓中心を onset とする既知のバイアスを 15 ms に固定する。
+    const onset = sampleRate / 2 + secondMod8 * sampleRate;
+    onsets.push(onset);
+    for (let index = 0; index < Math.round(sampleRate * 0.075); index += 1) {
+      samples[onset + index] += Math.sin(2 * Math.PI * (600 + 100 * secondMod8) * index / sampleRate) * amplitude * beepEnvelope(index / sampleRate);
+    }
+  }
+  return { samples, onsets };
+}
+
 function withLiveVideoSender(trackId = 'sender-a'): { evaluator: VideoProfileEvaluator; parameters: RTCRtpSendParameters; setReadbackMismatch(value: boolean): void; replaceSender(track: string): void; restore(): void } {
   let parameters = { encodings: [{ scaleResolutionDownBy: 2 }] } as RTCRtpSendParameters;
   let mismatch = false;
@@ -210,6 +237,17 @@ describe('latency block code', () => {
     expect(detected.secondMod8).toBe(5);
     expect(detected.onset).toBeGreaterThanOrEqual(11_040);
     expect(detected.onset).toBeLessThanOrEqual(12_480);
+  });
+
+  test.each([
+    ['現行の 220/330 Hz', [220, 330]],
+    ['旧 440/880 Hz（倍音がビープ帯域に近い最悪ケース）', [440, 880]],
+  ] as const)('定常音 %s に重ねても8個の秒識別ビープを取り違えず検出する', (_label, steadyHz) => {
+    const { samples, onsets } = synthesizeBeepsOverSteadyTones(steadyHz);
+    const detected = detectIdentifiedBeeps(samples, 48_000);
+
+    expect(detected.map((beep) => beep.secondMod8)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    for (const [index, beep] of detected.entries()) expect(Math.abs(beep.onset - onsets[index]!)).toBeLessThanOrEqual(720);
   });
 
   test('映像近接標本で8秒内の音声送出秒を絶対遅延へ対応付ける', () => {

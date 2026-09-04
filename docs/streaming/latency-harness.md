@@ -63,6 +63,7 @@ bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 - 連続 ffmpeg（`-vf fps=5` や `-use_wallclock_as_timestamps`）は起動時の PTS ギャップと内部バッファで古さを引きずり、実遅延 0.8 秒が 2〜6 秒に見えた。映像の連続取得は使わない（音声は連続取得で WAV に保存し `analyze` で検出）
 - `--server-snap HOST` は run 中にサーバーへ SSH し、ingress（8554）と egress（554）を**並列起動**で単発取得して `server-snap.md` に出す。ingress の値が「配信元 → ingress」、egress との差が relay の寄与
 - 実測（2026-09-02、計測ページ 1150x720 / 250 ms 更新）: ingress 約 0.55 秒、egress 約 0.80 秒（上限値）、Mac からの出口単発取得 約 0.78 秒。開始直後から安定し、出口に「数秒 → 1 秒未満」の収束は無い
+- `?tones=1` の左右確認用定常音（現行 220/330 Hz、旧 440/880 Hz）は 50 ms 検出窓では秒識別ビープの 8 帯域へ漏れず、検出数・`secondMod8`・onset（±15 ms）を乱さない（回帰: `web/tests/scripts/latency-probe.test.ts` の test.each「定常音 … に重ねても8個の秒識別ビープを取り違えず検出する」。ただし 600〜1300 Hz の各帯域近傍に定常音を足すとグローバル閾値が持ち上がって検出が消えるため（実測: 890 / 900 / 905+1210 Hz で検出 0 件）、確認音の周波数はこの範囲外に置く）
 - `--notify-discord CHANNEL_ID` で配信 URL を Discord に投稿する（VRChat を動かす別 PC で貼るため）。`--player win2022` の録画は Scheduled Task 経由で、MacType 導入機では互換性ダイアログが出るが録画は継続する
 
 ## 実測前の確認手順（2026-09-02 追記）
