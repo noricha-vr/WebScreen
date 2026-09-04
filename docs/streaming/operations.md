@@ -32,7 +32,7 @@ origin ノードの中身:
 |---|---|
 | MediaMTX | `/usr/local/bin/mediamtx`（v1.20.1）+ versioned config `/etc/webscreen/streaming` |
 | relay | `/opt/webscreen/streaming/relay.sh`。映像 copy、音声があれば AAC 変換 |
-| 常駐 | systemd `webscreen-mediamtx-ingress` / `webscreen-mediamtx-egress`。旧 `mediamtx.service` と `/etc/mediamtx/mediamtx.yml` は停止済み |
+| 常駐 | 旧 `mediamtx.service` と `/etc/mediamtx/mediamtx.yml` は停止済み（現行 unit は上表） |
 | TLS 終端 | Caddy `/etc/caddy/Caddyfile` + `/etc/caddy/mediamtx-api.env`（ingress / egress 別 token。root:root 600） |
 | ログ | journald（上記2 unit を指定。/var/log/journal で永続） |
 | DNS | Cloudflare。`webscreen.tv`（apex A → **全 read ノード**の IP・**プロキシ OFF 必須**。凍結ドメイン、自動更新を切らない。TTL 300 秒）/ `stream.web-screen.net`（A → origin の IP。Control API 専用で案内には使わない） |
@@ -82,6 +82,8 @@ A レコードを増やす前に、どちらかを決めて反映すること（
 - origin だけに解決する WHIP 用ホスト名を用意し、`STREAM_WHIP_ORIGIN` をそれに向ける（ホスト名は未決定。`stream.web-screen.net` は Control API 専用で WHIP ルートを持たない）
 - replica の Caddy にも `webscreen.tv` の WHIP ルートを置き、origin へ reverse_proxy する（ノード間 1 ホップ。**未検証**）
 
+あわせて未検証: `webscreen.tv` の A レコードが複数になると ACME の challenge（HTTP-01 / TLS-ALPN）がどのノードへ届くか決まらないため、各ノードで `webscreen.tv` の証明書を取る構成は取得・更新がリトライ頼みになる。ノード専用ホスト名（Control API 用・WHIP 用）は 1 ノードにしか解決しないのでこの問題を持たない。
+
 ### 手順
 
 1. **新ノードを replica として構築する。** 新ノードの `ORIGINS` は現 origin。既存の replica がある場合は、その `ORIGINS` を「新 origin, 現 origin」の順に先回りで書いておくと手順 9 が掃除だけで済む（自ノードは `ORIGINS` に入れない）。
@@ -93,7 +95,10 @@ A レコードを増やす前に、どちらかを決めて反映すること（
    ```sh
    curl -si https://<新ノードの Control API ホスト>/v3/paths/list | head -3   # token 無しは 401
    ```
-3. **cron の read ノード一覧に追加する。** `web/cron/wrangler.jsonc` の var `MEDIAMTX_READ_EGRESS_API_URLS` にカンマ区切りで追記する PR → main マージ → Actions デプロイ。A レコードより先に入れる（到達できるノードを足すのは無害だが、A レコードだけ先に足すと reader を数えられない）。デプロイ後は `stream_lifecycle_completed` の `egressObserved` に新ノードが載ることを確認する。
+3. **cron の read ノード一覧に追加する。** `web/cron/wrangler.jsonc` の var `MEDIAMTX_READ_EGRESS_API_URLS` にカンマ区切りで追記する PR → main マージ → Actions デプロイ。A レコードより先に入れる（到達できるノードを足すのは無害だが、A レコードだけ先に足すと reader を数えられない）。デプロイ後は `stream_lifecycle_completed` の `egressObserved` に新ノードが載ることを「cron（毎分 lifecycle）の検証方法」の手順で確かめる。
+   ```sh
+   gh run list --workflow deploy.yml --limit 1
+   ```
 4. **`webscreen.tv` に新ノードの A レコードを追加する**（プロキシ OFF、TTL は既存と同じ 300 秒）。この時点で視聴者と転送量の 1/N が新ノードへ流れる。
    ```sh
    dig +short webscreen.tv @1.1.1.1     # 2 本返ること
@@ -111,11 +116,11 @@ A レコードを増やす前に、どちらかを決めて反映すること（
    # /etc/webscreen/streaming/mediamtx-egress.yml の pathDefaults（未検証）
    pathDefaults:
      overridePublisher: false
-     runOnDemand: /opt/webscreen/streaming/RELEASE/replica-pull.sh
+     runOnDemand: /opt/webscreen/streaming/replica-pull.sh
      runOnDemandRestart: false
      runOnDemandCloseAfter: 10s
    ```
-   あわせて `replica-pull.sh` を同じ release ディレクトリへ置き、`/etc/webscreen/streaming/replica.env`（`ORIGINS` は新 origin、`SELF_HOSTS` は自ノード）を作る。`webscreen-mediamtx-egress.service` は `EnvironmentFile` を持たないので drop-in が要る。
+   あわせて `replica-pull.sh` を `runOnDemand` に書いたパス（replica の yml と同じ `/opt/webscreen/streaming/replica-pull.sh`）へ置き、`/etc/webscreen/streaming/replica.env`（`ORIGINS` は新 origin、`SELF_HOSTS` は自ノード）を作る。`webscreen-mediamtx-egress.service` は `EnvironmentFile` を持たないので drop-in が要る。
    ```sh
    ssh webscreen-indigo-poc 'sudo systemctl edit webscreen-mediamtx-egress'   # [Service] EnvironmentFile=/etc/webscreen/streaming/replica.env
    ssh webscreen-indigo-poc 'sudo systemctl show -p EnvironmentFiles webscreen-mediamtx-egress'
@@ -127,14 +132,14 @@ A レコードを増やす前に、どちらかを決めて反映すること（
    # 反映後に配信を 1 本開始し、新 origin 側の ingress に path が立つことで確認する
    ssh <new-node> 'curl -fsS http://127.0.0.1:9997/v3/paths/list | jq "[.items[] | {name, ready}]"'
    ```
-8. **旧 origin の live が 0 になるまで待つ。** 本番は延長無効・15 分固定なので**最長 15 分**。
+8. **旧 origin の live が 0 になるまで待つ。** 本番は延長無効・15 分固定なので**最長 15 分**。判定は旧 origin の **ingress（:9997）の path が空**になること。手順 6 を入れた後は、新 origin 発の配信を pull した egress path が旧 origin にも立つので、egress は判定に使わない。
    ```sh
-   make stream-paths                       # 旧 origin（STREAM_HOST 既定）の ingress / egress path が空になること
+   ssh webscreen-indigo-poc 'curl -fsS http://127.0.0.1:9997/v3/paths/list | jq "[.items[] | {name, ready}]"'
    cd web && bunx wrangler d1 execute webscreen-beta-db --remote -c wrangler.jsonc \
      --command "SELECT COUNT(*) AS live FROM stream_sessions WHERE status = 'live'"
    ```
-   `stream_sessions` に origin 列が入るのは M3 以降なので、この件数は全 origin の合計。ノード単位の判定は `make stream-paths` を使う。
-9. **read 専用 replica の `ORIGINS` を新 origin 単独へ更新する。** restart は pull 中の視聴を切るので live 0 のうちに行う。新 origin 自身の `ORIGINS`（旧 origin 向き）はそのまま残す — ローカル publisher がある path では発火せず、ロールバック時にそのまま効く。
+   `stream_sessions` に origin 列が入るのは M3 以降なので、この件数は全 origin の合計（切替後は新 origin 発の配信も数える）。ノード単位の判定は上の ingress path を使う。
+9. **read 専用 replica の `ORIGINS` を新 origin 単独へ更新する。** 掃除なので急がない。restart は pull 中の視聴を切るため、そのノードの全 path の `readers` が 0 のときに行う（確認は「read edge を撤去する」の手順 2 と同じコマンド）。新 origin 自身の `ORIGINS`（旧 origin 向き）はそのまま残す — ローカル publisher がある path では発火せず、ロールバック時にそのまま効く。
    ```sh
    ssh <replica> 'sudo systemctl restart webscreen-mediamtx-egress-replica && systemctl is-active webscreen-mediamtx-egress-replica'
    ```
@@ -149,9 +154,9 @@ A レコードを増やす前に、どちらかを決めて反映すること（
 `wrangler rollback` は Worker のコードだけを戻すので、var の変更は必ず PR で戻す。
 
 1. 旧 origin の ingress を起動する（`sudo systemctl enable --now webscreen-mediamtx-ingress` → `systemctl is-active`）
-2. `STREAM_WHIP_ORIGIN` を旧 origin へ戻す PR → デプロイ
-3. 新 origin の live が 0 になるまで待つ（手順 8 と同じ確認。最長 15 分）
-4. 全 replica の `ORIGINS` を旧 origin 先頭に戻して restart
+2. read 専用 replica の `ORIGINS` を「旧 origin, 新 origin」に戻して restart（WHIP を戻す前に。先に戻さないと、旧 origin 発の新規配信を pull できない replica が残る）
+3. `STREAM_WHIP_ORIGIN` を旧 origin へ戻す PR → デプロイ（WHIP 用ホスト名を分けている場合は、その A レコードも旧 origin へ戻す）
+4. 新 origin の **ingress** path が空になるまで待つ（手順 8 と同じ確認。最長 15 分）
 5. 新ノードを畳むなら「read edge を撤去する」節の順序で外す
 
 ## read edge を足す（自宅・会社回線を含む）
