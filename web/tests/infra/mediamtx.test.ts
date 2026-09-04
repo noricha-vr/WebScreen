@@ -40,16 +40,12 @@ describe('MediaMTX Control API adapter', () => {
         publisherId: 'publisher-1',
         publisherSessionType: 'webRTCSession',
         rtspReaders: 1,
-        bytesReceived: 0,
-        bytesSent: 0,
       },
       {
         name: 'live/ZyXwVu987654',
         publisherId: null,
         publisherSessionType: null,
         rtspReaders: 0,
-        bytesReceived: 0,
-        bytesSent: 0,
       },
     ]);
     expect(requests.map((request) => request.url)).toEqual([
@@ -74,6 +70,8 @@ describe('MediaMTX Control API adapter', () => {
             inboundBytes: 2000,
           },
           { name: 'live/ZyXwVu987654', source: null, readers: [], bytesSent: 30, bytesReceived: 40 },
+          // 欠落・負数・非整数は 0 に潰さず undefined（0 は再起動直後の正当な値と区別が要る）
+          { name: 'live/QwErTy112233', source: null, readers: [], outboundBytes: -1, inboundBytes: 1.5 },
         ],
       });
     const client = createMediaMtxClient({
@@ -86,6 +84,7 @@ describe('MediaMTX Control API adapter', () => {
     expect(paths.map((path) => [path.bytesSent, path.bytesReceived])).toEqual([
       [1000, 2000],
       [30, 40],
+      [undefined, undefined],
     ]);
   });
 
