@@ -1,6 +1,8 @@
-# MediaMTX v1.20.1 read-replica egress. The host firewall exposes RTSP :554 for readers,
-# publishing stays loopback-only and is driven by `runOnDemand` -> replica-pull.sh
-# (which fetches from an ordered ORIGINS list and re-publishes to 127.0.0.1:554 with -c copy).
+# MediaMTX v1.20.1 read-replica egress. The host firewall exposes RTSP :554 for readers; this node
+# never accepts a publisher and has no relay hook.
+# The pull uses MediaMTX's native `source` (gortsplib), not ffmpeg: ffmpeg's RTSP H.264 parser holds
+# each frame until the next access unit, adding one source frame interval per hop (250 ms at 4 fps;
+# 250 ms -> 0.3 ms measured, see docs/streaming/verification.md I27).
 logLevel: info
 readTimeout: 20s
 writeTimeout: 20s
@@ -20,8 +22,6 @@ authInternalUsers:
     pass: ""
     ips: [127.0.0.1/32, ::1/128]
     permissions:
-      - action: publish
-        path: "~^live/[A-Za-z0-9]{12}$"
       - action: api
   - user: any
     pass: ""
@@ -32,13 +32,13 @@ pathDefaults:
   overridePublisher: false
   # One 40-person world plus headroom caps a single live path at about 83 Mbps.
   maxReaders: 60
-  # `runOnDemand` fires when a reader connects to a path that has no active publisher.
-  # replica-pull.sh reads `MTX_PATH` (`live/{id}`) and pulls from ORIGINS in order.
-  # `runOnDemandRestart: false` keeps a full-origin-exhausted failure surfaced (no silent retry loop);
-  # `runOnDemandCloseAfter: 10s` lets a brief zero-reader gap avoid tearing down the pull.
-  # Booleans use true/false like the other MediaMTX files here (YAML 1.2 parsers treat `no` as a string).
-  runOnDemand: /opt/webscreen/streaming/replica-pull.sh
-  runOnDemandRestart: false
-  runOnDemandCloseAfter: 10s
 paths:
-  "~^live/[A-Za-z0-9]{12}$": {}
+  # The capture group is required: `source` expands `$G1` (first regexp group), not `$MTX_PATH`.
+  # `stream.web-screen.net` resolves to the origin only; moving the origin is a DNS change here.
+  "~^live/([A-Za-z0-9]{12})$":
+    source: rtsp://stream.web-screen.net:554/live/$G1
+    sourceOnDemand: true
+    # The pull starts when the first reader arrives and stops 10s after the last one leaves.
+    sourceOnDemandStartTimeout: 10s
+    sourceOnDemandCloseAfter: 10s
+    rtspTransport: tcp

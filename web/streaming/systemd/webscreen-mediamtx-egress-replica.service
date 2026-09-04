@@ -7,9 +7,6 @@ Wants=network-online.target
 Type=simple
 User=webscreen
 Group=webscreen
-# ORIGINS (ordered comma list) and optional SELF_HOSTS live here. Keep the file root-owned
-# and readable by the `webscreen` group only.
-EnvironmentFile=/etc/webscreen/streaming/replica.env
 ExecStart=/usr/local/bin/mediamtx /etc/webscreen/streaming/mediamtx-egress-replica.yml
 Restart=on-failure
 RestartSec=3
