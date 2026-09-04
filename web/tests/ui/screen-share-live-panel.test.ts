@@ -40,9 +40,10 @@ describe('配信中パネルの録画', () => {
     expect(page.texts()).toContain('録画 1.webm');
   });
 
-  test('配信を終了すると録画も止まり、一覧へ積んでから画面を戻す', async () => {
+  test('配信を終了すると非同期な onstop を待ち、一覧へ積んでから画面を戻す', async () => {
     const page = fakePage();
-    const recorders = fakeRecorders();
+    // 実ブラウザの MediaRecorder.onstop は非同期。待たずに track を止めると録画が落ちる。
+    const recorders = fakeRecorders({ asyncStop: true });
     new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
     await startLive(page);
 
@@ -51,10 +52,41 @@ describe('配信中パネルの録画', () => {
     recorders.last().emit(1024);
 
     page.button('[data-screen-stop]').click();
-    await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+    await waitFor(() => !page.step('idle').hidden);
 
     expect(recorders.last().stopCalls).toBe(1);
-    expect(page.step('idle').hidden).toBe(false);
+    // idle へ戻った時点で一覧は積み終わっている（積む前に画面を戻さない）。
+    expect(page.button('[data-screen-record-list]').children.length).toBe(1);
+  });
+
+  test('配信終了後も録画セクションは残り、開始ボタンだけ隠す', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders({ asyncStop: true });
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+    expect(page.button('[data-screen-record-section]').hidden).toBe(false);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(1024);
+    page.button('[data-screen-stop]').click();
+    await waitFor(() => !page.step('idle').hidden);
+
+    expect(page.button('[data-screen-record-section]').hidden).toBe(false);
+    expect(page.button('[data-screen-record-controls]').hidden).toBe(true);
+    expect(page.button('[data-screen-record-list]').hidden).toBe(false);
+  });
+
+  test('録画が 1 件も無いまま配信を終えたら録画セクションを隠す', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-stop]').click();
+    await waitFor(() => !page.step('idle').hidden);
+
+    expect(page.button('[data-screen-record-section]').hidden).toBe(true);
   });
 
   test('録画停止と配信停止が重なっても一覧は 1 件で、MediaRecorder も一度しか止めない', async () => {
@@ -89,7 +121,104 @@ describe('配信中パネルの録画', () => {
     expect(page.step('live').hidden).toBe(false);
     expect(page.button('[data-screen-record]').dataset.recording).toBe('false');
   });
+
+  test('未保存の Blob が上限に近ければ開始せず、ダウンロード後は再び開始できる', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    new ScreenShareController(page.root, dependencies({
+      MediaRecorder: recorders.Constructor,
+      maxRecordingBytes: 100,
+      totalRecordingLimitBytes: 150,
+    })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(80);
+    page.button('[data-screen-record]').click();
+    await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => !page.button('[data-screen-record-error]').hidden);
+    expect(page.button('[data-screen-record-error]').textContent).toBe('record-total-limit');
+    expect(recorders.instances.length).toBe(1);
+
+    const download = page.recordingAction(0);
+    download.click();
+    await waitFor(() => download.disabled);
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 2);
+  });
+
+  test('ダウンロードした行は「保存しました」で固定する', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(2048);
+    page.button('[data-screen-record]').click();
+    await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+
+    const download = page.recordingAction(0);
+    expect(download.labelSpan?.textContent).toBe('download');
+    download.click();
+    await waitFor(() => download.disabled);
+
+    expect(download.dataset.saved).toBe('true');
+    expect(download.labelSpan?.textContent).toBe('saved');
+  });
+
+  test('保存先を選んだ録画はディスクにあるので、保存済み表示だけを出す', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    const written: number[] = [];
+    new ScreenShareController(page.root, dependencies({
+      MediaRecorder: recorders.Constructor,
+      pickRecordingFile: async () => ({
+        createWritable: async () => ({
+          write: async (data: Blob) => { written.push(data.size); },
+          close: async () => undefined,
+        }),
+      }),
+    })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(1024);
+    page.button('[data-screen-record]').click();
+    await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+
+    const action = page.recordingAction(0);
+    expect(written).toEqual([1024]);
+    expect(action.disabled).toBe(true);
+    expect(action.labelSpan?.textContent).toBe('saved');
+  });
+
+  test('録画の開始時刻は端末ではなくページの言語で整形する', async () => {
+    // 時刻そのものは実行環境の TZ で変わるため、言語差（AM/PM の有無）だけを見る。
+    expect(await recordOnce('en')).toMatch(/AM|PM/);
+    expect(await recordOnce('ja')).not.toMatch(/AM|PM/);
+  });
 });
+
+/** 1 本録画して一覧へ積み、行に出た文言をまとめて返す。 */
+async function recordOnce(locale: string): Promise<string> {
+  const page = fakePage({ locale });
+  const recorders = fakeRecorders();
+  new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+  await startLive(page);
+
+  page.button('[data-screen-record]').click();
+  await waitFor(() => recorders.instances.length === 1);
+  recorders.last().emit(1024);
+  page.button('[data-screen-record]').click();
+  await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+  return page.texts().join(' ');
+}
 
 describe('配信中パネルの延長', () => {
   test('延長できたら期限を伸ばし、新しい publish token を publisher へ渡す', async () => {
@@ -180,7 +309,7 @@ function publisher(tokens: string[]): WhipPublisher {
 }
 
 /** 録画で使う MediaRecorder の差し替え。生成したインスタンスへテストから chunk を流す。 */
-function fakeRecorders(options: { supported?: string[] } = {}): {
+function fakeRecorders(options: { supported?: string[]; asyncStop?: boolean } = {}): {
   Constructor: MediaRecorderConstructor;
   instances: FakeMediaRecorder[];
   last: () => FakeMediaRecorder;
@@ -192,7 +321,7 @@ function fakeRecorders(options: { supported?: string[] } = {}): {
       return supported.includes(mimeType);
     }
     constructor(stream: MediaStream, init?: MediaRecorderOptions) {
-      super(stream, init);
+      super(stream, init, options.asyncStop ?? false);
       instances.push(this);
     }
   }
@@ -211,7 +340,11 @@ class FakeMediaRecorder implements RecorderInstance {
   onerror: ((event: Event) => void) | null = null;
   onstop: (() => void) | null = null;
 
-  constructor(readonly stream: MediaStream, init?: MediaRecorderOptions) {
+  constructor(
+    readonly stream: MediaStream,
+    init?: MediaRecorderOptions,
+    private readonly asyncStop = false
+  ) {
     this.mimeType = init?.mimeType ?? '';
   }
 
@@ -220,7 +353,8 @@ class FakeMediaRecorder implements RecorderInstance {
   stop(): void {
     this.stopCalls += 1;
     this.state = 'inactive';
-    this.onstop?.();
+    if (this.asyncStop) queueMicrotask(() => this.onstop?.());
+    else this.onstop?.();
   }
 
   emit(size: number): void {
@@ -239,10 +373,11 @@ function installFakeDocument(): () => void {
   };
 }
 
-function fakePage(): {
+function fakePage(options: { locale?: string } = {}): {
   root: HTMLElement;
   button: (selector: string) => FakeElement;
   step: (phase: string) => FakeElement;
+  recordingAction: (index: number) => FakeElement;
   texts: () => string[];
 } {
   const elements = new Map<string, FakeElement>();
@@ -254,6 +389,7 @@ function fakePage(): {
     '[data-screen-extend]', '[data-screen-live-error]', '[data-screen-record]',
     '[data-screen-record-icon]', '[data-screen-record-timer]', '[data-screen-record-elapsed]',
     '[data-screen-record-error]', '[data-screen-record-empty]', '[data-screen-record-list]',
+    '[data-screen-record-section]', '[data-screen-record-controls]',
   ]) elements.set(selector, new FakeElement());
   for (const selector of ['[data-screen-extend]', '[data-screen-record]']) {
     elements.get(selector)!.labelSpan = new FakeElement();
@@ -268,9 +404,12 @@ function fakePage(): {
       labelStart: 'start', labelSelecting: 'selecting', labelStarting: 'starting', labelRetry: 'retry',
       labelExtend: 'extend', labelRecordStart: 'rec-start', labelRecordStop: 'rec-stop',
       labelRecordDownload: 'download', labelRecordSaved: 'saved',
+      locale: options.locale ?? 'ja',
       recordFilenameBase: '録画 {number}', recordDetails: '{time} 開始 ・ {duration} ・ {size} MB',
+      recordFileType: '動画',
       msgRecordUnsupported: 'record-unsupported', msgRecordWriteFailed: 'record-write-failed',
-      msgRecordSizeLimit: 'record-size-limit', msgStreamExtensionDisabled: 'extension-disabled',
+      msgRecordSizeLimit: 'record-size-limit', msgRecordTotalLimit: 'record-total-limit',
+      msgStreamExtensionDisabled: 'extension-disabled',
       msgVideoOnly: 'video', msgDisplayDenied: 'denied', audioOn: 'audio-on', audioOff: 'audio-off',
     },
     querySelector: (selector: string) => elements.get(selector) ?? null,
@@ -280,6 +419,8 @@ function fakePage(): {
     root,
     button: (selector) => elements.get(selector)!,
     step: (phase) => steps.find((step) => step.dataset.screenStep === phase)!,
+    // 一覧の行は「情報 + 操作ボタン」の 2 要素で組み立てる。
+    recordingAction: (index) => elements.get('[data-screen-record-list]')!.children[index]!.children[1]!,
     texts: () => elements.get('[data-screen-record-list]')!.descendantTexts(),
   };
 }

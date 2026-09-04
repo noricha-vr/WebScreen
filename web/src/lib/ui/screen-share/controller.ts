@@ -15,8 +15,7 @@ import {
 } from './diagnostics';
 import { resolveScreenShareVideoSettingsForSearch } from './video-profile';
 import type { PreviewPreferenceStore } from './preview-preference';
-import type { MediaRecorderConstructor, RecordingPicker } from './recorder';
-import { RecordingController } from './recording';
+import { RecordingController, type RecordingDependencies } from './recording';
 import {
   currentSearch,
   delay,
@@ -33,21 +32,21 @@ import {
   ScreenShareView,
   StreamHealthError,
 } from './view';
+/** 録画の完了を待つ上限。超えたら録画は破棄せず、完了した時点で一覧へ積む。 */
+const RECORDING_STOP_TIMEOUT_MS = 3000;
+
 /** DOM controller の外部境界。テストでは画面・API・WHIP を独立して差し替える。 */
-export interface ScreenShareDependencies {
+export interface ScreenShareDependencies extends RecordingDependencies {
   requestJson: typeof requestJson;
   startWhipPublisher: typeof startWhipPublisher;
   waitForStreamReady: (streamId: string, signal?: AbortSignal) => Promise<boolean>;
   getDisplayMedia: typeof navigator.mediaDevices.getDisplayMedia;
   previewPreference: PreviewPreferenceStore;
   delay?: (ms: number) => Promise<void>;
-  now: () => number;
   createStartToken?: () => string;
   search?: () => string;
   sendBeacon: (url: string, data?: BodyInit | null) => boolean;
   onPageHide: (handler: () => void) => void;
-  MediaRecorder?: MediaRecorderConstructor | null;
-  pickRecordingFile?: RecordingPicker;
   /** 失敗の匿名報告。既定は client-error-report の reportClientError。 */
   reportStreamFailure?: (report: ClientErrorReport) => void;
 }
@@ -335,15 +334,19 @@ export class ScreenShareControllerImpl {
       }
     } catch (error) {
       if (!this.isActiveLive(live)) return;
-      const stopped = this.finishLocally('error', error);
+      const stopped = await this.finishLocally('error', error);
       if (stopped) await this.notifyRemoteStop(stopped);
     } finally {
       this.view.setBusy('[data-screen-retry]', false, this.live ? 'labelReconnect' : 'labelRetry');
     }
   }
 
-  private async stop(): Promise<void> {
-    const live = this.finishLocally('idle');
+  private stop(): Promise<void> {
+    return this.finishAndNotify('idle');
+  }
+
+  private async finishAndNotify(phase: 'idle' | 'error', error?: unknown): Promise<void> {
+    const live = await this.finishLocally(phase, error);
     if (live) await this.notifyRemoteStop(live);
   }
 
@@ -420,20 +423,54 @@ export class ScreenShareControllerImpl {
   }
 
   private handleRuntimeError(error: unknown): void {
-    const live = this.finishLocally('error', error);
-    if (live) void this.notifyRemoteStop(live);
+    void this.finishAndNotify('error', error);
   }
 
-  private finishLocally(phase: 'idle' | 'error', error?: unknown): LiveStreamSession | null {
-    if (this.stopping) return null;
+  /**
+   * 配信を終了する。MediaStream の所有者は配信 session なので、track を止める前に
+   * 録画の完了（最後のチャンクの書き出しと一覧への追加）を待つ。
+   */
+  private async finishLocally(phase: 'idle' | 'error', error?: unknown): Promise<LiveStreamSession | null> {
+    if (!this.beginFinish()) return null;
+    if (this.recording.isActive) {
+      // 待っている間は停止ボタンで進行中だと分かるようにする（最長 3 秒）。
+      this.view.setBusy('[data-screen-stop]', true, 'labelStopping');
+      await this.awaitRecordingStop();
+      this.view.setBusy('[data-screen-stop]', false, 'labelStop');
+    }
+    return this.closeLocally(phase, error);
+  }
+
+  /** 停止を予約し、進行中の開始と heartbeat を無効化する。二重停止なら false。 */
+  private beginFinish(): boolean {
+    if (this.stopping) return false;
     this.stopping = true;
     this.startGeneration += 1;
+    this.activeStart?.abortController.abort();
+    return true;
+  }
+
+  /**
+   * 録画の停止完了を待つ。MediaRecorder.onstop は非同期なので待つが、待ちきれない時は
+   * 配信停止を止めない（録画は破棄せず、完了した時点で一覧へ積まれる）。
+   */
+  private async awaitRecordingStop(): Promise<void> {
+    let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = globalThis.setTimeout(resolve, RECORDING_STOP_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([this.recording.stop(), timeout]);
+    } finally {
+      if (timer !== undefined) globalThis.clearTimeout(timer);
+    }
+  }
+
+  /** capture と PeerConnection を閉じ、画面を戻す。閉じた配信 session を返す。 */
+  private closeLocally(phase: 'idle' | 'error', error?: unknown): LiveStreamSession | null {
     const run = this.activeStart;
     this.activeStart = null;
-    run?.abortController.abort();
     const live = this.live;
-    // MediaStream の所有者は配信 session。track を止める前に録画を停止要求し、借用側に解放を任せる。
-    if (this.recording.isActive) void this.recording.stop();
     live?.abortController.abort();
     if (live) live.closeLocal();
     else run?.capture.dispose();
@@ -448,7 +485,10 @@ export class ScreenShareControllerImpl {
 
   private stopForPageHide(): void {
     const run = this.activeStart;
-    const live = this.finishLocally('idle');
+    this.beginFinish();
+    // pagehide は beacon を同期で送りきる必要があるため、録画は停止要求だけ出して待たない。
+    if (this.recording.isActive) void this.recording.stop();
+    const live = this.closeLocally('idle');
     if (live) {
       void this.notifyLiveServerStop(live, true);
       void this.notifyWhipDeletion(live);
