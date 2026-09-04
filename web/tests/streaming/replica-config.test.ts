@@ -27,6 +27,14 @@ describe('read replica pull configuration', () => {
     expect(contents).not.toContain('runOnDemand');
   });
 
+  it('keeps the API on loopback and grants no publish permission', async () => {
+    // 公開 :554 の read だけを許し、publish は誰にも与えない（source が唯一の供給元）。API は Caddy 経由のみ。
+    const contents = await readReplicaConfig();
+    expect(contents).toMatch(/^apiAddress: 127\.0\.0\.1:9998$/m);
+    expect(contents).not.toMatch(/action: publish/);
+    expect(contents).toMatch(/^ {6}- action: read\n {8}path: "~\^live\/\[A-Za-z0-9\]\{12\}\$"$/m);
+  });
+
   it('pulls over RTSP TCP', async () => {
     const contents = await readReplicaConfig();
     expect(contents).toMatch(/^ {4}rtspTransport: tcp$/m);
