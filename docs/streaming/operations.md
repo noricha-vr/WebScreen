@@ -24,7 +24,7 @@ cron Worker --別 Bearer client--> ingress（publisher kick）/ egress（viewer�
 | ノード | 役割 | 実体 | 常駐 unit |
 |---|---|---|---|
 | Indigo | **origin**（WHIP 受け + relay + read） | WebARENA Indigo `161.34.34.128`（SSH: `ssh webscreen-indigo-poc`、鍵は ~/.ssh/config 参照）。ufw は inactive で、ポート開放は WebARENA ポータルの FW で行う | `webscreen-mediamtx-ingress` / `webscreen-mediamtx-egress` |
-| 2 台目 | **read replica**（read のみ） | **未構築**（ホスト・IP・SSH alias とも未定） | `webscreen-mediamtx-egress-replica` のみ |
+| Cherry | **read replica + origin 機能**（構築中。2026-09-04 契約） | Cherry Servers Cloud VDS 2（Chicago, US）`88.216.73.71`（SSH: `ssh webscreen-cherry`、root、Ed25519 鍵は ~/.ssh/config 参照）。ポータル名 `webscreen-chicago-01` / Resource #988436。4 vCore / 16 GB / NVMe 100 GB / 1 Gbps / 月 10 TB 込み / €29 月（次回請求 2026-10-04）。Ubuntu 24.04。FW は ufw（ポータル FW の有無は構築時に確認）。ノード用ホスト `chi1.web-screen.net` | `webscreen-mediamtx-egress-replica` + `webscreen-mediamtx-ingress`（ingress は単体計測・origin 切替用。WHIP を向けるまで待機） |
 
 origin ノードの中身:
 
@@ -35,11 +35,38 @@ origin ノードの中身:
 | 常駐 | 旧 `mediamtx.service` と `/etc/mediamtx/mediamtx.yml` は停止済み（現行 unit は上表） |
 | TLS 終端 | Caddy `/etc/caddy/Caddyfile` + `/etc/caddy/mediamtx-api.env`（ingress / egress 別 token。root:root 600） |
 | ログ | journald（上記2 unit を指定。/var/log/journal で永続） |
-| DNS | Cloudflare。`webscreen.tv`（apex A → **全 read ノード**の IP・**プロキシ OFF 必須**。凍結ドメイン、自動更新を切らない。TTL 300 秒）/ `stream.web-screen.net`（A → origin の IP。Control API 専用で案内には使わない） |
+| DNS | Cloudflare。`webscreen.tv`（apex A → **全 read ノード**の IP・**プロキシ OFF 必須**。凍結ドメイン、自動更新を切らない。TTL 300 秒）/ `stream.web-screen.net`（A → **origin の IP だけ**。origin の Control API と WHIP 用。利用者には案内しない）/ `chi1.web-screen.net`（A → Cherry。read ノードの Control API 用。cron だけが使う）。役割の整理は「ホスト名の役割」節 |
 
 ポート方針: 公開は **22 / 80 / 443 / 554(tcp) / 8189(udp)** のみ。8889（WHIP）、8554（ingress RTSP）、
 9997（ingress API）、9998（egress API）は loopback。hls / rtmp / srt / moq と RTSP UDP transport は無効。
 replica は ingress を置かないので 8189 は不要（22 / 80 / 443 / 554 のみ）。
+
+## ホスト名の役割（決定済み。この節を読んだら同じ質問をしない）
+
+**公開 URL にサブドメインを付けない理由**（2026-09-04 ユーザー確認。ChatGPT との 2026-09-02 設計セッションで決めた判断の正本）:
+
+`webscreen.tv` はフロントのブランド URL ではなく、**VRChat から接続する配信バックエンドの固定入口**である。
+`node-01.webscreen.tv` / `stream.webscreen.tv` のように VRChat から見える接続先を分ける案は採らず、視聴 URL は常に
+`rtspt://webscreen.tv/live/{id}` に固定する。理由は **VRChat ワールド側の URL 許可リストを 1 枠に抑えるため**。
+ノードが増えるたびに `node-01` `node-02` … を VRChat に直接参照させる構成は、ワールドの許可設定と相性が悪い
+（allowlist はホスト単位。[vrchat-constraints.md](vrchat-constraints.md)「allowlist」節、[requirements.md](requirements.md)）。
+
+> バックエンドのノード構成を VRChat から隠し、VRChat 側で許可する接続先を `webscreen.tv` 1 つに固定したいので、公開 URL にはサブドメインを付けない。
+
+「ブランドとして短い」「Web アプリ自体が商品だから」は別件の話で、この判断の理由ではない。
+裏側の振り分けは、配信側は Worker + D1 が origin を決めて `whipUrl` で返し（[scale-plan.md](scale-plan.md) M3 で `origin_node_id`）、
+視聴側は `webscreen.tv` の複数 A レコードで READY な read ノードへ分散する（同 M1）。地域別の振り分けも同じ制約の下で行う（[#228](https://github.com/noricha-vr/WebScreen/issues/228)）。
+調査原文の該当箇所: [../research/2026-09-04-hosting-region-research.md](../research/2026-09-04-hosting-region-research.md)「重要な制約」（`stream.web-screen.net` をサーバーごとのホスト名へ変更してはいけない、と書かれているが指しているのは視聴 URL のホスト）。
+
+この理由が効くのは **VRChat から見えるホストだけ**。cron や配信者ブラウザだけが使う内部ホストはノードごとに分けてよく、VRChat の許可リストには一切影響しない。
+
+| 種類 | ホスト | 解決先 | 見る人 | なぜこの形か |
+|---|---|---|---|---|
+| 視聴 URL | `webscreen.tv`（凍結・変更不可） | **全 read ノード**の A レコード（DNS ラウンドロビン、プロキシ OFF、TTL 300 秒） | VRChat 利用者 | 上記の理由。ノードの増減は A レコードの追加・削除だけで行う |
+| WHIP と origin の Control API | `stream.web-screen.net`（既存） | **origin 1 台だけ** | 配信者ブラウザ（WHIP）と Worker（Control API） | WHIP は ingress のある origin だけに届く必要がある。`webscreen.tv` が複数 A になると WHIP が replica に飛んで失敗するので、`STREAM_WHIP_ORIGIN` はこのホストに向ける（Caddy に WHIP ルートを追加。反映は [#219](https://github.com/noricha-vr/WebScreen/issues/219) の冗長化作業）。origin 移設はこの A レコードの向き先変更だけで済む |
+| read ノードの Control API | ノード専用: `chi1.web-screen.net`（Cherry）。Indigo が replica に降りたら `tyo1.web-screen.net` | そのノード 1 台 | cron Worker のみ（`MEDIAMTX_READ_EGRESS_API_URLS`） | cron はノード単位で reader を数えるので個別に到達できるホストが要る。1 ノードにしか解決しないので ACME の証明書取得も安定する |
+
+ノード専用ホスト名の命名は「リージョン略号 + 連番 . web-screen.net」（`chi1` / `tyo1`）。`webscreen.tv` 配下には作らない。
 
 ## Secrets の対応表（値はここに書かない）
 
@@ -74,16 +101,13 @@ versioned 設定、VPS → Worker の cutover、Worker / VPS 一体 rollback は
 ノード構築そのものの差分は [MediaMTX relay 運用手順](../../web/streaming/README.md)「Read replica node」を参照（ここで再説明しない）。
 DNS 操作は Cloudflare ダッシュボードで行う（API token は使わない・書かない）。
 
-### 着手前に決めること（未解決）
+### 着手前の前提（決定済み）
 
 WHIP を 8889 へ通すのは Caddy の `webscreen.tv` ブロックだけで（`web/streaming/Caddyfile`）、Worker の `STREAM_WHIP_ORIGIN` は `https://webscreen.tv`。
 **`webscreen.tv` の A レコードを 2 本にした瞬間、配信開始の WHIP も read ノードへ均等に飛び、ingress の無いノードを引いた配信が失敗する。**
-A レコードを増やす前に、どちらかを決めて反映すること（この節の手順 3 の前提）:
-
-- origin だけに解決する WHIP 用ホスト名を用意し、`STREAM_WHIP_ORIGIN` をそれに向ける（ホスト名は未決定。`stream.web-screen.net` は Control API 専用で WHIP ルートを持たない）
-- replica の Caddy にも `webscreen.tv` の WHIP ルートを置き、origin へ reverse_proxy する（ノード間 1 ホップ。**未検証**）
-
-あわせて未検証: `webscreen.tv` の A レコードが複数になると ACME の challenge（HTTP-01 / TLS-ALPN）がどのノードへ届くか決まらないため、各ノードで `webscreen.tv` の証明書を取る構成は取得・更新がリトライ頼みになる。ノード専用ホスト名（Control API 用・WHIP 用）は 1 ノードにしか解決しないのでこの問題を持たない。
+決定（「ホスト名の役割」節）: origin だけに解決する `stream.web-screen.net` の Caddy ブロックに WHIP ルートを足し、`STREAM_WHIP_ORIGIN` を `https://stream.web-screen.net` に向ける。
+**この 2 つを手順 4（A レコード追加）より先に反映する。** replica の Caddy で `webscreen.tv` の WHIP を origin へ reverse_proxy する案は採らない（1 ホップ増える上に未検証）。
+`webscreen.tv` の証明書を各ノードで取る構成は ACME challenge がどのノードへ届くか決まらないので採らず、HTTPS が要るホストはすべて 1 ノードにしか解決しないノード専用ホストにする。
 
 ### 手順
 
@@ -182,7 +206,7 @@ ssh <edge> 'curl -fsS http://127.0.0.1:9998/v3/paths/list | jq "[.items[] | {nam
 
 制約:
 
-- **`webscreen.tv` の A レコードを増やすと WHIP も分散する**。「着手前に決めること（未解決）」を先に解決すること
+- **`webscreen.tv` の A レコードを増やすと WHIP も分散する**。先に `STREAM_WHIP_ORIGIN` を `https://stream.web-screen.net` に向ける（「ホスト名の役割」節）
 - 分散は DNS の均等のみ。細い回線でも 1/N が来るので path 単位の `maxReaders` で自衛する（値は #223）
 - Control API へ HTTPS で到達できない edge を A レコードに入れると reader を数えられず、`no_viewers` が誤発火する
 - 自宅・会社の IPv4 が公開 A レコードに載る

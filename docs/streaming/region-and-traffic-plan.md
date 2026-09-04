@@ -4,14 +4,14 @@
 収容人数の計算式は [capacity.md](capacity.md)、事業者ごとのプラン一覧は [server-plan.md](server-plan.md) が正本なので、ここでは繰り返さない。
 
 出所は [../research/2026-09-04-hosting-region-research.md](../research/2026-09-04-hosting-region-research.md)（2026-09-04 の調査原文）。
-**契約・実測はまだ行っていない。** 下表の「決定」は推奨であって、契約済みの構成ではない。
+**2026-09-04 に Chicago Cloud VDS 2 を 1 台契約した**（ポータル名 `webscreen-chicago-01`、Resource #988436、IP 88.216.73.71、月 10 TB 込みを注文画面で確認、次回請求 2026-10-04）。サーバーの実体と SSH は [operations.md](operations.md)「サーバー実体」。負荷試験と VRChat 実機の遅延計測は未実施（下の「未確定・要検証」）。
 
 ## 結論
 
 | 問い | 答え | 状態 |
 |---|---|---|
-| 無料提供の標準リージョンはどこか | **Cherry Servers Chicago**（US）。日本 50% / 北米 25% / 欧州 25% の加重平均 RTT が最小で、転送単価も最安 | 推奨・未契約 |
-| 最初に契約する箱は | **Cloud VDS 2**（4 vCore / 16 GB / 1 Gbps / 10 TB 込み / €29 月・セール価格） | 推奨・未契約 |
+| 無料提供の標準リージョンはどこか | **Cherry Servers Chicago**（US）。日本 50% / 北米 25% / 欧州 25% の加重平均 RTT が最小で、転送単価も最安 | 採用・契約済み（2026-09-04） |
+| 最初に契約する箱は | **Cloud VDS 2**（4 vCore / 16 GB / 1 Gbps / 10 TB 込み / €29 月・セール価格） | 契約済み（2026-09-04）。10 TB 込みは注文画面で確認 |
 | 転送量が足りなくなったら | サーバーを大きくせず **Traffic package を買い足す**（€0.50/TB、Chicago） | 事実（公式ドキュメント） |
 | ピーク帯域が足りなくなったら | **VDS を 1 台足す**（1 Gbps 単位）。転送枠はプロジェクト共通プールなので買い直し不要 | 事実（公式ドキュメント） |
 | Indigo を増やすか | **増やさない**。160 GB/日 は 40 人ワールド 1 つで約 6.4 時間で尽きる | 判断 |
@@ -88,12 +88,12 @@ NTTPC からは 2026-09-04 に「申告どおり（160 GB/日）の範囲で利�
 | 項目 | いま言えること | 確かめ方 |
 |---|---|---|
 | 1000 TB を超える枠を買えるか | ポータルの 1 注文上限が 1000 TB。ハード上限の公開記載はない | Cherry へ問い合わせ。ただし 1 Gbps × 1 台では月 324 TB が物理上限なので当面不要 |
-| Chicago の実 RTT（日本の自宅回線から） | 外部ベンチの引用値のみ | `speedtest.us.cherryservers.com` で実測し、現行 Indigo と実機 A/B |
+| Chicago の実 RTT（日本の自宅回線から） | 2026-09-04 に自宅 Mac から契約したサーバーへ ping 5 回で **平均 184 ms・ロス 0**（調査の引用値 125〜145 ms より大きい。暫定値） | ハーネス（[latency-harness.md](latency-harness.md)）で Cherry を origin にした配信と Indigo 配信を VRChat 実機で A/B し、体感遅延の差で判断する |
 | Chicago 実機の耐久 | 未実施 | 500 / 700 viewer、40 人 × 10〜15 配信、pps、72 時間連続 |
 | Cherry 東京の月間転送枠 | ページ上部 100 TB とプラン表 20 TB の表記混在（[#227](https://github.com/noricha-vr/WebScreen/issues/227)） | Chicago を採るなら判断に不要。東京を再検討する時だけ書面確認 |
 
 [scale-plan.md](scale-plan.md) の「上位ティア = Cherry Servers **東京** bare metal（€237/月）」は、
-本ドキュメントの Chicago Cloud VDS 2（€29/月）案と競合する。**採用を決めた時点で scale-plan.md 側を更新すること。**
+本ドキュメントの Chicago Cloud VDS 2（€29/月）案と競合していたが、2026-09-04 の契約で Chicago を採用し scale-plan.md 側を更新済み。
 
 ## 事業者への確認文（契約前に送る）
 

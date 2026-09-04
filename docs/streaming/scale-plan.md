@@ -13,7 +13,7 @@
 | replica の取得 | egress の `runOnDemand` + 順序付き origin リスト（env `ORIGINS`）。origin の **egress**（AAC 変換済み）から `-c copy` | Worker / D1 に依存せず、origin 移設中の並存と origin 障害時の切替を同じ仕組みで吸収する |
 | 上限到達時の縮退 | **超過分を接続拒否**（egress path の `maxReaders`） | 制御面が全滅してもノード単体で守れる唯一の線。「全員が途切れる」より「超過分が拒否」 |
 | 常時ヘッドルーム | **2 台常設**（Indigo origin 1 + replica 1、+3,410 円/月） | autoscale は VM 作成 + bootstrap + DNS TTL 300 秒で分単位。バズの立ち上がりには間に合わない |
-| 上位ティア | **Cherry Servers 東京 bare metal**（10 Gbps・月 20 TB 保守値・€237/月）へ origin ごと移す。**移設先は未決定**（[region-and-traffic-plan.md](region-and-traffic-plan.md) に Chicago Cloud VDS 2 €29/月 + 転送枠の追加購入という別案がある） | Indigo の 160 GB/日 は 40 人ワールド 1 つで約 6.4 時間。Cherry は転送量の壁が事実上消える |
+| 上位ティア | **Cherry Servers Chicago Cloud VDS 2**（1 Gbps・月 10 TB 込み・€0.50/TB で買い足し・€29/月。2026-09-04 契約、[region-and-traffic-plan.md](region-and-traffic-plan.md)）。まず replica、VRChat 実機で遅延を確認してから origin を移す。東京 bare metal（€237/月）案は却下表へ | Indigo の 160 GB/日 は 40 人ワールド 1 つで約 6.4 時間。Cherry は転送枠をプロジェクト単位で買い足せるので転送量の壁が事実上消える |
 | 自宅・会社回線 | read edge として足せる（origin にはしない） | Worker / D1 変更なしで追加・撤去できる。一時的なしのぎ・コスト削減用 |
 
 ## 構成
@@ -87,12 +87,13 @@ publish JWT は Worker が署名するので origin が変わっても鍵は同�
 | 画質段の自動降格 | 実装が重く、途中で画質が変わる。M3 以降の追加候補 |
 | ChatGPT 案の「1 配信 60 Mbps 予約で edge を選ぶ」 | 視聴者の行き先は DNS が決めるため、予約は origin にしか効かない |
 | Cherry Cloud VPS | 1 Gbps・1 TB/月で Indigo 8GB（4.8 TB/月相当）より少ない。bare metal 一択 |
+| Cherry 東京 bare metal（€237/月） | Chicago Cloud VDS 2 が 1/8 の費用で同じ 1 Gbps。転送枠は後から買い足せるので大箱を先に買う理由がない。日本向け RTT の差は実機 A/B で判断（2026-09-04） |
 | 配置専用 Durable Object / 配信中 origin のライブマイグレーション | D1 の順次処理で足りる / WebRTC 再接続が要り初期に作らない |
 
 ## 未確認
 
 - VRChat PC / Quest が複数 A レコードをどう選ぶか（先頭固定・ランダム・失敗時に次を試すか）。**M1 の実機ゲート**
-- Cherry 東京の月間転送枠（ページ上部 100 TB とプラン表 20 TB の表記混在。契約前に書面確認、#219）
+- Cherry Chicago を origin にした時の VRChat 実機遅延（自宅 Mac からの ping は 184 ms）と、500 / 700 viewer・pps の負荷試験（[region-and-traffic-plan.md](region-and-traffic-plan.md)「未確定・要検証」）
 - Indigo ノード間の RTSP pull の帯域・遅延増分、内部ネットワークの有無
 - `maxReaders` 拒否が VRChat 側でどう見えるか
 - Indigo の日次インスタンス作成上限の具体数
