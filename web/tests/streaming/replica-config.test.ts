@@ -9,12 +9,15 @@ describe('read replica pull configuration', () => {
   it('pulls through a regexp capture group so `source` can expand $G1', async () => {
     const contents = await readReplicaConfig();
     expect(contents).toMatch(/^ {2}"~\^live\/\(\[A-Za-z0-9\]\{12\}\)\$":$/m);
-    expect(contents).toMatch(/^ {4}source: rtsp:\/\/\S+\/live\/\$G1$/m);
+    // 取り寄せ先は origin だけに解決するホスト固定（webscreen.tv は全 read ノードに解決し自己参照しうる）
+    expect(contents).toMatch(/^ {4}source: rtsp:\/\/stream\.web-screen\.net:554\/live\/\$G1$/m);
   });
 
   it('starts the pull on demand', async () => {
     const contents = await readReplicaConfig();
     expect(contents).toMatch(/^ {4}sourceOnDemand: true$/m);
+    expect(contents).toMatch(/^ {4}sourceOnDemandStartTimeout: 10s$/m);
+    expect(contents).toMatch(/^ {4}sourceOnDemandCloseAfter: 10s$/m);
   });
 
   it('does not fall back to the ffmpeg runOnDemand hook', async () => {

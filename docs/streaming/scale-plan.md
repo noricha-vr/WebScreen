@@ -52,12 +52,7 @@
 ## origin 移設（Indigo → Cherry）の手順
 
 1. Cherry を replica として A レコードに追加。この時点で視聴者の 1/N と転送量が Cherry へ流れる
-2. Cherry で ingress / relay を起動し、負荷試験（600 Mbps 連続 72 時間・reader 800 本・WHIP 20 本・UDP 8189）
-3. **旧 origin を「publish しつつ他 origin から pull する」ノードにはできない（未解決）**。`source` を持つ path は publisher を受け付けないため、1 ノードで origin と replica を兼ねられない。切替中に Indigo を引いた視聴者が Cherry 発の配信を再生できない問題は未解決（[#252](https://github.com/noricha-vr/WebScreen/issues/252)）
-4. Worker の `STREAM_WHIP_ORIGIN` を Cherry に切替。新規配信は Cherry が origin、既存配信は Indigo で継続
-5. 旧 origin の live が 0 になるまで待つ。本番は延長無効・15 分固定なので**最長 15 分**（延長を有効にした後は cron の origin 別 live 数で判定）
-6. `stream.web-screen.net` の A レコードを Cherry へ向ける。これで全 replica の取り寄せ先が切り替わる（yml は共通のまま、restart 不要）
-7. Indigo は replica として残す（ロールバック先）。戻す時は 4〜6 を逆順
+2. **これ以降（Cherry での ingress 起動 → WHIP 切替 → Indigo の replica 化）は `source` 方式では成立しない（[#252](https://github.com/noricha-vr/WebScreen/issues/252) で再設計）。** `source` を持つ path は publisher を受け付けないので egress は replica 版か origin 版のどちらか一方で、A レコードに載ったノードを origin 版へ切り替えると旧 origin 発の配信をそのノード経由で再生できなくなる。加えて `stream.web-screen.net` は WHIP 先と全 replica の取り寄せ先を兼ねるため、切替の瞬間に旧 origin 発の配信（最長 15 分）を replica が引けなくなる。手順の再設計と負荷試験（600 Mbps 連続 72 時間・reader 800 本・WHIP 20 本・UDP 8189。A レコードから外した状態で行う）は #252 の完了条件に含める
 
 移す判断基準（案）: 転送量の 7 日移動平均が 160 GB/日 の 70% 超。値は運用で確定する。
 publish JWT は Worker が署名するので origin が変わっても鍵は同じ。コマンド粒度の runbook は #224 で operations.md に置く。
