@@ -96,18 +96,19 @@ latency-probe: MIN ?= 5
 # $(value) で生の文字列を取り Make 自身の $(shell ...) 展開を起こさず、コマンドライン変数が
 # target-specific 代入を上書きできないよう別名（LP_*）で export する
 # コマンドライン変数は Make が子環境へ export する時に展開するので、元の名前は export しない
-unexport MIN SOURCE PLAYER NOTIFY_DISCORD SERVER_SNAP NODE_HOST
+unexport MIN SOURCE PLAYER NOTIFY_DISCORD SERVER_SNAP NODE_HOST READ_HOST
 latency-probe: export LP_MIN := $(value MIN)
 latency-probe: export LP_SOURCE := $(value SOURCE)
 latency-probe: export LP_PLAYER := $(value PLAYER)
 latency-probe: export LP_NOTIFY_DISCORD := $(value NOTIFY_DISCORD)
 latency-probe: export LP_SERVER_SNAP := $(value SERVER_SNAP)
 latency-probe: export LP_NODE_HOST := $(value NODE_HOST)
-latency-probe: ## 遅延測定を実行（MIN=5 SOURCE=URL、PLAYER=win2022、NOTIFY_DISCORD=ID、SERVER_SNAP=HOST、NODE_HOST=HOST）
+latency-probe: export LP_READ_HOST := $(value READ_HOST)
+latency-probe: ## 遅延測定を実行（MIN=5 SOURCE=URL、PLAYER=win2022、NOTIFY_DISCORD=ID、SERVER_SNAP=HOST、NODE_HOST=HOST、READ_HOST=HOST[:PORT]）
 	@script="$(WEB_DIR)/scripts/latency-probe.ts"; \
 	if [[ ! -f "$$script" ]]; then echo 'feat/latency-harness をマージしてください' >&2; exit 1; fi; \
 	if [[ -z "$$LP_SOURCE" ]]; then echo 'SOURCE=URL を指定してください' >&2; exit 64; fi; \
-	cd "$(WEB_DIR)" && bun scripts/latency-probe.ts run --minutes "$$LP_MIN" --source "$$LP_SOURCE" $${LP_PLAYER:+--player "$$LP_PLAYER"} $${LP_NOTIFY_DISCORD:+--notify-discord "$$LP_NOTIFY_DISCORD"} $${LP_SERVER_SNAP:+--server-snap "$$LP_SERVER_SNAP"} $${LP_NODE_HOST:+--node-host "$$LP_NODE_HOST"}
+	cd "$(WEB_DIR)" && bun scripts/latency-probe.ts run --minutes "$$LP_MIN" --source "$$LP_SOURCE" $${LP_PLAYER:+--player "$$LP_PLAYER"} $${LP_NOTIFY_DISCORD:+--notify-discord "$$LP_NOTIFY_DISCORD"} $${LP_SERVER_SNAP:+--server-snap "$$LP_SERVER_SNAP"} $${LP_NODE_HOST:+--node-host "$$LP_NODE_HOST"} $${LP_READ_HOST:+--read-host "$$LP_READ_HOST"}
 
 stream-source: ## 遅延測定中の配信元タブの表示先を切り替える（URL=URL）
 	@script="$(WEB_DIR)/scripts/latency-probe.ts"; \

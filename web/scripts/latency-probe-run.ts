@@ -32,6 +32,8 @@ export interface RunOptions {
   abCycleSeconds: number | null; scrollPixelsPerSecond: number; outletQualitySeconds: number; notifyDiscordChannelId: string | null; serverSnapHost: string | null; streamId: string | null;
   /** 配信先ノードのホスト名。null なら本番既定（API 応答の whipUrl と webscreen.tv）を使う。 */
   nodeHost: string | null;
+  /** 視聴先だけを差し替える `host` または `host:port`。null なら nodeHost、それも null なら webscreen.tv。 */
+  readHost: string | null;
 }
 interface ActiveController { endpoint: string; sourceUrl: string }
 interface ControllerState { sourcePage: import('@playwright/test').Page | null; sourceUrl: string; sourceServerUrl: string }
@@ -73,7 +75,7 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
     if (options.nodeHost) await routeWhipToNode(sharingPage, options.nodeHost);
     await sharingPage.goto(screenShareUrl(options), { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const streamId = await startScreenShare(sharingPage, options.profileDir);
-    const readHost = options.nodeHost ?? 'webscreen.tv';
+    const readHost = options.readHost ?? options.nodeHost ?? 'webscreen.tv';
     await writeFile(join(options.outDir, 'sender-config.json'), JSON.stringify({ ...await captureSenderConfig(sharingPage), harnessNodeHost: options.nodeHost, harnessReadHost: readHost }, null, 2) + '\n');
     const target = resolveSourceUrl(options.source, sourceServer.url);
     if (target !== sourceServer.url.href) await sourcePage.goto(target, { waitUntil: 'domcontentloaded' });
@@ -207,6 +209,7 @@ export async function clearPreviousRunArtifacts(outDir: string): Promise<void> {
 export function validateRunOptions(options: RunOptions): void {
   if (options.videoProfile !== 'quality' && options.videoProfile !== 'realtime') throw new Error('videoProfile must be quality or realtime');
   if (options.nodeHost !== null) validateNodeHost(options.nodeHost);
+  if (options.readHost !== null) validateReadHost(options.readHost);
   if (options.maxBitrate !== null) validateVideoProfile(options.videoProfile, options.maxBitrate);
   if (options.videoProfile === 'realtime' && options.maxBitrate === null) throw new Error('realtime videoProfile requires maxBitrate');
   if (options.abCycleSeconds !== null) {
@@ -217,6 +220,15 @@ export function validateRunOptions(options: RunOptions): void {
 
 /** ハーネスが配信先に選べるノードは自前ドメイン配下だけ（publish JWT を任意ホストへ送らせない）。 */
 export const NODE_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.web-screen\.net$/;
+
+/** 視聴先は nodeHost と同じ allowlist に任意のポート（1〜65535）を許す。 */
+export function validateReadHost(readHost: string): void {
+  const [host, port, ...rest] = readHost.split(':');
+  if (rest.length > 0 || host === undefined) throw new Error('readHost must be host or host:port');
+  validateNodeHost(host);
+  if (port !== undefined && !/^[1-9][0-9]{0,4}$/.test(port)) throw new Error('readHost port must be an integer');
+  if (port !== undefined && Number(port) > 65_535) throw new Error('readHost port must be 1..65535');
+}
 
 export function validateNodeHost(nodeHost: string): void {
   if (!NODE_HOST_PATTERN.test(nodeHost)) throw new Error('nodeHost must be a single label under web-screen.net (e.g. chi1.web-screen.net)');
