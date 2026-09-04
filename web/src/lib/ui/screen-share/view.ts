@@ -300,11 +300,15 @@ export class ScreenShareView {
       const blob = recording.blob ?? await recording.fileHandle?.getFile();
       if (!blob) throw new Error('Recording file is unavailable');
       const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = recording.filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      try {
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = recording.filename;
+        anchor.click();
+      } finally {
+        // click() 直後の同期 revoke はダウンロードを中断させるブラウザがあるため次タスクへ回す。
+        globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
       const label = button.querySelector('span');
       if (label) label.textContent = this.message('labelRecordSaved');
       button.dataset['saved'] = 'true';

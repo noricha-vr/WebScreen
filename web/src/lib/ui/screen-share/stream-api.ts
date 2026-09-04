@@ -65,7 +65,7 @@ export function createStreamApi(
       return readyOverride?.(id, signal) ?? waitForStreamReady(id, request, wait, signal);
     },
     async extend(id) {
-      return asExtendStream(await request(streamPath(id, 'extend'), { method: 'POST' }));
+      return asExtendStream(await request(streamPath(id, 'extend'), { method: 'POST' }), id);
     },
     async stop(id, preferBeacon = false) {
       const url = streamPath(id, 'stop');
@@ -133,10 +133,20 @@ function streamPath(id: string, operation: 'heartbeat' | 'health' | 'stop' | 'ex
   return `/api/streams/${encodeURIComponent(id)}/${operation}/`;
 }
 
-function asExtendStream(value: unknown): ExtendStreamResponse {
-  if (!isRecord(value) || !hasStringFields(value, [
-    'id', 'publishToken', 'publishTokenExpiresAt', 'extendExpiresAt',
-  ]) || value.status !== 'live') throw new Error('Invalid extend stream response');
+/**
+ * 延長応答を、要求した配信 ID と publish token の使える形だけに絞る。
+ *
+ * 別配信の token を掴んで publish し続ける事故を防ぐため ID の完全一致を要求し、
+ * publishTokenExpiresAt と extendExpiresAt の一致も検証する（docs/api-contracts.md の
+ * 「同じ期限の新 publish JWT を発行」が契約。ずれた応答は上流の異常として扱う）。
+ */
+function asExtendStream(value: unknown, requestedId: string): ExtendStreamResponse {
+  if (!isRecord(value) || value.status !== 'live' || value.id !== requestedId ||
+      !isNonEmptyString(value.publishToken) ||
+      !isTimestamp(value.publishTokenExpiresAt) || !isTimestamp(value.extendExpiresAt) ||
+      value.publishTokenExpiresAt !== value.extendExpiresAt) {
+    throw new Error('Invalid extend stream response');
+  }
   return value as unknown as ExtendStreamResponse;
 }
 
@@ -184,6 +194,14 @@ function asNoContent(value: unknown): void {
 
 function hasStringFields(value: Record<string, unknown>, keys: readonly string[]): boolean {
   return keys.every((key) => typeof value[key] === 'string');
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function isTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

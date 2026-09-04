@@ -142,7 +142,7 @@ function dependencies(
     requestJson: (async (url: string) => {
       if (url.endsWith('/extend/')) return {
         id: 'Ab12Cd34Ef56', status: 'live', publishToken: 'extended-token',
-        publishTokenExpiresAt: '2026-09-01T03:00:00.000Z', extendExpiresAt: '2026-09-01T02:00:00.000Z',
+        publishTokenExpiresAt: '2026-09-01T02:00:00.000Z', extendExpiresAt: '2026-09-01T02:00:00.000Z',
       };
       if (url.endsWith('/stop/')) return null;
       return createResponse();

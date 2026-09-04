@@ -268,6 +268,7 @@ async function closeQuietly(writable: RecordingWritable | null): Promise<void> {
   try {
     await writable.close();
   } catch (error) {
-    console.warn('Failed to close the aborted recording file', error);
+    // ファイル名・ハンドル等が混ざらないよう、例外は種別だけをログに出す。
+    console.warn('Failed to close the aborted recording file', error instanceof Error ? error.name : 'unknown');
   }
 }
