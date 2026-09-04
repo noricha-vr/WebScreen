@@ -3,9 +3,10 @@ import type { ScreenShareAnalyticsEvent } from '../analytics';
 import type { requestJson } from '../request-json';
 import type { startWhipPublisher } from '../whip-publisher';
 import type { PreviewPreferenceStore } from './preview-preference';
+import type { RecordingDependencies } from './recording';
 
 /** DOM controller の外部境界。テストでは画面・API・WHIP を独立して差し替える。 */
-export interface ScreenShareDependencies {
+export interface ScreenShareDependencies extends RecordingDependencies {
   requestJson: typeof requestJson;
   startWhipPublisher: typeof startWhipPublisher;
   waitForStreamReady: (streamId: string, signal?: AbortSignal) => Promise<boolean>;

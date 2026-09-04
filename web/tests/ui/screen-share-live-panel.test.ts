@@ -1,0 +1,580 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
+import { ERROR_CODES } from '../../src/lib/contracts/api';
+import { ScreenShareController } from '../../src/lib/ui/screen-share';
+import type { ScreenShareDependencies } from '../../src/lib/ui/screen-share';
+import type { MediaRecorderConstructor, RecorderInstance } from '../../src/lib/ui/screen-share/recorder';
+import { JsonRequestError } from '../../src/lib/ui/request-json';
+import type { WhipPublisher } from '../../src/lib/ui/whip-publisher';
+
+let restoreDocument: () => void = () => undefined;
+
+beforeEach(() => {
+  restoreDocument = installFakeDocument();
+});
+
+afterEach(() => {
+  restoreDocument();
+});
+
+describe('配信中パネルの録画', () => {
+  test('停止するたびに一覧へ 1 件積み、空状態を隠す', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    expect(page.button('[data-screen-record]').dataset.recording).toBe('true');
+    expect(page.button('[data-screen-record-timer]').hidden).toBe(false);
+    recorders.last().emit(2048);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+
+    expect(page.button('[data-screen-record-empty]').hidden).toBe(true);
+    expect(page.button('[data-screen-record-list]').hidden).toBe(false);
+    expect(page.button('[data-screen-record]').dataset.recording).toBe('false');
+    expect(page.button('[data-screen-record-timer]').hidden).toBe(true);
+    expect(page.texts()).toContain('録画 1.webm');
+  });
+
+  test('配信を終了すると非同期な onstop を待ち、一覧へ積んでから画面を戻す', async () => {
+    const page = fakePage();
+    // 実ブラウザの MediaRecorder.onstop は非同期。待たずに track を止めると録画が落ちる。
+    const recorders = fakeRecorders({ asyncStop: true });
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(1024);
+
+    page.button('[data-screen-stop]').click();
+    await waitFor(() => !page.step('idle').hidden);
+
+    expect(recorders.last().stopCalls).toBe(1);
+    // idle へ戻った時点で一覧は積み終わっている（積む前に画面を戻さない）。
+    expect(page.button('[data-screen-record-list]').children.length).toBe(1);
+  });
+
+  test('配信終了後も録画セクションは残り、開始ボタンだけ隠す', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders({ asyncStop: true });
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+    expect(page.button('[data-screen-record-section]').hidden).toBe(false);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(1024);
+    page.button('[data-screen-stop]').click();
+    await waitFor(() => !page.step('idle').hidden);
+
+    expect(page.button('[data-screen-record-section]').hidden).toBe(false);
+    expect(page.button('[data-screen-record-controls]').hidden).toBe(true);
+    expect(page.button('[data-screen-record-list]').hidden).toBe(false);
+  });
+
+  test('録画が 1 件も無いまま配信を終えたら録画セクションを隠す', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-stop]').click();
+    await waitFor(() => !page.step('idle').hidden);
+
+    expect(page.button('[data-screen-record-section]').hidden).toBe(true);
+  });
+
+  test('録画停止と配信停止が重なっても一覧は 1 件で、MediaRecorder も一度しか止めない', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(512);
+
+    page.button('[data-screen-record]').click();
+    page.button('[data-screen-stop]').click();
+    await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+    await Promise.resolve();
+
+    expect(page.button('[data-screen-record-list]').children.length).toBe(1);
+    expect(recorders.last().stopCalls).toBe(1);
+  });
+
+  test('録画できない環境では録画セクションに文言を出し、配信は続ける', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders({ supported: [] });
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => !page.button('[data-screen-record-error]').hidden);
+
+    expect(page.button('[data-screen-record-error]').textContent).toBe('record-unsupported');
+    expect(page.step('live').hidden).toBe(false);
+    expect(page.button('[data-screen-record]').dataset.recording).toBe('false');
+  });
+
+  test('未保存の Blob が上限に近ければ開始せず、ダウンロード後は再び開始できる', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    new ScreenShareController(page.root, dependencies({
+      MediaRecorder: recorders.Constructor,
+      maxRecordingBytes: 100,
+      totalRecordingLimitBytes: 150,
+    })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(80);
+    page.button('[data-screen-record]').click();
+    await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => !page.button('[data-screen-record-error]').hidden);
+    expect(page.button('[data-screen-record-error]').textContent).toBe('record-total-limit');
+    expect(recorders.instances.length).toBe(1);
+
+    const download = page.recordingAction(0);
+    download.click();
+    await waitFor(() => download.disabled);
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 2);
+  });
+
+  test('ダウンロードした行は「ダウンロードを開始しました」で固定する', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders();
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(2048);
+    page.button('[data-screen-record]').click();
+    await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+
+    const download = page.recordingAction(0);
+    expect(download.labelSpan?.textContent).toBe('download');
+    download.click();
+    await waitFor(() => download.disabled);
+
+    expect(download.dataset.saved).toBe('true');
+    // anchor.click() が保証するのは開始要求まで。保存完了とは表示しない。
+    expect(download.labelSpan?.textContent).toBe('download-started');
+  });
+
+  test('録画の開始時刻は端末ではなくページの言語で整形する', async () => {
+    // 時刻そのものは実行環境の TZ で変わるため、言語差（AM/PM の有無）だけを見る。
+    expect(await recordOnce('en')).toMatch(/AM|PM/);
+    expect(await recordOnce('ja')).not.toMatch(/AM|PM/);
+  });
+});
+
+describe('録画を失った時の表示', () => {
+  test('停止中に届いた録画の失敗は、idle へ戻った後も録画セクションに残す', async () => {
+    const page = fakePage();
+    const recorders = fakeRecorders({ asyncStop: true });
+    new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(1024);
+
+    page.button('[data-screen-stop]').click();
+    // onstop が届く前に MediaRecorder が失敗する経路（録画は残らない）。
+    recorders.last().onerror?.(new Event('error'));
+    await waitFor(() => !page.step('idle').hidden);
+
+    // 一覧へ積めていないので、セクションが消えると失敗そのものが伝わらなくなる。
+    expect(page.button('[data-screen-record-list]').children.length).toBe(0);
+    expect(page.button('[data-screen-record-section]').hidden).toBe(false);
+    expect(page.button('[data-screen-record-error]').hidden).toBe(false);
+    expect(page.button('[data-screen-record-error]').textContent).toBe('record-after-stop');
+  });
+
+  test('待ちきれず idle へ戻った後に届いた失敗でも、録画セクションを開き直す', async () => {
+    const timers = installFakeTimeouts();
+    try {
+      const page = fakePage();
+      // onstop をテストから発火させ、配信停止が録画の完了を待ちきれない状況を作る。
+      const recorders = fakeRecorders({ manualStop: true });
+      new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+      await startLive(page);
+
+      page.button('[data-screen-record]').click();
+      await waitFor(() => recorders.instances.length === 1);
+      recorders.last().emit(1024);
+      await settle();
+
+      page.button('[data-screen-stop]').click();
+      await settle();
+      // 録画の完了を待ちきれずに配信を閉じる経路（3 秒の待ち上限）。
+      timers.tick(3000);
+      await waitFor(() => !page.step('idle').hidden);
+      expect(page.button('[data-screen-record-section]').hidden).toBe(true);
+
+      recorders.last().onerror?.(new Event('error'));
+      recorders.last().finishStop();
+      await waitFor(() => !page.button('[data-screen-record-error]').hidden);
+
+      expect(page.button('[data-screen-record-section]').hidden).toBe(false);
+      expect(page.button('[data-screen-record-error]').textContent).toBe('record-after-stop');
+      expect(page.button('[data-screen-record-list]').children.length).toBe(0);
+    } finally {
+      timers.restore();
+    }
+  });
+});
+
+/** 1 本録画して一覧へ積み、行に出た文言をまとめて返す。 */
+async function recordOnce(locale: string): Promise<string> {
+  const page = fakePage({ locale });
+  const recorders = fakeRecorders();
+  new ScreenShareController(page.root, dependencies({ MediaRecorder: recorders.Constructor })).mount();
+  await startLive(page);
+
+  page.button('[data-screen-record]').click();
+  await waitFor(() => recorders.instances.length === 1);
+  recorders.last().emit(1024);
+  page.button('[data-screen-record]').click();
+  await waitFor(() => page.button('[data-screen-record-list]').children.length === 1);
+  return page.texts().join(' ');
+}
+
+describe('配信中パネルの延長', () => {
+  test('延長できたら期限を伸ばし、新しい publish token を publisher へ渡す', async () => {
+    const page = fakePage();
+    const tokens: string[] = [];
+    new ScreenShareController(page.root, dependencies({}, { tokens })).mount();
+    await startLive(page);
+    expect(page.button('[data-screen-expires]').textContent).toBe('60:00');
+
+    page.button('[data-screen-extend]').click();
+    await waitFor(() => page.button('[data-screen-expires]').textContent === '120:00');
+
+    expect(tokens).toEqual(['extended-token']);
+    expect(page.button('[data-screen-live-error]').hidden).toBe(true);
+    expect(page.button('[data-screen-extend]').disabled).toBe(false);
+  });
+
+  test('延長が無効なら配信中のまま理由を出し、ボタンを戻す', async () => {
+    const page = fakePage();
+    new ScreenShareController(page.root, dependencies({
+      requestJson: (async (url: string) => {
+        if (url.endsWith('/extend/')) throw new JsonRequestError(409, ERROR_CODES.streamExtensionDisabled);
+        return url.endsWith('/stop/') ? null : createResponse();
+      }) as unknown as ScreenShareDependencies['requestJson'],
+    })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-extend]').click();
+    await waitFor(() => !page.button('[data-screen-live-error]').hidden);
+
+    expect(page.button('[data-screen-live-error]').textContent).toBe('extension-disabled');
+    expect(page.step('live').hidden).toBe(false);
+    expect(page.button('[data-screen-extend]').disabled).toBe(false);
+    expect(page.button('[data-screen-extend]').labelSpan?.textContent).toBe('extend');
+  });
+
+  test('終了済みの配信への延長は、録画の完了を待って配信を閉じ理由を出す', async () => {
+    const page = fakePage();
+    // onstop は非同期。待たずに閉じると最後の録画を落とす。
+    const recorders = fakeRecorders({ asyncStop: true });
+    const stops: string[] = [];
+    deleteResourceCalls = 0;
+    new ScreenShareController(page.root, dependencies({
+      MediaRecorder: recorders.Constructor,
+      requestJson: (async (url: string) => {
+        if (url.endsWith('/extend/')) throw new JsonRequestError(409, ERROR_CODES.streamEnded);
+        if (url.endsWith('/stop/')) {
+          stops.push(url);
+          return null;
+        }
+        return createResponse();
+      }) as unknown as ScreenShareDependencies['requestJson'],
+    })).mount();
+    await startLive(page);
+
+    page.button('[data-screen-record]').click();
+    await waitFor(() => recorders.instances.length === 1);
+    recorders.last().emit(1024);
+
+    page.button('[data-screen-extend]').click();
+    await waitFor(() => !page.step('error').hidden);
+
+    expect(page.button('[data-screen-error-message]').textContent).toBe('stream-ended');
+    expect(page.step('live').hidden).toBe(true);
+    // 録画は取りこぼさずに一覧へ積んでから閉じる。
+    expect(recorders.last().stopCalls).toBe(1);
+    expect(page.button('[data-screen-record-list]').children.length).toBe(1);
+    // サーバー側は終了済みでも D1 行は live のまま残りうるので、冪等な停止通知と WHIP DELETE を 1 回ずつ送る。
+    expect(stops).toHaveLength(1);
+    expect(deleteResourceCalls).toBe(1);
+  });
+});
+
+async function startLive(page: ReturnType<typeof fakePage>): Promise<void> {
+  page.button('[data-screen-start]').click();
+  await waitFor(() => !page.step('live').hidden);
+}
+
+function dependencies(
+  overrides: Partial<ScreenShareDependencies> = {},
+  hooks: { tokens?: string[] } = {}
+): ScreenShareDependencies {
+  const track = { addEventListener: () => undefined, stop: () => undefined };
+  const stream = { getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] } as unknown as MediaStream;
+  return {
+    requestJson: (async (url: string) => {
+      if (url.endsWith('/extend/')) return {
+        id: 'Ab12Cd34Ef56', status: 'live', publishToken: 'extended-token',
+        publishTokenExpiresAt: '2026-09-01T02:00:00.000Z', extendExpiresAt: '2026-09-01T02:00:00.000Z',
+      };
+      if (url.endsWith('/stop/')) return null;
+      return createResponse();
+    }) as unknown as ScreenShareDependencies['requestJson'],
+    startWhipPublisher: async () => publisher(hooks.tokens ?? []),
+    waitForStreamReady: async () => true,
+    getDisplayMedia: async () => stream,
+    previewPreference: { load: () => null, save: () => undefined },
+    now: () => Date.parse('2026-09-01T00:00:00.000Z'),
+    sendBeacon: () => true,
+    onPageHide: () => undefined,
+    ...overrides,
+  };
+}
+
+function createResponse(): Record<string, unknown> {
+  return {
+    id: 'Ab12Cd34Ef56', streamUrl: 'rtspt://webscreen.tv/live/Ab12Cd34Ef56',
+    whipUrl: 'https://webscreen.tv/live/Ab12Cd34Ef56/whip', status: 'live',
+    publishToken: 'token', publishTokenExpiresAt: '2026-09-01T01:00:00.000Z',
+    extendExpiresAt: '2026-09-01T01:00:00.000Z', startedAt: '2026-09-01T00:00:00.000Z',
+    lastHeartbeatAt: '2026-09-01T00:00:00.000Z', endedAt: null, endReason: null,
+  };
+}
+
+let deleteResourceCalls = 0;
+
+function publisher(tokens: string[]): WhipPublisher {
+  return {
+    close: () => undefined,
+    deleteResource: async () => { deleteResourceCalls += 1; },
+    stop: async () => undefined,
+    republish: async () => publisher(tokens),
+    setPublishToken: (token: string) => { tokens.push(token); },
+    videoStats: async () => null,
+  };
+}
+
+/** 録画で使う MediaRecorder の差し替え。生成したインスタンスへテストから chunk を流す。 */
+function fakeRecorders(options: { supported?: string[]; asyncStop?: boolean; manualStop?: boolean } = {}): {
+  Constructor: MediaRecorderConstructor;
+  instances: FakeMediaRecorder[];
+  last: () => FakeMediaRecorder;
+} {
+  const instances: FakeMediaRecorder[] = [];
+  const supported = options.supported ?? ['video/webm'];
+  class Constructor extends FakeMediaRecorder {
+    static isTypeSupported(mimeType: string): boolean {
+      return supported.includes(mimeType);
+    }
+    constructor(stream: MediaStream, init?: MediaRecorderOptions) {
+      super(stream, init, options.asyncStop ?? false, options.manualStop ?? false);
+      instances.push(this);
+    }
+  }
+  return {
+    Constructor: Constructor as unknown as MediaRecorderConstructor,
+    instances,
+    last: () => instances[instances.length - 1]!,
+  };
+}
+
+class FakeMediaRecorder implements RecorderInstance {
+  state: 'inactive' | 'recording' | 'paused' = 'inactive';
+  mimeType: string;
+  stopCalls = 0;
+  ondataavailable: ((event: BlobEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  onstop: (() => void) | null = null;
+
+  constructor(
+    readonly stream: MediaStream,
+    init?: MediaRecorderOptions,
+    private readonly asyncStop = false,
+    private readonly manualStop = false
+  ) {
+    this.mimeType = init?.mimeType ?? '';
+  }
+
+  start(): void { this.state = 'recording'; }
+
+  stop(): void {
+    this.stopCalls += 1;
+    this.state = 'inactive';
+    // manualStop はテストが finishStop() で onstop を出す（完了を待たせる経路の検証用）。
+    if (this.manualStop) return;
+    if (this.asyncStop) queueMicrotask(() => this.onstop?.());
+    else this.onstop?.();
+  }
+
+  finishStop(): void { this.onstop?.(); }
+
+  emit(size: number): void {
+    this.ondataavailable?.({ data: new Blob([new Uint8Array(size)]) } as BlobEvent);
+  }
+}
+
+/** 録画一覧は DOM を組み立てる。bun には document が無いので最小の生成器を差す。 */
+function installFakeDocument(): () => void {
+  const had = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const original = Reflect.get(globalThis, 'document');
+  Reflect.set(globalThis, 'document', { createElement: () => new FakeElement() });
+  return () => {
+    if (had) Reflect.set(globalThis, 'document', original);
+    else Reflect.deleteProperty(globalThis, 'document');
+  };
+}
+
+function fakePage(options: { locale?: string } = {}): {
+  root: HTMLElement;
+  button: (selector: string) => FakeElement;
+  step: (phase: string) => FakeElement;
+  recordingAction: (index: number) => FakeElement;
+  texts: () => string[];
+} {
+  const elements = new Map<string, FakeElement>();
+  for (const selector of [
+    '[data-screen-start]', '[data-screen-retry]', '[data-screen-stop]', '[data-screen-url]',
+    '[data-screen-preview]', '[data-screen-elapsed]', '[data-screen-expires]',
+    '[data-screen-expiry-warning]', '[data-screen-audio-status]', '[data-screen-expires-bar]',
+    '[data-screen-audio-chip]', '[data-screen-audio-icon]', '[data-screen-audio-label]',
+    '[data-screen-extend]', '[data-screen-live-error]', '[data-screen-record]',
+    '[data-screen-record-icon]', '[data-screen-record-timer]', '[data-screen-record-elapsed]',
+    '[data-screen-record-error]', '[data-screen-record-empty]', '[data-screen-record-list]',
+    '[data-screen-record-section]', '[data-screen-record-controls]',
+    '[data-screen-error-message]',
+  ]) elements.set(selector, new FakeElement());
+  for (const selector of ['[data-screen-extend]', '[data-screen-record]']) {
+    elements.get(selector)!.labelSpan = new FakeElement();
+  }
+  const steps = ['idle', 'login', 'starting', 'live', 'error'].map((phase) => {
+    const step = new FakeElement();
+    step.dataset.screenStep = phase;
+    return step;
+  });
+  const root = {
+    dataset: {
+      labelStart: 'start', labelSelecting: 'selecting', labelStarting: 'starting', labelRetry: 'retry',
+      labelExtend: 'extend', labelRecordStart: 'rec-start', labelRecordStop: 'rec-stop',
+      labelRecordDownload: 'download',
+      labelRecordDownloadStarted: 'download-started',
+      locale: options.locale ?? 'ja',
+      recordFilenameBase: '録画 {number}', recordDetails: '{time} 開始 ・ {duration} ・ {size} MB',
+      msgRecordUnsupported: 'record-unsupported', msgRecordWriteFailed: 'record-write-failed',
+      msgRecordSizeLimit: 'record-size-limit', msgRecordTotalLimit: 'record-total-limit',
+      msgRecordAfterStop: 'record-after-stop',
+      msgStreamExtensionDisabled: 'extension-disabled', msgStreamEnded: 'stream-ended',
+      msgVideoOnly: 'video', msgDisplayDenied: 'denied', audioOn: 'audio-on', audioOff: 'audio-off',
+    },
+    querySelector: (selector: string) => elements.get(selector) ?? null,
+    querySelectorAll: (selector: string) => (selector === '[data-screen-step]' ? steps : []),
+  } as unknown as HTMLElement;
+  return {
+    root,
+    button: (selector) => elements.get(selector)!,
+    step: (phase) => steps.find((step) => step.dataset.screenStep === phase)!,
+    // 一覧の行は「情報 + 操作ボタン」の 2 要素で組み立てる。
+    recordingAction: (index) => elements.get('[data-screen-record-list]')!.children[index]!.children[1]!,
+    texts: () => elements.get('[data-screen-record-list]')!.descendantTexts(),
+  };
+}
+
+class FakeElement {
+  dataset: Record<string, string> = {};
+  children: FakeElement[] = [];
+  disabled = false;
+  hidden = false;
+  paused = false;
+  textContent = '';
+  value = '';
+  className = '';
+  type = '';
+  style = { width: '' };
+  srcObject: MediaStream | null = null;
+  labelSpan: FakeElement | null = null;
+  private readonly attributes = new Map<string, string>();
+  private readonly listeners: Array<() => void> = [];
+
+  pause(): void { this.paused = true; }
+  play(): Promise<void> { this.paused = false; return Promise.resolve(); }
+  querySelector(selector: string): FakeElement | null { return selector === 'span' ? this.labelSpan : null; }
+  setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
+  getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
+  addEventListener(event: string, listener: () => void): void { if (event === 'click') this.listeners.push(listener); }
+  click(): void { for (const listener of this.listeners) listener(); }
+  append(...children: FakeElement[]): void {
+    this.children.push(...children);
+    // 生成直後の要素は span を label として引けるようにする（setButtonLabel と同じ経路）。
+    this.labelSpan ??= children.find((child) => child.textContent !== '') ?? null;
+  }
+  prepend(child: FakeElement): void { this.children.unshift(child); }
+  descendantTexts(): string[] {
+    return this.children.flatMap((child) => [child.textContent, ...child.descendantTexts()])
+      .filter((text) => text.length > 0);
+  }
+}
+
+/** 書き込みの成否をテストから決められる保存先。write は解決するまで保留する。 */
+/** 録画停止の待ち上限（setTimeout）をテストから進めるための差し替え。 */
+function installFakeTimeouts(): { tick: (delay: number) => void; restore: () => void } {
+  const timeouts = new Map<number, { callback: () => void; delay: number }>();
+  let nextId = 1;
+  const original = globalThis.setTimeout;
+  const originalClear = globalThis.clearTimeout;
+  Reflect.set(globalThis, 'setTimeout', ((callback: () => void, delay = 0) => {
+    const id = nextId;
+    nextId += 1;
+    timeouts.set(id, { callback, delay });
+    return id as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout);
+  Reflect.set(globalThis, 'clearTimeout', ((id: ReturnType<typeof setTimeout>) => {
+    timeouts.delete(Number(id));
+  }) as typeof clearTimeout);
+  return {
+    tick(delay) {
+      const entry = [...timeouts.entries()].find(([, candidate]) => candidate.delay === delay);
+      if (!entry) throw new Error(`Expected a ${delay} ms timeout`);
+      timeouts.delete(entry[0]);
+      entry[1].callback();
+    },
+    restore() {
+      Reflect.set(globalThis, 'setTimeout', original);
+      Reflect.set(globalThis, 'clearTimeout', originalClear);
+    },
+  };
+}
+
+/** await 先が無い非同期処理を流し切る（microtask を数回回す）。 */
+async function settle(): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) await Promise.resolve();
+}
+
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (condition()) return;
+    await Promise.resolve();
+  }
+  throw new Error('Expected asynchronous UI update');
+}

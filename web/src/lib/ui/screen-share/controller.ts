@@ -6,16 +6,9 @@ import { currentAudioProfile, displayMediaConstraints } from './capture';
 import { LiveStreamSession, releasePublisher, StartRun } from './session';
 import { createStreamApi, type StreamApi } from './stream-api';
 import { resolveScreenShareVideoSettingsForSearch } from './video-profile';
-import {
-  currentSearch,
-  delay,
-  durationUntil,
-} from './controller-helpers';
-import {
-  isStreamIdNotReusableError,
-  ScreenShareView,
-  StreamHealthError,
-} from './view';
+import { RecordingController } from './recording';
+import { currentSearch, delay, durationUntil } from './controller-helpers';
+import { isStreamEndedError, isStreamIdNotReusableError, messageKeyForError, ScreenShareView, StreamHealthError } from './view';
 import { ScreenShareDiagnostics } from './controller-diagnostics';
 import { StreamRemoteCleanup } from './remote-cleanup';
 import { updateStreamClock } from './controller-clock';
@@ -38,6 +31,7 @@ export class ScreenShareControllerImpl {
   private reuseDisabled = false;
   private readonly diagnostics: ScreenShareDiagnostics;
   private readonly analytics: ScreenShareAnalyticsObserver;
+  private readonly recording: RecordingController;
   constructor(
     root: HTMLElement,
     private readonly deps: ScreenShareDependencies
@@ -45,19 +39,16 @@ export class ScreenShareControllerImpl {
     this.view = new ScreenShareView(root, deps.previewPreference);
     this.diagnostics = new ScreenShareDiagnostics(this.view, deps.now, deps.reportStreamFailure);
     this.analytics = new ScreenShareAnalyticsObserver(deps.trackAnalytics);
-    this.api = createStreamApi(
-      deps.requestJson,
-      deps.sendBeacon,
-      deps.delay,
-      deps.waitForStreamReady
-    );
+    this.api = createStreamApi(deps.requestJson, deps.sendBeacon, deps.delay, deps.waitForStreamReady);
     this.cleanup = new StreamRemoteCleanup(this.api);
+    this.recording = new RecordingController(this.view, deps);
   }
   mount(): void {
     // getDisplayMedia はクリック起点で直接呼び、user activation を失わない。
     bindScreenShareActions(this.view, this.deps.onPageHide, {
       start: (stopOthers) => void this.beginStart(stopOthers),
       copyUrl: () => void this.copyUrl(), copyDiagnostics: () => void this.copyDiagnostics(),
+      record: () => void this.toggleRecording(), extend: () => void this.extend(),
       stop: () => void this.stop(), retry: () => void this.retry(),
       pageHide: () => this.stopForPageHide(),
     });
@@ -97,7 +88,6 @@ export class ScreenShareControllerImpl {
       this.view.setDisabled('[data-screen-retry]', false);
     }
   }
-
   private async stopOthers(run: StartRun): Promise<void> {
     const stopped = await this.api.stopLive(run.abortController.signal);
     if (!this.isActiveRun(run)) return this.cancelStart(run);
@@ -105,7 +95,6 @@ export class ScreenShareControllerImpl {
     await (this.deps.delay ?? delay)(Math.max(stopped.retryAfterSeconds, 3) * 1000);
     if (!this.isActiveRun(run)) this.cancelStart(run);
   }
-
   private async continueStart(run: StartRun): Promise<void> {
     const started = await this.createAndPublish(run);
     if (!started) return;
@@ -131,7 +120,6 @@ export class ScreenShareControllerImpl {
     this.diagnostics.recordFailure('healthTimeout', stats, stream.capture.media);
     this.diagnostics.showError(new StreamHealthError(), true);
   }
-
   private async createAndPublish(run: StartRun): Promise<StartedStream | null> {
     let created;
     try {
@@ -156,7 +144,6 @@ export class ScreenShareControllerImpl {
     }
     return this.publishAndVerify(run, created);
   }
-
   private async publishAndVerify(
     run: StartRun,
     created: Awaited<ReturnType<StreamApi['create']>>
@@ -189,7 +176,6 @@ export class ScreenShareControllerImpl {
       throw error;
     }
   }
-
   private async verifyInitialStream(
     stream: LiveStreamSession,
     run: StartRun
@@ -238,7 +224,6 @@ export class ScreenShareControllerImpl {
     }
     return { live: stream, ready: retry.ready };
   }
-
   private async copyUrl(): Promise<void> {
     const input = this.view.urlInput();
     if (!input) return;
@@ -246,7 +231,6 @@ export class ScreenShareControllerImpl {
     this.view.setButtonLabel('[data-screen-copy]', copied ? 'labelCopied' : 'labelCopy');
     if (copied) this.analytics.emit('screen_share_url_copy');
   }
-
   private async copyDiagnostics(): Promise<void> {
     const snapshot = this.diagnostics.snapshotJson();
     if (!snapshot) return;
@@ -256,7 +240,34 @@ export class ScreenShareControllerImpl {
       copied ? 'labelDiagnosticsCopied' : 'labelDiagnosticsCopy'
     );
   }
-
+  /** 録画は配信中だけ操作できる。MediaStream は live session から借りる。 */
+  private toggleRecording(): Promise<void> {
+    const live = this.live;
+    return live ? this.recording.toggle(live.capture.media) : Promise.resolve();
+  }
+  private async extend(): Promise<void> {
+    const live = this.live;
+    if (!live || this.starts.isStopping) return;
+    this.view.setBusy('[data-screen-extend]', true, 'labelExtend');
+    this.view.setLiveError(null);
+    try {
+      const extended = await this.api.extend(live.id);
+      if (!this.isActiveLive(live)) return;
+      live.extendExpiresAt = extended.extendExpiresAt;
+      live.publishToken = extended.publishToken;
+      live.publishTokenExpiresAt = extended.publishTokenExpiresAt;
+      live.publisher.setPublishToken(extended.publishToken);
+      this.expiresBarTotalSeconds = durationUntil(live.extendExpiresAt, this.deps.now());
+      this.updateClock();
+    } catch (error) {
+      if (!this.isActiveLive(live)) return;
+      // 終了済みなら録画を確定してからローカルを閉じ、冪等な停止と WHIP DELETE を送る。
+      if (isStreamEndedError(error)) return void await this.stopWithRecording('error', error);
+      this.view.setLiveError(messageKeyForError(error));
+    } finally {
+      this.view.setBusy('[data-screen-extend]', false, 'labelExtend');
+    }
+  }
   private async retry(): Promise<void> {
     const live = this.live;
     if (!live) return this.beginStart(false);
@@ -286,12 +297,16 @@ export class ScreenShareControllerImpl {
       this.view.setBusy('[data-screen-retry]', false, this.live ? 'labelReconnect' : 'labelRetry');
     }
   }
-
   private async stop(): Promise<void> {
-    const live = this.finishLocally('idle');
+    await this.stopWithRecording('idle');
+  }
+  private async stopWithRecording(phase: 'idle' | 'error', error?: unknown): Promise<void> {
+    const run = this.starts.beginStop();
+    if (run === undefined) return;
+    if (this.recording.isActive) await this.recording.awaitRecordingStop();
+    const live = this.finishLocally(phase, error, run);
     if (live) await this.cleanup.stopAll(live);
   }
-
   private async heartbeat(): Promise<void> {
     const live = this.live;
     if (!live || this.starts.isStopping) return;
@@ -301,7 +316,6 @@ export class ScreenShareControllerImpl {
       if (!this.starts.isStopping && this.live === live) this.handleRuntimeError(error);
     }
   }
-
   private updateClock(): void {
     const live = this.live;
     if (!live) return;
@@ -310,24 +324,23 @@ export class ScreenShareControllerImpl {
       void this.stop();
     }
   }
-
   private handleStartError(error: unknown, media: MediaStream | null): void {
     this.diagnostics.handleStartError(error, media, Boolean(this.live));
   }
-
   /** live 表示に到達したら診断を捨てる（後続の別エラーで古い診断をコピーさせない）。 */
   private markLiveSuccess(stream: LiveStreamSession): void {
     this.diagnostics.markSuccess();
     this.analytics.ready(stream);
+    this.view.setLiveError(null);
+    this.view.setRecordingError(null);
   }
-
   private handleRuntimeError(error: unknown): void {
     const live = this.finishLocally('error', error);
     if (live) void this.cleanup.stopAll(live);
   }
-
-  private finishLocally(phase: 'idle' | 'error', error?: unknown): LiveStreamSession | null {
-    const run = this.starts.beginStop();
+  private finishLocally(
+    phase: 'idle' | 'error', error?: unknown, run = this.starts.beginStop()
+  ): LiveStreamSession | null {
     if (run === undefined) return null;
     const live = this.live;
     live?.abortController.abort();
@@ -340,16 +353,16 @@ export class ScreenShareControllerImpl {
     } else this.view.show('idle');
     return live;
   }
-
   private stopForPageHide(): void {
     const run = this.starts.current;
+    // pagehide は beacon を同期で送りきる必要があるため、録画は停止要求だけ出して待たない。
+    if (this.recording.isActive) void this.recording.stop();
     const live = this.finishLocally('idle');
     if (live) {
       void this.cleanup.stopLiveServer(live, true);
       void this.cleanup.deleteWhip(live);
     } else if (run) void this.cleanup.cancelStart(run, true);
   }
-
   private reserveStart(): number | null {
     const generation = this.starts.reserve(Boolean(this.live));
     if (generation === null) return null;
@@ -357,16 +370,13 @@ export class ScreenShareControllerImpl {
     this.diagnostics.reset();
     return generation;
   }
-
   private registerStart(media: MediaStream, generation: number): StartRun | null {
     const token = this.deps.createStartToken?.() ?? globalThis.crypto.randomUUID();
     return this.starts.register(media, generation, token, Boolean(this.live));
   }
-
   private cancelStart(run: StartRun): void {
     this.starts.cancel(run);
   }
-
   private discardInactiveRun(stream: LiveStreamSession, run: StartRun): null {
     this.cancelStart(run);
     if (this.live === stream) this.live = null;
@@ -374,21 +384,16 @@ export class ScreenShareControllerImpl {
     void this.cleanup.stopAll(stream);
     return null;
   }
-
   private isActiveStart(generation: number): boolean {
     return this.starts.isGenerationActive(generation);
   }
-
   private isActiveRun(run: StartRun): boolean {
     return this.starts.isRunActive(run);
   }
-
   private isActiveLive(live: LiveStreamSession): boolean {
     return !this.starts.isStopping && this.live === live;
   }
-
   private search(): string {
     return this.deps.search?.() ?? currentSearch();
   }
-
 }

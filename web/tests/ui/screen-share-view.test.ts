@@ -140,6 +140,8 @@ describe('画面共有の表示契約', () => {
 
     page.button('[data-screen-stop]').click();
     page.button('[data-screen-stop]').click();
+    // 停止は録画の完了待ちを挟むため、remote への通知は次の microtask で走る。
+    await waitFor(() => counters.deleted === 1);
 
     expect(counters).toEqual({ stopped: 2, closed: 1, deleted: 1 });
     expect(page.step('idle').hidden).toBe(false);

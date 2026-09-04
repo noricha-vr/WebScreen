@@ -43,6 +43,14 @@ describe('画面共有 stream API のHTTP契約', () => {
     ]);
   });
 
+  test('extendはPOSTとencode済みIDで期限・publish tokenを受け取る', async () => {
+    const state = recordingApi();
+    await expect(state.api.extend('Ab/12')).resolves.toMatchObject({
+      id: 'Ab/12', extendExpiresAt: '2026-09-01T02:00:00.000Z',
+    });
+    expect(state.calls).toEqual([{ url: '/api/streams/Ab%2F12/extend/', init: { method: 'POST' } }]);
+  });
+
   test('healthはencode済みIDのGETを同じsignalでpollする', async () => {
     const state = recordingApi();
     const signal = new AbortController().signal;
@@ -131,6 +139,19 @@ describe('画面共有 stream API の応答検証', () => {
     const api = apiReturning(response);
     await expect(api.waitForReady('Ab12Cd34Ef56')).rejects.toThrow('Invalid stream health response');
   });
+
+  test.each([
+    null,
+    { id: 'Ab12Cd34Ef56', status: 'live' },
+    { id: 'Ab12Cd34Ef56', status: 'ended', publishToken: 'token', publishTokenExpiresAt: 'x', extendExpiresAt: 'x' },
+    { ...extendResponse(), id: 'OtherId12345' },
+    { ...extendResponse(), publishToken: '' },
+    { ...extendResponse(), publishTokenExpiresAt: 'not-a-date', extendExpiresAt: 'not-a-date' },
+    { ...extendResponse(), extendExpiresAt: 'not-a-date' },
+    { ...extendResponse(), extendExpiresAt: '2026-09-01T03:00:00.000Z' },
+  ])('extendの不正応答を拒否する', async (response) => {
+    await expect(apiReturning(response).extend('Ab12Cd34Ef56')).rejects.toThrow('Invalid extend stream response');
+  });
 });
 
 const START_TOKEN = 'test-start-token';
@@ -148,6 +169,7 @@ function recordingApi(options: { beaconResult?: boolean } = {}) {
     calls.push({ url, init });
     if (url === '/api/streams/') return createResponse();
     if (url === '/api/streams/stop-live/') return { stopped: 1, retryAfterSeconds: 3 };
+    if (url.endsWith('/extend/')) return { ...extendResponse(), id: 'Ab/12' };
     if (url.endsWith('/health/')) {
       healthCalls += 1;
       return {
@@ -173,6 +195,16 @@ function recordingApi(options: { beaconResult?: boolean } = {}) {
 function apiReturning(response: unknown) {
   const request = (async () => response) as unknown as ScreenShareDependencies['requestJson'];
   return createStreamApi(request, () => false, async () => undefined);
+}
+
+function extendResponse(): Record<string, unknown> {
+  return {
+    id: 'Ab12Cd34Ef56',
+    status: 'live',
+    publishToken: 'extended-token',
+    publishTokenExpiresAt: '2026-09-01T02:00:00.000Z',
+    extendExpiresAt: '2026-09-01T02:00:00.000Z',
+  };
 }
 
 function createResponse(): Record<string, unknown> {
