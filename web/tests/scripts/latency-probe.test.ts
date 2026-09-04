@@ -31,6 +31,7 @@ import { resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scrip
 import { applyVideoProfile, cycleVideoProfiles, type VideoProfileEvaluator } from '../../scripts/latency-probe-profile';
 import { analyzeDirectory, clearPreviousRunArtifacts, headersForRewrittenBody, rewriteWhipUrlHost, screenShareUrl, syntheticHealthBody, validateRunOptions } from '../../scripts/latency-probe-run';
 import { parseFreezeLog, type SenderSample } from '../../scripts/latency-probe-quality';
+import { recordingDeadlineSeconds } from '../../scripts/latency-probe-player';
 
 function rasterize(timestampMs: number, cell = 20): { rgb: Uint8Array; width: number; height: number } {
   const width = BLOCK_GRID_SIZE * cell + 40;
@@ -440,5 +441,13 @@ describe('latency probe node host routing', () => {
     expect(rewriteWhipUrlHost(error, 'chi1.web-screen.net')).toBe(error);
     expect(rewriteWhipUrlHost('not json', 'chi1.web-screen.net')).toBe('not json');
     expect(rewriteWhipUrlHost('[1,2]', 'chi1.web-screen.net')).toBe('[1,2]');
+  });
+});
+
+describe('latency probe windows recording deadline', () => {
+  test('実時間の 1.5 倍 + 30 秒を待つ（VRChat 起動中の低速エンコードを吸収する）', () => {
+    expect(recordingDeadlineSeconds(10)).toBe(45);
+    expect(recordingDeadlineSeconds(480)).toBe(750);
+    expect(recordingDeadlineSeconds(8)).toBe(42);
   });
 });
