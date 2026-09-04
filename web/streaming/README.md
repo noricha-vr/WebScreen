@@ -53,9 +53,13 @@ Install differences from an origin node:
   # Ordered comma-separated `host` or `host:port` entries (default port 554).
   # The list is walked top-to-bottom on every pull attempt.
   ORIGINS="origin-a.example,origin-b.example"
-  # Optional: hostnames this replica answers to. If any ORIGINS host matches,
-  # the pull is refused (self-loop guard). Comma-separated, no port.
+  # Optional: hostnames this replica answers to. If any ORIGINS host matches
+  # (case-insensitive, port ignored), the pull is refused (self-loop guard).
+  # Hostnames or IPv4 only; IPv6 literals are rejected with exit 64.
   SELF_HOSTS="replica-1.example"
+  # Optional tuning (unsigned integers; anything else exits 64):
+  # REPLICA_SUSTAINED_PULL_SECONDS=5 REPLICA_MAX_RETRIES=3 REPLICA_BASE_BACKOFF_SECONDS=1
+  # RTSP_PORT is injected by MediaMTX (local egress port the pull publishes to; default 554).
   ```
 
 - Do **not** include this node's own hostname in `ORIGINS`. The self-loop guard exits `64` if you do, but keep the config correct on the writing side.

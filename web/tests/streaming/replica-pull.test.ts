@@ -175,6 +175,95 @@ describe('MediaMTX replica-pull hook', () => {
     expect(await readCallCount(fake)).toBe(2);
   });
 
+  it('持続したpullが切れたら先頭originから再試行し、再試行回数はリセットする', async () => {
+    // 1st call: hold for longer than REPLICA_SUSTAINED_PULL_SECONDS (1s) then drop with exit 1.
+    // 2nd call: exit 0 (clean close). The drop must re-enter the loop from origin-a, not advance to origin-b.
+    const fake = await fakeFfmpeg(
+      `if [[ "$call_num" == "1" ]]; then sleep 1.2; exit 1; fi\nexit 0`,
+    );
+    const child = Bun.spawn([replicaPull], {
+      env: {
+        ...process.env,
+        MTX_PATH: 'live/AbCdEf123456',
+        ORIGINS: 'origin-a.example,origin-b.example',
+        FFMPEG_BIN: fake.binary,
+        REPLICA_SUSTAINED_PULL_SECONDS: '1',
+        REPLICA_MAX_RETRIES: '0',
+        REPLICA_BASE_BACKOFF_SECONDS: '0',
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(await child.exited).toBe(0);
+    expect(await readCallCount(fake)).toBe(2);
+    const argsBlob = await readArgs(fake);
+    const calls = argsBlob.split('===call').filter((chunk) => chunk.length > 0);
+    expect(calls[0]).toContain('rtsp://origin-a.example:554/live/AbCdEf123456');
+    expect(calls[1]).toContain('rtsp://origin-a.example:554/live/AbCdEf123456');
+    expect(argsBlob).not.toContain('origin-b.example');
+  });
+
+  it('SELF_HOSTSの照合は大文字小文字とportの有無を無視し、IPv6リテラルは拒否する', async () => {
+    const fake = await fakeFfmpeg('exit 0');
+    const caseInsensitive = Bun.spawn([replicaPull], {
+      env: {
+        ...process.env,
+        MTX_PATH: 'live/AbCdEf123456',
+        ORIGINS: 'Replica-1.Example:554',
+        SELF_HOSTS: 'replica-1.example:554',
+        FFMPEG_BIN: fake.binary,
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(await caseInsensitive.exited).toBe(64);
+    const ipv6 = Bun.spawn([replicaPull], {
+      env: { ...process.env, MTX_PATH: 'live/AbCdEf123456', ORIGINS: '[::1]:554', FFMPEG_BIN: fake.binary },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(await ipv6.exited).toBe(64);
+    const badNumber = Bun.spawn([replicaPull], {
+      env: {
+        ...process.env,
+        MTX_PATH: 'live/AbCdEf123456',
+        ORIGINS: 'origin-a.example',
+        REPLICA_MAX_RETRIES: '3; echo pwned',
+        FFMPEG_BIN: fake.binary,
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(await badNumber.exited).toBe(64);
+    expect(await readCallCount(fake)).toBe(0);
+  });
+
+  it('SIGINT（MediaMTXの最終reader切断）で子ffmpegを止めて親を0で終了する', async () => {
+    const fake = await fakeFfmpeg(`
+trap 'printf "%s" terminated > "$TERM_MARKER"; exit 0' TERM
+printf "%s" ready > "$READY_MARKER"
+while :; do sleep 1; done
+`);
+    const marker = join(dirname(fake.binary), 'int-term-marker');
+    const readyMarker = join(dirname(fake.binary), 'int-ready-marker');
+    const child = Bun.spawn([replicaPull], {
+      env: {
+        ...process.env,
+        MTX_PATH: 'live/AbCdEf123456',
+        ORIGINS: 'origin-a.example',
+        FFMPEG_BIN: fake.binary,
+        TERM_MARKER: marker,
+        READY_MARKER: readyMarker,
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    await waitForMarker(readyMarker);
+    child.kill('SIGINT');
+    expect(await child.exited).toBe(0);
+    expect(await readFile(marker, 'utf8')).toBe('terminated');
+  });
+
   it('SIGTERMで子ffmpegを止めて親を0で終了する', async () => {
     const fake = await fakeFfmpeg(`
 trap 'printf "%s" terminated > "$TERM_MARKER"; exit 0' TERM

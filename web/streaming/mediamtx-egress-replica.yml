@@ -32,10 +32,11 @@ pathDefaults:
   overridePublisher: false
   # `runOnDemand` fires when a reader connects to a path that has no active publisher.
   # replica-pull.sh reads `MTX_PATH` (`live/{id}`) and pulls from ORIGINS in order.
-  # `runOnDemandRestart: no` keeps a full-origin-exhausted failure surfaced (no silent retry loop);
+  # `runOnDemandRestart: false` keeps a full-origin-exhausted failure surfaced (no silent retry loop);
   # `runOnDemandCloseAfter: 10s` lets a brief zero-reader gap avoid tearing down the pull.
+  # Booleans use true/false like the other MediaMTX files here (YAML 1.2 parsers treat `no` as a string).
   runOnDemand: /opt/webscreen/streaming/replica-pull.sh
-  runOnDemandRestart: no
+  runOnDemandRestart: false
   runOnDemandCloseAfter: 10s
 paths:
   "~^live/[A-Za-z0-9]{12}$": {}

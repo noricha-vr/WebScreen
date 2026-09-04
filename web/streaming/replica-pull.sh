@@ -67,6 +67,31 @@ trim_whitespace() {
   fi
 }
 
+require_unsigned_int() {
+  local name="$1" value="$2"
+  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    echo "replica-pull requires $name to be an unsigned integer" >&2
+    exit 64
+  fi
+}
+
+# The env file is root-owned, but bash arithmetic and IFS splitting still deserve a fail-closed gate:
+# a stray newline or a non-numeric value must stop the pull instead of being silently truncated.
+validate_env() {
+  require_unsigned_int REPLICA_SUSTAINED_PULL_SECONDS "$SUSTAINED_PULL_SECONDS"
+  require_unsigned_int REPLICA_MAX_RETRIES "$MAX_RETRIES"
+  require_unsigned_int REPLICA_BASE_BACKOFF_SECONDS "$BASE_BACKOFF_SECONDS"
+  require_unsigned_int REPLICA_RTSP_CONNECT_TIMEOUT_US "$RTSP_CONNECT_TIMEOUT_US"
+  require_unsigned_int RTSP_PORT "$LOCAL_RTSP_PORT"
+  local name
+  for name in ORIGINS SELF_HOSTS; do
+    if [[ "${!name:-}" == *$'\n'* ]]; then
+      echo "replica-pull refused $name containing a newline (use a single comma-separated line)" >&2
+      exit 64
+    fi
+  done
+}
+
 parse_origins_env() {
   local raw="${ORIGINS:-}"
   if [[ -z "$raw" ]]; then
@@ -78,7 +103,10 @@ parse_origins_env() {
   local entry cleaned
   for entry in "${raw_entries[@]}"; do
     cleaned="$(trim_whitespace "$entry")"
-    [[ -n "$cleaned" ]] && PARSED_ORIGINS+=("$cleaned")
+    [[ -z "$cleaned" ]] && continue
+    # Validate the host syntax up front (rejects IPv6 literals) even when SELF_HOSTS is unset.
+    origin_host "$cleaned" >/dev/null
+    PARSED_ORIGINS+=("$cleaned")
   done
   if (( ${#PARSED_ORIGINS[@]} == 0 )); then
     echo 'replica-pull requires ORIGINS to contain at least one non-empty entry' >&2
@@ -86,9 +114,16 @@ parse_origins_env() {
   fi
 }
 
+# Lower-cased host part of `host` or `host:port`. IPv6 literals are refused: the `%%:*` split and the
+# URL builder below only support one colon, and the self-loop guard would silently miss `[::1]`.
 origin_host() {
   local origin="$1"
-  printf '%s' "${origin%%:*}"
+  if [[ "$origin" == *\[* || "$origin" == *:*:* ]]; then
+    echo "replica-pull does not support IPv6 literals in ORIGINS/SELF_HOSTS ($origin); use a hostname or IPv4" >&2
+    exit 64
+  fi
+  local host="${origin%%:*}"
+  printf '%s' "${host,,}"
 }
 
 enforce_self_loop_guard() {
@@ -102,6 +137,8 @@ enforce_self_loop_guard() {
     for self_host in "${self_entries[@]}"; do
       cleaned_self="$(trim_whitespace "$self_host")"
       [[ -z "$cleaned_self" ]] && continue
+      # Compare host parts case-insensitively; a stray `:port` in SELF_HOSTS must not defeat the guard.
+      cleaned_self="$(origin_host "$cleaned_self")"
       if [[ "$host" == "$cleaned_self" ]]; then
         echo "replica-pull refused an ORIGINS entry that matches SELF_HOSTS ($host)" >&2
         exit 64
@@ -171,6 +208,7 @@ pull_loop() {
 }
 
 stream_id="$(require_stream_id)"
+validate_env
 parse_origins_env
 enforce_self_loop_guard "${PARSED_ORIGINS[@]}"
 pull_loop "$stream_id" "${PARSED_ORIGINS[@]}"
