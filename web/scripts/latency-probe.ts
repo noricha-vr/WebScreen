@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { analyzeDirectory, loginProfile, runLatencyProbe, switchSource, validateNodeHost, validateReadHost, type RunOptions } from './latency-probe-run';
+import { validateNotifyChannelId } from './latency-probe-notify';
 import { checkWindowsRecording } from './latency-probe-player';
 
 const HELP = `Usage: bun scripts/latency-probe.ts <subcommand> [options]
@@ -82,7 +83,7 @@ export function parseLatencyProbeArgs(argv: readonly string[]):
   if (values['server-snap'] !== undefined && !isValidSshHost(values['server-snap'])) throw new Error('--server-snap must be an ssh host name');
   if (values['node-host'] !== undefined) validateNodeHost(values['node-host']);
   if (values['read-host'] !== undefined) validateReadHost(values['read-host']);
-  if (values['notify-discord'] !== undefined && !/^\d{15,25}$/.test(values['notify-discord'])) throw new Error('--notify-discord must be a Discord channel id');
+  if (values['notify-discord'] !== undefined) validateNotifyChannelId(values['notify-discord']);
   if (values['stream-id'] !== undefined && !/^[A-Za-z0-9]{12}$/.test(values['stream-id'])) throw new Error('--stream-id must be a 12-character alphanumeric ID');
   const minutes = Number(values.minutes);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) throw new Error('--minutes must be an integer between 1 and 120');

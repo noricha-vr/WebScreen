@@ -27,10 +27,10 @@ import {
   encodeMonoWav,
 } from '../../scripts/latency-probe-codec';
 import { parseLatencyProbeArgs } from '../../scripts/latency-probe';
-import { resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
+import { requirePipe, resolveAbsoluteAudioLatency, shouldLogDecodeFailure } from '../../scripts/latency-probe-observe';
 import { applyVideoProfile, cycleVideoProfiles, type VideoProfileEvaluator } from '../../scripts/latency-probe-profile';
 import { analyzeDirectory, clearPreviousRunArtifacts, headersForRewrittenBody, rewriteWhipUrlHost, screenShareUrl, syntheticHealthBody, validateReadHost, validateRunOptions } from '../../scripts/latency-probe-run';
-import { NOTIFY_COMMAND_ENV, buildNotifyArgv, notifyCommandTemplate, notifyStdinJson, notifyStreamUrl, parseCommandLine, type NotifyChild } from '../../scripts/latency-probe-notify';
+import { NOTIFY_COMMAND_ENV, NOTIFY_STDERR_TRUNCATED_SUFFIX, buildNotifyArgv, notifyCommandTemplate, notifyStdinJson, notifyStreamUrl, parseCommandLine, warnNotifyCommandMissing, type NotifyChild, type NotifySpawn } from '../../scripts/latency-probe-notify';
 import { parseFreezeLog, type SenderSample } from '../../scripts/latency-probe-quality';
 import { recordingDeadlineSeconds } from '../../scripts/latency-probe-player';
 
@@ -160,6 +160,8 @@ describe('latency probe video profiles', () => {
     await expect(applyVideoProfile(evaluator, 'other' as 'quality', 1_500_000, 1_000)).rejects.toThrow('video profile');
     expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: 999_999, abCycleSeconds: null, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null, streamId: null, nodeHost: null, readHost: null })).toThrow('maxBitrate');
     expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: 1_500_000, abCycleSeconds: 59, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: null, serverSnapHost: null, streamId: null, nodeHost: null, readHost: null })).toThrow('cycleSeconds');
+    // CLI を通さず runLatencyProbe を直接呼ぶ経路でも、通知先 ID を CLI と同じ規則で弾く
+    expect(() => validateRunOptions({ minutes: 1, source: 'https://example.test', player: null, profileDir: '/tmp/profile', outDir: '/tmp/out', videoProfile: 'quality', maxBitrate: null, abCycleSeconds: null, scrollPixelsPerSecond: 0, outletQualitySeconds: 20, notifyDiscordChannelId: '12345', serverSnapHost: null, streamId: null, nodeHost: null, readHost: null })).toThrow('notify-discord');
   });
 
   test('sender差し替え時は5秒ポーリングで同じプロファイルを再適用する', async () => {
@@ -546,7 +548,7 @@ describe('latency probe notify command', () => {
     const recorder = recordingSpawn(0);
     const info = spyOn(console, 'info').mockImplementation(() => undefined);
     try {
-      await notifyStreamUrl({ template, url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200, spawn: recorder.spawn });
+      await notifyStreamUrl({ template: template ?? [], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200, spawn: recorder.spawn });
     } finally { info.mockRestore(); }
     expect(recorder.calls).toHaveLength(1);
     expect(recorder.calls[0]?.argv).toContain('配信: rtspt://host/live/AbCdEf123456');
@@ -555,10 +557,10 @@ describe('latency probe notify command', () => {
     expect(notifyStdinJson({ url: 'u', channel: 'c' }).endsWith('\n')).toBe(true);
   });
 
-  test('未設定なら警告だけ出して例外にせず計測を続行する', async () => {
+  test('未設定なら警告だけ出して例外にせず計測を続行する', () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      await notifyStreamUrl({ template: null, url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200 });
+      warnNotifyCommandMissing();
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0]?.[0])).toContain(NOTIFY_COMMAND_ENV);
     } finally { warn.mockRestore(); }
@@ -581,8 +583,6 @@ describe('latency probe notify command', () => {
     } finally { info.mockRestore(); }
   });
 
-  // docs の注入例と同じ形（$HOME 展開後の絶対パス + 引用符つきメッセージ）が argv へ落ちることを確認する。
-  // 実パスは書かない（リポジトリに個人環境の固定パスを残さないのが本変更の目的）。
   test('固まったコマンドはタイムアウトで kill して警告に落とす', async () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
     const startedAt = Date.now();
@@ -594,6 +594,56 @@ describe('latency probe notify command', () => {
     expect(Date.now() - startedAt).toBeLessThan(5_000);
   });
 
+  test('存在しないコマンドでも spawn の同期例外を警告に落として run を止めない', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      // Bun.spawn は実行ファイルが無いと同期で ENOENT を投げる（実プロセスでの回帰確認）
+      await notifyStreamUrl({ template: ['/nonexistent/webscreen-notify-xyz', '{channel}'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200 });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain('/nonexistent/webscreen-notify-xyz');
+      expect(String(warn.mock.calls[0]?.[0])).toContain('起動できませんでした');
+    } finally { warn.mockRestore(); }
+  });
+
+  test('SIGTERM を無視する子も期限内に打ち切り、SIGKILL まで上げて残さない', async () => {
+    const exits: Promise<number>[] = [];
+    const spawn: NotifySpawn = (argv, stdin) => {
+      const child = Bun.spawn([...argv], { stdin, stdout: 'ignore', stderr: 'pipe' });
+      exits.push(child.exited);
+      return { exited: child.exited, stderr: requirePipe(child.stderr, 'test notify stderr'), kill: (signal) => child.kill(signal) };
+    };
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    const startedAt = Date.now();
+    try {
+      await notifyStreamUrl({
+        template: [process.execPath, '-e', "process.on('SIGTERM', () => {}); setTimeout(() => {}, 30_000)"],
+        url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 300, spawn,
+      });
+      expect(String(warn.mock.calls[0]?.[0])).toContain('exit -1');
+    } finally { warn.mockRestore(); }
+    // 期限 + kill 猶予 + stderr 猶予の合計で返ること（stderr の EOF 待ちで 30 秒引きずらない）
+    expect(Date.now() - startedAt).toBeLessThan(3_000);
+    // 30 秒の孤児を残さない（SIGTERM だけでは死なないので SIGKILL まで上げられているか）
+    expect(await Promise.race([exits[0] ?? Promise.resolve(0), Bun.sleep(1_000).then(() => 'alive')])).not.toBe('alive');
+  });
+
+  test('stderr は上限で切り詰めて警告に載せる', async () => {
+    const noisy: NotifySpawn = () => ({
+      exited: Promise.resolve(1),
+      stderr: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('e'.repeat(10_000))); controller.close(); } }),
+      kill: () => undefined,
+    });
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await notifyStreamUrl({ template: ['notify'], url: 'rtspt://host/live/AbCdEf123456', channel: '123456789012345678', timeoutMs: 200, spawn: noisy });
+      const message = String(warn.mock.calls[0]?.[0]);
+      expect(message.match(/e{2,}/)?.[0]).toHaveLength(4_096);
+      expect(message).toContain(NOTIFY_STDERR_TRUNCATED_SUFFIX);
+    } finally { warn.mockRestore(); }
+  });
+
+  // docs の注入例と同じ形（$HOME 展開後の絶対パス + 引用符つきメッセージ）が argv へ落ちることを確認する。
+  // 実パスは書かない（リポジトリに個人環境の固定パスを残さないのが本変更の目的）。
   test('docs の通知コマンド例が argv へ分解できる', () => {
     const template = notifyCommandTemplate(`bun /Users/example/notify-discord.ts --message '遅延計測の配信を開始しました。VRChat に貼ってください: {url}' --target nori --channel-id {channel} --project-dir .`);
     expect(template?.[0]).toBe('bun');
