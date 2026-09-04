@@ -5,6 +5,11 @@ DISCORD_CLIENT_SECRET=your_discord_client_secret
 # ws_session / ws_oauth_state の HMAC-SHA256 署名鍵
 SESSION_SIGNING_KEY=replace_with_a_long_random_value
 
+# R2 S3 API 署名用。通常の mock E2E では不要なので空のままにする。
+# 本番値をこの git 管理ファイルやローカル開発用ファイルへコピーしない。
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+
 # MediaMTX publish JWT の RS256 秘密鍵（PKCS#8 DER を base64 化した値）。
 # 生成例: openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | \
 #   openssl pkcs8 -topk8 -nocrypt -outform DER | openssl base64 -A
