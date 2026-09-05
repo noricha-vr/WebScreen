@@ -1,5 +1,6 @@
 import { captureServerSnapshots, snapshotScheduleSeconds } from './latency-probe-server-snap';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
 import { formatLatencyCsv, formatSummary, type LatencySample } from './latency-probe-analysis';
@@ -35,8 +36,12 @@ export interface RunOptions {
   /** 視聴先だけを差し替える `host` または `host:port`。null なら nodeHost、それも null なら webscreen.tv。 */
   readHost: string | null;
 }
-interface ActiveController { endpoint: string; sourceUrl: string }
-interface ControllerState { sourcePage: import('@playwright/test').Page | null; sourceUrl: string; sourceServerUrl: string }
+interface ActiveController { endpoint: string; sourceUrl: string; token: string }
+/** controller が参照・更新する実行中ハーネスの状態。 */
+export interface ControllerState { sourcePage: import('@playwright/test').Page | null; sourceUrl: string; sourceServerUrl: string }
+interface ControllerRequestBody { url?: unknown; scrollPixelsPerSecond?: unknown }
+
+const CONTROLLER_BODY_LIMIT_BYTES = 4 * 1024;
 
 const browserLog: string[] = [];
 function pushBrowserLog(line: string): void { browserLog.push(`${new Date().toISOString()} ${line}`); if (browserLog.length > 80) browserLog.shift(); }
@@ -53,9 +58,10 @@ export async function runLatencyProbe(options: RunOptions): Promise<void> {
   await clearPreviousRunArtifacts(options.outDir);
   const sourceServer = startSourceServer();
   const state: ControllerState = { sourcePage: null, sourceUrl: sourceServer.url.href, sourceServerUrl: sourceServer.url.href };
-  const controllerServer = startControllerServer(state);
+  const controllerToken = randomBytes(32).toString('hex');
+  const controllerServer = startControllerServer(state, controllerToken);
   await mkdir(resolve('..', 'docs', 'tmp', 'latency'), { recursive: true });
-  await writeFile(ACTIVE_FILE, JSON.stringify({ endpoint: controllerServer.url.href, sourceUrl: sourceServer.url.href }));
+  await writeActiveController({ endpoint: controllerServer.url.href, sourceUrl: sourceServer.url.href, token: controllerToken });
   let startedAtMs = 0;
   const outlet: LatencySample[] = [];
   let browser: import('@playwright/test').BrowserContext | null = null;
@@ -175,7 +181,7 @@ export async function loginProfile(profileDir: string, timeoutMs = 8 * 60_000): 
 /** 動作中ハーネスの共有済みタブを指定URLへ遷移する。 */
 export async function switchSource(url: string, scrollPixelsPerSecond = 0): Promise<void> {
   const active = JSON.parse(await readFile(ACTIVE_FILE, 'utf8')) as ActiveController;
-  const response = await fetch(new URL('/source', active.endpoint), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, scrollPixelsPerSecond }) });
+  const response = await fetch(new URL('/source', active.endpoint), { method: 'POST', headers: { Authorization: `Bearer ${active.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ url, scrollPixelsPerSecond }) });
   if (!response.ok) throw new Error(`source switch failed: ${await response.text()}`);
 }
 
@@ -304,11 +310,17 @@ function startSourceServer(): ReturnType<typeof Bun.serve> {
   } });
 }
 
-function startControllerServer(state: ControllerState): ReturnType<typeof Bun.serve> {
+/** 認証済みの source 切替要求だけを受け付けるローカル controller を起動する。 */
+export function startControllerServer(state: ControllerState, token: string): ReturnType<typeof Bun.serve> {
   return Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
     const url = new URL(request.url);
     if (request.method !== 'POST' || url.pathname !== '/source') return new Response('Not found', { status: 404 });
-    const body = await request.json().catch(() => null) as { url?: unknown; scrollPixelsPerSecond?: unknown } | null;
+    if (!hasValidControllerToken(request.headers.get('authorization'), token)) return new Response('Unauthorized', { status: 401 });
+    if (request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') return new Response('Content-Type must be application/json', { status: 400 });
+    const bodyText = await readControllerBody(request);
+    if (bodyText === null) return new Response('request body must not exceed 4 KB', { status: 400 });
+    let body: ControllerRequestBody | null = null;
+    try { body = JSON.parse(bodyText) as ControllerRequestBody; } catch { /* invalid JSON is handled as a bad request below */ }
     if (!body || typeof body.url !== 'string') return new Response('url is required', { status: 400 });
     const target = resolveSourceUrl(body.url, new URL(state.sourceServerUrl));
     if (!state.sourcePage) return new Response('run is not ready', { status: 409 });
@@ -317,6 +329,45 @@ function startControllerServer(state: ControllerState): ReturnType<typeof Bun.se
     await applyAutoScroll(state.sourcePage, target, state.sourceServerUrl, body.scrollPixelsPerSecond); state.sourceUrl = target;
     return Response.json({ ok: true, sourceUrl: target });
   } });
+}
+
+function hasValidControllerToken(authorization: string | null, token: string): boolean {
+  const match = /^bearer\s+(\S+)$/i.exec(authorization ?? '');
+  if (!match) return false;
+  const supplied = new TextEncoder().encode(match[1]);
+  const expected = new TextEncoder().encode(token);
+  return supplied.byteLength === expected.byteLength && timingSafeEqual(supplied, expected);
+}
+
+async function writeActiveController(active: ActiveController): Promise<void> {
+  const temporaryFile = `${ACTIVE_FILE}.tmp-${process.pid}-${randomBytes(8).toString('hex')}`;
+  try {
+    await writeFile(temporaryFile, JSON.stringify(active), { flag: 'wx', mode: 0o600 });
+    await chmod(temporaryFile, 0o600);
+    await rename(temporaryFile, ACTIVE_FILE);
+  } finally { await rm(temporaryFile, { force: true }); }
+}
+
+async function readControllerBody(request: Request): Promise<string | null> {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > CONTROLLER_BODY_LIMIT_BYTES)) return null;
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      byteLength += value.byteLength;
+      if (byteLength > CONTROLLER_BODY_LIMIT_BYTES) { await reader.cancel(); return null; }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const body = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(body);
 }
 
 async function startChrome(profileDir: string): Promise<import('@playwright/test').BrowserContext> {

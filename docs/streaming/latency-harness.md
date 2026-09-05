@@ -18,6 +18,8 @@ bun scripts/latency-probe.ts source --url https://example.com/ --scroll 240
 bun scripts/latency-probe.ts analyze docs/tmp/latency/<UTC timestamp>
 ```
 
+`source` は `run` と同じマシン・同じユーザーから実行する。切替には `docs/tmp/latency/.active.json`（mode `0600`）に保存された実行中トークンが必要。
+
 - 初回だけ既定プロファイル `~/.webscreen-harness/chrome-profile` で `bun scripts/latency-probe.ts login` を実行し、開いたChromeでWebScreenへ手動ログインする。未ログイン時は開始せず終了する。
 - `--source` の `127.0.0.1:0` は起動時の空きポートへ置換される。`?tones=1` は左右チャンネル確認用の小さな持続音（220 / 330 Hz、ゆっくり揺らぐ）も加える。
 - 計測ページは復号用の格子の左に秒針つきアナログ時計、右に `HH:MM:SS.mmm`（配信元 PC のローカル時刻）を描く。VRChat 実機で隣にブラウザの同じページ（または任意の時計）を並べれば、Windows 全画面録画のフレームから目視でも遅延を読める。どちらも格子の隔離矩形の外に描くので復号には影響しない（plain / heavy / 800x600 で確認済み）
