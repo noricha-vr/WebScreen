@@ -65,7 +65,12 @@ bun scripts/latency-probe.ts run --minutes 8 --source 'http://127.0.0.1:0/latenc
 
 ## 落とし穴
 
-- run ごとに配信 URL は変わる。古い URL は再生できない
+- run ごとに配信 URL は変わる。古い URL は再生できない。**同じ URL を使い回すには `--stream-id {前回の ID}` を付ける**（終了済みで自分が所有する ID だけ）。貼る手間が 1 回で済む
+- **貼る前にワールドへ入り直す**。前の配信が終わった直後に貼ると Player Error になり、そのまま run が終わる（2026-09-05 実測: 8 分すべて Player Error）
+- **`--player win2022` の前に Windows 側を確認する**（2026-09-05 実測。どれか 1 つでも欠けると録画は「成功」しても標本 0 になる）
+  - 物理モニターが点いている（消灯中は gdigrab が最後のフレームを返し続ける。`powercfg /q SCHEME_CURRENT SUB_VIDEO VIDEOIDLE` の AC が 0x78 = 120 秒。run 中は `powercfg /change monitor-timeout-ac 0`、終わったら `2`（分）に戻す）
+  - コミット（仮想メモリ）に空きがある（`(Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory`。Docker Desktop の backend が 99 GB 掴んで dwm.exe が落ち、録画も VRChat も止まった。Docker Desktop は終了しておく）
+  - プレイヤーを正面から映す（少し斜めでも軸走査の同期パターン探索が外れて `sync-pattern-not-found` になる）
 - 前の配信が終わった直後に新しい URL を貼ると Player Error になることがある。ワールドに入り直してから貼る
 - Windows 側の遅延の絶対値は録画時間基準に約 1 秒のオフセットがあり得る（frame 番号 / 30 fps で復元しているため）。同じ run 内の A と B の相対比較に使う
 - 連続 run の間は 20 秒以上空ける。残留 Chrome は `pgrep -f webscreen-harness/chrome-profile` で確認する
