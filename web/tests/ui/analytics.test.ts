@@ -21,10 +21,10 @@ const PARAMETERS: AnalyticsEventParameterMap['convert_complete'] = {
 describe('GA4 製品イベント契約', () => {
   test('page locationと同一origin referrerからquery/hashを除く', () => {
     expect(analyticsPageConfig(
-      { origin: 'https://web-screen.net', pathname: '/ja/screen-share/' },
-      'https://web-screen.net/ja/?stream-id=Secret123456#live'
+      { origin: 'https://web-screen.net', pathname: '/ja/web/' },
+      'https://web-screen.net/ja/?short-id=Secret123456#done'
     )).toEqual({
-      page_location: 'https://web-screen.net/ja/screen-share/',
+      page_location: 'https://web-screen.net/ja/web/',
       page_referrer: 'https://web-screen.net/ja/',
     });
   });
@@ -43,8 +43,8 @@ describe('GA4 製品イベント契約', () => {
       page_referrer: '',
     });
     expect(
-      analyticsPageConfig(page, 'https://web-screen.net/ja/screen-share/')?.page_referrer
-    ).toBe('https://web-screen.net/ja/screen-share/');
+      analyticsPageConfig(page, 'https://web-screen.net/ja/web/')?.page_referrer
+    ).toBe('https://web-screen.net/ja/web/');
   });
 
   test('公開IDを含む現在パスでは初期設定自体を送らない', () => {
@@ -56,7 +56,7 @@ describe('GA4 製品イベント契約', () => {
 
   test.each([
     ['/ja/', false],
-    ['/ja/screen-share/', false],
+    ['/ja/web/', false],
     ['/en/video-player/', false],
     ['/Ab12Cd34Ef56/', true],
     ['/ja/Ab12Cd34Ef56', true],
@@ -68,10 +68,10 @@ describe('GA4 製品イベント契約', () => {
     if (false) {
       dispatchAnalyticsEvent(
         { hostname: 'web-screen.net' },
-        'screen_share_ready',
+        'tool_nav_click',
         {
-          tool: 'screen_share', source: 'screen_share_page', locale: 'ja',
-          // @ts-expect-error screen_share 系へ input_kind は送れない。
+          tool: 'convert', source: 'header', locale: 'ja',
+          // @ts-expect-error tool_nav_click へ input_kind は送れない。
           input_kind: 'image',
         }
       );
@@ -83,11 +83,8 @@ describe('GA4 製品イベント契約', () => {
     expect(true).toBe(true);
   });
 
-  test('許可する9イベントを固定する', () => {
+  test('許可する6イベントを固定する', () => {
     expect(ANALYTICS_EVENT_NAMES).toEqual([
-      'screen_share_start',
-      'screen_share_ready',
-      'screen_share_url_copy',
       'convert_start',
       'convert_complete',
       'convert_url_copy',
@@ -136,11 +133,18 @@ describe('GA4 製品イベント契約', () => {
       parameters: object
     ) => void;
 
-    unsafeDispatch(environment, 'screen_share_ready', {
-      tool: 'screen_share', source: 'screen_share_page', locale: 'ja', input_kind: 'image',
+    unsafeDispatch(environment, 'tool_nav_click', {
+      tool: 'convert', source: 'header', locale: 'ja', input_kind: 'image',
     });
-    unsafeDispatch(environment, 'screen_share_secret', {
+    unsafeDispatch(environment, 'convert_secret', {
+      tool: 'convert', source: 'home', locale: 'ja', input_kind: 'image',
+    });
+    // 削除した画面共有のイベント名・tool 値は実行時にも通さない。
+    unsafeDispatch(environment, 'screen_share_ready', {
       tool: 'screen_share', source: 'screen_share_page', locale: 'ja',
+    });
+    unsafeDispatch(environment, 'tool_nav_click', {
+      tool: 'screen_share', source: 'header', locale: 'ja',
     });
 
     expect(calls).toEqual([]);
@@ -180,22 +184,19 @@ describe('GA4 製品イベント契約', () => {
   test('gtag不在・例外でも呼び出し元へ例外を返さない', () => {
     expect(() => dispatchAnalyticsEvent(
       { hostname: 'web-screen.net' },
-      'screen_share_ready',
-      { tool: 'screen_share', source: 'screen_share_page', locale: 'en' }
+      'tool_nav_click',
+      { tool: 'convert', source: 'header', locale: 'en' }
     )).not.toThrow();
     expect(() => dispatchAnalyticsEvent(
       { hostname: 'web-screen.net', gtag: (() => { throw new Error('blocked'); }) as AnalyticsGtag },
-      'screen_share_ready',
-      { tool: 'screen_share', source: 'screen_share_page', locale: 'en' }
+      'tool_nav_click',
+      { tool: 'convert', source: 'header', locale: 'en' }
     )).not.toThrow();
   });
 
   test('現在パスをhome・専用ページだけへ変換し、他パスは拒否する', () => {
     expect(pageContext('/ja/', 'convert')).toEqual({ source: 'home', locale: 'ja' });
-    expect(pageContext('/en/screen-share/', 'screen_share')).toEqual({
-      source: 'screen_share_page',
-      locale: 'en',
-    });
+    expect(pageContext('/en/screen-share/', 'convert')).toBeNull();
     expect(pageContext('/ja/convert/', 'convert')).toEqual({ source: 'convert_page', locale: 'ja' });
     expect(pageContext('/ja/preview/', 'convert')).toBeNull();
     expect(pageContext('/fr/', 'convert')).toBeNull();

@@ -48,16 +48,14 @@ test('og.png が宣言どおりの実寸で配信される', async ({ request })
 });
 
 test.describe('用途別ページのメタ情報', () => {
-  /** sitemap に載せた用途別ページ（ja / en）。パンくずと description を持つのはこの 10 本だけ。 */
+  /** sitemap に載せた用途別ページ（ja / en）。パンくずと description を持つのはこの 8 本だけ。 */
   const USE_CASE_PATHS = [
     '/ja/web/',
     '/ja/video-player/',
-    '/ja/screen-share/',
     '/ja/image/',
     '/ja/pdf/',
     '/en/web/',
     '/en/video-player/',
-    '/en/screen-share/',
     '/en/image/',
     '/en/pdf/',
   ] as const;
@@ -125,14 +123,6 @@ test.describe('用途別ページのメタ情報', () => {
       expect(withoutMeta).not.toContain(description);
     });
   }
-
-  test('画面共有ページは確定した検索タイトルを出す', async ({ request }) => {
-    const ja = await (await request.get('/ja/screen-share/')).text();
-    const en = await (await request.get('/en/screen-share/')).text();
-
-    expect(ja).toContain('<title>VRChat で画面共有する方法 — OBS 不要・ブラウザだけ | WebScreen</title>');
-    expect(en).toContain('<title>How to share your screen in VRChat — no OBS, just your browser | WebScreen</title>');
-  });
 
   // パンくずを持たないページに出すと、階層の無いところに階層を主張することになる。
   for (const path of ['/ja/', '/en/', '/ja/privacy/', '/en/privacy/', '/ja/terms/', '/en/terms/'] as const) {

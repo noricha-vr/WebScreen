@@ -10,7 +10,7 @@
   // 本体（web/wrangler.jsonc）と揃える。片方だけ上げると同じ D1 / R2 を
   // 別挙動の runtime で触ることになるため、上げる時は両方同時に上げる。
   "compatibility_date": "2026-08-18",
-  // 式は cron/src/index.ts の RETENTION_CRON / ALERT_CRON / STREAM_CRON と一致させること
+  // 式は cron/src/index.ts の RETENTION_CRON / ALERT_CRON と一致させること
   // （知らない式は index.ts が error ログにして何もしない）。
   //   17 分 … 保持期間バッチ本体。0 分ちょうどは Cloudflare 全体のスケジュール集中で
   //           遅延しやすいので外している。
@@ -19,7 +19,7 @@
   //           通知先は secret DISCORD_ALERT_WEBHOOK_URL（wrangler.jsonc には書けない）:
   //             bunx wrangler secret put DISCORD_ALERT_WEBHOOK_URL -c cron/wrangler.jsonc
   "triggers": {
-    "crons": ["17 * * * *", "47 * * * *", "* * * * *"]
+    "crons": ["17 * * * *", "47 * * * *"]
   },
   "observability": {
     "enabled": true
@@ -32,15 +32,7 @@
   //   bunx wrangler secret put CLOUDFLARE_PURGE_TOKEN -c cron/wrangler.jsonc
   "vars": {
     "R2_PUBLIC_BASE_URL": "https://cdn.web-screen.net",
-    "CLOUDFLARE_ZONE_ID": "2210192b51f9f0eb6761d70341ca09b0",
-    "STREAM_NO_VIEWER_SECONDS": "600",
-    "STREAM_HEARTBEAT_SECONDS": "60",
-    // 1 read egress nodeの1日上限（bytes）。日付境界はJST仮定で、Indigo側は未確認。
-    "NODE_EGRESS_DAILY_LIMIT_BYTES": "160000000000",
-    "MEDIAMTX_INGRESS_API_URL": "https://stream.web-screen.net",
-    "MEDIAMTX_EGRESS_API_URL": "https://stream.web-screen.net",
-    // origin を含む全 read egress。2 台目追加時はカンマ区切りで URL を増やす。
-    "MEDIAMTX_READ_EGRESS_API_URLS": "https://stream.web-screen.net,https://chi1.web-screen.net"
+    "CLOUDFLARE_ZONE_ID": "2210192b51f9f0eb6761d70341ca09b0"
   },
   "d1_databases": [
     {

@@ -41,7 +41,6 @@ make install         # 初回のみ（web/ の依存を lockfile 固定で入れ
 make help
 make check
 make e2e
-make stream-probe ID=AbCdEf123456
 ```
 
 `web/.dev.vars` にローカル用の環境変数が要る（`.dev.vars.example` を参照）。
@@ -69,12 +68,10 @@ main への push で GitHub Actions が本番へ反映する（`.github/workflow
 | 上流（web-capture）との契約 | [docs/api-contracts.md](docs/api-contracts.md) |
 | 動画のエンコード条件（VRChat 互換） | [docs/encode-contract.md](docs/encode-contract.md) |
 | R2 の配信とキャッシュ | [docs/r2-delivery.md](docs/r2-delivery.md) |
+| ライブ配信（画面共有） | **2026-09-07 に ちょいキャス（[noricha-vr/choicast](https://github.com/noricha-vr/choicast)）へ移管**。このリポには 301 だけ残す（`web/public/_redirects` / `web/src/pages/screen-share.astro`）。経緯は [docs/streaming/README.md](docs/streaming/README.md) |
 | 表示文言 | `web/src/i18n/ja.json` / `en.json` |
 | 実装コンベンション（D1 条件付き更新・R2 etag・Workers 間通信・SSG の時刻） | [docs/coding-conventions.md](docs/coding-conventions.md) |
 | ローカル開発・E2E（ポート分離・サンドボックス） | [docs/local-dev.md](docs/local-dev.md) |
-| ライブ配信の設計・検証 | [docs/streaming/](docs/streaming/) |
-| 配信サーバーの本番構成・運用（サーバー実体・secrets・移設・cron 検証） | [docs/streaming/operations.md](docs/streaming/operations.md) |
-| VRChat 実機で配信設定を A/B するときの手順・固定値（配信元 URL・通知先・コマンド） | [docs/streaming/vrchat-ab-runbook.md](docs/streaming/vrchat-ab-runbook.md) |
 
 ## 気をつけること
 

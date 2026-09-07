@@ -9,7 +9,6 @@
 | クライアント失敗報告（段・受け付けるコードの allowlist・本文上限） | `web/src/lib/contracts/client-error.ts` |
 | セッション Cookie（名前・署名形式・TTL） | `web/src/lib/contracts/session.ts` |
 | R2 オブジェクトキー、shortId 生成 | `web/src/lib/contracts/r2key.ts` |
-| 配信セッションの状態・レスポンス型 | `web/src/lib/contracts/streams.ts`（`api.ts` から再 export） |
 | DB スキーマ | `web/migrations/`（連番の全ファイル。適用は `wrangler d1 migrations apply`） |
 | mp4 のエンコード条件 | [encode-contract.md](encode-contract.md) |
 
@@ -32,58 +31,18 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `PATCH /api/movies/{shortId}/` | ファイル名の変更 | 本人（所有者） | `RenameMovieRequest` / `RenameMovieResponse` |
 | `DELETE /api/movies/{shortId}/` | `ready` 動画の削除（R2 の実体 → D1 の行の順） | 本人（所有者） | `pending` / `failed` は 409 `INVALID_REQUEST`。`pending` の破棄は abandon を使う |
 | `POST /api/client-error/` | クライアント側の失敗報告（識別子だけを受けて `client_error` として構造化ログに残す。応答は 204） | 任意（Cookie があれば `userId` を添える） | `ClientErrorReport` |
-| `POST /api/streams/` | 新しい 12 文字 path ID と publish JWT を発行、または終了済み ID を再利用 | 本人 | `CreateStreamResponse.whipUrl` は publish と resource 操作に使う絶対 WHIP URL。`CreateStreamRequest` の `id` は任意。指定時は所有する終了済み ID のうち、前の配信の kick 完了後かつ publish JWT の期限切れ後だけを同じ作成間隔・上限・開始 token 制約で再開する。期限内は 409 `STREAM_ID_NOT_REUSABLE` と `retryAfterSeconds` を返す。未指定は旧クライアント互換。本文ありは `application/json`・1024 byte 上限、空文字/空白本文は `{}` として扱う。本人の同時配信は 409 `STREAM_ALREADY_LIVE`、取り消し済み token は 409 `STREAM_START_CANCELLED`、全体 20 本到達は 429 `STREAM_CAPACITY_REACHED`、作成間隔内は 429 `STREAM_CREATE_RATE_LIMITED` |
-| `POST /api/streams/cancel-start/` | 配信開始操作を取り消す | 本人 | `application/json` の `{ "startToken": UUIDv4 }` だけを許可（余分なフィールド不可、本文 1024 byte 上限）。対象が未作成・作成済み・取り消し済みのいずれでも冪等 204 |
-| `POST /api/streams/stop-live/` | 本人の live 配信をすべて `user_stop` で終了し、cron の kick 対象にする | 本人 | `StopLiveStreamsResponse`（`stopped` と `retryAfterSeconds`）。冪等 200 |
-| `POST /api/streams/{id}/extend/` | 延長期限を更新し、同じ期限の新 publish JWT を発行 | 本人（所有者） | `STREAM_EXTENSION_ENABLED=true` の時だけ `ExtendStreamResponse` を返す。`false`（既定）では期限・JWTを更新せず409 `STREAM_EXTENSION_DISABLED`。終了済みは409 `STREAM_ENDED` |
-| `POST /api/streams/{id}/heartbeat/` | 配信ブラウザの生存時刻を更新 | 本人（所有者） | 成功は 204。終了済みは 409 `STREAM_ENDED` |
-| `POST /api/streams/{id}/stop/` | 配信を `user_stop` で終了し、cron の kick 対象にする | 本人（所有者） | 冪等 204 |
-| `GET /api/streams/{id}/` | 配信状態を取得 | 本人（所有者） | `StreamStatusResponse`、`Cache-Control: no-store` |
-| `GET /api/streams/{id}/health/` | ingress → relay → egress の到達状態を取得 | 本人（所有者） | `StreamHealthResponse`。`ingressBytes` / `egressBytes` を返し、`state==='ready'` かつ `egressBytes` の増加をブラウザが確認してから配信 URL を表示する（さらにブラウザ側で映像 outbound-rtp の bytesSent>0 も確認する） |
-| `GET /api/streams/jwks/` | MediaMTX が publish JWT を検証する公開 JWKS | 不要 | RS256 公開鍵のみ。秘密要素は返さない。`Cache-Control: no-store`。cutover までは `STREAM_JWKS_MERGE_URL`（ちょいキャス）の公開鍵も併載する（下記） |
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
 
-### 配信開始 operation token
+### ライブ配信 API（移管済み）
 
-同一ユーザーの create と cancel は、UUIDv4 の開始 token 単位で次を保証する。
+`/api/streams/*`（配信セッション・publish JWT・JWKS・MediaMTX 連携）は 2026-09-07 に
+ちょいキャス（[noricha-vr/choicast](https://github.com/noricha-vr/choicast)）へ移管し、このリポからは削除した。
+配信サーバー（MediaMTX）の `authJWTJWKS` は `https://app.choicast.com/api/streams/jwks/` を指す。
+旧 URL `/{lang}/screen-share/` は `https://app.choicast.com/{lang}/` へ 301 する。
+D1 の `stream_sessions` / `stream_start_cancellations` / `node_egress_*` は削除せず残している（`wrangler rollback` で D1 は戻らないため）。
 
-- cancel が先なら tombstone を作り、同じ token の create は 409 `STREAM_START_CANCELLED` で live を作らない
-- create が先なら cancel が同じ token の live を `user_stop` で終了する。並行実行でも両方の完了後に live は残らない
-- tombstone はユーザーごとに最新 32 件まで保持し、24 時間を超えたものを毎分の cron で削除する
-
-この契約を追加する migration は既存列を壊さない加算変更であり、デプロイは **D1 migration → 本体 Worker → cron Worker** の順に行う。
-旧 Worker は追加列・追加テーブルを参照しないため、Worker コードだけを旧版へロールバックしても動作できる。ただし D1 migration 自体は戻さない。
-
-### 配信JWTとMediaMTXの運用ゲート
-
-#126 のMediaMTX構築前に、Workerの `STREAM_JWT_PRIVATE_KEY`、Web / cron Worker の
-`MEDIAMTX_INGRESS_API_*` / `MEDIAMTX_EGRESS_API_*`、MediaMTXからのJWKS取得をすべて設定し、
-JWKS取得と ingress / egress の再読込を確認してから配信APIを利用可能にする。単一 MediaMTX から移行する間だけ
-旧 `MEDIAMTX_API_*` を fallback として利用できる。fallback が有効なのは split の URL / token を **1 つも設定していない環境だけ**。
-split の 4 値を設定した版は移行完了後の構成であり、旧単一 service へ自動で戻らない。
-
-現在のJWKSは単一鍵で、publish JWTは最大でベータ版の配信上限（15分）有効なため、鍵の即時切替は
-active JWTとの互換を保てない。ローテーションは配信停止メンテナンスとして、secret投入 →
-JWKS取得とMediaMTX再読込の確認 → API再開、の順で行う。無停止ローテーションにはprevious keyを
-JWKSへ併載する後続対応が必要。
-
-一時対応として、`STREAM_JWKS_MERGE_URL`（ちょいキャス `https://app.choicast.com/api/streams/jwks/`）の公開鍵を自鍵の後ろに併載している（配信サーバーの `authJWTJWKS` が 1 本しか持てないため）。
-取得は 5 分キャッシュ（失敗は 30 秒）し、失敗時は自鍵だけを返して `stream_jwks_merge_failed` を warn で記録する。`kid` が自鍵と重なる鍵は自鍵を優先する。cutover 完了後に設定・コードごと削除する。
-
-| 設定キー | 初期値 / 投入先 |
-|---|---|
-| `STREAM_EXTENSION_SECONDS` | `900`（ベータ版は15分。画面の延長は無効）/ Web Worker vars |
-| `STREAM_EXTENSION_ENABLED` | `false`（`true` の時だけ延長 API が期限と publish JWT を更新）/ Web Worker vars |
-| `STREAM_MAX_LIVE_PER_USER` | `1` / Web Worker vars |
-| `STREAM_MAX_LIVE` | `20` / Web Worker vars |
-| `STREAM_CREATE_INTERVAL_SECONDS` | `10` / Web Worker vars |
-| `STREAM_NO_VIEWER_SECONDS` | `600` / cron Worker vars |
-| `STREAM_HEARTBEAT_SECONDS` | `60` / cron Worker vars |
-
-秘密値は `STREAM_JWT_PRIVATE_KEY`、`MEDIAMTX_INGRESS_API_TOKEN`、`MEDIAMTX_EGRESS_API_TOKEN`。
-deploy workflow は 2 つの MediaMTX token を Worker code と同じ version の secret file として原子的に反映する。
-URL は `MEDIAMTX_INGRESS_API_URL` / `MEDIAMTX_EGRESS_API_URL` の vars に置く。token をログや設定ファイルへ展開しない。
+### クライアント失敗報告の上限
 
 `/api/client-error/` は無認証なので、受け付けるのは allowlist に載る `stage` / `errorCode` /
 `httpStatus` だけで、未知フィールド・1 KiB 超の本文・`application/json` 以外の Content-Type は

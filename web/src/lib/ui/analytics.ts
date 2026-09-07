@@ -2,9 +2,6 @@ import { isShortId } from '../contracts/r2key';
 
 /** GA4 へ送信できるイベント名。未実装 UI のイベントも契約としてここで予約する。 */
 export const ANALYTICS_EVENT_NAMES = [
-  'screen_share_start',
-  'screen_share_ready',
-  'screen_share_url_copy',
   'convert_start',
   'convert_complete',
   'convert_url_copy',
@@ -14,8 +11,8 @@ export const ANALYTICS_EVENT_NAMES = [
 ] as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENT_NAMES)[number];
-export type AnalyticsTool = 'screen_share' | 'convert';
-export type AnalyticsSource = 'home' | 'screen_share_page' | 'convert_page' | 'header' | 'resume';
+export type AnalyticsTool = 'convert';
+export type AnalyticsSource = 'home' | 'convert_page' | 'header' | 'resume';
 export type AnalyticsInputKind = 'web' | 'image' | 'pdf';
 export type AnalyticsLocale = 'ja' | 'en';
 
@@ -24,20 +21,10 @@ export interface AnalyticsConfigParameters {
   page_referrer: string;
 }
 
-export type ScreenShareAnalyticsEvent = Extract<
-  AnalyticsEventName,
-  'screen_share_start' | 'screen_share_ready' | 'screen_share_url_copy'
->;
 export type ConversionAnalyticsEvent = Extract<
   AnalyticsEventName,
   'convert_start' | 'convert_complete' | 'convert_url_copy'
 >;
-
-interface ScreenShareParameters {
-  tool: 'screen_share';
-  source: 'home' | 'screen_share_page';
-  locale: AnalyticsLocale;
-}
 
 export interface ConversionParameters {
   tool: 'convert';
@@ -60,9 +47,6 @@ interface ResumeParameters {
 
 /** イベントごとに送信を許可するパラメータ。余分なキーを受ける汎用 Record は公開しない。 */
 export interface AnalyticsEventParameterMap {
-  screen_share_start: ScreenShareParameters;
-  screen_share_ready: ScreenShareParameters;
-  screen_share_url_copy: ScreenShareParameters;
   convert_start: ConversionParameters;
   convert_complete: ConversionParameters;
   convert_url_copy: ConversionParameters;
@@ -89,7 +73,7 @@ export interface AnalyticsEnvironment {
 const TRACKED_HOST = 'web-screen.net';
 
 /**
- * 公開 ID（変換の shortId・配信 ID。どちらも 12 文字 base62）をパスに含むか。
+ * 公開 ID（変換の shortId。12 文字 base62）をパスに含むか。
  *
  * 公開 URL は 12 文字のランダム ID だけで守られているため、GA4 へ渡すと保護が Google 側へ漏れる。
  */
@@ -137,25 +121,13 @@ export function dispatchAnalyticsEvent(
   }
 }
 
-/** 現在の画面共有ページに対する成功イベントを送る。 */
-export function trackScreenShareEvent(event: ScreenShareAnalyticsEvent): void {
-  const browser = browserEnvironment('screen_share');
-  if (!browser || browser.source === 'convert_page') return;
-  const eventCall = [event, {
-    tool: 'screen_share',
-    source: browser.source,
-    locale: browser.locale,
-  }] as unknown as AnalyticsEventCall;
-  dispatchAnalyticsEvent(browser.environment, ...eventCall);
-}
-
 /** 現在の変換ページに対する成功イベントを送る。 */
 export function trackConversionEvent(
   event: ConversionAnalyticsEvent,
   inputKind: AnalyticsInputKind
 ): void {
   const browser = browserEnvironment('convert');
-  if (!browser || browser.source === 'screen_share_page') return;
+  if (!browser) return;
   const eventCall = [event, {
     tool: 'convert',
     source: browser.source,
@@ -174,9 +146,6 @@ export function pageContext(
   if (!match) return null;
   const locale = match[1] as AnalyticsLocale;
   if (pathname === `/${locale}` || pathname === `/${locale}/`) return { source: 'home', locale };
-  if (tool === 'screen_share' && pathname === `/${locale}/screen-share/`) {
-    return { source: 'screen_share_page', locale };
-  }
   if (tool === 'convert' && pathname === `/${locale}/convert/`) {
     return { source: 'convert_page', locale };
   }
@@ -185,7 +154,7 @@ export function pageContext(
 
 function browserEnvironment(tool: AnalyticsTool): {
   environment: AnalyticsEnvironment;
-  source: 'home' | 'screen_share_page' | 'convert_page';
+  source: 'home' | 'convert_page';
   locale: AnalyticsLocale;
 } | null {
   if (typeof window === 'undefined') return null;
@@ -206,7 +175,7 @@ function browserEnvironment(tool: AnalyticsTool): {
  * 実行時に許可できる呼び出しだけを、検証済みフィールドから組み直して返す。
  *
  * 受け取ったオブジェクトをそのまま gtag へ渡さない。型を迂回した呼び出し元
- * （trackScreenShareEvent 等の as 経由や、将来の JS からの呼び出し）で余分なキーが
+ * （trackConversionEvent 等の as 経由や、将来の JS からの呼び出し）で余分なキーが
  * 付いていても、ここを通った値には現れないようにする。
  */
 function allowedEventCall(eventCall: AnalyticsEventCall): AnalyticsEventCall | null {
@@ -223,10 +192,6 @@ function allowedEventCall(eventCall: AnalyticsEventCall): AnalyticsEventCall | n
   // 判定とイベント名の対応を型で表せないため、返す時だけ契約型へ寄せる。
   const call = (value: object): AnalyticsEventCall => [event, value] as unknown as AnalyticsEventCall;
 
-  if (event.startsWith('screen_share_')) {
-    if (tool !== 'screen_share' || !['home', 'screen_share_page'].includes(source)) return null;
-    return keys === 'locale,source,tool' ? call({ tool, source, locale }) : null;
-  }
   if (event.startsWith('convert_')) {
     const inputKind = (parameters as ConversionParameters).input_kind;
     if (tool !== 'convert' || !['home', 'convert_page'].includes(source)) return null;
@@ -235,7 +200,7 @@ function allowedEventCall(eventCall: AnalyticsEventCall): AnalyticsEventCall | n
       ? call({ tool, source, input_kind: inputKind, locale })
       : null;
   }
-  if (!['screen_share', 'convert'].includes(tool) || keys !== 'locale,source,tool') return null;
+  if (tool !== 'convert' || keys !== 'locale,source,tool') return null;
   if (event === 'tool_nav_click') {
     return source === 'header' ? call({ tool, source, locale }) : null;
   }

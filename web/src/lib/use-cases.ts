@@ -1,8 +1,8 @@
 /**
- * 用途別ページ（Web / ビデオプレイヤー / 画面共有 / 画像 / PDF）のページキーと URL スラッグの対応。
+ * 用途別ページ（Web / ビデオプレイヤー / 画像 / PDF）のページキーと URL スラッグの対応。
  *
  * 辞書 `useCases` のキーと 1 対 1 で、宣言順が関連リンクの並び順も兼ねる。
- * キーをそのまま URL にしない（screenShare はハイフン区切りの screen-share で公開している）。
+ * キーをそのまま URL にしない（videoPlayer はハイフン区切りの video-player で公開している）。
  *
  * ページ本体（UseCaseArticle）とルート（src/pages/{lang}/*.astro のパンくず）の両方が参照するので、
  * どちらか一方に置かず独立させている。
@@ -12,7 +12,6 @@ import type { Locale } from '../i18n';
 export const USE_CASE_SLUGS = {
   web: 'web',
   videoPlayer: 'video-player',
-  screenShare: 'screen-share',
   image: 'image',
   pdf: 'pdf',
 } as const;

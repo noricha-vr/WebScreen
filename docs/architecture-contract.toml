@@ -36,7 +36,7 @@ forbidden_imports = [
 # 構造化ログ。外部依存を持たず（console へ 1 行 JSON を書くだけ）、失敗を記録する層から
 # 直接呼べる横断的関心事なので infra から出してある。infra に置くと entrypoints から
 # ログを出せず、かといって entrypoints → infra を開けると D1 / R2 の直叩きまで通るため。
-# 現在の呼び出し元は services / entrypoints / tests。infra・cron・screen_share から
+# 現在の呼び出し元は services / entrypoints / tests。infra・cron から
 # 呼びたくなったら、その層の may_depend_on に足す（今は参照がないので開けていない）。
 [modules.observability]
 paths = ["web/src/lib/observability"]
@@ -76,19 +76,10 @@ paths = ["web/cron/src"]
 may_depend_on = ["services", "contracts"]
 max_file_loc = 200
 
-# 画面共有 feature。内部は index（composition root）から controller →
-# view/capture/session/stream-api/video-profile へだけ配線する。
-# audio-profile / stream-profile / request-json / whip-publisher 等の共有 UI utility は
-# 現段階では未登録モジュールとして扱い、feature への逆 import をレビューで禁止する。
-[modules.screen_share]
-paths = ["web/src/lib/ui/screen-share"]
-may_depend_on = ["contracts"]
-max_file_loc = 400
-
 # テストは検査対象を直接 import する層。cron を含めるのは、保持期間バッチの
 # 構造化ログ（件数の出し方）を workerd 無しで検証するため。
 [modules.tests]
 paths = ["web/tests", "web/e2e"]
-may_depend_on = ["contracts", "observability", "infra", "services", "entrypoints", "cron", "screen_share"]
+may_depend_on = ["contracts", "observability", "infra", "services", "entrypoints", "cron"]
 max_file_loc = 500
 max_public_symbols = 0
