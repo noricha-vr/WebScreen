@@ -115,6 +115,7 @@
   "footer": {
     "github": "GitHub",
     "releases": "Release notes",
+    "choicast": "Choicast (screen sharing)",
     "privacy": "Cookies and privacy",
     "terms": "Terms",
     "langSwitch": "日本語",
@@ -279,12 +280,13 @@
     "extensionLink": "Add from the Chrome Web Store",
     "imageLink": "More about converting images",
     "pdfLink": "More about converting PDFs",
-    "screenShareLink": "About screen sharing in VRChat",
-    "comingSoon": "Screen recording and screen sharing are still on the way"
+    "screenShareLink": "Screen sharing / live streaming moved to Choicast"
   },
   "screenSharePage": {
     "title": "How to share your screen in VRChat — no OBS, just your browser | WebScreen",
     "description": "Share your screen in VRChat without OBS or installs. Pick what to share and paste the RTSP URL. PC latency was 0.1s video-only and 1.2s with audio.",
+    "movedNotice": "Screen sharing has moved to our new service, Choicast. Please start new streams on Choicast.",
+    "movedLink": "Open Choicast",
     "heading": "Screen sharing for VRChat",
     "subheading": "Share your screen to a VRChat world — no OBS, no install",
     "lead": "Create a streaming URL you can paste into a VRChat video player. Share a tab, a window, or your whole desktop. Start sharing your screen in VRChat without OBS.",

@@ -1,5 +1,6 @@
 ---
 import { useTranslations, type Locale } from '../i18n';
+import { choicastUrl } from '../lib/choicast';
 
 interface Props {
   lang: Locale;
@@ -9,9 +10,31 @@ const { lang } = Astro.props;
 const t = useTranslations(lang).screenSharePage;
 const wizard = t.wizard;
 const flowIcons = ['fa-display', 'fa-link', 'fa-paste'];
+const CHOICAST_URL = choicastUrl(lang);
 ---
 
 <main class="mx-auto max-w-5xl px-4 py-12">
+  {/* 画面共有はちょいキャスへ移行済み。cutover までこのページは残すので、先頭で新サービスへ誘導する。 */}
+  <aside class="mb-10 rounded-lg border border-brand-200 bg-brand-50 p-5">
+    <div class="flex items-start gap-3">
+      <i class="fa-solid fa-circle-info mt-1 text-brand-500" aria-hidden="true"></i>
+
+      <div>
+        <p class="text-base leading-relaxed text-slate-700">{t.movedNotice}</p>
+
+        <a
+          href={CHOICAST_URL}
+          target="_blank"
+          rel="noopener"
+          class="mt-3 inline-flex items-center gap-2 text-base font-semibold text-brand-700 underline hover:text-brand-500"
+        >
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span>{t.movedLink}</span>
+        </a>
+      </div>
+    </div>
+  </aside>
+
   <section class="text-center">
     <h1 class="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-5xl">{t.heading}</h1>
     <h2 class="mt-5 text-xl font-bold tracking-tight text-slate-700 sm:text-2xl">{t.subheading}</h2>
