@@ -40,7 +40,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 | `POST /api/streams/{id}/stop/` | 配信を `user_stop` で終了し、cron の kick 対象にする | 本人（所有者） | 冪等 204 |
 | `GET /api/streams/{id}/` | 配信状態を取得 | 本人（所有者） | `StreamStatusResponse`、`Cache-Control: no-store` |
 | `GET /api/streams/{id}/health/` | ingress → relay → egress の到達状態を取得 | 本人（所有者） | `StreamHealthResponse`。`ingressBytes` / `egressBytes` を返し、`state==='ready'` かつ `egressBytes` の増加をブラウザが確認してから配信 URL を表示する（さらにブラウザ側で映像 outbound-rtp の bytesSent>0 も確認する） |
-| `GET /api/streams/jwks/` | MediaMTX が publish JWT を検証する公開 JWKS | 不要 | RS256 公開鍵のみ。秘密要素は返さない。`Cache-Control: no-store` |
+| `GET /api/streams/jwks/` | MediaMTX が publish JWT を検証する公開 JWKS | 不要 | RS256 公開鍵のみ。秘密要素は返さない。`Cache-Control: no-store`。cutover までは `STREAM_JWKS_MERGE_URL`（ちょいキャス）の公開鍵も併載する（下記） |
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
 
@@ -67,6 +67,9 @@ split の 4 値を設定した版は移行完了後の構成であり、旧単�
 active JWTとの互換を保てない。ローテーションは配信停止メンテナンスとして、secret投入 →
 JWKS取得とMediaMTX再読込の確認 → API再開、の順で行う。無停止ローテーションにはprevious keyを
 JWKSへ併載する後続対応が必要。
+
+一時対応として、`STREAM_JWKS_MERGE_URL`（ちょいキャス `https://app.choicast.com/api/streams/jwks/`）の公開鍵を自鍵の後ろに併載している（配信サーバーの `authJWTJWKS` が 1 本しか持てないため）。
+取得は 5 分キャッシュ（失敗は 30 秒）し、失敗時は自鍵だけを返して `stream_jwks_merge_failed` を warn で記録する。`kid` が自鍵と重なる鍵は自鍵を優先する。cutover 完了後に設定・コードごと削除する。
 
 | 設定キー | 初期値 / 投入先 |
 |---|---|
