@@ -4,6 +4,7 @@ import { logWorkerFailure } from '../observability/worker-log';
 import { importSigningKey } from '../contracts/session';
 import { requireUser, type AuthDatabase } from './auth';
 import { createStreamJwtKeySet } from './stream-jwt';
+import { mergeRemoteJwks, type MergeRemoteJwksOptions } from './stream-jwks-merge';
 import { StreamError, type StreamDatabase, type StreamJwtSigner, type StreamSettings } from './streams';
 
 const DEFAULT_EXTENSION_SECONDS = 15 * 60;
@@ -21,6 +22,8 @@ export interface StreamApiBindings {
   STREAM_MAX_LIVE_PER_USER?: string;
   STREAM_MAX_LIVE?: string;
   STREAM_CREATE_INTERVAL_SECONDS?: string;
+  /** 併載する他サービスの JWKS URL（cutover までの一時設定。未設定なら自鍵だけを返す）。 */
+  STREAM_JWKS_MERGE_URL?: string;
 }
 
 export interface StreamApiContext {
@@ -97,11 +100,23 @@ export function noContent(): Response {
   return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
 }
 
-/** 公開 JWKS を返し、秘密鍵の構成不良は安全な 500 として記録する。 */
-export async function streamJwksResponse(secret: string): Promise<Response> {
+/**
+ * 公開 JWKS を返し、秘密鍵の構成不良は安全な 500 として記録する。
+ *
+ * `additionalJwksUrl` があれば、その URL の公開鍵を自鍵の後ろに併載する（cutover までの
+ * 一時対応。取得に失敗しても自鍵だけで 200 を返す）。
+ */
+export async function streamJwksResponse(
+  secret: string,
+  additionalJwksUrl?: string,
+  mergeOptions: MergeRemoteJwksOptions = {}
+): Promise<Response> {
   try {
     const { jwks } = await createStreamJwtKeySet(secret);
-    return Response.json(jwks, {
+    const keys = additionalJwksUrl
+      ? await mergeRemoteJwks(jwks.keys, additionalJwksUrl, mergeOptions)
+      : jwks.keys;
+    return Response.json({ keys }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {

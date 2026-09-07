@@ -19,6 +19,9 @@ STREAM_JWT_PRIVATE_KEY=
 # WHIP publish の接続先 origin（末尾スラッシュなし）。
 STREAM_WHIP_ORIGIN=https://webscreen.tv
 
+# 併載する他サービス（ちょいキャス）の JWKS URL。cutover までの一時設定。未設定なら自鍵だけを返す。
+STREAM_JWKS_MERGE_URL=https://app.choicast.com/api/streams/jwks/
+
 # MediaMTX Control API。二段構成では INGRESS / EGRESS を両 Worker へ投入する。
 # 新キーがあれば旧単一MEDIAMTX_API_URL/TOKENより優先する。値はHTTPS originとsecretのみ。
 MEDIAMTX_API_URL=
