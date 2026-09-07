@@ -1,4 +1,4 @@
-import { parseEstimatedImages, parseRetryAfterSeconds } from '../contracts/api';
+import { parseEstimatedImages } from '../contracts/api';
 
 interface ErrorBody {
   errorCode?: unknown;
@@ -13,8 +13,7 @@ export class JsonRequestError extends Error {
   constructor(
     readonly status: number,
     readonly errorCode: string | null,
-    readonly estimatedImages: number | null = null,
-    readonly retryAfterSeconds: number | null = null
+    readonly estimatedImages: number | null = null
   ) {
     super('JSON request failed');
   }
@@ -32,8 +31,7 @@ export async function requestJson(
     throw new JsonRequestError(
       response.status,
       errorCode(body.value),
-      parseEstimatedImages(body.value),
-      parseRetryAfterSeconds(body.value)
+      parseEstimatedImages(body.value)
     );
   }
   // 成功応答なのに JSON として読めないのは上流の異常。null を返すと呼び出し側が

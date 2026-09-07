@@ -5,13 +5,16 @@ import { expect, test } from '@playwright/test';
 // 実行時に解釈するため、ファイルの中身を読むだけでは「実際に転送されるか」を確認できない。
 
 /** 新版に用途別ページがある旧 URL。言語なしは Accept-Language で振り分ける。 */
-const USE_CASE_PATHS = ['web', 'pdf', 'image', 'screen-share'] as const;
+const USE_CASE_PATHS = ['web', 'pdf', 'image'] as const;
 
 /** 対応する単独ページが無く、言語トップへ寄せる旧 URL。 */
 const TOP_FALLBACK_PATHS = ['history', 'github'] as const;
 
-/** 機能自体が無く、用途がいちばん近い screen-share へ寄せる旧 URL。 */
+/** 画面共有の別名。/screen-share/ と同じくちょいキャスへ送る旧 URL。 */
 const SCREEN_SHARE_ALIASES = ['recording', 'streaming'] as const;
+
+/** 画面共有の移管先（2026-09-07 にちょいキャスへ分離）。lib/choicast.ts と同じ値。 */
+const choicast = (locale: 'ja' | 'en') => `https://app.choicast.com/${locale}/`;
 
 const LOCALES = ['ja', 'en'] as const;
 
@@ -40,6 +43,30 @@ test.describe('言語なしの旧 URL（router/main.py）', () => {
 
     expect(response.status()).toBe(302);
     expect(response.headers()['location']).toBe('/ja/web/');
+  });
+
+  test('/screen-share/ は Accept-Language を見てちょいキャスの言語別 URL へ 301 で送る', async ({
+    request,
+  }) => {
+    // 画面共有はちょいキャスへ移管済み。_redirects では言語を判定できないので Worker で実行し、
+    // 被リンクを引き継ぐため 301 にする。クエリは落とさず引き継ぐ。
+    const response = await request.get('/screen-share/?audio-profile=legacy', {
+      headers: { 'accept-language': 'en-US,en;q=0.9' },
+      maxRedirects: 0,
+    });
+
+    expect(response.status()).toBe(301);
+    expect(response.headers()['location']).toBe(`${choicast('en')}?audio-profile=legacy`);
+  });
+
+  test('/screen-share/ は日本語のブラウザならちょいキャスの /ja/ へ送る', async ({ request }) => {
+    const response = await request.get('/screen-share/', {
+      headers: { 'accept-language': 'ja,en-US;q=0.9' },
+      maxRedirects: 0,
+    });
+
+    expect(response.status()).toBe(301);
+    expect(response.headers()['location']).toBe(choicast('ja'));
   });
 
   for (const path of SCREEN_SHARE_ALIASES) {
@@ -92,15 +119,16 @@ test.describe('言語付きの旧 URL（router/main_page.py）', () => {
       });
     }
 
-    for (const path of SCREEN_SHARE_ALIASES) {
-      test(`/${locale}/${path}/ は /${locale}/screen-share/ へ 301 で転送される`, async ({
+    for (const path of ['screen-share', ...SCREEN_SHARE_ALIASES]) {
+      test(`/${locale}/${path}/ はちょいキャスの /${locale}/ へ 301 で転送される`, async ({
         request,
       }) => {
-        // 用途が一致するページへ 1 対 1 で送る（言語トップへの多対一だと評価を引き継がない）。
+        // 画面共有はちょいキャスへ移管済み。/{lang}/screen-share/ 経由の二段ホップにせず、
+        // 別名も直接ちょいキャスへ送る。
         const response = await request.get(`/${locale}/${path}/`, { maxRedirects: 0 });
 
         expect(response.status()).toBe(301);
-        expect(response.headers()['location']).toBe(`/${locale}/screen-share/`);
+        expect(response.headers()['location']).toBe(choicast(locale));
       });
     }
 

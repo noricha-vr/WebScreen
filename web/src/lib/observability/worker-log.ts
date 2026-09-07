@@ -25,8 +25,6 @@ const WORKER_FAILURE_EVENTS = [
   'capture_upstream_rejected',
   'capture_upstream_error_unmapped',
   'health_cron_read_failed',
-  'stream_api_failed',
-  'stream_jwks_failed',
 ] as const;
 type WorkerFailureEvent = (typeof WORKER_FAILURE_EVENTS)[number];
 
@@ -66,37 +64,6 @@ export function logWorkerFailure({
     return;
   }
   console.error(entry);
-}
-
-/**
- * JWKS へ他サービスの公開鍵を併載する取得の失敗を記録する（応答自体は自鍵だけで 200）。
- *
- * warn にするのは、自鍵の応答は成功しており Worker のエラー率に混ぜたくないため。
- * cutover 後に併載ごと削除する一時コード。
- */
-export function logStreamJwksMergeFailure({
-  reason,
-  upstreamStatus,
-  errorName,
-}: {
-  reason: string;
-  upstreamStatus?: number;
-  errorName?: string;
-}): void {
-  console.warn(
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      source: SOURCE,
-      severity: 'warn',
-      kind: 'event',
-      level: 'warn',
-      event: 'stream_jwks_merge_failed',
-      reason,
-      upstreamStatus,
-      errorName,
-      summary: `stream_jwks_merge_failed (${reason}); serving own keys only.`,
-    })
-  );
 }
 
 /** upload commit の cleanup 失敗を、安全な識別子だけで記録する。 */

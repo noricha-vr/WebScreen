@@ -34,19 +34,7 @@
     //   bunx wrangler secret put CLOUDFLARE_PURGE_TOKEN
     // どちらかが欠けると purge せず warn だけ出す（削除自体は成功する）。
     "CLOUDFLARE_ZONE_ID": "2210192b51f9f0eb6761d70341ca09b0",
-    "WEBCAPTURE_URL": "https://web-capture-345811595113.asia-northeast1.run.app",
-    "STREAM_EXTENSION_SECONDS": "900",
-    "STREAM_EXTENSION_ENABLED": "false",
-    "STREAM_MAX_LIVE_PER_USER": "1",
-    "STREAM_MAX_LIVE": "20",
-    "STREAM_CREATE_INTERVAL_SECONDS": "10",
-    "STREAM_WHIP_ORIGIN": "https://webscreen.tv",
-    // 画面共有をちょいキャス（app.choicast.com）へ分離する間の一時設定。配信サーバーの
-    // authJWTJWKS は 1 本しか設定できないため、この URL の公開鍵を /api/streams/jwks/ に
-    // 併載する。cutover 完了後に WebScreen の画面共有ごと削除する。
-    "STREAM_JWKS_MERGE_URL": "https://app.choicast.com/api/streams/jwks/",
-    "MEDIAMTX_INGRESS_API_URL": "https://stream.web-screen.net",
-    "MEDIAMTX_EGRESS_API_URL": "https://stream.web-screen.net"
+    "WEBCAPTURE_URL": "https://web-capture-345811595113.asia-northeast1.run.app"
   },
   "d1_databases": [
     {

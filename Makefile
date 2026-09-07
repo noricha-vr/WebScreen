@@ -3,12 +3,9 @@ SHELL := bash
 .DEFAULT_GOAL := help
 
 WEB_DIR := web
-STREAM_HOST ?= webscreen-indigo-poc
-SMOKE_URLS ?= https://web-screen.net/ https://web-screen.net/api/health/ https://web-screen.net/api/streams/jwks/
-STREAM_CONTROL_URL := https://stream.web-screen.net
-STREAM_PUBLIC_URL := https://webscreen.tv
+SMOKE_URLS ?= https://web-screen.net/ https://web-screen.net/api/health/
 
-.PHONY: help install dev typecheck test e2e build check smoke stream-health stream-probe stream-logs stream-paths latency-probe stream-source
+.PHONY: help install dev typecheck test e2e build check smoke
 
 help: ## 利用可能な開発・運用コマンドを表示
 	@awk 'BEGIN { FS = ":.*##"; printf "使い方: make <target> [VAR=value]\n\n" } /^[a-zA-Z0-9_-]+:.*##/ { printf "  %-20s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -57,64 +54,3 @@ smoke: ## 本番公開 URL の HTTP ステータスを確認（SMOKE_URLS=... �
 		if [[ ! "$$code" =~ ^[23][0-9][0-9]$$ ]]; then failed=1; fi; \
 	done; \
 	exit "$$failed"
-
-stream-health: ## 配信の外形4点（Control API・WHIP・RTSP・JWKS）を確認
-	@curl -si "$(STREAM_CONTROL_URL)/v3/paths/list"
-	@curl -s -X POST -H 'Content-Type: application/sdp' --data 'v=0' -o /dev/null -w '%{http_code}\n' "$(STREAM_PUBLIC_URL)/live/x/whip"
-	@# 匿名 read の経路（path は live/[A-Za-z0-9]{12} に限定）を通した 404 を確認するため、未使用の 12 文字 ID を使う
-	@ffprobe -rtsp_transport tcp "rtsp://webscreen.tv/live/nonexistent0" || true
-	@curl -s "https://web-screen.net/api/streams/jwks/" | head -c 100; printf '\n'
-
-stream-probe: ## 出口の codec・音量・L-R 差分を確認（ID=12文字）
-	@id="$(ID)"; \
-	if [[ ! "$$id" =~ ^[A-Za-z0-9]{12}$$ ]]; then \
-		echo 'ID は英数字12文字で指定してください（例: make stream-probe ID=AbCdEf123456）' >&2; \
-		exit 64; \
-	fi; \
-	url="rtsp://webscreen.tv/live/$$id"; \
-	echo 'codec:'; \
-	ffprobe -v error -rtsp_transport tcp -show_entries stream=codec_type,codec_name,sample_rate,channels -of default=noprint_wrappers=1 "$$url"; \
-	echo '音量:'; \
-	ffmpeg -nostdin -hide_banner -rtsp_transport tcp -i "$$url" -t 5 -af 'volumedetect' -f null - 2>&1 | awk '/mean_volume:|max_volume:/'; \
-	echo 'L-R 差分（-90 dB 近辺ならモノラル）:'; \
-	ffmpeg -nostdin -hide_banner -rtsp_transport tcp -i "$$url" -t 5 -af 'pan=mono|c0=0.5*c0-0.5*c1,volumedetect' -f null - 2>&1 | awk '/mean_volume:|max_volume:/'
-
-stream-logs: MIN ?= 15
-stream-logs: ## 配信サーバーの journald を表示（MIN=15、GREP=... で絞り込み）
-	@if [[ ! "$(MIN)" =~ ^[0-9]+$$ ]]; then echo 'MIN は0以上の整数で指定してください' >&2; exit 64; fi; \
-	ssh "$(STREAM_HOST)" "journalctl -u webscreen-mediamtx-ingress -u webscreen-mediamtx-egress --since '-$(MIN) min'" \
-		| if [[ -n "$(GREP)" ]]; then grep -F -- "$(GREP)"; else cat; fi
-
-stream-paths: ## ingress / egress の MediaMTX path 一覧を表示
-	@echo 'ingress (:9997):'
-	@ssh "$(STREAM_HOST)" 'curl -fsS http://127.0.0.1:9997/v3/paths/list | jq'
-	@echo 'egress (:9998):'
-	@ssh "$(STREAM_HOST)" 'curl -fsS http://127.0.0.1:9998/v3/paths/list | jq'
-
-latency-probe: MIN ?= 5
-# 変数はレシピ文字列へ展開せず環境変数で渡す（シェル記号が入ってもコマンドにならない）。
-# $(value) で生の文字列を取り Make 自身の $(shell ...) 展開を起こさず、コマンドライン変数が
-# target-specific 代入を上書きできないよう別名（LP_*）で export する
-# コマンドライン変数は Make が子環境へ export する時に展開するので、元の名前は export しない
-unexport MIN SOURCE PLAYER NOTIFY_DISCORD SERVER_SNAP NODE_HOST READ_HOST
-latency-probe: export LP_MIN := $(value MIN)
-latency-probe: export LP_SOURCE := $(value SOURCE)
-latency-probe: export LP_PLAYER := $(value PLAYER)
-latency-probe: export LP_NOTIFY_DISCORD := $(value NOTIFY_DISCORD)
-latency-probe: export LP_SERVER_SNAP := $(value SERVER_SNAP)
-latency-probe: export LP_NODE_HOST := $(value NODE_HOST)
-latency-probe: export LP_READ_HOST := $(value READ_HOST)
-# NOTIFY_DISCORD を使う時は、実際に叩く通知コマンドを環境変数 WEBSCREEN_LATENCY_NOTIFY_COMMAND で
-# 渡す（make VAR= 経由では $ が Make に展開されるので、シェル側で export しておく）。
-# 値の書式と例: docs/streaming/latency-harness.md#配信-url-の通知コマンド
-latency-probe: ## 遅延測定を実行（MIN=5 SOURCE=URL、PLAYER=win2022、NOTIFY_DISCORD=ID、SERVER_SNAP=HOST、NODE_HOST=HOST、READ_HOST=HOST[:PORT]）
-	@script="$(WEB_DIR)/scripts/latency-probe.ts"; \
-	if [[ ! -f "$$script" ]]; then echo 'feat/latency-harness をマージしてください' >&2; exit 1; fi; \
-	if [[ -z "$$LP_SOURCE" ]]; then echo 'SOURCE=URL を指定してください' >&2; exit 64; fi; \
-	cd "$(WEB_DIR)" && bun scripts/latency-probe.ts run --minutes "$$LP_MIN" --source "$$LP_SOURCE" $${LP_PLAYER:+--player "$$LP_PLAYER"} $${LP_NOTIFY_DISCORD:+--notify-discord "$$LP_NOTIFY_DISCORD"} $${LP_SERVER_SNAP:+--server-snap "$$LP_SERVER_SNAP"} $${LP_NODE_HOST:+--node-host "$$LP_NODE_HOST"} $${LP_READ_HOST:+--read-host "$$LP_READ_HOST"}
-
-stream-source: ## 遅延測定中の配信元タブの表示先を切り替える（URL=URL）
-	@script="$(WEB_DIR)/scripts/latency-probe.ts"; \
-	if [[ ! -f "$$script" ]]; then echo 'feat/latency-harness をマージしてください' >&2; exit 1; fi; \
-	if [[ -z "$(URL)" ]]; then echo 'URL=URL を指定してください' >&2; exit 64; fi; \
-	cd "$(WEB_DIR)" && bun scripts/latency-probe.ts source --url "$(URL)"

@@ -1,12 +1,15 @@
 ---
 import { resolveLocale } from '../i18n';
+import { choicastUrl } from '../lib/choicast';
 
 // 言語なしの旧 URL（旧版は Accept-Language を見て /{lang}/xxx/ へ 301 していた）。
-// _redirects は静的でリクエストヘッダーを読めず、転送先に /ja/screen-share/ と書くと日本語へ
-// 決め打ちになる。用途を保ったまま言語だけ振り分けるため、このルートだけ Worker で実行する。
+// 画面共有は 2026-09-07 にちょいキャス（app.choicast.com）へ移管したので、言語だけ判定して
+// 直接ちょいキャスへ送る。_redirects は静的でリクエストヘッダーを読めず、転送先を
+// https://app.choicast.com/ja/ と書くと日本語へ決め打ちになるため、このルートだけ Worker で実行する。
+// 被リンクを引き継ぐため 301。
 export const prerender = false;
 
 const locale = resolveLocale(Astro.request.headers.get('accept-language'));
-// audio-profile=legacy 等のクエリを言語別 URL へ引き継ぐ（落とすと既定の raw に戻ってしまう）
-return Astro.redirect(`/${locale}/screen-share/${Astro.url.search}`, 302);
+// クエリはそのまま引き継ぐ（ちょいキャス側が同じ意味で解釈する）。
+return Astro.redirect(`${choicastUrl(locale)}${Astro.url.search}`, 301);
 ---

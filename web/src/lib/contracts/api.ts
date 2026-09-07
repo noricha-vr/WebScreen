@@ -9,16 +9,6 @@
  * D1 のカラム名（short_id など）は snake_case なので、境界で変換する。
  */
 import { isShortId } from './r2key';
-export { type CreateStreamRequest, validateCreateStreamRequest } from './stream-create';
-export type {
-  CreateStreamResponse,
-  ExtendStreamResponse,
-  StopLiveStreamsResponse,
-  StreamEndReason,
-  StreamHealthResponse,
-  StreamSessionStatus,
-  StreamStatusResponse,
-} from './streams';
 /** 1 ファイルあたりのアップロード上限（50 MiB）。R2 の単発 PUT で扱える範囲に収める。 */
 export const MAX_UPLOAD_BYTES = 52_428_800;
 /** abandon の JSON 本文上限。shortId 1 件に対し十分な余裕を持たせる。 */
@@ -70,13 +60,6 @@ export const ERROR_CODES = {
   payloadTooLarge: 'PAYLOAD_TOO_LARGE',
   tooManyPendingUploads: 'TOO_MANY_PENDING_UPLOADS',
   tooManyPresignRequests: 'TOO_MANY_PRESIGN_REQUESTS',
-  streamAlreadyLive: 'STREAM_ALREADY_LIVE',
-  streamIdNotReusable: 'STREAM_ID_NOT_REUSABLE',
-  streamCapacityReached: 'STREAM_CAPACITY_REACHED',
-  streamCreateRateLimited: 'STREAM_CREATE_RATE_LIMITED',
-  streamStartCancelled: 'STREAM_START_CANCELLED',
-  streamExtensionDisabled: 'STREAM_EXTENSION_DISABLED',
-  streamEnded: 'STREAM_ENDED',
   captureFailed: 'CAPTURE_FAILED',
   pageTooLong: 'PAGE_TOO_LONG',
   captureTimeout: 'CAPTURE_TIMEOUT',
@@ -92,8 +75,6 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 export interface ErrorResponse {
   errorCode: ErrorCode;
   message: string;
-  /** `STREAM_ID_NOT_REUSABLE` で旧 publish JWT の失効を待つ秒数。 */
-  retryAfterSeconds?: number;
   /**
    * `PAGE_TOO_LONG` のときだけ付く、ページ全体に必要と推定した画面数。
    *
@@ -118,14 +99,6 @@ export function parseEstimatedImages(value: unknown): number | null {
   if (typeof estimated !== 'number' || !Number.isSafeInteger(estimated)) return null;
   if (estimated <= 0 || estimated > MAX_ESTIMATED_IMAGES) return null;
   return estimated;
-}
-
-/** API 応答から再試行までの秒数だけを安全に取り出す。 */
-export function parseRetryAfterSeconds(value: unknown): number | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const seconds = (value as { retryAfterSeconds?: unknown }).retryAfterSeconds;
-  if (typeof seconds !== 'number' || !Number.isSafeInteger(seconds) || seconds <= 0) return null;
-  return seconds;
 }
 
 // ---------------------------------------------------------------------------
