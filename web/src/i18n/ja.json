@@ -115,6 +115,7 @@
   "footer": {
     "github": "GitHub",
     "releases": "更新履歴",
+    "choicast": "ちょいキャス（画面共有）",
     "privacy": "Cookie とプライバシー",
     "terms": "利用規約",
     "langSwitch": "English",
@@ -279,12 +280,13 @@
     "extensionLink": "Chrome ウェブストアで追加",
     "imageLink": "画像の変換について詳しく",
     "pdfLink": "PDF の変換について詳しく",
-    "screenShareLink": "VRChat の画面共有について",
-    "comingSoon": "画面録画・画面共有は対応中です"
+    "screenShareLink": "画面共有・ライブ配信は ちょいキャス へ"
   },
   "screenSharePage": {
     "title": "VRChat で画面共有する方法 — OBS 不要・ブラウザだけ | WebScreen",
     "description": "VRChat に自分の画面をそのまま映せます。OBS もインストールも不要、ブラウザで画面を選んで URL を貼るだけ。検証した PC ワールドでは映像のみ約 0.1 秒、音声付き約 1.2 秒、Quest では 2〜3 秒です。",
+    "movedNotice": "画面共有は新サービス『ちょいキャス』に移りました。新しい配信は ちょいキャス でお願いします。",
+    "movedLink": "ちょいキャスを開く",
     "heading": "VRChat に画面共有",
     "subheading": "OBS・インストール不要でVRChatのワールドに画面共有",
     "lead": "VRChat のビデオプレイヤーに貼れる配信 URL を作れます。タブ・ウィンドウや、デスクトップ全体も共有できます。VRChat の画面配信を OBS なしで始められます",

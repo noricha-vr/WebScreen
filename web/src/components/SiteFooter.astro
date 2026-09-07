@@ -1,5 +1,6 @@
 ---
 import { alternateLocale, switchLocalePath, useTranslations, type Locale } from '../i18n';
+import { choicastUrl } from '../lib/choicast';
 
 interface Props {
   lang: Locale;
@@ -11,6 +12,7 @@ const other = alternateLocale(lang);
 
 const REPOSITORY_URL = 'https://github.com/noricha-vr/WebScreen';
 const RELEASES_URL = `${REPOSITORY_URL}/releases`;
+const CHOICAST_URL = choicastUrl(lang);
 ---
 
 <footer class="mt-16 border-t border-slate-200 bg-slate-50">
@@ -19,7 +21,7 @@ const RELEASES_URL = `${REPOSITORY_URL}/releases`;
   >
     <p>{t.footer.note}</p>
 
-    {/* 5 つのリンクは 320px 幅で 1 行に収まらず、折り返さないとページごと横スクロールする。
+    {/* 6 つのリンクは 320px 幅で 1 行に収まらず、折り返さないとページごと横スクロールする。
         収まる幅では折り返しが起きないので、広い画面の見た目は変わらない。 */}
     <nav class="flex flex-wrap items-center gap-4">
       <a
@@ -39,6 +41,15 @@ const RELEASES_URL = `${REPOSITORY_URL}/releases`;
       >
         <i class="fa-solid fa-tag" aria-hidden="true"></i>
         <span>{t.footer.releases}</span>
+      </a>
+      <a
+        href={CHOICAST_URL}
+        target="_blank"
+        rel="noopener"
+        class="inline-flex items-center gap-2 text-slate-700 underline hover:text-brand-700"
+      >
+        <i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i>
+        <span>{t.footer.choicast}</span>
       </a>
       <a
         href={`/${lang}/privacy/`}
