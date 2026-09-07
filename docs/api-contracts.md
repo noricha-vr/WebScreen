@@ -69,7 +69,7 @@ JWKS取得とMediaMTX再読込の確認 → API再開、の順で行う。無停
 JWKSへ併載する後続対応が必要。
 
 一時対応として、`STREAM_JWKS_MERGE_URL`（ちょいキャス `https://app.choicast.com/api/streams/jwks/`）の公開鍵を自鍵の後ろに併載している（配信サーバーの `authJWTJWKS` が 1 本しか持てないため）。
-取得は 5 分キャッシュし、失敗時は自鍵だけを返して `stream_jwks_merge_failed` を warn で記録する。`kid` が自鍵と重なる鍵は自鍵を優先する。cutover 完了後に設定・コードごと削除する。
+取得は 5 分キャッシュ（失敗は 30 秒）し、失敗時は自鍵だけを返して `stream_jwks_merge_failed` を warn で記録する。`kid` が自鍵と重なる鍵は自鍵を優先する。cutover 完了後に設定・コードごと削除する。
 
 | 設定キー | 初期値 / 投入先 |
 |---|---|
