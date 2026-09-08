@@ -51,3 +51,36 @@ test.describe('cross-origin isolation', () => {
     });
   }
 });
+
+test.describe('更新系 API の Origin 検証', () => {
+  // ユニットテストは middleware を単体で見る。ここではビルド済み Worker を通して、
+  // Astro 既定の checkOrigin が素通しする application/json でも拒否されることを見る。
+  test('クロス origin の JSON POST は 403 FORBIDDEN', async ({ request }) => {
+    const response = await request.post('/api/uploads/commit/', {
+      data: { shortId: 'E2EReady0001' },
+      headers: { Origin: 'https://evil.example' },
+    });
+
+    expect(response.status()).toBe(403);
+    expect((await response.json()).errorCode).toBe('FORBIDDEN');
+  });
+
+  test('Origin の無い JSON POST は 403 FORBIDDEN', async ({ request }) => {
+    const response = await request.post('/api/uploads/commit/', {
+      data: { shortId: 'E2EReady0001' },
+    });
+
+    expect(response.status()).toBe(403);
+    expect((await response.json()).errorCode).toBe('FORBIDDEN');
+  });
+
+  test('同一 origin の JSON POST は Origin 検証を通り認証判定へ進む', async ({ request, baseURL }) => {
+    const response = await request.post('/api/uploads/commit/', {
+      data: { shortId: 'E2EReady0001' },
+      headers: { Origin: new URL(baseURL ?? '').origin },
+    });
+
+    // Cookie が無いので 401。403 でないことが Origin 検証を通った証拠。
+    expect(response.status()).toBe(401);
+  });
+});
