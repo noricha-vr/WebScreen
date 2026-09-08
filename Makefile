@@ -5,7 +5,7 @@ SHELL := bash
 WEB_DIR := web
 SMOKE_URLS ?= https://web-screen.net/ https://web-screen.net/api/health/
 
-.PHONY: help install dev typecheck test e2e build check smoke
+.PHONY: help install dev typecheck test e2e build check smoke usage-report
 
 help: ## 利用可能な開発・運用コマンドを表示
 	@awk 'BEGIN { FS = ":.*##"; printf "使い方: make <target> [VAR=value]\n\n" } /^[a-zA-Z0-9_-]+:.*##/ { printf "  %-20s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -45,6 +45,9 @@ check: ## 型チェック・ユニットテスト・ビルドを順に実行
 	run_step 'typecheck' bun run typecheck; \
 	run_step 'test' bun test; \
 	run_step 'build' bun run build
+
+usage-report: ## 本番 D1 の利用ログ（usage_events）からユーザー別・日次の利用状況を表示（読み取りのみ）
+	cd "$(WEB_DIR)" && bunx wrangler d1 execute webscreen-beta-db --remote --file scripts/usage-report.sql
 
 smoke: ## 本番公開 URL の HTTP ステータスを確認（SMOKE_URLS=... で上書き可）
 	@failed=0; \

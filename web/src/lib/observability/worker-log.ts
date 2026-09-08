@@ -26,6 +26,7 @@ const WORKER_FAILURE_EVENTS = [
   'capture_upstream_error_unmapped',
   'health_cron_read_failed',
   'cross_origin_mutation_rejected',
+  'usage_event_write_failed',
 ] as const;
 type WorkerFailureEvent = (typeof WORKER_FAILURE_EVENTS)[number];
 

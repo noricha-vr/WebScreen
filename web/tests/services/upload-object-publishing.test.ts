@@ -1,6 +1,8 @@
 import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import { describe, expect, it } from 'bun:test';
 
+import { applyMigrations } from './helpers/sqlite-migrations';
+
 import { movieKey, temporaryUploadKey } from '../../src/lib/contracts/r2key';
 import { deleteMovie } from '../../src/lib/services/movies';
 import {
@@ -136,7 +138,7 @@ class MemoryUploadBucket implements UploadBucket {
 
 async function createDatabase(): Promise<SqliteD1Adapter> {
   const sqlite = new Database(':memory:');
-  sqlite.exec(await Bun.file(new URL('../../migrations/0001_init.sql', import.meta.url)).text());
+  await applyMigrations(sqlite);
   sqlite
     .query('INSERT INTO users (id, discord_id, name) VALUES (?, ?, ?)')
     .run(USER_ID, String(USER_ID), 'tester');

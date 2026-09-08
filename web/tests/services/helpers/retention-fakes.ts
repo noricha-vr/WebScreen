@@ -28,6 +28,10 @@ export interface TestMovie {
   pinned: 0 | 1;
   createdAt: string;
   expiresAt: string | null;
+  /** 利用ログへ写す値。省略時は既定（user 1 / 0 バイト / 種別不明）。 */
+  userId?: number;
+  sizeBytes?: number;
+  kind?: string | null;
 }
 
 /**
@@ -47,6 +51,8 @@ export function isExpired(movie: TestMovie, threshold: number): boolean {
 
 export class FakeRetentionDatabase implements RetentionDatabase {
   readonly movies = new Map<string, TestMovie>();
+  /** usage_events へ INSERT された値（user_id, event, short_id, kind, size_bytes）。 */
+  readonly usageEvents: unknown[][] = [];
   /** 行を SELECT した直後に走らせるフック（pin の割り込みを再現する）。 */
   onSelect: ((rows: TestMovie[]) => void) | undefined;
   /** failed の最終 early sweep 時刻の記録を失敗させる。 */
@@ -72,7 +78,7 @@ export class FakeRetentionDatabase implements RetentionDatabase {
     };
   }
 
-  private select(query: string, values: unknown[]): { short_id: string }[] {
+  private select(query: string, values: unknown[]): Record<string, unknown>[] {
     // 監査のサンプル抽出（開始点以降の ready 行を N 件）。
     if (query.includes('short_id >= ?')) {
       return [...this.movies.values()]
@@ -118,10 +124,25 @@ export class FakeRetentionDatabase implements RetentionDatabase {
         : 1;
     const rows = query.includes('LIMIT ?') ? matched.slice(0, values[limitIndex] as number) : matched;
     this.onSelect?.(rows);
+    // 期限切れの SELECT は利用ログ用の列も返す（実装が列を増やしたことをここで再現する）。
+    if (query.includes('user_id')) {
+      return rows.map((movie) => ({
+        short_id: movie.shortId,
+        user_id: movie.userId ?? 1,
+        size_bytes: movie.sizeBytes ?? 0,
+        kind: movie.kind ?? null,
+      }));
+    }
     return rows.map((movie) => ({ short_id: movie.shortId }));
   }
 
   private delete(query: string, values: unknown[]): number {
+    // 利用ログの追記。movies には触らない。
+    if (query.startsWith('INSERT INTO usage_events')) {
+      this.usageEvents.push(values);
+      return 1;
+    }
+
     // failed の最終 early sweep 時刻を巡回カーソルとして記録する。
     if (query.startsWith('UPDATE') && query.includes('short_id IN (')) {
       if (this.failSweepUpdate) throw new Error('D1 sweep timestamp update failed');

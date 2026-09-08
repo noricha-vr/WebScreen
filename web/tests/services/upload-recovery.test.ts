@@ -99,9 +99,9 @@ class RecoveryDatabase
         string,
       ];
       if (query.includes('SELECT SUM(size_bytes)')) {
-        const quotaUserId = values[5] as number;
-        const additionalBytes = values[6] as number;
-        const quotaBytes = values[7] as number;
+        const quotaUserId = values[6] as number;
+        const additionalBytes = values[7] as number;
+        const quotaBytes = values[8] as number;
         const usedBytes = [...this.movies.values()]
           .filter(
             (movie) =>
@@ -109,8 +109,8 @@ class RecoveryDatabase
           )
           .reduce((sum, movie) => sum + movie.sizeBytes, 0);
         if (usedBytes + additionalBytes > quotaBytes) return 0;
-        const pendingUserId = values[8] as number;
-        const maxPendingUploads = values[9] as number;
+        const pendingUserId = values[9] as number;
+        const maxPendingUploads = values[10] as number;
         const pendingUploads = [...this.movies.values()].filter(
           (movie) => movie.userId === pendingUserId && movie.status === 'pending'
         ).length;

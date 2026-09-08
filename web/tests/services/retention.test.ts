@@ -21,7 +21,7 @@ import {
 describe('runRetention: 期限切れ動画', () => {
   it('期限を過ぎた ready 動画を R2 と D1 の両方から消す', async () => {
     const database = new FakeRetentionDatabase([
-      movie({ shortId: 'expiredAAAAA', expiresAt: iso(-HOUR_MS) }),
+      movie({ shortId: 'expiredAAAAA', expiresAt: iso(-HOUR_MS), userId: 42, sizeBytes: 2048, kind: 'pdf' }),
     ]);
     const bucket = new FakeRetentionBucket();
 
@@ -33,6 +33,8 @@ describe('runRetention: 期限切れ動画', () => {
       temporaryUploadKey('expiredAAAAA'),
     ]);
     expect(database.movies.has('expiredAAAAA')).toBe(false);
+    // 行を消した後も「誰の何が期限切れで消えたか」を利用ログに残す。
+    expect(database.usageEvents).toEqual([[42, 'movie_expired', 'expiredAAAAA', 'pdf', 2048]]);
   });
 
   it('pin された動画も期限を過ぎていれば消す', async () => {

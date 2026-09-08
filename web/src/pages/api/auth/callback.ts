@@ -17,11 +17,12 @@ import {
   consumeOAuthState,
   type AuthDatabase,
 } from '../../../lib/services/auth';
+import { recordUsageEvent, type UsageLogDatabase } from '../../../lib/services/usage-log';
 
 export const prerender = false;
 
 interface CallbackBindings {
-  DB: AuthDatabase;
+  DB: AuthDatabase & UsageLogDatabase;
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
   SESSION_SIGNING_KEY: string;
@@ -61,6 +62,8 @@ export const GET: APIRoute = async ({ cookies, redirect, request, url }) => {
       ...SESSION_COOKIE_ATTRIBUTES,
       maxAge: SESSION_TTL_SECONDS,
     });
+    // 利用ログ。書けなくてもログインは成立させる（recordUsageEvent は投げない）。
+    await recordUsageEvent(bindings.DB, { userId: result.user.id, event: 'login' });
     return redirect(`/${resolveLocale(request.headers.get('accept-language'))}/`, 302);
   } catch (error) {
     if (error instanceof OAuthUpstreamError) {

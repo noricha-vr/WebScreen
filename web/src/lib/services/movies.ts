@@ -28,6 +28,7 @@ import {
   UNPIN_GRACE_MS,
 } from './quota';
 import { toMovieIsoString as toIsoString } from './movie-time';
+import { recordUsageEvent } from './usage-log';
 
 export { findPublicMovie, type PublicMovie } from './movie-public';
 
@@ -70,6 +71,10 @@ interface MovieRow {
   pinned: number;
   created_at: string;
   expires_at: string | null;
+  /** 利用ログ用。表示には使わない。 */
+  size_bytes: number;
+  /** 変換元の種別。migration 0006 より前の行は null。 */
+  kind: string | null;
 }
 
 interface CountRow {
@@ -105,7 +110,7 @@ export async function listHistory(input: ListHistoryInput): Promise<HistoryRespo
   // created_at は秒精度なので、同一秒の挿入で並びが揺れないよう short_id を第 2 キーにする。
   const { results } = await input.database
     .prepare(
-      `SELECT short_id, user_id, filename, status, pinned, created_at, expires_at
+      `SELECT short_id, user_id, filename, status, pinned, created_at, expires_at, size_bytes, kind
        FROM movies
        WHERE user_id = ? AND status = 'ready'
        ORDER BY created_at DESC, short_id DESC
@@ -186,6 +191,13 @@ export async function togglePin(
   // 成功として返すと、画面には pin 済みと出るのに実体は消える（または上限を超える）。
   if (result.meta.changes === 0) await throwPinConflict({ ...input, nextPinned });
 
+  await recordUsageEvent(input.database, {
+    userId: input.userId,
+    event: nextPinned ? 'movie_pinned' : 'movie_unpinned',
+    shortId: input.shortId,
+    kind: movie.kind,
+    sizeBytes: movie.size_bytes,
+  });
   return { shortId: input.shortId, pinned: nextPinned, expiresAt };
 }
 
@@ -318,6 +330,15 @@ export async function deleteMovie(
     });
     throw error;
   }
+
+  // 行が消えた後も「いつ誰が消したか」を残す。movie は削除前に読んだ行。
+  await recordUsageEvent(input.database, {
+    userId: input.userId,
+    event: 'movie_deleted',
+    shortId: input.shortId,
+    kind: movie.kind,
+    sizeBytes: movie.size_bytes,
+  });
 }
 
 /** 所有者の行を引く。形式不正・不在・他人の shortId はすべて 404（存在を漏らさない）。 */
@@ -332,7 +353,7 @@ async function findOwnedMovie(
 
   const row = await database
     .prepare(
-      `SELECT short_id, user_id, filename, status, pinned, created_at, expires_at
+      `SELECT short_id, user_id, filename, status, pinned, created_at, expires_at, size_bytes, kind
        FROM movies
        WHERE short_id = ? AND user_id = ?`
     )

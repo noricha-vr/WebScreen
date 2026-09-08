@@ -64,8 +64,8 @@ export async function createPendingUpload(
   // 1 文の書き込みを直列化するため、後から実行された INSERT は先行予約を含めて判定する。
   const reservation = await input.database
     .prepare(
-      `INSERT INTO movies (short_id, user_id, filename, size_bytes, status, expires_at)
-       SELECT ?, ?, ?, ?, 'pending', ?
+      `INSERT INTO movies (short_id, user_id, filename, size_bytes, status, expires_at, kind)
+       SELECT ?, ?, ?, ?, 'pending', ?, ?
        WHERE COALESCE((
          SELECT SUM(size_bytes) FROM movies
          WHERE user_id = ? AND status IN ('pending', 'ready', 'failed')
@@ -78,6 +78,7 @@ export async function createPendingUpload(
       input.request.filename,
       input.request.sizeBytes,
       expiresAt,
+      input.request.kind,
       input.userId,
       input.request.sizeBytes,
       USER_STORAGE_QUOTA_BYTES,

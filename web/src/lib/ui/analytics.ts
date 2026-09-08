@@ -4,13 +4,38 @@ import { isShortId } from '../contracts/r2key';
 export const ANALYTICS_EVENT_NAMES = [
   'convert_start',
   'convert_complete',
+  'convert_error',
   'convert_url_copy',
   'tool_nav_click',
   'resume_prompt_impression',
   'resume_prompt_click',
+  'login_click',
+] as const;
+
+/**
+ * convert_error の reason。表示側の UploadErrorCode（lib/ui/upload-flow.ts）と同じ語彙。
+ * エラー本文や URL は載せず、分類だけを送る。
+ */
+export const ANALYTICS_ERROR_REASONS = [
+  'tooLarge',
+  'unsupported',
+  'tooManyPages',
+  'pageTooLong',
+  'captureTimeout',
+  'sessionExpired',
+  'failed',
+  'pdfUrlNotSupported',
+  'imageUrlNotSupported',
+  'videoUrlNotSupported',
+  'nonWebPageUrl',
+  'wasmLoadTimeout',
+  'imageFetchTimeout',
+  'uploadTimeout',
+  'apiTimeout',
 ] as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENT_NAMES)[number];
+export type AnalyticsErrorReason = (typeof ANALYTICS_ERROR_REASONS)[number];
 export type AnalyticsTool = 'convert';
 export type AnalyticsSource = 'home' | 'convert_page' | 'header' | 'resume';
 export type AnalyticsInputKind = 'web' | 'image' | 'pdf';
@@ -23,7 +48,7 @@ export interface AnalyticsConfigParameters {
 
 export type ConversionAnalyticsEvent = Extract<
   AnalyticsEventName,
-  'convert_start' | 'convert_complete' | 'convert_url_copy'
+  'convert_start' | 'convert_complete' | 'convert_error' | 'convert_url_copy'
 >;
 
 export interface ConversionParameters {
@@ -33,7 +58,19 @@ export interface ConversionParameters {
   locale: AnalyticsLocale;
 }
 
+/** 失敗は分類（reason）だけを添える。URL・ファイル名・例外本文は送らない。 */
+export interface ConversionErrorParameters extends ConversionParameters {
+  reason: AnalyticsErrorReason;
+}
+
 interface ToolNavigationParameters {
+  tool: AnalyticsTool;
+  source: 'header';
+  locale: AnalyticsLocale;
+}
+
+/** ヘッダーのログイン導線。どのページからでも押せるので source で区別する。 */
+interface LoginClickParameters {
   tool: AnalyticsTool;
   source: 'header';
   locale: AnalyticsLocale;
@@ -49,10 +86,12 @@ interface ResumeParameters {
 export interface AnalyticsEventParameterMap {
   convert_start: ConversionParameters;
   convert_complete: ConversionParameters;
+  convert_error: ConversionErrorParameters;
   convert_url_copy: ConversionParameters;
   tool_nav_click: ToolNavigationParameters;
   resume_prompt_impression: ResumeParameters;
   resume_prompt_click: ResumeParameters;
+  login_click: LoginClickParameters;
 }
 
 export type AnalyticsEventCall = {
@@ -121,20 +160,57 @@ export function dispatchAnalyticsEvent(
   }
 }
 
-/** 現在の変換ページに対する成功イベントを送る。 */
+/** 現在の変換ページに対するイベントを送る。convert_error は reason（失敗の分類）を添える。 */
 export function trackConversionEvent(
   event: ConversionAnalyticsEvent,
-  inputKind: AnalyticsInputKind
+  inputKind: AnalyticsInputKind,
+  reason?: AnalyticsErrorReason
 ): void {
   const browser = browserEnvironment('convert');
   if (!browser) return;
-  const eventCall = [event, {
+  const parameters: ConversionParameters = {
     tool: 'convert',
     source: browser.source,
     input_kind: inputKind,
     locale: browser.locale,
-  }] as unknown as AnalyticsEventCall;
+  };
+  const eventCall = (
+    event === 'convert_error' ? [event, { ...parameters, reason: reason ?? 'failed' }] : [event, parameters]
+  ) as unknown as AnalyticsEventCall;
   dispatchAnalyticsEvent(browser.environment, ...eventCall);
+}
+
+/** ヘッダーのログインボタンが押されたことを送る。言語付きページならどこからでも送る。 */
+export function trackLoginClick(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const locale = localeForPath(window.location.pathname);
+    if (!locale) return;
+    dispatchAnalyticsEvent(
+      { hostname: window.location.hostname, gtag: window.gtag },
+      'login_click',
+      { tool: 'convert', source: 'header', locale }
+    );
+  } catch {
+    // 計測の失敗でログイン遷移を止めない。
+  }
+}
+
+/**
+ * `data-analytics-login` を持つリンクの click で login_click を送る。
+ *
+ * 遷移は止めない（gtag は既定で sendBeacon を使うので、離脱してもイベントは届く）。
+ */
+export function bindLoginClickTracking(root: ParentNode): void {
+  for (const link of root.querySelectorAll<HTMLElement>('[data-analytics-login]')) {
+    link.addEventListener('click', () => trackLoginClick());
+  }
+}
+
+/** 言語付きページ（/{lang}/ 配下すべて）の locale。言語の無いパス（共有 URL 等）は計測しない。 */
+export function localeForPath(pathname: string): AnalyticsLocale | null {
+  const match = pathname.match(/^\/(ja|en)(?:\/|$)/);
+  return match ? (match[1] as AnalyticsLocale) : null;
 }
 
 /** 言語付き製品ページだけを、許可済み source / locale へ変換する。 */
@@ -196,12 +272,19 @@ function allowedEventCall(eventCall: AnalyticsEventCall): AnalyticsEventCall | n
     const inputKind = (parameters as ConversionParameters).input_kind;
     if (tool !== 'convert' || !['home', 'convert_page'].includes(source)) return null;
     if (!['web', 'image', 'pdf'].includes(inputKind)) return null;
+    if (event === 'convert_error') {
+      const reason = (parameters as ConversionErrorParameters).reason;
+      if (!(ANALYTICS_ERROR_REASONS as readonly string[]).includes(reason)) return null;
+      return keys === 'input_kind,locale,reason,source,tool'
+        ? call({ tool, source, input_kind: inputKind, locale, reason })
+        : null;
+    }
     return keys === 'input_kind,locale,source,tool'
       ? call({ tool, source, input_kind: inputKind, locale })
       : null;
   }
   if (tool !== 'convert' || keys !== 'locale,source,tool') return null;
-  if (event === 'tool_nav_click') {
+  if (event === 'tool_nav_click' || event === 'login_click') {
     return source === 'header' ? call({ tool, source, locale }) : null;
   }
   if (event === 'resume_prompt_impression' || event === 'resume_prompt_click') {

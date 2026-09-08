@@ -81,6 +81,7 @@ main への push で GitHub Actions が本番へ反映する（`.github/workflow
 - 変換した動画とキャプチャ画像は**公開**（認証なしで取得できる）。保護は 12 文字のランダム ID だけ
 - ブラウザ内変換は FFmpeg.wasm を使うため COOP/COEP ヘッダーが要る（`web/src/middleware.ts`）
 - **D1 の条件付き更新（期限・容量・上限）は事前 SELECT で判定せず WHERE で守る**（詳細: [docs/coding-conventions.md](docs/coding-conventions.md)）
+- **利用ログ（D1 `usage_events`）は消さない**。movies の行は保持期間で消えるので、「誰が・いつ・何を・どれだけ」は `services/usage-log.ts` 経由でこのテーブルに残す（commit・削除・pin・期限切れ・ログイン）。集計は `make usage-report`。GA4 のイベント契約は `web/src/lib/ui/analytics.ts`（公開 ID・URL・例外本文は送らない）
 
 ## Review guidelines
 
