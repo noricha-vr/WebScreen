@@ -25,6 +25,7 @@ const WORKER_FAILURE_EVENTS = [
   'capture_upstream_rejected',
   'capture_upstream_error_unmapped',
   'health_cron_read_failed',
+  'cross_origin_mutation_rejected',
 ] as const;
 type WorkerFailureEvent = (typeof WORKER_FAILURE_EVENTS)[number];
 
@@ -36,6 +37,7 @@ export function logWorkerFailure({
   status,
   upstreamStatus,
   errorName,
+  reason,
 }: {
   level?: WorkerLogLevel;
   event: WorkerFailureEvent;
@@ -44,6 +46,8 @@ export function logWorkerFailure({
   upstreamStatus?: number;
   /** 例外の種別だけ（`error.name`）。message / stack は内容が読めないので入れない。 */
   errorName?: string;
+  /** 拒否理由の固定識別子（例外ではない判定結果の内訳）。リクエストの値は入れない。 */
+  reason?: string;
 }): void {
   // URL・Cookie・上流本文は含めず、Cloudflare observability で安全に絞り込める項目だけを出す。
   const entry = JSON.stringify({
@@ -57,6 +61,7 @@ export function logWorkerFailure({
     status,
     upstreamStatus,
     errorName,
+    reason,
     summary: `${event} returned ${status} ${errorCode}.`,
   });
   if (level === 'warn') {
