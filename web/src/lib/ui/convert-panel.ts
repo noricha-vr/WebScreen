@@ -66,11 +66,13 @@ type Dispatch = (event: UploadEvent, runGeneration?: number) => void;
 type Navigate = (url: string) => void;
 type EmittedConversionAnalyticsEvent = Extract<
   ConversionAnalyticsEvent,
-  'convert_start' | 'convert_complete'
+  'convert_start' | 'convert_complete' | 'convert_error'
 >;
 type TrackConversionAnalytics = (
   event: EmittedConversionAnalyticsEvent,
-  inputKind: AnalyticsInputKind
+  inputKind: AnalyticsInputKind,
+  /** convert_error の分類（UploadErrorCode）。成功イベントでは付けない。 */
+  reason?: UploadErrorCode
 ) => void;
 
 export interface ConvertPanelOptions {
@@ -242,7 +244,7 @@ export function uploadErrorEstimatedImages(error: unknown): number | null {
 export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptions = {}): void {
   const navigate: Navigate = options.navigate ?? ((url) => window.location.assign(url));
   const trackAnalytics: TrackConversionAnalytics = options.trackAnalytics ?? (
-    (event, inputKind) => trackConversionEvent(event, inputKind)
+    (event, inputKind, reason) => trackConversionEvent(event, inputKind, reason)
   );
 
   let state = INITIAL_UPLOAD_STATE;
@@ -278,9 +280,10 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
 
   const trackConversion = (
     event: EmittedConversionAnalyticsEvent,
-    inputKind: AnalyticsInputKind
+    inputKind: AnalyticsInputKind,
+    reason?: UploadErrorCode
   ): void => {
-    try { trackAnalytics(event, inputKind); }
+    try { trackAnalytics(event, inputKind, reason); }
     catch { /* 計測 observer の失敗で変換を止めない。 */ }
   };
 
@@ -396,6 +399,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         console.error('conversion failed', error);
         const errorCode = uploadErrorCode(error);
         reportFailure(error, errorCode);
+        trackConversion('convert_error', kind, errorCode);
         dispatch({ type: 'failed', errorCode }, current);
       });
   };
@@ -479,6 +483,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         console.error('conversion failed', error);
         const errorCode = uploadErrorCode(error);
         reportFailure(error, errorCode);
+        trackConversion('convert_error', 'web', errorCode);
         dispatch(
           {
             type: 'failed',

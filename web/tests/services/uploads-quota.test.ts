@@ -1,6 +1,8 @@
 import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import { describe, expect, it } from 'bun:test';
 
+import { applyMigrations } from './helpers/sqlite-migrations';
+
 import {
   ERROR_CODES,
   MAX_UPLOAD_BYTES,
@@ -48,7 +50,7 @@ class SqliteD1Adapter implements UploadDatabase {
 /** 実際の初期 migration を適用した、テストごとに独立なD1代替を作る。 */
 async function createDatabase(): Promise<SqliteD1Adapter> {
   const sqlite = new Database(':memory:');
-  sqlite.exec(await Bun.file(new URL('../../migrations/0001_init.sql', import.meta.url)).text());
+  await applyMigrations(sqlite);
   sqlite.query('INSERT INTO users (id, discord_id, name) VALUES (?, ?, ?)').run(USER_ID, '10', 'tester');
   return new SqliteD1Adapter(sqlite);
 }

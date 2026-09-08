@@ -33,6 +33,7 @@ import {
   sweepFailedObjects,
 } from './retention-failed';
 import { recoverPendingUploads } from './retention-pending';
+import { recordUsageEvent } from './usage-log';
 
 export { MAX_FAILED_DELETIONS_PER_RUN } from './retention-failed';
 export { MAX_PENDING_CLAIMS_PER_RUN } from './retention-pending';
@@ -110,6 +111,13 @@ export interface RetentionInput {
 
 interface ShortIdRow {
   short_id: string;
+}
+
+/** 期限切れの削除対象。行を消す前に利用ログへ写す値も一緒に読む。 */
+interface ExpiredMovieRow extends ShortIdRow {
+  user_id: number;
+  size_bytes: number;
+  kind: string | null;
 }
 
 /**
@@ -214,10 +222,10 @@ async function deleteExpiredMovies(
   const threshold = now.toISOString();
   const { results } = await database
     .prepare(
-      "SELECT short_id FROM movies WHERE status = 'ready' AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?) LIMIT ?"
+      "SELECT short_id, user_id, size_bytes, kind FROM movies WHERE status = 'ready' AND expires_at IS NOT NULL AND datetime(expires_at) < datetime(?) LIMIT ?"
     )
     .bind(threshold, MAX_EXPIRED_DELETIONS_PER_RUN)
-    .all<ShortIdRow>();
+    .all<ExpiredMovieRow>();
 
   let deleted = 0;
   let stranded = 0;
@@ -257,6 +265,16 @@ async function deleteExpiredMovies(
       .bind(row.short_id, threshold)
       .run();
     deleted += result.meta.changes;
+    // 行を消せた分だけ利用ログに残す（消した後は誰の動画だったか辿れなくなるため、ここで写す）。
+    if (result.meta.changes > 0) {
+      await recordUsageEvent(database, {
+        userId: row.user_id,
+        event: 'movie_expired',
+        shortId: row.short_id,
+        kind: row.kind,
+        sizeBytes: row.size_bytes,
+      });
+    }
     // 0 件は「行が残った」とは限らない（所有者の削除と競合しただけなら正常）。
     // 実体を消したのに行が残っている時だけ、不変条件が破れた印として数える。
     // 次回の実行では R2 が空で気づけないため、この場で確かめる。

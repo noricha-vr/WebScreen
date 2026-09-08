@@ -10,6 +10,7 @@ import {
   type UploadBucket,
 } from './upload-objects';
 import { UploadError, type UploadDatabase } from './upload-types';
+import { recordUsageEvent } from './usage-log';
 
 interface MovieRow {
   short_id: string;
@@ -17,6 +18,8 @@ interface MovieRow {
   size_bytes: number;
   status: 'pending' | 'ready' | 'failed';
   expires_at: string | null;
+  /** 変換元の種別。migration 0006 より前の行は null。 */
+  kind: string | null;
 }
 
 /** upload commit に必要な D1・R2 と所有者情報。 */
@@ -91,6 +94,14 @@ async function finalizePublishedUpload(
 
   if (updated.meta.changes === 0) return resolvePublishedConflict(input, actualSize);
   await tryDeleteTemporaryUpload(input.bucket, input.shortId);
+  // 公開できた動画だけを利用ログに残す（行が 30 日で消えても「誰が何を変換したか」は残る）。
+  await recordUsageEvent(input.database, {
+    userId: input.userId,
+    event: 'movie_ready',
+    shortId: input.shortId,
+    kind: movie.kind,
+    sizeBytes: actualSize,
+  });
   return toCommitResponse({ ...movie, size_bytes: actualSize, status: 'ready' }, input.publicBaseUrl);
 }
 
@@ -164,7 +175,7 @@ async function findMovie(
 ): Promise<MovieRow | null> {
   return database
     .prepare(
-      'SELECT short_id, user_id, size_bytes, status, expires_at FROM movies WHERE short_id = ? AND user_id = ?'
+      'SELECT short_id, user_id, size_bytes, status, expires_at, kind FROM movies WHERE short_id = ? AND user_id = ?'
     )
     .bind(shortId, userId)
     .first<MovieRow>();

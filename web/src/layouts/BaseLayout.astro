@@ -235,9 +235,11 @@ const GA_TRACKED_HOST = 'web-screen.net';
 
     <script>
       // ログイン状態は静的 HTML に埋め込めないので、描画後に /api/me/ で解決する。
+      import { bindLoginClickTracking } from '../lib/ui/analytics';
       import { resolveAuthState } from '../lib/ui/session-view';
 
       void resolveAuthState(document.documentElement);
+      bindLoginClickTracking(document);
     </script>
   </body>
 </html>

@@ -42,6 +42,24 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 旧 URL `/{lang}/screen-share/` は `https://app.choicast.com/{lang}/` へ 301 する。
 D1 の `stream_sessions` / `stream_start_cancellations` / `node_egress_*` は削除せず残している（`wrangler rollback` で D1 は戻らないため）。
 
+### 利用ログ（D1 `usage_events`）
+
+movies の行と R2 の実体は保持期間（30 日、pin で 1 年）で消えるため、消えた後も「誰が・いつ・何を・どれだけ」を
+追える追記専用のテーブル（`web/migrations/0006_usage_events.sql`）。書き込みは `services/usage-log.ts` の
+`recordUsageEvent` だけが行い、失敗しても本体の操作（commit・削除・ログイン）は失敗させない（warn の構造化ログ
+`usage_event_write_failed` に残す）。
+
+| event | 書く場所 | short_id / kind / size_bytes |
+|---|---|---|
+| `login` | `GET /api/auth/callback/` の成功後 | NULL |
+| `movie_ready` | commit で `ready` にできた直後 | あり |
+| `movie_deleted` | 本人の `DELETE /api/movies/{shortId}/` | あり |
+| `movie_pinned` / `movie_unpinned` | `POST /api/movies/{shortId}/pin/` の成功後 | あり |
+| `movie_expired` | 保持期間バッチが期限切れの行を消した直後 | あり |
+
+`movies.kind`（`pdf` / `image` / `web`）は同じ migration で足した列で、presign 時に `PresignRequest.kind` を書く。
+migration 前の行は NULL（集計では「不明」）。集計は `make usage-report`（`web/scripts/usage-report.sql`）。
+
 ### クライアント失敗報告の上限
 
 `/api/client-error/` は無認証なので、受け付けるのは allowlist に載る `stage` / `errorCode` /

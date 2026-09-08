@@ -5,6 +5,7 @@ import {
   analyticsPageConfig,
   containsPublicId,
   dispatchAnalyticsEvent,
+  localeForPath,
   pageContext,
   type AnalyticsEventName,
   type AnalyticsEventParameterMap,
@@ -83,15 +84,66 @@ describe('GA4 製品イベント契約', () => {
     expect(true).toBe(true);
   });
 
-  test('許可する6イベントを固定する', () => {
+  test('許可するイベントを固定する', () => {
     expect(ANALYTICS_EVENT_NAMES).toEqual([
       'convert_start',
       'convert_complete',
+      'convert_error',
       'convert_url_copy',
       'tool_nav_click',
       'resume_prompt_impression',
       'resume_prompt_click',
+      'login_click',
     ]);
+  });
+
+  test('convert_error は allowlist の reason だけを添えて送り、それ以外は落とす', () => {
+    const calls: unknown[][] = [];
+    const environment = {
+      hostname: 'web-screen.net',
+      gtag: ((...args: unknown[]) => calls.push(args)) as AnalyticsGtag,
+    };
+    const unsafeDispatch = dispatchAnalyticsEvent as unknown as (
+      target: typeof environment,
+      event: string,
+      parameters: object
+    ) => void;
+
+    dispatchAnalyticsEvent(environment, 'convert_error', { ...PARAMETERS, reason: 'tooLarge' });
+    // URL や例外本文を reason に載せる呼び出しは、型を迂回しても通さない。
+    unsafeDispatch(environment, 'convert_error', { ...PARAMETERS, reason: 'https://example.com/secret' });
+    unsafeDispatch(environment, 'convert_error', PARAMETERS);
+    unsafeDispatch(environment, 'convert_complete', { ...PARAMETERS, reason: 'failed' });
+
+    expect(calls).toEqual([['event', 'convert_error', { ...PARAMETERS, reason: 'tooLarge' }]]);
+  });
+
+  test('login_click は header からだけ送る', () => {
+    const calls: unknown[][] = [];
+    const environment = {
+      hostname: 'web-screen.net',
+      gtag: ((...args: unknown[]) => calls.push(args)) as AnalyticsGtag,
+    };
+    const unsafeDispatch = dispatchAnalyticsEvent as unknown as (
+      target: typeof environment,
+      event: string,
+      parameters: object
+    ) => void;
+
+    dispatchAnalyticsEvent(environment, 'login_click', { tool: 'convert', source: 'header', locale: 'en' });
+    unsafeDispatch(environment, 'login_click', { tool: 'convert', source: 'home', locale: 'en' });
+
+    expect(calls).toEqual([['event', 'login_click', { tool: 'convert', source: 'header', locale: 'en' }]]);
+  });
+
+  test.each([
+    ['/ja/', 'ja'],
+    ['/en/web/', 'en'],
+    ['/ja/pdf', 'ja'],
+    ['/', null],
+    ['/Ab12Cd34Ef56/', null],
+  ])('%s の言語判定は %s', (pathname, expected) => {
+    expect(localeForPath(pathname)).toBe(expected as 'ja' | 'en' | null);
   });
 
   test.each(['localhost', 'preview.web-screen.net', 'webscreen.pages.dev'])(
