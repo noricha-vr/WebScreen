@@ -34,6 +34,8 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 
 エラーは全経路で `ErrorResponse`（`errorCode` + `message`）を返す。
 
+更新系（POST / PATCH / DELETE）は Cookie 認証だけなので CSRF 対策として `web/src/middleware.ts` が `Origin` ヘッダーの一致を検証する: `Origin` がリクエスト URL の origin と一致しない・欠落している（`Sec-Fetch-Site: same-origin` / `none` が付く場合を除く）、または `Sec-Fetch-Site` が `cross-site` / `same-site` なら 403 `FORBIDDEN`（Content-Type を問わない。フォーム系 Content-Type と Content-Type 無しは Astro 既定の `security.checkOrigin` が先に text/plain の 403 で落とす）。GET（Chrome 拡張の `/api/me/` 等）は対象外。Worker の更新系をブラウザ以外から叩く経路は現状無く、サーバー間経路を足す時は別認証で本判定を明示的に迂回する。
+
 ### ライブ配信 API（移管済み）
 
 `/api/streams/*`（配信セッション・publish JWT・JWKS・MediaMTX 連携）は 2026-09-07 に
