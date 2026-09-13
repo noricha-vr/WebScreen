@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Claude Code がこのリポジトリで作業するときの地図。詳細は各リンク先を正本とし、ここには判断に効く情報だけ置く。
+Claude Code / Codex がこのリポジトリで作業するときの共通の地図（`AGENTS.md` はこのファイルへの相対シンボリックリンク）。詳細は各リンク先を正本とし、ここには判断に効く情報だけ置く。
 
 ## このリポジトリは 2 系統が同居している
 
@@ -41,11 +41,19 @@ make install         # 初回のみ（web/ の依存を lockfile 固定で入れ
 make help
 make check
 make e2e
+make test-tools      # Python の検証ツール（実機接続なし）
 ```
 
 `web/.dev.vars` にローカル用の環境変数が要る（`.dev.vars.example` を参照）。
 
 - ローカル環境・E2E の落とし穴（dev サーバー復旧・ポート分離・Claude Code サンドボックス）は [docs/local-dev.md](docs/local-dev.md)
+
+### 変更に応じた検証
+
+- 通常の変更: `make check`。画面・変換フローの変更は `make e2e` も実行する。
+- 運用ツールの変更: `make test-tools`。コマンド一覧は `make help`。
+- エンコード・動画配信経路の変更: 実際の生成物を `make video-check FILE=...` で検査し、Windows の VRChat で実再生を確認する。自動テストだけで実再生成功と扱わない。実機へ接続できなければ未検証と記録する。
+- Windows 接続先は `VRCHAT_SSH_HOST`（必須、既定値なし）。設定と画面操作は [Windows 実機検証手順](docs/windows-vrchat-verification.md) を参照する。
 
 ## デプロイ
 
@@ -67,6 +75,7 @@ main への push で GitHub Actions が本番へ反映する（`.github/workflow
 | R2 のキー規則 | `web/src/lib/contracts/r2key.ts` |
 | 上流（web-capture）との契約 | [docs/api-contracts.md](docs/api-contracts.md) |
 | 動画のエンコード条件（VRChat 互換） | [docs/encode-contract.md](docs/encode-contract.md) |
+| Windows の VRChat 操作・再生検証 | [docs/windows-vrchat-verification.md](docs/windows-vrchat-verification.md) |
 | R2 の配信とキャッシュ | [docs/r2-delivery.md](docs/r2-delivery.md) |
 | ライブ配信（画面共有） | **2026-09-07 に ちょいキャス（[noricha-vr/choicast](https://github.com/noricha-vr/choicast)）へ移管**。このリポには 301 だけ残す（`web/public/_redirects` / `web/src/pages/screen-share.astro`）。経緯は [docs/streaming/README.md](docs/streaming/README.md) |
 | 表示文言 | `web/src/i18n/ja.json` / `en.json` |
