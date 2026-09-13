@@ -20,3 +20,15 @@ Playwright の `reuseExistingServer`（ローカルでは有効）は、**同じ
 
 - **E2E（wrangler dev / Playwright webServer）はサンドボックス内 Bash では動かない**。miniflare が内部で張る接続がネットワーク遮断に当たり `read ECONNRESET` → `webServer was not able to start` で落ちる。環境変数では直らないので、その呼び出しだけサンドボックス外で実行する
 - **build の EPERM** は別問題: wrangler が `~/Library/Preferences/.wrangler` 等へ書けないだけなので、`MINIFLARE_REGISTRY_PATH=/private/tmp/{name}` と `WRANGLER_LOG_PATH=/private/tmp/{name}.log`（必要なら `XDG_CONFIG_HOME` も）を指定すればサンドボックス内で通る
+
+## テストを絞り込む
+
+```bash
+make test FILE=tests/convert/encode.test.ts
+make e2e FILE=top.spec.ts GREP='MP4' E2E_PORT=4332
+make test-tools
+```
+
+`FILE` は web/ からのテストパス、`GREP` は Playwright のテスト名フィルター。
+E2E はローカルの `.wrangler/state` を作り直すため、同じ checkout で dev と同時に走らせない。
+Windows の接続先設定・再生確認は [Windows 実機検証](windows-vrchat-verification.md) を参照する。
