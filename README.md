@@ -57,7 +57,7 @@ bunx playwright test
 Pushing to `main` deploys to production through GitHub Actions.
 
 Repository layout, conventions and the things you must not break are documented in
-[CLAUDE.md](CLAUDE.md).
+[AGENTS.md](AGENTS.md).
 
 > [!NOTE]
 > The files at the repository root (`router/`, `movie_maker/`, `templates/`, `Dockerfile`, …) are the
