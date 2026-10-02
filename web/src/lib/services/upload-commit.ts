@@ -1,6 +1,7 @@
 import { ERROR_CODES, MAX_UPLOAD_BYTES, type CommitResponse } from '../contracts/api';
 import { movieUrl } from '../contracts/r2key';
 import { logWorkerFailure } from '../observability/worker-log';
+import { purgeMovieCache, type CachePurgeSettings } from './cache-purge';
 import { USER_STORAGE_QUOTA_BYTES } from './quota';
 import {
   getTemporaryUpload,
@@ -29,6 +30,7 @@ export interface CommitUploadInput {
   userId: number;
   shortId: string;
   publicBaseUrl: string;
+  cachePurge: CachePurgeSettings;
 }
 
 /** 一時 R2 実体を検証し、所有者の pending movie を ready に確定する。 */
@@ -112,18 +114,25 @@ async function resolvePublishedConflict(
   let current = await findMovie(input.database, input.userId, input.shortId);
   if (current?.status === 'pending') {
     if (await claimOversizedUpload(input, actualSize)) {
-      await tryDeletePublishedUpload(input.bucket, input.shortId);
+      await cleanupPublishedUpload(input);
       throw oversizedUploadError();
     }
     current = await findMovie(input.database, input.userId, input.shortId);
   }
 
   if (current?.status !== 'ready') {
-    await tryDeletePublishedUpload(input.bucket, input.shortId);
+    await cleanupPublishedUpload(input);
   } else {
     await tryDeleteTemporaryUpload(input.bucket, input.shortId);
   }
   return resolveCurrentMovie(current, input.publicBaseUrl);
+}
+
+/** 公開コピーを消せたときだけ、配信キャッシュも無効にする。 */
+async function cleanupPublishedUpload(input: CommitUploadInput): Promise<void> {
+  if (await tryDeletePublishedUpload(input.bucket, input.shortId)) {
+    await purgeMovieCache([input.shortId], input.cachePurge);
+  }
 }
 
 async function rejectOversizedUpload(

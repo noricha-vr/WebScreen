@@ -19,6 +19,8 @@ interface UploadBindings {
   BUCKET: UploadBucket;
   SESSION_SIGNING_KEY: string;
   R2_PUBLIC_BASE_URL: string;
+  CLOUDFLARE_ZONE_ID?: string;
+  CLOUDFLARE_PURGE_TOKEN?: string;
 }
 
 /** R2 に存在する動画を確認し、所有者の movie を ready に確定する。 */
@@ -38,6 +40,12 @@ export const POST: APIRoute = async ({ request }) => {
       userId: authenticated.user.id,
       shortId: validation.value.shortId,
       publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
+      cachePurge: {
+        publicBaseUrl: bindings.R2_PUBLIC_BASE_URL,
+        zoneId: bindings.CLOUDFLARE_ZONE_ID ?? '',
+        apiToken: bindings.CLOUDFLARE_PURGE_TOKEN ?? '',
+        source: 'webscreen-beta-worker',
+      },
     });
     return json(response, 200);
   } catch (error) {

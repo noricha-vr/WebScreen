@@ -57,6 +57,8 @@ export class FakeRetentionDatabase implements RetentionDatabase {
   onSelect: ((rows: TestMovie[]) => void) | undefined;
   /** failed の最終 early sweep 時刻の記録を失敗させる。 */
   failSweepUpdate = false;
+  /** D1 の指定処理で障害を注入し、削除済み実体の後始末を検証する。 */
+  beforeQuery: ((query: string, values: unknown[]) => void) | undefined;
 
   constructor(movies: TestMovie[]) {
     for (const movie of movies) this.movies.set(movie.shortId, { ...movie });
@@ -79,6 +81,7 @@ export class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private select(query: string, values: unknown[]): Record<string, unknown>[] {
+    this.beforeQuery?.(query, values);
     // 監査のサンプル抽出（開始点以降の ready 行を N 件）。
     if (query.includes('short_id >= ?')) {
       return [...this.movies.values()]
@@ -137,6 +140,7 @@ export class FakeRetentionDatabase implements RetentionDatabase {
   }
 
   private delete(query: string, values: unknown[]): number {
+    this.beforeQuery?.(query, values);
     // 利用ログの追記。movies には触らない。
     if (query.startsWith('INSERT INTO usage_events')) {
       this.usageEvents.push(values);

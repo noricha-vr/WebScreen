@@ -25,6 +25,13 @@ import {
 
 const USER_ID = 10;
 const PUBLIC_URL = 'https://public.example';
+const CACHE_PURGE = {
+  publicBaseUrl: PUBLIC_URL,
+  zoneId: '2210192b51f9f0eb6761d70341ca09b0',
+  apiToken: 'test-token',
+  source: 'test-worker',
+  fetcher: async () => new Response(null, { status: 200 }),
+};
 
 /** bun:sqlite を D1 のサービス境界へ合わせる最小アダプター。 */
 class SqliteD1Adapter implements UploadDatabase {
@@ -207,7 +214,7 @@ describe('アップロードのクォータと検証', () => {
     );
 
     const results = await releaseTogether(['CommitOne001', 'CommitTwo001'].map((shortId) => () =>
-      commitUpload({ database, bucket, userId: USER_ID, shortId, publicBaseUrl: PUBLIC_URL })
+      commitUpload({ database, bucket, userId: USER_ID, shortId, publicBaseUrl: PUBLIC_URL, cachePurge: CACHE_PURGE })
     ));
 
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);

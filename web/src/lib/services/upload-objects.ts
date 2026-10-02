@@ -66,11 +66,13 @@ export async function tryDeleteTemporaryUpload(
 export async function tryDeletePublishedUpload(
   bucket: UploadBucket,
   shortId: string
-): Promise<void> {
+): Promise<boolean> {
   try {
     await bucket.delete(movieKey(shortId));
+    return true;
   } catch (error) {
     logCleanupFailure('upload_public_cleanup_failed', error);
+    return false;
   }
 }
 
