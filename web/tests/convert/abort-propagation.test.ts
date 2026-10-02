@@ -73,12 +73,41 @@ describe('imageFilesToFrames', () => {
 });
 
 describe('pdfToFrames', () => {
+  test('全ページの変換が終わったら loading task と worker を解放する', async () => {
+    restores.push(installCanvasFakes());
+    let destroyed = 0;
+    let terminated = 0;
+    const workerPortHolder = { workerPort: null as unknown };
+    mock.module('pdfjs-dist', () => ({
+      GlobalWorkerOptions: workerPortHolder,
+      getDocument: () => ({
+        promise: Promise.resolve({
+          numPages: 2,
+          getPage: async () => ({
+            getViewport: () => ({ width: 100, height: 100 }),
+            render: () => ({ promise: Promise.resolve(), cancel: () => {} }),
+          }),
+        }),
+        destroy: async () => { destroyed += 1; },
+      }),
+    }));
+    restores.push(installWorkerFake(() => { terminated += 1; }));
+
+    const frames = await pdfToFrames(new File(['pdf'], 'a.pdf'));
+
+    expect(frames).toHaveLength(2);
+    expect(destroyed).toBe(1);
+    expect(terminated).toBe(1);
+    expect(workerPortHolder.workerPort).toBeNull();
+  });
+
   test('中止したら残りのページを描画せず、進行中の描画も打ち切る', async () => {
     restores.push(installCanvasFakes());
     const controller = new AbortController();
     let renders = 0;
     let cancels = 0;
     let terminated = 0;
+    let destroyed = 0;
 
     const page = {
       getViewport: () => ({ width: 100, height: 100 }),
@@ -101,8 +130,8 @@ describe('pdfToFrames', () => {
         promise: Promise.resolve({
           numPages: 3,
           getPage: async () => page,
-          destroy: async () => {},
         }),
+        destroy: async () => { destroyed += 1; },
       }),
     }));
     restores.push(installWorkerFake(() => {
@@ -118,6 +147,7 @@ describe('pdfToFrames', () => {
     expect(failure).toBeInstanceOf(Error);
     // 自前の worker は pdfjs が畳んでくれないので、中止でも必ず終了させる。
     expect(terminated).toBe(1);
+    expect(destroyed).toBe(1);
     expect(workerPortHolder.workerPort).toBeNull();
   });
 });
@@ -129,21 +159,31 @@ describe('返ってこない前処理', () => {
     restores.push(installCanvasFakes());
     const controller = new AbortController();
     let terminated = 0;
+    let destroyed = 0;
+    const started = Promise.withResolvers<void>();
     const workerPortHolder = { workerPort: null as unknown };
     mock.module('pdfjs-dist', () => ({
       GlobalWorkerOptions: workerPortHolder,
       // 解析が始まったきり返ってこない上流。
-      getDocument: () => ({ promise: neverSettles() }),
+      getDocument: () => {
+        started.resolve();
+        return {
+          promise: neverSettles(),
+          destroy: () => { destroyed += 1; return neverSettles(); },
+        };
+      },
     }));
     restores.push(installWorkerFake(() => {
       terminated += 1;
     }));
 
     const running = pdfToFrames(new File(['pdf'], 'a.pdf'), undefined, controller.signal);
+    await started.promise;
     controller.abort();
 
     expect(await millisUntilSettled(running)).toBeLessThan(SETTLE_BUDGET_MS);
     expect(terminated).toBe(1);
+    expect(destroyed).toBe(1);
     expect(workerPortHolder.workerPort).toBeNull();
   });
 

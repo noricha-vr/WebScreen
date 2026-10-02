@@ -1,4 +1,4 @@
-import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
+import type { PDFDocumentLoadingTask, PDFPageProxy } from 'pdfjs-dist';
 
 import { DEFAULT_CAPTURE_HEIGHT, DEFAULT_CAPTURE_WIDTH } from '../contracts/api';
 import { onAbort, raceAbort } from './timeouts';
@@ -47,9 +47,12 @@ export async function pdfToFrames(
   };
   // 解析（getDocument / getPage / render）はシグナルを受け取らない。中止したら worker ごと
   // 落として保留中の待ちを reject させる。これが無いと 1 ページの解析が終わるまで止まらない。
-  const session: { document: PDFDocumentProxy | null } = { document: null };
+  const session: { loadingTask: PDFDocumentLoadingTask | null } = { loadingTask: null };
+  let closing: Promise<void> | undefined;
+  const destroyDocument = (): Promise<void> | undefined =>
+    closing ??= session.loadingTask?.destroy().catch(() => undefined);
   const releaseAbort = onAbort(signal, () => {
-    void session.document?.destroy().catch(() => undefined);
+    void destroyDocument();
     stopWorker();
   });
 
@@ -58,7 +61,7 @@ export async function pdfToFrames(
   } finally {
     releaseAbort();
     // 中止時は worker を畳んだ後なので destroy の応答は返らない。待つと止まらなくなる。
-    const closing = session.document?.destroy().catch(() => undefined);
+    const closing = destroyDocument();
     if (!signal?.aborted) await closing;
     stopWorker();
     pdfjs.GlobalWorkerOptions.workerPort = null;
@@ -68,14 +71,15 @@ export async function pdfToFrames(
 async function renderPdfFrames(
   pdfjs: typeof import('pdfjs-dist'),
   pdfFile: File,
-  session: { document: PDFDocumentProxy | null },
+  session: { loadingTask: PDFDocumentLoadingTask | null },
   report?: ProgressReporter,
   signal?: AbortSignal
 ): Promise<VideoFrame[]> {
   const data = await raceAbort(pdfFile.arrayBuffer(), signal);
-  const pdfDocument = await raceAbort(pdfjs.getDocument({ data }).promise, signal);
-  // 破棄は呼び出し側（worker を畳む側）に任せる。ここで待つと中止時に返らなくなる。
-  session.document = pdfDocument;
+  // PDF.js 6 では文書の破棄は loading task が担当する。解析中の中止でも解放できるよう
+  // promise の完了を待つ前に保持し、worker を畳む呼び出し側で破棄する。
+  session.loadingTask = pdfjs.getDocument({ data });
+  const pdfDocument = await raceAbort(session.loadingTask.promise, signal);
 
   assertPdfPageCount(pdfDocument.numPages);
   const frames: VideoFrame[] = [];
