@@ -42,8 +42,9 @@ interface FailedSweepResult {
 export async function deleteFailedMovies(
   database: FailedRetentionDatabase,
   bucket: FailedRetentionBucket,
-  now: Date
-): Promise<FailedSweepResult & { deleted: number }> {
+  now: Date,
+  purged: string[]
+): Promise<Omit<FailedSweepResult, 'purged'> & { deleted: number }> {
   const threshold = new Date(now.getTime() - FAILED_RETENTION_MS).toISOString();
   const { results } = await database
     .prepare(
@@ -53,18 +54,20 @@ export async function deleteFailedMovies(
     .all<ShortIdRow>();
 
   const capped = results.length === MAX_FAILED_DELETIONS_PER_RUN;
-  if (results.length === 0) return { deleted: 0, deferred: 0, purged: [], capped };
+  if (results.length === 0) return { deleted: 0, deferred: 0, capped };
 
   const shortIds = results.map((row) => row.short_id);
   try {
     await bucket.delete(objectKeys(shortIds));
   } catch {
     // R2 が落ちている間に行だけ消すと実体が孤児になるため、この実行では行を残す。
-    return { deleted: 0, deferred: shortIds.length, purged: [], capped };
+    return { deleted: 0, deferred: shortIds.length, capped };
   }
 
+  // D1 の途中失敗でも呼び出し元の finally が全 URL を purge できるよう先に記録する。
+  purged.push(...shortIds);
   const deleted = await deleteFailedRows(database, shortIds);
-  return { deleted, deferred: 0, purged: shortIds, capped };
+  return { deleted, deferred: 0, capped };
 }
 
 /** 署名失効後の failed 実体だけを早期回収し、D1行を保持する。 */

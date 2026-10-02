@@ -329,6 +329,7 @@ describe('upload recovery', () => {
         bucket,
         userId: USER_ID,
         shortId: first.shortId,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_BASE_URL,
       })
     ).rejects.toMatchObject({ status: 413 });

@@ -110,7 +110,13 @@ mp4 は Cloudflare の[既定キャッシュ対象](https://developers.cloudflar
 | 経路 | 実装 |
 |---|---|
 | 所有者の削除（`DELETE /api/movies/{shortId}/`、`ready` のみ） | `web/src/lib/services/movies.ts` の `deleteMovie` |
+| commit 競合・容量超過で公開コピーを回収する時 | `web/src/lib/services/upload-commit.ts`（R2 の削除成功後だけ purge） |
 | 保持期間バッチ（期限切れ・署名失効後の pending・failed の掃除） | `web/src/lib/services/retention.ts`、`retention-pending.ts`、`retention-failed.ts` |
+
+保持期間バッチは、各フェーズで R2 の削除に成功した ID を保持し、後続の D1 処理が失敗した場合も
+`finally` で purge する。D1 の例外自体は呼び出し元へ伝え、cron の失敗として記録する。
+commit の公開コピー回収も、R2 の削除に失敗した時は purge しない。purge の失敗は既存の
+`cache_purge_failed` ログで観測し、commit の元のエラー応答は維持する。
 
 `captures/` の掃除（`retention-captures.ts`）は purge しない。中間 PNG は変換が終われば誰も参照せず、キャッシュに残っても動画の削除の意図に反しないため。
 

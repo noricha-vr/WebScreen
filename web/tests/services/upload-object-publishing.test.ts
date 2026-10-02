@@ -4,6 +4,7 @@ import { describe, expect, it } from 'bun:test';
 import { applyMigrations } from './helpers/sqlite-migrations';
 
 import { movieKey, temporaryUploadKey } from '../../src/lib/contracts/r2key';
+import type { CachePurgeSettings } from '../../src/lib/services/cache-purge';
 import { deleteMovie } from '../../src/lib/services/movies';
 import {
   commitUpload,
@@ -15,6 +16,27 @@ import {
 const USER_ID = 137;
 const SHORT_ID = 'Hardening137';
 const PUBLIC_BASE_URL = 'https://cdn.example';
+const CACHE_PURGE = {
+  publicBaseUrl: PUBLIC_BASE_URL,
+  zoneId: '2210192b51f9f0eb6761d70341ca09b0',
+  apiToken: 'test-token',
+  source: 'test-worker',
+  fetcher: async () => new Response(null, { status: 200 }),
+};
+
+function capturePurge(status = 200): { batches: string[][]; settings: CachePurgeSettings } {
+  const batches: string[][] = [];
+  return {
+    batches,
+    settings: {
+      ...CACHE_PURGE,
+      fetcher: async (_url, init) => {
+        batches.push((JSON.parse(String(init?.body)) as { files: string[] }).files);
+        return new Response(null, { status });
+      },
+    },
+  };
+}
 
 class SqliteD1Adapter implements UploadDatabase {
   onReadyUpdate: (() => void) | undefined;
@@ -191,18 +213,21 @@ describe('署名 PUT の一時キー公開', () => {
     const bucket = new MemoryUploadBucket();
     await reserve(database, []);
     bucket.objects.set(temporaryUploadKey(SHORT_ID), bytes(1, 2, 3));
+    const purge = capturePurge();
 
     await commitUpload({
       database,
       bucket,
       userId: USER_ID,
       shortId: SHORT_ID,
+      cachePurge: purge.settings,
       publicBaseUrl: PUBLIC_BASE_URL,
     });
 
     expect(bucket.objects.get(movieKey(SHORT_ID))).toEqual(bytes(1, 2, 3));
     expect(bucket.contentTypes.get(movieKey(SHORT_ID))).toBe('video/mp4');
     expect(bucket.objects.has(temporaryUploadKey(SHORT_ID))).toBe(false);
+    expect(purge.batches).toEqual([]);
   });
 
   it('commit 後に元署名先へ巨大再 PUT しても公開 bytes と D1 size は変わらない', async () => {
@@ -215,6 +240,7 @@ describe('署名 PUT の一時キー公開', () => {
       bucket,
       userId: USER_ID,
       shortId: SHORT_ID,
+      cachePurge: CACHE_PURGE,
       publicBaseUrl: PUBLIC_BASE_URL,
     });
 
@@ -240,6 +266,7 @@ describe('署名 PUT の一時キー公開', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_BASE_URL,
       }),
       commitUpload({
@@ -247,6 +274,7 @@ describe('署名 PUT の一時キー公開', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_BASE_URL,
       }),
     ]);
@@ -270,6 +298,7 @@ describe('署名 PUT の一時キー公開', () => {
       bucket,
       userId: USER_ID,
       shortId: SHORT_ID,
+      cachePurge: CACHE_PURGE,
       publicBaseUrl: PUBLIC_BASE_URL,
     });
 
@@ -290,6 +319,7 @@ describe('署名 PUT の一時キー公開', () => {
       bucket,
       userId: USER_ID,
       shortId: SHORT_ID,
+      cachePurge: CACHE_PURGE,
       publicBaseUrl: PUBLIC_BASE_URL,
     });
     await deleteMovie({
@@ -324,6 +354,7 @@ describe('署名 PUT の一時キー公開', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_BASE_URL,
       })
     ).rejects.toThrow('R2 put failed');
@@ -338,6 +369,7 @@ describe('署名 PUT の一時キー公開', () => {
   it('公開コピー後に D1 の failed 確保と競合したら公開コピーだけを戻す', async () => {
     const database = await createDatabase();
     const bucket = new MemoryUploadBucket();
+    const purge = capturePurge();
     await reserve(database, []);
     bucket.objects.set(temporaryUploadKey(SHORT_ID), bytes(1, 2, 3));
     bucket.onPut = () => {
@@ -352,15 +384,41 @@ describe('署名 PUT の一時キー公開', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: purge.settings,
         publicBaseUrl: PUBLIC_BASE_URL,
       })
     ).rejects.toMatchObject({ status: 400 });
 
     expect(bucket.objects.has(movieKey(SHORT_ID))).toBe(false);
     expect(bucket.objects.has(temporaryUploadKey(SHORT_ID))).toBe(true);
+    expect(purge.batches).toEqual([[`${PUBLIC_BASE_URL}/${movieKey(SHORT_ID)}`]]);
     expect(database.sqlite.query('SELECT status FROM movies WHERE short_id = ?').get(SHORT_ID)).toEqual({
       status: 'failed',
     });
+  });
+
+  it.each([200, 500])('公開サイズ超過のコピーを削除・purge し、purge 応答 %i でも413を保つ', async (status) => {
+    const database = await createDatabase();
+    const bucket = new MemoryUploadBucket();
+    const purge = capturePurge(status);
+    await reserve(database, []);
+    bucket.objects.set(temporaryUploadKey(SHORT_ID), bytes(1, 2, 3));
+    bucket.objects.set(movieKey(SHORT_ID), new Uint8Array(201));
+
+    const events = await captureWarnEvents(async () => {
+      await expect(commitUpload({
+        database,
+        bucket,
+        userId: USER_ID,
+        shortId: SHORT_ID,
+        publicBaseUrl: PUBLIC_BASE_URL,
+        cachePurge: purge.settings,
+      })).rejects.toMatchObject({ status: 413 });
+    });
+
+    expect(bucket.objects.has(movieKey(SHORT_ID))).toBe(false);
+    expect(purge.batches).toEqual([[`${PUBLIC_BASE_URL}/${movieKey(SHORT_ID)}`]]);
+    expect(events).toEqual(status === 500 ? ['cache_purge_failed'] : []);
   });
 
   it('ready 化後の tmp cleanup 失敗を記録し、ready DELETE で再回収する', async () => {
@@ -377,6 +435,7 @@ describe('署名 PUT の一時キー公開', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_BASE_URL,
       });
     });
@@ -405,6 +464,7 @@ describe('署名 PUT の一時キー公開', () => {
   it('競合時の公開 cleanup 失敗を記録し、failed sweep が両キーを追跡できる状態を残す', async () => {
     const database = await createDatabase();
     const bucket = new MemoryUploadBucket();
+    const purge = capturePurge();
     const publicKey = movieKey(SHORT_ID);
     await reserve(database, []);
     bucket.objects.set(temporaryUploadKey(SHORT_ID), bytes(1, 2, 3));
@@ -422,12 +482,14 @@ describe('署名 PUT の一時キー公開', () => {
           bucket,
           userId: USER_ID,
           shortId: SHORT_ID,
+          cachePurge: purge.settings,
           publicBaseUrl: PUBLIC_BASE_URL,
         })
       ).rejects.toMatchObject({ status: 400 });
     });
 
     expect(events).toEqual(['upload_public_cleanup_failed']);
+    expect(purge.batches).toEqual([]);
     expect(bucket.objects.has(publicKey)).toBe(true);
     expect(bucket.objects.has(temporaryUploadKey(SHORT_ID))).toBe(true);
     expect(database.sqlite.query('SELECT status FROM movies WHERE short_id = ?').get(SHORT_ID)).toEqual({

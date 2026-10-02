@@ -23,7 +23,7 @@
  */
 
 import { movieKey, temporaryUploadKey } from '../contracts/r2key';
-import { purgeMovieCache, type CachePurgeSettings } from './cache-purge';
+import { purgeMovieCache, type CachePurgeResult, type CachePurgeSettings } from './cache-purge';
 import { PINNED_RETENTION_MS } from './quota';
 import { auditReadyObjects } from './retention-audit';
 import { deleteStaleCaptures, type CaptureBucket } from './retention-captures';
@@ -133,10 +133,14 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   const backfilledPinned = await backfillPinnedExpiry(database, now);
   // 経路ごとに、実体を消した直後にキャッシュも落とす（最後にまとめると、後続の掃除が
   // 落ちた時に先行の分まで purge されず「消したのに 120 分見える」が残る）。
-  const expired = await deleteExpiredMovies(database, bucket, now);
-  const expiredPurge = await purgeMovieCache(expired.purged, cachePurge);
-  const failed = await deleteFailedMovies(database, bucket, now);
-  const failedPurge = await purgeMovieCache(failed.purged, cachePurge);
+  const { result: expired, purge: expiredPurge } = await runDeletionPhase(
+    (purged) => deleteExpiredMovies(database, bucket, now, purged),
+    cachePurge
+  );
+  const { result: failed, purge: failedPurge } = await runDeletionPhase(
+    (purged) => deleteFailedMovies(database, bucket, now, purged),
+    cachePurge
+  );
   // 24時間超の pending をこの実行で failed にしても、墓石を即消さない。
   // 次の failed object sweep が実体を回収し、行は次サイクルの failed purge まで残す。
   const pending = await recoverPendingUploads(database, now);
@@ -174,6 +178,24 @@ export async function runRetention(input: RetentionInput): Promise<RetentionSumm
   };
 }
 
+/** 後続の D1 処理が失敗しても、R2 削除済みの分は purge してから元の例外を返す。 */
+async function runDeletionPhase<T>(
+  remove: (purged: string[]) => Promise<T>,
+  settings: CachePurgeSettings
+): Promise<{ result: T; purge: CachePurgeResult }> {
+  // 削除処理が return に到達しなくても、成功した R2 削除の記録を失わない。
+  const purged: string[] = [];
+  let result: T;
+  let purge: CachePurgeResult;
+  try {
+    result = await remove(purged);
+  } finally {
+    // purgeMovieCache は例外を投げない契約。元の D1 例外はそのまま伝播する。
+    purge = await purgeMovieCache(purged, settings);
+  }
+  return { result, purge };
+}
+
 /**
  * pin 済みなのに期限を持たない行へ、1 年後の期限を入れる。
  *
@@ -209,14 +231,13 @@ async function backfillPinnedExpiry(database: RetentionDatabase, now: Date): Pro
 async function deleteExpiredMovies(
   database: RetentionDatabase,
   bucket: RetentionBucket,
-  now: Date
+  now: Date,
+  purged: string[]
 ): Promise<{
   deleted: number;
   stranded: number;
   skipped: number;
   deferred: number;
-  /** R2 の実体を消した shortId（行が残ったものも含む。キャッシュは落とす）。 */
-  purged: string[];
   capped: boolean;
 }> {
   const threshold = now.toISOString();
@@ -231,7 +252,6 @@ async function deleteExpiredMovies(
   let stranded = 0;
   let skipped = 0;
   let deferred = 0;
-  const purged: string[] = [];
   for (const row of results) {
     // 初回 SELECT の後に pin（= 期限の延長）が入った場合、R2 を先に消すと生きた
     // 行だけが残る。R2 削除の直前にも期限を読み直し、実体と行の不整合を防ぐ。
@@ -292,7 +312,6 @@ async function deleteExpiredMovies(
     stranded,
     skipped,
     deferred,
-    purged,
     capped: results.length === MAX_EXPIRED_DELETIONS_PER_RUN,
   };
 }

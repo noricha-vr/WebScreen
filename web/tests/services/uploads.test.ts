@@ -160,6 +160,13 @@ async function captureWarnEvents(run: () => Promise<void>): Promise<string[]> {
 const USER_ID = 10;
 const SHORT_ID = 'AbCdEf123456';
 const PUBLIC_URL = 'https://public.example';
+const CACHE_PURGE = {
+  publicBaseUrl: PUBLIC_URL,
+  zoneId: '2210192b51f9f0eb6761d70341ca09b0',
+  apiToken: 'test-token',
+  source: 'test-worker',
+  fetcher: async () => new Response(null, { status: 200 }),
+};
 
 function movie(overrides: Partial<TestMovie> = {}): TestMovie {
   return {
@@ -203,6 +210,7 @@ describe('commitUpload', () => {
         bucket: new FakeUploadBucket(321),
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).resolves.toEqual({
@@ -223,6 +231,7 @@ describe('commitUpload', () => {
         bucket: new FakeUploadBucket(null),
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).resolves.toMatchObject({ shortId: SHORT_ID, sizeBytes: 321 });
@@ -240,6 +249,7 @@ describe('commitUpload', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 404 });
@@ -261,6 +271,7 @@ describe('commitUpload', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 400 });
@@ -284,6 +295,7 @@ describe('commitUpload', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).resolves.toMatchObject({ shortId: SHORT_ID, sizeBytes: 321 });
@@ -299,6 +311,7 @@ describe('commitUpload', () => {
         bucket: new FakeUploadBucket(100),
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 404 });
@@ -314,6 +327,7 @@ describe('commitUpload', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 413 });
@@ -335,6 +349,7 @@ describe('commitUpload', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 413 });
@@ -353,6 +368,7 @@ describe('commitUpload', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 413 });
@@ -377,6 +393,7 @@ describe('commitUpload', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       });
     });
@@ -401,6 +418,7 @@ describe('commitUpload', () => {
           bucket,
           userId: USER_ID,
           shortId: SHORT_ID,
+          cachePurge: CACHE_PURGE,
           publicBaseUrl: PUBLIC_URL,
         })
       ).rejects.toMatchObject({ status: 404 });
@@ -425,6 +443,7 @@ describe('commitUpload', () => {
         bucket,
         userId: USER_ID,
         shortId: SHORT_ID,
+        cachePurge: CACHE_PURGE,
         publicBaseUrl: PUBLIC_URL,
       })
     ).rejects.toMatchObject({ status: 400 });
