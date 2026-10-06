@@ -9,6 +9,9 @@ https://web-screen.net
 VRChat のビデオプレイヤーは Web ページやスライド、スクリーンショットをそのまま開けません。動画しか再生できないためです。
 WebScreen はそれらを「上から下へスクロールする動画」に変換し、プレイヤーに貼るための URL を返します。
 
+画面共有・ライブ配信は [ちょいキャス](https://choicast.com/ja/) に移りました。OBS 不要で、ブラウザから VRChat（VRC）の
+ビデオプレイヤーへ画面を共有できます。
+
 ## 使い方
 
 1. https://web-screen.net を開き、Discord でログインする

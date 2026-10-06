@@ -10,6 +10,9 @@ VRChat video players cannot open a web page, a slide deck or a screenshot — th
 WebScreen converts those into an MP4 that scrolls through the content, and gives you a URL to paste
 into the player.
 
+Looking for live screen sharing? That moved to [Choicast](https://choicast.com/en/): share your screen
+to a VRChat video player straight from the browser, no OBS needed.
+
 ## How to use
 
 1. Open https://web-screen.net and sign in with Discord.
