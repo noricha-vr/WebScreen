@@ -115,7 +115,7 @@
   "footer": {
     "github": "GitHub",
     "releases": "更新履歴",
-    "choicast": "ちょいキャス（画面共有）",
+    "choicast": "ちょいキャス（VRChat 画面共有）",
     "privacy": "Cookie とプライバシー",
     "terms": "利用規約",
     "langSwitch": "English",
@@ -280,11 +280,15 @@
     "extensionLink": "Chrome ウェブストアで追加",
     "imageLink": "画像の変換について詳しく",
     "pdfLink": "PDF の変換について詳しく",
-    "screenShareLink": "画面共有・ライブ配信は ちょいキャス へ"
+    "choicastHeading": "VRChat の画面共有は ちょいキャス",
+    "choicastBody": "PC の画面をリアルタイムで見せたいときは、姉妹サービスの「ちょいキャス」が使えます。OBS は不要で、ブラウザから配信を始めて、発行された URL を VRChat（VRC）のビデオプレイヤーに貼るだけです。WebScreen にあった画面共有・ライブ配信の機能は、ちょいキャスへ引っ越しました。",
+    "choicastMediaAlt": "PC の画面が VRChat に共有される様子",
+    "choicastLink": "ちょいキャスで VRChat に画面共有する"
   },
   "useCases": {
     "stepsHeading": "使い方",
     "relatedHeading": "関連ページ",
+    "choicastLink": "VRChat で画面共有する（ちょいキャス）",
     "web": {
       "title": "VRChat で Web ページを見せる｜URL を動画に変換 — WebScreen",
       "navLabel": "Web ページを動画にする",

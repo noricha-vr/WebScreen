@@ -1,5 +1,6 @@
 ---
 import { useTranslations, type Locale } from '../i18n';
+import { choicastUrl } from '../lib/choicast';
 import { USE_CASE_SLUGS, useCasePath, type UseCasePage } from '../lib/use-cases';
 
 /**
@@ -75,6 +76,19 @@ const related = (Object.keys(USE_CASE_SLUGS) as UseCasePage[]).filter((key) => k
           </li>
         ))
       }
+      {/* 画面共有は用途別ページを持たず、姉妹サービスのちょいキャスが受け持つ。 */}
+      <li>
+        <a
+          href={choicastUrl(lang)}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center gap-2 text-slate-700 underline hover:text-brand-700"
+          data-choicast-link
+        >
+          <i class="fa-solid fa-tower-broadcast text-brand-500" aria-hidden="true"></i>
+          <span>{t.useCases.choicastLink}</span>
+        </a>
+      </li>
     </ul>
   </nav>
 </article>

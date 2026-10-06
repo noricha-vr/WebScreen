@@ -86,6 +86,41 @@ test.describe('サービス紹介', () => {
   });
 });
 
+test.describe('ちょいキャスへの案内', () => {
+  // 転送を挟まない正規 URL。app.choicast.com は apex へ 301 するので、そちらに戻すと二段転送になる。
+  const choicast = (locale: 'ja' | 'en') => `https://choicast.com/${locale}/`;
+
+  for (const [locale, dict] of [
+    ['ja', ja],
+    ['en', en],
+  ] as const) {
+    test(`${locale} トップに画面共有の案内が見出し付きで出て、ちょいキャスへ繋がる`, async ({
+      page,
+    }) => {
+      await page.goto(`/${locale}/`);
+
+      await expect(
+        page.getByRole('heading', { level: 2, name: dict.lp.choicastHeading })
+      ).toBeVisible();
+      const link = page.getByRole('link', { name: dict.lp.choicastLink });
+      await expect(link).toHaveAttribute('href', choicast(locale));
+      // nofollow を付けると評価が渡らない。
+      await expect(link).toHaveAttribute('rel', 'noopener');
+    });
+
+    for (const path of ['web', 'video-player', 'image', 'pdf']) {
+      test(`/${locale}/${path}/ の関連ページからちょいキャスへ繋がる`, async ({ page }) => {
+        await page.goto(`/${locale}/${path}/`);
+
+        const link = page.locator('article [data-choicast-link]');
+        await expect(link).toHaveText(dict.useCases.choicastLink);
+        await expect(link).toHaveAttribute('href', choicast(locale));
+        await expect(link).toHaveAttribute('rel', 'noopener');
+      });
+    }
+  }
+});
+
 test.describe('リンクプレビュー', () => {
   const content = (page: Page, selector: string): Promise<string | null> =>
     page.locator(selector).getAttribute('content');

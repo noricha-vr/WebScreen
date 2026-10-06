@@ -41,7 +41,7 @@ URL は `trailingSlash: 'always'`（末尾スラッシュ必須）。スラッ�
 `/api/streams/*`（配信セッション・publish JWT・JWKS・MediaMTX 連携）は 2026-09-07 に
 ちょいキャス（[noricha-vr/choicast](https://github.com/noricha-vr/choicast)）へ移管し、このリポからは削除した。
 配信サーバー（MediaMTX）の `authJWTJWKS` は `https://app.choicast.com/api/streams/jwks/` を指す。
-旧 URL `/{lang}/screen-share/` は `https://app.choicast.com/{lang}/` へ 301 する。
+旧 URL `/{lang}/screen-share/` は `https://choicast.com/{lang}/` へ 301 する。
 D1 の `stream_sessions` / `stream_start_cancellations` / `node_egress_*` は削除せず残している（`wrangler rollback` で D1 は戻らないため）。
 
 ### 利用ログ（D1 `usage_events`）
