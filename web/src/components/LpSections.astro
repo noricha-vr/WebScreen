@@ -85,6 +85,18 @@ const sections: Section[] = [
     mediaAlt: t.lp.historyMediaAlt,
     media: { kind: 'image', src: `${MEDIA_BASE}/history.png` },
   },
+  {
+    // 画面共有は姉妹サービスのちょいキャスへ移管した。1 行のリンクではなく見出しと本文を持つ
+    // 項目にして、「VRChat 画面共有」で探している人と検索エンジンの両方に移管先を伝える。
+    // 順序を前に入れると Web → 拡張機能の並び（e2e/top-content.spec.ts）が崩れるので末尾に置く。
+    icon: 'fa-tower-broadcast',
+    heading: t.lp.choicastHeading,
+    body: t.lp.choicastBody,
+    mediaAlt: t.lp.choicastMediaAlt,
+    // share.webm にも対応する静止画が GCS に無いため poster を付けない。
+    media: { kind: 'video', src: `${MEDIA_BASE}/share.webm` },
+    link: { href: CHOICAST_URL, label: t.lp.choicastLink, external: true },
+  },
 ];
 ---
 
@@ -150,16 +162,4 @@ const sections: Section[] = [
   <div class="mt-14">
     <PinHighlight lang={lang} />
   </div>
-
-  <p class="mt-12 text-base text-slate-600">
-    <a
-      href={CHOICAST_URL}
-      target="_blank"
-      rel="noopener"
-      class="inline-flex items-center gap-2 text-brand-700 underline hover:text-brand-500"
-    >
-      <span>{t.lp.screenShareLink}</span>
-      <i class="fa-solid fa-arrow-up-right-from-square text-sm" aria-hidden="true"></i>
-    </a>
-  </p>
 </section>

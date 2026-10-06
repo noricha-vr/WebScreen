@@ -11,7 +11,7 @@
 #   - web / pdf / image     : 同じ用途のページを新版に用意したので、ここに転送行を書かない。
 #                             転送行を残すと実ページより優先され、新ページへ到達できなくなる。
 #   - screen-share          : 画面共有は 2026-09-07 に姉妹サービス「ちょいキャス」
-#                             （https://app.choicast.com/{lang}/ ）へ移管した。言語付きはここで直接送る。
+#                             （https://choicast.com/{lang}/ ）へ移管した。言語付きはここで直接送る。
 #   - recording / streaming : リアルタイムの画面共有・録画も同じくちょいキャスの領分。以前は
 #                             /{lang}/screen-share/ へ寄せていたが、そこが外部へ 301 する今は
 #                             二段ホップを避けるため直接ちょいキャスへ送る。
@@ -42,14 +42,14 @@
 # マッチし、`/fr/history/` → `/fr/`（404）と 2 ホップさせてしまう。対応言語は astro.config.mjs の
 # i18n.locales で 2 つに固定されているので、増えた時にここへ追記する。
 /ja/history/ /ja/ 301
-/ja/screen-share/ https://app.choicast.com/ja/ 301
-/ja/recording/ https://app.choicast.com/ja/ 301
-/ja/streaming/ https://app.choicast.com/ja/ 301
+/ja/screen-share/ https://choicast.com/ja/ 301
+/ja/recording/ https://choicast.com/ja/ 301
+/ja/streaming/ https://choicast.com/ja/ 301
 /ja/github/ /ja/ 301
 /en/history/ /en/ 301
-/en/screen-share/ https://app.choicast.com/en/ 301
-/en/recording/ https://app.choicast.com/en/ 301
-/en/streaming/ https://app.choicast.com/en/ 301
+/en/screen-share/ https://choicast.com/en/ 301
+/en/recording/ https://choicast.com/en/ 301
+/en/streaming/ https://choicast.com/en/ 301
 /en/github/ /en/ 301
 
 # 旧版の privacy は末尾スラッシュ無し（router/main_page.py の @router.get("/{lang}/privacy")）。

@@ -115,7 +115,7 @@
   "footer": {
     "github": "GitHub",
     "releases": "Release notes",
-    "choicast": "Choicast (screen sharing)",
+    "choicast": "Choicast (VRChat screen sharing)",
     "privacy": "Cookies and privacy",
     "terms": "Terms",
     "langSwitch": "日本語",
@@ -280,11 +280,15 @@
     "extensionLink": "Add from the Chrome Web Store",
     "imageLink": "More about converting images",
     "pdfLink": "More about converting PDFs",
-    "screenShareLink": "Screen sharing / live streaming moved to Choicast"
+    "choicastHeading": "Screen sharing in VRChat: Choicast",
+    "choicastBody": "To show your PC screen live, use our sister service Choicast. No OBS needed: start streaming from your browser and paste the issued URL into a VRChat video player. The screen sharing and live streaming features that used to be in WebScreen have moved to Choicast.",
+    "choicastMediaAlt": "A PC screen being shared into VRChat",
+    "choicastLink": "Share your screen in VRChat with Choicast"
   },
   "useCases": {
     "stepsHeading": "How to use it",
     "relatedHeading": "Related pages",
+    "choicastLink": "Share your screen in VRChat (Choicast)",
     "web": {
       "title": "Show a web page in VRChat: convert a URL to video — WebScreen",
       "navLabel": "Turn a web page into video",

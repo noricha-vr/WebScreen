@@ -14,7 +14,7 @@ const TOP_FALLBACK_PATHS = ['history', 'github'] as const;
 const SCREEN_SHARE_ALIASES = ['recording', 'streaming'] as const;
 
 /** 画面共有の移管先（2026-09-07 にちょいキャスへ分離）。lib/choicast.ts と同じ値。 */
-const choicast = (locale: 'ja' | 'en') => `https://app.choicast.com/${locale}/`;
+const choicast = (locale: 'ja' | 'en') => `https://choicast.com/${locale}/`;
 
 const LOCALES = ['ja', 'en'] as const;
 
