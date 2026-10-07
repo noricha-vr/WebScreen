@@ -48,21 +48,12 @@ describe('GA4 製品イベント契約', () => {
     expect(analyticsPageConfig(page, raw)?.page_referrer).toBe(expected);
   });
 
-  test('page locationはキャンペーン用のqueryだけ残す', () => {
+  test('page locationはutmを含むqueryを全部落とす', () => {
+    // utm の値には公開 ID や公開 URL を自由に入れられるため、キャンペーン用でも残さない。
     expect(analyticsPageConfig(
-      {
-        origin: 'https://web-screen.net',
-        pathname: '/ja/web/',
-        search: '?short-id=Secret123456&utm_source=x&utm_medium=social&gclid=abc&fbclid=zzz',
-      },
+      { origin: 'https://web-screen.net', pathname: '/ja/web/' },
       ''
-    )?.page_location).toBe(
-      'https://web-screen.net/ja/web/?utm_source=x&utm_medium=social&gclid=abc'
-    );
-    expect(analyticsPageConfig(
-      { origin: 'https://web-screen.net', pathname: '/ja/', search: '?stream-id=Secret123456' },
-      ''
-    )?.page_location).toBe('https://web-screen.net/ja/');
+    )?.page_location).toBe('https://web-screen.net/ja/web/');
   });
 
   test('公開IDを含む同一origin referrerは空文字で上書きする', () => {

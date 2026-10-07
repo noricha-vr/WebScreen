@@ -121,20 +121,6 @@ export function containsPublicId(pathname: string): boolean {
 }
 
 /**
- * page_location に残してよい query。GA4 はキャンペーン（参照元・メディア）を page_location の
- * utm_* / gclid から判定するため、全部落とすと広告・SNS 投稿のリンクが Direct に混ざる。
- * 値はリンクを作った側が決める短いラベルで、公開 ID の置き場ではないので許可リストで残す。
- */
-export const ANALYTICS_CAMPAIGN_PARAMS = [
-  'utm_source',
-  'utm_medium',
-  'utm_campaign',
-  'utm_term',
-  'utm_content',
-  'gclid',
-] as const;
-
-/**
  * GA4 へ渡す referrer。
  *
  * - 外部: origin だけ（例 `https://www.google.com/`）。流入元の判定には host があれば足り、
@@ -142,8 +128,8 @@ export const ANALYTICS_CAMPAIGN_PARAMS = [
  * - 同一 origin: 公開 ID を含まないパスだけ。含むなら空文字。
  * - 空・不正: 空文字。
  *
- * http(s) 以外（Android アプリの `android-app://パッケージ名/` 等）も host があれば同じ形で残す。
- * GA4 はこの形でアプリからの流入を判定する。
+ * Android アプリ経由の流入は `android-app://パッケージ名/` の形で届くので、http(s) 以外も
+ * host があれば同じ形（scheme + host）で残す。
  */
 function analyticsReferrer(rawReferrer: string, pageOrigin: string): string {
   let referrer: URL;
@@ -158,20 +144,12 @@ function analyticsReferrer(rawReferrer: string, pageOrigin: string): string {
   return referrer.host === '' ? '' : `${referrer.protocol}//${referrer.host}/`;
 }
 
-/** page_location の query を ANALYTICS_CAMPAIGN_PARAMS だけに絞る（hash は常に落とす）。 */
-function analyticsLocation(page: { origin: string; pathname: string; search?: string }): string {
-  const source = new URLSearchParams(page.search ?? '');
-  const kept = new URLSearchParams();
-  for (const name of ANALYTICS_CAMPAIGN_PARAMS) {
-    const value = source.get(name);
-    if (value !== null) kept.set(name, value);
-  }
-  const query = kept.toString();
-  return page.origin + page.pathname + (query === '' ? '' : `?${query}`);
-}
-
 /**
- * 公開 ID を除いたページ情報だけを GA4 初期設定へ渡す。
+ * query/hash と公開 ID を除いたページ情報だけを GA4 初期設定へ渡す。
+ *
+ * page_location の query は utm_* も含めて全部落とす。キャンペーン判定は効かなくなるが、
+ * utm の値はリンクを作った人が自由に書けるので、公開 ID や公開 URL をそのまま入れられる。
+ * 値を検証して残すほどキャンペーン計測に頼っていないため、漏らさない側に倒している。
  *
  * 公開 ID を含む現在パスでは null を返し、config 自体を送らせない。パラメータの省略は使えない
  * （gtag は page_location / page_referrer 未指定時に location.href / document.referrer を
@@ -182,12 +160,12 @@ function analyticsLocation(page: { origin: string; pathname: string; search?: st
  * 実際の dataLayer の値でこの関数と同じ結果になることを確かめている。
  */
 export function analyticsPageConfig(
-  page: { origin: string; pathname: string; search?: string },
+  page: { origin: string; pathname: string },
   rawReferrer: string
 ): AnalyticsConfigParameters | null {
   if (containsPublicId(page.pathname)) return null;
   return {
-    page_location: analyticsLocation(page),
+    page_location: page.origin + page.pathname,
     page_referrer: analyticsReferrer(rawReferrer, page.origin),
   };
 }

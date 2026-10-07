@@ -214,17 +214,9 @@ const GA_TRACKED_HOST = 'web-screen.net';
             } catch {
               // 空・不正な referrer は送らない。
             }
-            // キャンペーン判定に使う query だけ残す（ANALYTICS_CAMPAIGN_PARAMS の写し）。
-            const currentParams = new URLSearchParams(location.search);
-            const campaignParams = new URLSearchParams();
-            for (const name of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid']) {
-              const value = currentParams.get(name);
-              if (value !== null) campaignParams.set(name, value);
-            }
-            const campaignQuery = campaignParams.toString();
             window.gtag('config', gaMeasurementId, {
-              page_location:
-                location.origin + location.pathname + (campaignQuery === '' ? '' : '?' + campaignQuery),
+              // query は utm_* も含めて落とす（理由は analyticsPageConfig のコメント）。
+              page_location: location.origin + location.pathname,
               page_referrer: pageReferrer,
             });
 

@@ -67,20 +67,14 @@ for (const { title, path, referer } of [
   { title: '検索エンジン', path: '/ja/web/', referer: 'https://www.google.com/search?q=x' },
   { title: '公開IDを含む同一origin', path: '/ja/', referer: `${PRODUCTION_ORIGIN}/Ab12Cd34Ef56/` },
   { title: '同一originのquery付き', path: '/en/', referer: `${PRODUCTION_ORIGIN}/ja/?short-id=Secret123456` },
-  {
-    title: 'キャンペーンquery付きの着地',
-    path: '/ja/?utm_source=x&utm_campaign=y&stream-id=Secret123456',
-    referer: 'https://t.co/abc',
-  },
+  // utm の値に公開 ID を入れられるため、キャンペーン用の query も送らない。
+  { title: 'utm付きの着地', path: '/ja/?utm_campaign=Ab12Cd34Ef56&stream-id=Secret123456', referer: 'https://t.co/abc' },
 ]) {
   test(`GA4初期設定（${title}）はanalyticsPageConfigと同じ値を送る`, async ({ page }) => {
     // インラインスクリプトは analyticsPageConfig の写しなので、実ブラウザの dataLayer で一致を見る。
     const config = await openAsProduction(page, path, referer);
     const url = new URL(path, PRODUCTION_ORIGIN);
-    const expected = analyticsPageConfig(
-      { origin: url.origin, pathname: url.pathname, search: url.search },
-      referer
-    );
+    const expected = analyticsPageConfig({ origin: url.origin, pathname: url.pathname }, referer);
 
     expect(config).toEqual(['config', GA_MEASUREMENT_ID, expected]);
   });
