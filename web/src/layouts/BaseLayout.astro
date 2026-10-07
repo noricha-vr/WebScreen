@@ -169,7 +169,7 @@ const GA_TRACKED_HOST = 'web-screen.net';
     <meta name="twitter:card" content="summary_large_image" />
     {
       // 言語版の対応。索引対象のページだけに出す（noindex のプレビューは言語版を持たない）。
-      // 絶対 URL・自分自身を含む全言語・x-default（言語振り分けのトップ）の組にする。
+      // 絶対 URL・自分自身を含む全言語・x-default の組にする（規則は hreflangAlternates）。
       // HTML コメントにしないのは、出力に残ると「noindex」の語がページに混ざるため。
       !noindex &&
         hreflangAlternates(Astro.url.pathname, Astro.site).map((alternate) => (
