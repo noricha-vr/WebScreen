@@ -208,7 +208,8 @@ const GA_TRACKED_HOST = 'web-screen.net';
                 if (!containsPublicId(referrer.pathname)) {
                   pageReferrer = referrer.origin + referrer.pathname;
                 }
-              } else if (referrer.host !== '') {
+              } else if (referrer.host !== '' && !containsPublicId(referrer.hostname.replace(/\./g, '/'))) {
+                // ホスト名のラベルに 12 文字の英数字があれば ID の漏れとして送らない。
                 pageReferrer = referrer.protocol + '//' + referrer.host + '/';
               }
             } catch {

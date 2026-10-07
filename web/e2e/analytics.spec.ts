@@ -65,6 +65,7 @@ const PRODUCTION_ORIGIN = 'https://web-screen.net';
 for (const { title, path, referer } of [
   // #278: 外部 referrer を捨てていたため、検索流入が全部 Direct に計上されていた。
   { title: '検索エンジン', path: '/ja/web/', referer: 'https://www.google.com/search?q=x' },
+  { title: 'ホスト名に公開IDを含む外部', path: '/ja/', referer: 'https://Ab12Cd34Ef56.example.com/' },
   { title: '公開IDを含む同一origin', path: '/ja/', referer: `${PRODUCTION_ORIGIN}/Ab12Cd34Ef56/` },
   { title: '同一originのquery付き', path: '/en/', referer: `${PRODUCTION_ORIGIN}/ja/?short-id=Secret123456` },
   // utm の値に公開 ID を入れられるため、キャンペーン用の query も送らない。

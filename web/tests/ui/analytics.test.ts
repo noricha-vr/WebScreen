@@ -37,7 +37,10 @@ describe('GA4 製品イベント契約', () => {
     // 外部ページのパスに 12 文字の ID が入っていても origin しか送らない。
     ['https://example.com/Ab12Cd34Ef56/?q=secret#frag', 'https://example.com/'],
     ['http://example.com:8080/a/b', 'http://example.com:8080/'],
-    // Android アプリからの流入は GA4 がこの形で判定する。
+    // ホスト名のラベルに 12 文字の英数字があれば、小文字化されていても ID の漏れとして送らない。
+    ['https://Ab12Cd34Ef56.example.com/', ''],
+    ['https://www.ab12cd34ef56.example/x', ''],
+    // Android アプリからの流入は scheme + host の形で届く。
     ['android-app://com.google.android.gm/', 'android-app://com.google.android.gm/'],
     // 空・不正・host の無い referrer は送らない（空文字で自動収集を打ち消す）。
     ['', ''],

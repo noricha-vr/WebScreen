@@ -125,6 +125,8 @@ export function containsPublicId(pathname: string): boolean {
  *
  * - 外部: origin だけ（例 `https://www.google.com/`）。流入元の判定には host があれば足り、
  *   パスと query には外部ページ側の任意の文字列（たまたま 12 文字の ID を含むものも）が入る。
+ *   ただしホスト名のラベルに 12 文字の英数字があれば空文字。host は小文字化されて届くが、
+ *   英字の大小を総当たりすれば 2^12 通りまで絞れるので、ID の漏れとして扱う。
  * - 同一 origin: 公開 ID を含まないパスだけ。含むなら空文字。
  * - 空・不正: 空文字。
  *
@@ -141,7 +143,8 @@ function analyticsReferrer(rawReferrer: string, pageOrigin: string): string {
   if (referrer.origin === pageOrigin) {
     return containsPublicId(referrer.pathname) ? '' : referrer.origin + referrer.pathname;
   }
-  return referrer.host === '' ? '' : `${referrer.protocol}//${referrer.host}/`;
+  if (referrer.host === '' || referrer.hostname.split('.').some(isShortId)) return '';
+  return `${referrer.protocol}//${referrer.host}/`;
 }
 
 /**
