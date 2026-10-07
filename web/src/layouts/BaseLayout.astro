@@ -2,7 +2,7 @@
 import '../styles/global.css';
 import SiteFooter from '../components/SiteFooter.astro';
 import SiteHeader from '../components/SiteHeader.astro';
-import { alternateLocale, switchLocalePath, useTranslations, type Locale } from '../i18n';
+import { hreflangAlternates, useTranslations, type Locale } from '../i18n';
 
 interface Props {
   lang: Locale;
@@ -51,7 +51,6 @@ const {
   webApplication = false,
 } = Astro.props;
 const t = useTranslations(lang);
-const other = alternateLocale(lang);
 const summary = description ?? t.meta.description;
 
 // OG の URL は絶対でないとクローラが解決できない。site は astro.config.mjs で固定しており、
@@ -168,7 +167,15 @@ const GA_TRACKED_HOST = 'web-screen.net';
     <meta property="og:image:height" content={OG_IMAGE_SIZE.height} />
     <meta property="og:image:alt" content={t.meta.imageAlt} />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="alternate" hreflang={other} href={switchLocalePath(Astro.url.pathname, other)} />
+    {
+      // 言語版の対応。索引対象のページだけに出す（noindex のプレビューは言語版を持たない）。
+      // 絶対 URL・自分自身を含む全言語・x-default（言語振り分けのトップ）の組にする。
+      // HTML コメントにしないのは、出力に残ると「noindex」の語がページに混ざるため。
+      !noindex &&
+        hreflangAlternates(Astro.url.pathname, Astro.site).map((alternate) => (
+          <link rel="alternate" hreflang={alternate.hreflang} href={alternate.href} />
+        ))
+    }
     <link
       rel="stylesheet"
       href={FONT_AWESOME_URL}

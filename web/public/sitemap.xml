@@ -13,6 +13,7 @@
         <loc>https://web-screen.net/ja/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>1.0</priority>
     </url>
@@ -20,6 +21,7 @@
         <loc>https://web-screen.net/en/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>1.0</priority>
     </url>
@@ -27,6 +29,7 @@
         <loc>https://web-screen.net/ja/web/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/web/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/web/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -34,6 +37,7 @@
         <loc>https://web-screen.net/en/web/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/web/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/web/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -41,6 +45,7 @@
         <loc>https://web-screen.net/ja/video-player/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/video-player/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/video-player/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -48,6 +53,7 @@
         <loc>https://web-screen.net/en/video-player/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/video-player/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/video-player/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -56,6 +62,7 @@
         <loc>https://web-screen.net/ja/image/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/image/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/image/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -63,6 +70,7 @@
         <loc>https://web-screen.net/en/image/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/image/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/image/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -70,6 +78,7 @@
         <loc>https://web-screen.net/ja/pdf/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/pdf/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/pdf/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -77,6 +86,7 @@
         <loc>https://web-screen.net/en/pdf/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/pdf/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/pdf/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -84,6 +94,7 @@
         <loc>https://web-screen.net/ja/privacy/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/privacy/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/privacy/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>yearly</changefreq>
         <priority>0.3</priority>
     </url>
@@ -91,6 +102,7 @@
         <loc>https://web-screen.net/en/privacy/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/privacy/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/privacy/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>yearly</changefreq>
         <priority>0.3</priority>
     </url>
@@ -98,6 +110,7 @@
         <loc>https://web-screen.net/ja/terms/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/terms/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/terms/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>yearly</changefreq>
         <priority>0.3</priority>
     </url>
@@ -105,6 +118,7 @@
         <loc>https://web-screen.net/en/terms/</loc>
         <xhtml:link rel="alternate" hreflang="ja" href="https://web-screen.net/ja/terms/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://web-screen.net/en/terms/"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://web-screen.net/"/>
         <changefreq>yearly</changefreq>
         <priority>0.3</priority>
     </url>

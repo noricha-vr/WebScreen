@@ -155,6 +155,44 @@ test.describe('用途別ページのメタ情報', () => {
   }
 });
 
+test.describe('hreflang', () => {
+  /** HTML の `<link rel="alternate" hreflang>` を { 言語: href } にする。 */
+  function hreflangLinks(html: string): Record<string, string> {
+    const links = [...html.matchAll(/<link\b[^>]*\brel="alternate"[^>]*>/g)].map((m) => m[0]);
+    return Object.fromEntries(
+      links.map((link) => [/hreflang="([^"]+)"/.exec(link)![1]!, /href="([^"]+)"/.exec(link)![1]!])
+    );
+  }
+
+  test('sitemap の全ページが絶対 URL・自己参照・x-default 付きの hreflang を持つ', async ({
+    request,
+  }) => {
+    // sitemap を正本にして、ページを増やした時の付け忘れも拾う。
+    const sitemap = await (await request.get('/sitemap.xml')).text();
+    const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!);
+    expect(locations.length).toBeGreaterThan(0);
+
+    for (const location of locations) {
+      const path = new URL(location).pathname;
+      const html = await (await request.get(path)).text();
+      const lang = path.startsWith('/en/') ? 'en' : 'ja';
+      const other = lang === 'ja' ? 'en' : 'ja';
+
+      expect(hreflangLinks(html), path).toEqual({
+        [lang]: location,
+        [other]: `https://web-screen.net${path.replace(`/${lang}/`, `/${other}/`)}`,
+        'x-default': 'https://web-screen.net/',
+      });
+    }
+  });
+
+  test('noindex のプレビューページには hreflang を出さない', async ({ request }) => {
+    const html = await (await request.get(`/${E2E_FIXTURES.readyShortId}/`)).text();
+
+    expect(hreflangLinks(html)).toEqual({});
+  });
+});
+
 test.describe('noindex', () => {
   test('プレビューページは検索結果に載せない', async ({ request }) => {
     const response = await request.get(`/${E2E_FIXTURES.readyShortId}/`);

@@ -46,6 +46,26 @@ export function switchLocalePath(pathname: string, target: Locale): string {
 }
 
 /**
+ * ページの hreflang の組。全言語分（自分自身を含む）と、言語振り分けのトップ `/` を指す x-default。
+ *
+ * 検索エンジンは相対 URL・片方向の指定を正しく束ねられないため、絶対 URL で全言語分を返す
+ * （自分自身を欠くと、相手側からの指定と対にならず無視されうる）。
+ * sitemap.xml の xhtml:link も同じ組にしている（tests/contracts/sitemap.test.ts が突合する）。
+ */
+export function hreflangAlternates(
+  pathname: string,
+  site: URL
+): { hreflang: Locale | 'x-default'; href: string }[] {
+  return [
+    ...LOCALES.map((locale) => ({
+      hreflang: locale,
+      href: new URL(switchLocalePath(pathname, locale), site).href,
+    })),
+    { hreflang: 'x-default' as const, href: new URL('/', site).href },
+  ];
+}
+
+/**
  * Accept-Language ヘッダーからロケールを決める（`/` のリダイレクト先判定）。
  *
  * q 値順に見て最初に一致した言語を採用する。未知の言語しか無い場合は既定ロケール。
