@@ -1,8 +1,6 @@
 # ladder-stage: 1
 #
-# 検査対象は web/（Cloudflare β 版）のみ。既存の Python 実装（router/ movie_maker/ 等）は
-# ゲート外にする。β の構造を先に固めるのが目的で、移行前のコードに後付けの契約を
-# かぶせても違反リストが出るだけで設計は良くならないため。
+# 検査対象は web/ のみ（アプリ本体は web/ にしかない）。
 #
 # 記述規約の正本: ~/.claude/docs/architecture-contract.md
 # 検査: python3 ~/.claude/scripts/check-architecture.py --root .

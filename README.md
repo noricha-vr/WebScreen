@@ -62,10 +62,6 @@ Pushing to `main` deploys to production through GitHub Actions.
 Repository layout, conventions and the things you must not break are documented in
 [AGENTS.md](AGENTS.md).
 
-> [!NOTE]
-> The files at the repository root (`router/`, `movie_maker/`, `templates/`, `Dockerfile`, …) are the
-> previous FastAPI implementation. It is no longer developed and will be removed.
-
 ## License
 
 See [LICENSE.md](LICENSE.md).
