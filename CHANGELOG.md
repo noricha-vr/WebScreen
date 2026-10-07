@@ -4,6 +4,10 @@ Changes are recorded in the Keep a Changelog format.
 
 ## 2026-10-07
 
+### Fixed
+
+- Send the origin of external referrers (for example `https://www.google.com/`) to Google Analytics instead of dropping them, so visits from search engines and other sites are no longer counted as Direct. Paths and query strings of external referrers are still not sent.
+
 ### Removed
 
 - Remove the previous FastAPI implementation (Python app, Dockerfile, Cloud Build config) from the repository. The site has been served by the Cloudflare Workers version in `web/` since 2026-08; nothing in `web/` depended on it.

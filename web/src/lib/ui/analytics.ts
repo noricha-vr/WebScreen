@@ -121,28 +121,56 @@ export function containsPublicId(pathname: string): boolean {
 }
 
 /**
+ * GA4 へ渡す referrer。
+ *
+ * - 外部: origin だけ（例 `https://www.google.com/`）。流入元の判定には host があれば足り、
+ *   パスと query には外部ページ側の任意の文字列（たまたま 12 文字の ID を含むものも）が入る。
+ *   ただしホスト名のラベルに 12 文字の英数字があれば空文字。host は小文字化されて届くが、
+ *   英字の大小を総当たりすれば 2^12 通りまで絞れるので、ID の漏れとして扱う。
+ * - 同一 origin: 公開 ID を含まないパスだけ。含むなら空文字。
+ * - 空・不正: 空文字。
+ *
+ * Android アプリ経由の流入は `android-app://パッケージ名/` の形で届くので、http(s) 以外も
+ * host があれば同じ形（scheme + host）で残す。
+ */
+function analyticsReferrer(rawReferrer: string, pageOrigin: string): string {
+  let referrer: URL;
+  try {
+    referrer = new URL(rawReferrer);
+  } catch {
+    return '';
+  }
+  if (referrer.origin === pageOrigin) {
+    return containsPublicId(referrer.pathname) ? '' : referrer.origin + referrer.pathname;
+  }
+  if (referrer.host === '' || referrer.hostname.split('.').some(isShortId)) return '';
+  return `${referrer.protocol}//${referrer.host}/`;
+}
+
+/**
  * query/hash と公開 ID を除いたページ情報だけを GA4 初期設定へ渡す。
+ *
+ * page_location の query は utm_* も含めて全部落とす。キャンペーン判定は効かなくなるが、
+ * utm の値はリンクを作った人が自由に書けるので、公開 ID や公開 URL をそのまま入れられる。
+ * 値を検証して残すほどキャンペーン計測に頼っていないため、漏らさない側に倒している。
  *
  * 公開 ID を含む現在パスでは null を返し、config 自体を送らせない。パラメータの省略は使えない
  * （gtag は page_location / page_referrer 未指定時に location.href / document.referrer を
  * 自動収集するため、省略するとフル URL が渡って逆効果になる）。referrer 側は同じ理由で
- * 空文字を明示的に送って自動収集を打ち消す。
+ * 送らない時も空文字を明示して自動収集を打ち消す。
+ *
+ * BaseLayout.astro のインラインスクリプトが同じ規則の写しを持つ。e2e/analytics.spec.ts が
+ * 実際の dataLayer の値でこの関数と同じ結果になることを確かめている。
  */
 export function analyticsPageConfig(
   page: { origin: string; pathname: string },
   rawReferrer: string
 ): AnalyticsConfigParameters | null {
   if (containsPublicId(page.pathname)) return null;
-  let pageReferrer = '';
-  try {
-    const referrer = new URL(rawReferrer);
-    if (referrer.origin === page.origin && !containsPublicId(referrer.pathname)) {
-      pageReferrer = referrer.origin + referrer.pathname;
-    }
-  } catch {
-    // 空・不正・外部 referrer は送らない。
-  }
-  return { page_location: page.origin + page.pathname, page_referrer: pageReferrer };
+  return {
+    page_location: page.origin + page.pathname,
+    page_referrer: analyticsReferrer(rawReferrer, page.origin),
+  };
 }
 
 /** 完全一致した本番ホストだけへ、型付きイベントを安全に送る。 */

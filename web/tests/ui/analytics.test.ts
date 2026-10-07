@@ -30,10 +30,33 @@ describe('GA4 製品イベント契約', () => {
     });
   });
 
-  test('外部・不正referrerはGA4へ渡さない', () => {
+  test.each([
+    // 検索エンジン: query（検索語）とパスは落とし、流入元の判定に要る origin だけ残す。
+    ['https://www.google.com/search?q=x', 'https://www.google.com/'],
+    ['https://www.bing.com/search?q=vrchat+pdf', 'https://www.bing.com/'],
+    // 外部ページのパスに 12 文字の ID が入っていても origin しか送らない。
+    ['https://example.com/Ab12Cd34Ef56/?q=secret#frag', 'https://example.com/'],
+    ['http://example.com:8080/a/b', 'http://example.com:8080/'],
+    // ホスト名のラベルに 12 文字の英数字があれば、小文字化されていても ID の漏れとして送らない。
+    ['https://Ab12Cd34Ef56.example.com/', ''],
+    ['https://www.ab12cd34ef56.example/x', ''],
+    // Android アプリからの流入は scheme + host の形で届く。
+    ['android-app://com.google.android.gm/', 'android-app://com.google.android.gm/'],
+    // 空・不正・host の無い referrer は送らない（空文字で自動収集を打ち消す）。
+    ['', ''],
+    ['not a url', ''],
+    ['about:blank', ''],
+  ])('外部referrer %s はoriginだけ送る', (raw, expected) => {
     const page = { origin: 'https://web-screen.net', pathname: '/en/' };
-    expect(analyticsPageConfig(page, 'https://example.com/private?q=secret')?.page_referrer).toBe('');
-    expect(analyticsPageConfig(page, 'not a url')?.page_referrer).toBe('');
+    expect(analyticsPageConfig(page, raw)?.page_referrer).toBe(expected);
+  });
+
+  test('page locationはutmを含むqueryを全部落とす', () => {
+    // utm の値には公開 ID や公開 URL を自由に入れられるため、キャンペーン用でも残さない。
+    expect(analyticsPageConfig(
+      { origin: 'https://web-screen.net', pathname: '/ja/web/' },
+      ''
+    )?.page_location).toBe('https://web-screen.net/ja/web/');
   });
 
   test('公開IDを含む同一origin referrerは空文字で上書きする', () => {

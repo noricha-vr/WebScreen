@@ -198,17 +198,25 @@ const GA_TRACKED_HOST = 'web-screen.net';
               window.dataLayer.push(arguments);
             };
             window.gtag('js', new Date());
-            // 空文字を明示して、gtag の document.referrer 自動収集を打ち消す。
+            // 規則の正本は src/lib/ui/analytics.ts の analyticsPageConfig（ここはその写し）。
+            // 外部 referrer は origin だけ、同一 origin は公開 ID を含まないパスだけを送る。
+            // 送らない時も空文字を明示して、gtag の document.referrer 自動収集を打ち消す。
             let pageReferrer = '';
             try {
               const referrer = new URL(document.referrer);
-              if (referrer.origin === location.origin && !containsPublicId(referrer.pathname)) {
-                pageReferrer = referrer.origin + referrer.pathname;
+              if (referrer.origin === location.origin) {
+                if (!containsPublicId(referrer.pathname)) {
+                  pageReferrer = referrer.origin + referrer.pathname;
+                }
+              } else if (referrer.host !== '' && !containsPublicId(referrer.hostname.replace(/\./g, '/'))) {
+                // ホスト名のラベルに 12 文字の英数字があれば ID の漏れとして送らない。
+                pageReferrer = referrer.protocol + '//' + referrer.host + '/';
               }
             } catch {
-              // 空・不正・外部 referrer は送らない。
+              // 空・不正な referrer は送らない。
             }
             window.gtag('config', gaMeasurementId, {
+              // query は utm_* も含めて落とす（理由は analyticsPageConfig のコメント）。
               page_location: location.origin + location.pathname,
               page_referrer: pageReferrer,
             });
