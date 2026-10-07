@@ -16,11 +16,6 @@
     "avatarAlt": "Account avatar",
     "sessionUnavailable": "Sign-in status unavailable"
   },
-  "notice": {
-    "heading": "WebScreen has been rebuilt",
-    "body": "We now ask you to sign in with Discord so that you can find your converted videos in your history. There is no password to create.",
-    "link": "See what changed"
-  },
   "hero": {
     "title": "Turn what you want to show into a video URL for VRChat",
     "lead": "Convert web pages, photos and slides (PDF) into an MP4 URL that plays in VRChat video players. Drag and drop your files.",

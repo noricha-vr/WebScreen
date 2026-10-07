@@ -2,6 +2,12 @@
 
 Changes are recorded in the Keep a Changelog format.
 
+## 2026-10-07
+
+### Removed
+
+- Remove the "WebScreen has been rebuilt" announcement from the top of the home page in every language.
+
 ## 2026-10-06
 
 ### Changed
