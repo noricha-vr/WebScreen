@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { LANGUAGE_NEUTRAL_PATHS, hreflangAlternates } from '../../src/i18n';
+
 /**
  * sitemap.xml と実際の公開ページの突合。
  *
@@ -79,15 +81,16 @@ describe('sitemap.xml', () => {
     }
   });
 
-  test('alternate は sitemap に載せた URL と x-default のトップだけを指す', () => {
+  test('alternate は sitemap に載せた URL と言語なしの振り分けページだけを指す', () => {
     // 除外したページ（プレビュー等）へ alternate で誘導してしまう事故を防ぐ。
-    // トップ / は言語振り分けの 302 なので loc には載せないが、x-default としては指す。
+    // 言語なしの振り分けページ（/ や /web/）は 302 なので loc には載せないが、x-default としては指す。
     const xml = readFileSync(SITEMAP_PATH, 'utf-8');
     const alternates = new Set(
       [...xml.matchAll(/<xhtml:link[^>]+href="([^"]+)"/g)].map((m) => m[1]!)
     );
 
-    expect([...alternates].sort()).toEqual([...sitemapLocations(), `${SITE_ORIGIN}/`].sort());
+    const neutral = LANGUAGE_NEUTRAL_PATHS.map((path) => `${SITE_ORIGIN}${path}`);
+    expect([...alternates].sort()).toEqual([...sitemapLocations(), ...neutral].sort());
   });
 
   test('各ページの alternate が自分自身と対の言語を指す', () => {
@@ -113,7 +116,6 @@ describe('sitemap.xml', () => {
       // 自分自身の言語・もう一方の言語・x-default の 3 本が揃っていること。
       // HTML 側の hreflang（BaseLayout の hreflangAlternates）と同じ組にする。
       expect(Object.keys(alternates).sort()).toEqual(['en', 'ja', 'x-default']);
-      expect(alternates['x-default']).toBe(`${SITE_ORIGIN}/`);
 
       const path = loc.slice(SITE_ORIGIN.length);
       const lang = path.startsWith('/en/') ? 'en' : 'ja';
@@ -121,6 +123,11 @@ describe('sitemap.xml', () => {
 
       expect(alternates[lang]).toBe(loc);
       expect(alternates[other]).toBe(`${SITE_ORIGIN}${path.replace(`/${lang}/`, `/${other}/`)}`);
+      // HTML 側（BaseLayout）と同じ規則で決まる x-default であること。
+      const expected = hreflangAlternates(path, new URL(SITE_ORIGIN)).find(
+        (alternate) => alternate.hreflang === 'x-default'
+      );
+      expect(alternates['x-default']).toBe(expected!.href);
     }
   });
 });

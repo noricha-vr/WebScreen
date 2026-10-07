@@ -46,22 +46,33 @@ export function switchLocalePath(pathname: string, target: Locale): string {
 }
 
 /**
- * ページの hreflang の組。全言語分（自分自身を含む）と、言語振り分けのトップ `/` を指す x-default。
+ * 言語なしで Accept-Language を見て `/{lang}/xxx/` へ振り分けるページ（src/pages 直下の
+ * index / web / image / pdf）。tests/i18n/hreflang.test.ts が src/pages 直下の実体と突合する。
+ */
+export const LANGUAGE_NEUTRAL_PATHS: readonly string[] = ['/', '/web/', '/image/', '/pdf/'];
+
+/**
+ * ページの hreflang の組。全言語分（自分自身を含む）と x-default。
  *
  * 検索エンジンは相対 URL・片方向の指定を正しく束ねられないため、絶対 URL で全言語分を返す
  * （自分自身を欠くと、相手側からの指定と対にならず無視されうる）。
+ * x-default は同じページの言語なし版（言語を振り分けるページ）があればそれ、無ければ既定ロケール版。
+ * 全ページでトップ `/` を指すと、下層ページの x-default が内容の対応しないページになる。
  * sitemap.xml の xhtml:link も同じ組にしている（tests/contracts/sitemap.test.ts が突合する）。
  */
 export function hreflangAlternates(
   pathname: string,
   site: URL
 ): { hreflang: Locale | 'x-default'; href: string }[] {
+  const defaultPath = switchLocalePath(pathname, DEFAULT_LOCALE);
+  const neutralPath = defaultPath.slice(`/${DEFAULT_LOCALE}`.length);
+  const xDefaultPath = LANGUAGE_NEUTRAL_PATHS.includes(neutralPath) ? neutralPath : defaultPath;
   return [
     ...LOCALES.map((locale) => ({
       hreflang: locale,
       href: new URL(switchLocalePath(pathname, locale), site).href,
     })),
-    { hreflang: 'x-default' as const, href: new URL('/', site).href },
+    { hreflang: 'x-default' as const, href: new URL(xDefaultPath, site).href },
   ];
 }
 
