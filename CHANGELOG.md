@@ -6,6 +6,7 @@ Changes are recorded in the Keep a Changelog format.
 
 ### Fixed
 
+- Declare `hreflang` alternates on every indexable page with absolute URLs, including the page itself and an `x-default` (the language-detecting URL for that page, such as `/` or `/web/`, or the Japanese version when none exists). The sitemap lists the same set.
 - Send the origin of external referrers (for example `https://www.google.com/`) to Google Analytics instead of dropping them, so visits from search engines and other sites are no longer counted as Direct. Paths and query strings of external referrers are still not sent.
 
 ### Removed

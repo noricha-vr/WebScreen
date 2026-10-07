@@ -1,5 +1,6 @@
-# 旧 FastAPI 版は機能別ページ（/web/ /image/ ...）を Disallow していたが、新版では
-# それらの URL 自体が無く、_redirects で言語トップへ 301 するだけなので除外指定は不要。
+# 旧 FastAPI 版は機能別ページ（/web/ /image/ ...）を Disallow していたが、新版では除外しない。
+# 用途別ページ（/{lang}/web/ /{lang}/image/ など）として検索結果に載せたい実ページで、言語なしの
+# /web/ /image/ もそこへ振り分けるだけ（src/pages/web.astro 等）。
 #
 # 動画のプレビューページ /{shortId}/ は shortId が動的でパターン化できないため、
 # ここではなく BaseLayout の noindex メタタグで検索結果から外す
