@@ -6,6 +6,7 @@ Changes are recorded in the Keep a Changelog format.
 
 ### Removed
 
+- Remove the previous FastAPI implementation (Python app, Dockerfile, Cloud Build config) from the repository. The site has been served by the Cloudflare Workers version in `web/` since 2026-08; nothing in `web/` depended on it.
 - Remove the "WebScreen has been rebuilt" announcement from the top of the home page in every language.
 
 ## 2026-10-06

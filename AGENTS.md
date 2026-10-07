@@ -1,18 +1,9 @@
 # AGENTS.md
 
-Claude Code / Codex がこのリポジトリで作業するときの共通の地図（`AGENTS.md` はこのファイルへの相対シンボリックリンク）。詳細は各リンク先を正本とし、ここには判断に効く情報だけ置く。
+Claude Code / Codex がこのリポジトリで作業するときの共通の地図。詳細は各リンク先を正本とし、ここには判断に効く情報だけ置く。
 
-## このリポジトリは 2 系統が同居している
-
-| 系統 | 実体 | 状態 |
-|------|------|------|
-| **現行**（ここを触る） | `web/` — Astro + Cloudflare Workers + D1 + R2 | 本番 https://web-screen.net |
-| 旧（触らない） | リポジトリ直下の `router/` `movie_maker/` `templates/` `static/` `api/` 等 — FastAPI + Selenium + GCS | **廃止予定**。Cloud Run で古いリビジョンが稼働したままだが新規開発しない |
-
-<critical_rule>
-**新しい機能・修正は `web/` に入れる。** 旧系統のファイルは、明示的に「旧版を直して」と指示された時以外は編集しない。
-`Dockerfile` / `docker-compose.yaml` / `cloudbuild.yaml` / `requirements.txt` も旧系統専用（Cloud Build のトリガーは無効化済み）。
-</critical_rule>
+アプリ本体は `web/`（Astro + Cloudflare Workers + D1 + R2、本番 https://web-screen.net）だけ。
+以前の FastAPI 実装（Cloud Run）は 2026-10-07 に撤去した。リポジトリ直下に Python アプリ・Dockerfile・Cloud Build 設定は無い。
 
 関連サービスは別リポにある: [web-capture](https://github.com/noricha-vr/web-capture)（Cloud Run。URL のスクリーンショットを撮って R2 へ置く）。
 

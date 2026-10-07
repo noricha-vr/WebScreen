@@ -57,11 +57,7 @@ bunx playwright test
 
 `main` への push で GitHub Actions が本番へデプロイします。
 
-ディレクトリ構成・規約・壊してはいけないものは [CLAUDE.md](CLAUDE.md) にまとめてあります。
-
-> [!NOTE]
-> リポジトリ直下のファイル（`router/`、`movie_maker/`、`templates/`、`Dockerfile` など）は以前の FastAPI 実装です。
-> 新規開発はしておらず、いずれ削除します。
+ディレクトリ構成・規約・壊してはいけないものは [AGENTS.md](AGENTS.md) にまとめてあります。
 
 ## ライセンス
 
