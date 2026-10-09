@@ -1,0 +1,297 @@
+# Dependabot の PR のうち patch / minor で高リスクに当たらないものだけ auto-merge を予約する。
+# - dependabot-policy ジョブを ruleset の必須チェックにする。major・高リスク・検証できない PR ではこのチェックが赤になり、
+#   古い auto-merge の予約が残っていても新しい head はマージされない
+# - 人が承認した PR は、admin が今の head より後に decision-approved ラベルを付けると通る（head が変われば無効）
+# - サードパーティのアクションは使わない（Dependabot が更新したアクションが書き込み権限付きで動くのを避けるため）。gh と jq だけ
+# - pull_request_target は使わない（PR 側のコードに書き込み権限付きトークンを渡さないため）
+# 生成元: dependabot-autofix の high-risk.json（ALLOWED_FILES / RISK_DEPS は render_workflow.py が書く。手で直さない）
+# リポ固有の高リスク依存は、既定ブランチの .github/dependabot-risk-deps.txt に 1 行 1 正規表現で足す（PR 側の版は読まない）
+name: dependabot-automerge
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions: {}
+
+# concurrency は付けない。同じ head への判定は何度走っても同じ結果になり、キャンセルされた実行が
+# 必須チェックの最新として残ると、緑の PR がマージされなくなるため（2026-10-08 に確認）
+
+jobs:
+  policy:
+    name: dependabot-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      dependabot: ${{ steps.judge.outputs.dependabot }}
+      eligible: ${{ steps.judge.outputs.eligible }}
+    steps:
+      - id: judge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          ALLOWED_FILES: '^(package\.json|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|requirements[^/]*\.(txt|in)|pyproject\.toml|uv\.lock|poetry\.lock|Pipfile(\.lock)?|go\.mod|go\.sum|pubspec\.(yaml|lock)|Gemfile(\.lock)?|composer\.(json|lock)|Cargo\.(toml|lock))$'
+          RISK_DEPS: '(stripe|paypal|allauth|next-auth|better-auth|passport|firebase-admin|firebase-auth|google-auth|google-sign-in|sign-in-with-apple|flutter-secure-storage|appauth|local-auth|oauth|jwt|jsonwebtoken|authlib)|(^|[/-])(jose|auth)([/-]|$)|^@auth/'
+        run: |
+          set -euo pipefail
+          reasons=()
+          # 出力は 1 回ずつだけ書く（eligible は最後に通った時だけ true を書き、書かれなければ対象外）
+          if [ "$PR_AUTHOR" != "dependabot[bot]" ]; then
+            echo "dependabot=false" >> "$GITHUB_OUTPUT"
+            echo "Dependabot の PR ではないので対象外（通す）" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          echo "dependabot=true" >> "$GITHUB_OUTPUT"
+          [ "$HEAD_REPO" = "$REPO" ] || reasons+=("fork からの PR")
+          [ "$BASE_REF" = "$DEFAULT_BRANCH" ] || reasons+=("base が既定ブランチでない")
+
+          # すべてのコミットが author=Dependabot・committer=GitHub（web-flow）・署名 valid で、最後が今の head であること（後から足されたコミットを通さない）
+          commits=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[] | [.sha, (.author.login // ""), (.committer.login // ""), (.commit.verification.reason // "")] | @tsv')
+          last_sha=$(printf '%s\n' "$commits" | tail -n1 | cut -f1)
+          [ "$last_sha" = "$HEAD_SHA" ] || reasons+=("コミット一覧の最後が head と一致しない")
+          # Dependabot の PR は rebase 後もコミット 1 本。2 本以上ある PR は判定を単純に保つため通さない
+          [ "$(printf '%s\n' "$commits" | grep -c .)" = "1" ] || reasons+=("コミットが 1 本でない")
+          unsigned=false
+          if printf '%s\n' "$commits" | awk -F'\t' '$2!="dependabot[bot]" || $3!="web-flow" || $4!="valid"{bad=1} END{exit bad?0:1}'; then
+            reasons+=("Dependabot の署名済みでないコミットがある"); unsigned=true
+          fi
+          [ "$HEAD_REPO" = "$REPO" ] || unsigned=true   # fork の PR は承認ラベルでも通さない
+
+          # 承認: decision-approved ラベルが今付いていて、最後に付けたのが admin で、付けた時刻が head のコミットより後
+          # （Dependabot の署名済みコミットだけの時に限る。日付を偽れるコミットが混ざる時は承認でも通さない）
+          approved_for_head() {
+            # ラベルはイベント時点の値ではなく今の値を見る（外した直後の古い実行が承認として通らないように）
+            gh api --paginate "repos/$REPO/issues/$PR/labels" --jq '.[].name' | grep -qx 'decision-approved' || return 1
+            local ev at actor head_at perm
+            ev=$(gh api --paginate "repos/$REPO/issues/$PR/events" --jq '.[] | select(.event=="labeled" and .label.name=="decision-approved") | [.created_at, .actor.login] | @tsv' | tail -n1) || return 1
+            [ -n "$ev" ] || return 1
+            at=$(printf '%s' "$ev" | cut -f1); actor=$(printf '%s' "$ev" | cut -f2)
+            head_at=$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.commit.committer.date') || return 1
+            perm=$(gh api "repos/$REPO/collaborators/$actor/permission" --jq '.permission') || return 1
+            [ "$perm" = "admin" ] || return 1
+            [[ "$at" > "$head_at" ]]
+          }
+
+          # 変更ファイルは全ページ取得し、件数を照合する。リネーム前のパスも見る。マニフェストと lockfile 以外は通さない
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          n_files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -c . || true)
+          [ "$n_files" = "$CHANGED_FILES" ] || reasons+=("変更ファイルの件数が合わない（取得 $n_files / PR ${CHANGED_FILES}）")
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            base=${f##*/}
+            printf '%s\n' "$base" | grep -Eq "$ALLOWED_FILES" || reasons+=("マニフェスト・lockfile 以外の変更: $f")
+          done <<< "$files"
+
+          # update-type と依存名は全コミットのメッセージから取る（グループ PR の一部に major が混ざるのを見落とさない）
+          msgs=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[].commit.message')
+          n_names=$(printf '%s\n' "$msgs" | grep -cE '^ *- dependency-name:' || true)
+          n_types=$(printf '%s\n' "$msgs" | grep -cE '^ *update-type:' || true)
+          # update-type が書かれていても版は必ず見る。Dependabot は 0.1→0.2 を semver-minor と書くが、0.x の minor は破壊的変更の扱い。
+          # 版は依存名ごとに取り（「name 旧版 新版」）、metadata の全依存に版があることを確かめる（行数だけだと二重計上で数が合ってしまう）
+          # shellcheck disable=SC2016  # バッククォートは本文の文字そのもの
+          named=$(printf '%s\n' "$msgs" | sed -nE \
+            -e 's/^Updates `([^`]+)` from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*)$/\1 \2 \3/p' \
+            -e 's/^Bumps \[([^]]+)\]\([^)]*\) from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*[0-9A-Za-z])\.?$/\1 \2 \3/p' \
+            -e 's/^Bumps ([^ []+) from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*[0-9A-Za-z])\.?$/\1 \2 \3/p')
+          # 版の行は 1 本ずつ確かめる。読めない行が 1 本でもある、または同じ依存に版の組が 2 つ以上ある時は通さない
+          # （読める別の行の陰に、読めない更新が隠れないようにする）
+          # shellcheck disable=SC2016  # バッククォートは本文の文字そのもの
+          n_ver_lines=$(printf '%s\n' "$msgs" | grep -cE '^Updates `[^`]+` from |^Bumps .+ from .+ to ' || true)
+          n_named=$(printf '%s' "$named" | grep -c . || true)
+          if printf '%s\n' "$msgs" | grep -qE '^Updates the requirements on '; then reasons+=("requirements を広げる更新を含む（版を確かめられない）"); fi
+          [ "$n_ver_lines" = "$n_named" ] || reasons+=("読めない版の行がある（行 ${n_ver_lines} / 読めた ${n_named}）")
+          named=$(printf '%s\n' "$named" | sort -u)
+          dup=$(printf '%s\n' "$named" | awk 'NF{c[$1]++} END{for (n in c) if (c[n] > 1) print n}')
+          [ -z "$dup" ] || reasons+=("同じ依存に版の行が複数ある: $(printf '%s' "$dup" | tr '\n' ' ')")
+          types=""
+          if [ "$n_types" -gt 0 ]; then
+            # 一部だけ欠けている時は計算で補わずに読めない扱いにする（既にある major を上書きしないため）
+            if [ "$n_names" = "$n_types" ]; then types=$(printf '%s\n' "$msgs" | sed -n 's/^ *update-type: *//p' | sort -u); fi
+          else
+            # security update の PR は update-type を書かないので、本文の版の行（グループは「Updates `X` from A to B」、
+            # 単独は「Bumps [X](…) from A to B.」）から計算する。先頭の数字（v は除く）が変われば major とみなす
+            updates=$named
+            upd_names=$(printf '%s\n' "$updates" | awk 'NF{print $1}' | sort -u)
+            dep_names=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | sort -u)
+            # 本文の行と metadata の依存名が 1 対 1 で一致する時だけ計算する
+            if [ -n "$upd_names" ] && [ "$upd_names" = "$dep_names" ]; then
+              # 先頭の数字が変われば major。0.x は minor の桁が変われば major（0.x の minor は破壊的変更の扱い）。数字でない版は読めない扱い
+              types=$(printf '%s\n' "$updates" | awk 'NF{split($2,a,"."); split($3,b,".");
+                if (a[1] !~ /^[0-9]+$/ || b[1] !~ /^[0-9]+$/ || a[2] !~ /^[0-9]+/ || b[2] !~ /^[0-9]+/) {print "unknown"; next}
+                if (a[1]+0 != b[1]+0 || (a[1]+0 == 0 && a[2]+0 != b[2]+0)) print "version-update:semver-major"; else print "version-update:semver-minor"}' | sort -u)
+              if printf '%s\n' "$types" | grep -qx unknown; then types=""; fi
+            fi
+          fi
+          [ -n "$types" ] || reasons+=("update-type が読めない（依存 $n_names / 種類 ${n_types}）")
+          missing=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | sort -u | while IFS= read -r n; do
+            [ -n "$n" ] || continue
+            printf '%s\n' "$named" | awk -v n="$n" '$1==n{f=1} END{exit f?0:1}' || printf '%s\n' "$n"
+          done)
+          [ -n "$named" ] && [ -z "$missing" ] || reasons+=("旧版と新版を読めない依存がある: $(printf '%s' "${missing:-全部}" | tr '\n' ' ')")
+          if [ -n "$named" ] && printf '%s\n' "$named" | awk 'NF{split($2,a,"."); split($3,b,"."); if (a[1]+0 != b[1]+0 || (a[1]+0 == 0 && a[2]+0 != b[2]+0)) bad=1} END{exit bad?0:1}'; then
+            reasons+=("0.x の minor 以上の更新、または先頭の版が変わる更新を含む")
+          fi
+          while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            case "$t" in
+              version-update:semver-patch|version-update:semver-minor) ;;
+              *) reasons+=("更新の種類: $t") ;;
+            esac
+          done <<< "$types"
+          # PyPI の名前は大文字小文字と - _ . を区別しない（PEP 503）ので正規化してから比べる
+          deps=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | tr '[:upper:]' '[:lower:]' | sed -E 's/[-_.]+/-/g' | sort -u)
+          # 照合は元の名前（小文字）と正規化した名前の両方で行う（socket.io のように記号で指定した一覧も効くように）
+          raw_deps=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | tr '[:upper:]' '[:lower:]' | sort -u)
+          [ -n "$deps" ] || reasons+=("依存名が読めない")
+          # リポ固有の一覧は無くてよい（404）。それ以外の読み取り失敗と壊れた正規表現は判断待ちにする
+          extra=""
+          if raw=$(gh api "repos/$REPO/contents/.github/dependabot-risk-deps.txt?ref=$DEFAULT_BRANCH" --jq '.content' 2>"$RUNNER_TEMP/risk.err"); then
+            if decoded=$(printf '%s' "$raw" | base64 -d); then
+              lines=$(printf '%s\n' "$decoded" | grep -vE '^[[:space:]]*(#|$)' || true)
+              # 1 行ずつ確かめてからつなぐ（つないだ後だと、壊れた行どうしが有効な式になることがある）
+              while IFS= read -r line; do
+                [ -n "$line" ] || continue
+                rc=0; printf '' | grep -Eq -- "$line" || rc=$?
+                [ "$rc" -le 1 ] || reasons+=("リポ固有の高リスク一覧の正規表現が壊れている: $line")
+              done <<< "$lines"
+              extra=$lines   # つながずに 1 行ずつ照合する（| でつなぐと後方参照の番号がずれる）
+            else
+              reasons+=("リポ固有の高リスク一覧を読めない")
+            fi
+          elif ! grep -q 'HTTP 404' "$RUNNER_TEMP/risk.err"; then
+            reasons+=("リポ固有の高リスク一覧を読めない")
+          fi
+          while IFS= read -r d; do
+            [ -n "$d" ] || continue
+            if printf '%s\n' "$d" | grep -Eq "$RISK_DEPS"; then reasons+=("課金・認証に関わる依存: $d"); fi
+            while IFS= read -r pat; do
+              [ -n "$pat" ] || continue
+              rc=0; printf '%s\n' "$d" | grep -Eq -- "$pat" || rc=$?
+              if [ "$rc" -eq 0 ]; then reasons+=("このリポで高リスクに指定した依存: $d")
+              elif [ "$rc" -gt 1 ]; then reasons+=("リポ固有の高リスク一覧で照合できない: $d"); fi
+            done <<< "$extra"
+          done <<< "$(printf '%s\n%s\n' "$deps" "$raw_deps" | sort -u)"
+
+          {
+            echo "### dependabot-policy"
+            echo "- update-type: $(printf '%s' "$types" | tr '\n' ' ')"
+            echo "- deps: $(printf '%s' "$deps" | tr '\n' ' ')"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ ${#reasons[@]} -gt 0 ] && [ "$unsigned" = "false" ] && approved_for_head; then
+            printf -- '- 人が承認済み（承認前の理由: %s）\n' "${reasons[@]}" >> "$GITHUB_STEP_SUMMARY"
+            reasons=()
+          fi
+          if [ ${#reasons[@]} -gt 0 ]; then
+            printf -- '- 判断待ち: %s\n' "${reasons[@]}" >> "$GITHUB_STEP_SUMMARY"
+            printf '::error::判断待ち: %s\n' "${reasons[@]}"
+            exit 1
+          fi
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+          echo "- 自動マージの対象" >> "$GITHUB_STEP_SUMMARY"
+
+  automerge:
+    needs: policy
+    if: needs.policy.outputs.dependabot == 'true' && needs.policy.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write        # auto-merge の予約・解除に要る
+      pull-requests: write
+      actions: read          # 同じ head の新しい実行と、その判定結果を読む
+    concurrency:            # 予約を変える 2 ジョブだけを PR ごとに直列にする（判定ジョブは直列にしない。キャンセルされた判定が必須チェックに残るため）
+      group: dependabot-automerge-reserve-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          INTENT: reserve
+        run: |
+          set -euo pipefail
+          state=$(gh pr view "$PR_URL" --json headRefOid,autoMergeRequest --jq '[.headRefOid, (.autoMergeRequest != null|tostring)] | @tsv')
+          # head が進んでいれば、新しい head の実行に任せる
+          [ "$(printf '%s' "$state" | cut -f1)" = "$HEAD_SHA" ] || { echo "head が進んだので何もしない"; exit 0; }
+          # 同じ head により新しい実行があれば、その判定ジョブの結果に従う。待機中だった新しい実行のジョブが
+          # この実行に置き換えられて消えても、最新の判断が反映されるようにするため
+          newest=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/dependabot-automerge.yml/runs?head_sha=$HEAD_SHA&event=pull_request&per_page=100" --jq '.workflow_runs[].id' | sort -n | tail -n1)
+          newest=${newest:-0}
+          want=$INTENT
+          if [ "$newest" -gt "$GITHUB_RUN_ID" ]; then
+            concl=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$newest/jobs" --jq '.jobs[] | select(.name=="dependabot-policy") | .conclusion // "pending"' | tail -n1)
+            case "$concl" in
+              success) want=reserve ;;
+              pending) echo "新しい実行 $newest の判定がまだ終わっていないので、そちらに任せる"; exit 0 ;;
+              *) want=release ;;   # failure・timed_out・cancelled など success 以外は判断待ちに倒す
+            esac
+            echo "新しい実行 $newest の判定（${concl}）に従う: $want"
+          fi
+          if [ "$want" = "reserve" ]; then
+            gh pr edit "$PR_URL" --remove-label needs-decision || true   # ラベルが無いだけの失敗は無視してよい（予約の可否には関わらない）
+            gh pr merge "$PR_URL" --auto --squash --match-head-commit "$HEAD_SHA"
+          else
+            if [ "$(printf '%s' "$state" | cut -f2)" = "true" ]; then
+              gh pr merge "$PR_URL" --disable-auto
+            fi
+            reserved=$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')
+            [ "$reserved" = "false" ] || { echo "::error::auto-merge の予約を解除できない"; exit 1; }
+            gh pr edit "$PR_URL" --add-label needs-decision
+          fi
+
+  needs-decision:
+    needs: policy
+    if: ${{ !cancelled() && github.event.pull_request.user.login == 'dependabot[bot]' && (needs.policy.result == 'failure' || needs.policy.outputs.eligible != 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write        # auto-merge の予約・解除に要る
+      pull-requests: write
+      actions: read          # 同じ head の新しい実行と、その判定結果を読む
+    concurrency:            # 予約を変える 2 ジョブだけを PR ごとに直列にする（判定ジョブは直列にしない。キャンセルされた判定が必須チェックに残るため）
+      group: dependabot-automerge-reserve-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          INTENT: release
+        run: |
+          set -euo pipefail
+          state=$(gh pr view "$PR_URL" --json headRefOid,autoMergeRequest --jq '[.headRefOid, (.autoMergeRequest != null|tostring)] | @tsv')
+          # head が進んでいれば、新しい head の実行に任せる
+          [ "$(printf '%s' "$state" | cut -f1)" = "$HEAD_SHA" ] || { echo "head が進んだので何もしない"; exit 0; }
+          # 同じ head により新しい実行があれば、その判定ジョブの結果に従う。待機中だった新しい実行のジョブが
+          # この実行に置き換えられて消えても、最新の判断が反映されるようにするため
+          newest=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/dependabot-automerge.yml/runs?head_sha=$HEAD_SHA&event=pull_request&per_page=100" --jq '.workflow_runs[].id' | sort -n | tail -n1)
+          newest=${newest:-0}
+          want=$INTENT
+          if [ "$newest" -gt "$GITHUB_RUN_ID" ]; then
+            concl=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$newest/jobs" --jq '.jobs[] | select(.name=="dependabot-policy") | .conclusion // "pending"' | tail -n1)
+            case "$concl" in
+              success) want=reserve ;;
+              pending) echo "新しい実行 $newest の判定がまだ終わっていないので、そちらに任せる"; exit 0 ;;
+              *) want=release ;;   # failure・timed_out・cancelled など success 以外は判断待ちに倒す
+            esac
+            echo "新しい実行 $newest の判定（${concl}）に従う: $want"
+          fi
+          if [ "$want" = "reserve" ]; then
+            gh pr edit "$PR_URL" --remove-label needs-decision || true   # ラベルが無いだけの失敗は無視してよい（予約の可否には関わらない）
+            gh pr merge "$PR_URL" --auto --squash --match-head-commit "$HEAD_SHA"
+          else
+            if [ "$(printf '%s' "$state" | cut -f2)" = "true" ]; then
+              gh pr merge "$PR_URL" --disable-auto
+            fi
+            reserved=$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')
+            [ "$reserved" = "false" ] || { echo "::error::auto-merge の予約を解除できない"; exit 1; }
+            gh pr edit "$PR_URL" --add-label needs-decision
+          fi
