@@ -32,8 +32,10 @@
   "overrides": {
     "@cloudflare/vite-plugin": "1.62.1",
     "devalue": "5.9.3",
+    "http-cache-semantics": "4.3.0",
     "js-yaml": "4.3.2",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2",
     "svgo": "4.1.0"
   }
 }
