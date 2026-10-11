@@ -13,21 +13,21 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "14.3.3",
+    "@astrojs/cloudflare": "14.3.4",
     "@ffmpeg/core": "0.12.10",
     "@ffmpeg/ffmpeg": "0.12.15",
     "@ffmpeg/util": "0.12.2",
     "@tailwindcss/vite": "4.3.3",
-    "astro": "7.3.5",
+    "astro": "7.3.8",
     "aws4fetch": "1.0.20",
     "pdfjs-dist": "6.4.299",
     "tailwindcss": "4.3.3"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0",
+    "@playwright/test": "1.64.0",
     "@types/bun": "1.4.2",
     "typescript": "7.0.2",
-    "wrangler": "4.147.0"
+    "wrangler": "4.149.0"
   },
   "overrides": {
     "@cloudflare/vite-plugin": "1.62.1",
