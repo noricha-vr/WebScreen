@@ -1,4 +1,4 @@
-# Dependabot の PR のうち patch / minor で高リスクに当たらないものだけ auto-merge を予約する。
+# Dependabot の PR のうち patch / minor とベースイメージ更新で、高リスクに当たらないものだけ auto-merge を予約する。
 # - dependabot-policy ジョブを ruleset の必須チェックにする。major・高リスク・検証できない PR ではこのチェックが赤になり、
 #   古い auto-merge の予約が残っていても新しい head はマージされない
 # - 人が承認した PR は、admin が今の head より後に decision-approved ラベルを付けると通る（head が変われば無効）
@@ -6,6 +6,14 @@
 # - pull_request_target は使わない（PR 側のコードに書き込み権限付きトークンを渡さないため）
 # 生成元: dependabot-autofix の high-risk.json（ALLOWED_FILES / RISK_DEPS は render_workflow.py が書く。手で直さない）
 # リポ固有の高リスク依存は、既定ブランチの .github/dependabot-risk-deps.txt に 1 行 1 正規表現で足す（PR 側の版は読まない）
+# v4: 判定ジョブ（dependabot-policy。読み取り権限だけで、全 PR の全イベントで走るので実行回数の大半）のランナーだけを
+# リポ変数 DEPENDABOT_AUTOMERGE_RUNS_ON（runs-on の JSON。例 '["self-hosted","Linux","ARM64","m3-ultra-arm64"]'）で切り替える。
+# 未設定・公開リポ・別リポからの PR は ubuntu-latest。書き込みトークンを持つ 2 ジョブは常駐ランナーに載せず hosted 固定。
+# この式は PR 側で書き換えられるので防御の 1 層にすぎない。公開リポに自前ランナーを使わせない設定はランナー側（リポ単位の登録・
+# org のランナーグループで公開リポを許可しない）と、fork からの PR の実行を許可しない設定で守る
+# v5: Docker 専用ブランチで Dockerfile / Containerfile の FROM 行だけを変える更新は、メジャータグ・digest も通す。
+# 継続行・heredoc の中の FROM は patch だけでは見分けきれないが、Dependabot の署名済みコミット 1 本に限るので許容する
+# 版・update-type・変更ファイルの許可リストだけを緩め、署名・コミット数・高リスク依存の検査はそのまま残す。
 name: dependabot-automerge
 
 on:
@@ -20,7 +28,7 @@ permissions: {}
 jobs:
   policy:
     name: dependabot-policy
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON((github.event.repository.private && github.event.pull_request.head.repo.full_name == github.repository && vars.DEPENDABOT_AUTOMERGE_RUNS_ON) || '"ubuntu-latest"') }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -36,6 +44,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -81,77 +90,135 @@ jobs:
             [[ "$at" > "$head_at" ]]
           }
 
-          # 変更ファイルは全ページ取得し、件数を照合する。リネーム前のパスも見る。マニフェストと lockfile 以外は通さない
+          # 変更ファイルは全ページ取得し、件数を照合する。リネーム前のパスも見る
           files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
           n_files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -c . || true)
           [ "$n_files" = "$CHANGED_FILES" ] || reasons+=("変更ファイルの件数が合わない（取得 $n_files / PR ${CHANGED_FILES}）")
-          while IFS= read -r f; do
-            [ -n "$f" ] || continue
-            base=${f##*/}
-            printf '%s\n' "$base" | grep -Eq "$ALLOWED_FILES" || reasons+=("マニフェスト・lockfile 以外の変更: $f")
-          done <<< "$files"
+          # Docker 専用ブランチで、同じイメージのタグ・digest だけを変える更新に限る。
+          # リネーム・不完全な patch・継続行・FROM 以外の構文は通常の判定に戻す。
+          base_image=false
+          if [[ "$HEAD_REF" == dependabot/docker/* ]] && [ "$n_files" -gt 0 ]; then
+            if gh api --paginate "repos/$REPO/pulls/$PR/files" | jq -se --argjson n "$n_files" '
+              def from_line:
+                [capture("^[[:blank:]]*(?i:FROM)[[:blank:]]+(?<flags>(?:--[A-Za-z0-9_-]+=[A-Za-z0-9._/:@-]+[[:blank:]]+)*)(?<image>[A-Za-z0-9._/:@-]+)(?:[[:blank:]]+(?i:AS)[[:blank:]]+(?<stage>[A-Za-z0-9_.-]+))?[[:blank:]]*$")]
+                | if length == 1 then .[0]
+                  | .flags |= [scan("--[^[:blank:]]+")]
+                  | .stage = (.stage // "")
+                  else null end;
+              def image_name:
+                sub("@sha256:[A-Fa-f0-9]+$"; "") | sub(":[^/:]+$"; "");
+              def from_key: [.flags, (.image | image_name), .stage];
+              def image_version: test("@sha256:|:[^/:]+$");
+              def image_update:
+                if .status == "modified" and (has("previous_filename") | not)
+                  and (.filename | split("/")[-1] | test("^(Dockerfile|Containerfile)(\\..+)?$|^.+\\.(Dockerfile|dockerfile)$"))
+                  and (.patch | type) == "string" then
+                  . as $file
+                  # hunk ごとに直前の行を覚え、変更行が継続行でないことも確かめる。
+                  | reduce (.patch | split("\n")[]) as $line
+                    ({previous:"", changed:[], safe:true};
+                      if $line | startswith("@@") then .previous = ""
+                      else
+                        (if $line | test("^[+-]") then
+                          .safe = (.safe and (.previous | endswith("\\") | not))
+                          | .changed += [{sign:$line[0:1], from:($line[1:] | from_line)}]
+                        else . end)
+                        | .previous = $line
+                      end)
+                  | . as $patch
+                  | [.changed[] | select(.sign == "-") | .from] as $old
+                  | [.changed[] | select(.sign == "+") | .from] as $new
+                  | if $patch.safe and all($patch.changed[]; .from != null)
+                    and ($old | length) > 0 and ($old | length) == ($new | length)
+                    and ($old | length) == $file.deletions and ($new | length) == $file.additions then
+                    # 削除・追加を順に組にし、フラグ・名前・段名は同じで、両方にタグか digest がある参照だけが変わっていること。
+                    {valid:all(range(0; $old | length); . as $i
+                      | ($old[$i] | from_key) == ($new[$i] | from_key)
+                        and ($old[$i].image | image_version) and ($new[$i].image | image_version)
+                        and $old[$i].image != $new[$i].image),
+                     changed:($old != $new)}
+                  else {valid:false, changed:false} end
+                else {valid:false, changed:false} end;
+              add | length == $n and
+                (map(image_update) | all(.[]; .valid) and any(.[]; .changed))
+              ' >/dev/null; then
+              base_image=true
+            fi
+          fi
+          if [ "$base_image" = "false" ]; then
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
+              base=${f##*/}
+              printf '%s\n' "$base" | grep -Eq "$ALLOWED_FILES" || reasons+=("マニフェスト・lockfile 以外の変更: $f")
+            done <<< "$files"
+          fi
 
           # update-type と依存名は全コミットのメッセージから取る（グループ PR の一部に major が混ざるのを見落とさない）
           msgs=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[].commit.message')
-          n_names=$(printf '%s\n' "$msgs" | grep -cE '^ *- dependency-name:' || true)
-          n_types=$(printf '%s\n' "$msgs" | grep -cE '^ *update-type:' || true)
-          # update-type が書かれていても版は必ず見る。Dependabot は 0.1→0.2 を semver-minor と書くが、0.x の minor は破壊的変更の扱い。
-          # 版は依存名ごとに取り（「name 旧版 新版」）、metadata の全依存に版があることを確かめる（行数だけだと二重計上で数が合ってしまう）
-          # shellcheck disable=SC2016  # バッククォートは本文の文字そのもの
-          named=$(printf '%s\n' "$msgs" | sed -nE \
-            -e 's/^Updates `([^`]+)` from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*)$/\1 \2 \3/p' \
-            -e 's/^Bumps \[([^]]+)\]\([^)]*\) from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*[0-9A-Za-z])\.?$/\1 \2 \3/p' \
-            -e 's/^Bumps ([^ []+) from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*[0-9A-Za-z])\.?$/\1 \2 \3/p')
-          # 版の行は 1 本ずつ確かめる。読めない行が 1 本でもある、または同じ依存に版の組が 2 つ以上ある時は通さない
-          # （読める別の行の陰に、読めない更新が隠れないようにする）
-          # shellcheck disable=SC2016  # バッククォートは本文の文字そのもの
-          n_ver_lines=$(printf '%s\n' "$msgs" | grep -cE '^Updates `[^`]+` from |^Bumps .+ from .+ to ' || true)
-          n_named=$(printf '%s' "$named" | grep -c . || true)
-          if printf '%s\n' "$msgs" | grep -qE '^Updates the requirements on '; then reasons+=("requirements を広げる更新を含む（版を確かめられない）"); fi
-          [ "$n_ver_lines" = "$n_named" ] || reasons+=("読めない版の行がある（行 ${n_ver_lines} / 読めた ${n_named}）")
-          named=$(printf '%s\n' "$named" | sort -u)
-          dup=$(printf '%s\n' "$named" | awk 'NF{c[$1]++} END{for (n in c) if (c[n] > 1) print n}')
-          [ -z "$dup" ] || reasons+=("同じ依存に版の行が複数ある: $(printf '%s' "$dup" | tr '\n' ' ')")
           types=""
-          if [ "$n_types" -gt 0 ]; then
-            # 一部だけ欠けている時は計算で補わずに読めない扱いにする（既にある major を上書きしないため）
-            if [ "$n_names" = "$n_types" ]; then types=$(printf '%s\n' "$msgs" | sed -n 's/^ *update-type: *//p' | sort -u); fi
-          else
-            # security update の PR は update-type を書かないので、本文の版の行（グループは「Updates `X` from A to B」、
-            # 単独は「Bumps [X](…) from A to B.」）から計算する。先頭の数字（v は除く）が変われば major とみなす
-            updates=$named
-            upd_names=$(printf '%s\n' "$updates" | awk 'NF{print $1}' | sort -u)
-            dep_names=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | sort -u)
-            # 本文の行と metadata の依存名が 1 対 1 で一致する時だけ計算する
-            if [ -n "$upd_names" ] && [ "$upd_names" = "$dep_names" ]; then
-              # 先頭の数字が変われば major。0.x は minor の桁が変われば major（0.x の minor は破壊的変更の扱い）。数字でない版は読めない扱い
-              types=$(printf '%s\n' "$updates" | awk 'NF{split($2,a,"."); split($3,b,".");
-                if (a[1] !~ /^[0-9]+$/ || b[1] !~ /^[0-9]+$/ || a[2] !~ /^[0-9]+/ || b[2] !~ /^[0-9]+/) {print "unknown"; next}
-                if (a[1]+0 != b[1]+0 || (a[1]+0 == 0 && a[2]+0 != b[2]+0)) print "version-update:semver-major"; else print "version-update:semver-minor"}' | sort -u)
-              if printf '%s\n' "$types" | grep -qx unknown; then types=""; fi
+          kind="base-image"
+          if [ "$base_image" = "false" ]; then
+            n_names=$(printf '%s\n' "$msgs" | grep -cE '^ *- dependency-name:' || true)
+            n_types=$(printf '%s\n' "$msgs" | grep -cE '^ *update-type:' || true)
+            # update-type が書かれていても版は必ず見る。Dependabot は 0.1→0.2 を semver-minor と書くが、0.x の minor は破壊的変更の扱い。
+            # 版は依存名ごとに取り（「name 旧版 新版」）、metadata の全依存に版があることを確かめる（行数だけだと二重計上で数が合ってしまう）
+            # shellcheck disable=SC2016  # バッククォートは本文の文字そのもの
+            named=$(printf '%s\n' "$msgs" | sed -nE \
+              -e 's/^Updates `([^`]+)` from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*)$/\1 \2 \3/p' \
+              -e 's/^Bumps \[([^]]+)\]\([^)]*\) from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*[0-9A-Za-z])\.?$/\1 \2 \3/p' \
+              -e 's/^Bumps ([^ []+) from v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*) to v?([0-9]+\.[0-9]+[0-9A-Za-z.+-]*[0-9A-Za-z])\.?$/\1 \2 \3/p')
+            # 版の行は 1 本ずつ確かめる。読めない行が 1 本でもある、または同じ依存に版の組が 2 つ以上ある時は通さない
+            # （読める別の行の陰に、読めない更新が隠れないようにする）
+            # shellcheck disable=SC2016  # バッククォートは本文の文字そのもの
+            n_ver_lines=$(printf '%s\n' "$msgs" | grep -cE '^Updates `[^`]+` from |^Bumps .+ from .+ to ' || true)
+            n_named=$(printf '%s' "$named" | grep -c . || true)
+            if printf '%s\n' "$msgs" | grep -qE '^Updates the requirements on '; then reasons+=("requirements を広げる更新を含む（版を確かめられない）"); fi
+            [ "$n_ver_lines" = "$n_named" ] || reasons+=("読めない版の行がある（行 ${n_ver_lines} / 読めた ${n_named}）")
+            named=$(printf '%s\n' "$named" | sort -u)
+            dup=$(printf '%s\n' "$named" | awk 'NF{c[$1]++} END{for (n in c) if (c[n] > 1) print n}')
+            [ -z "$dup" ] || reasons+=("同じ依存に版の行が複数ある: $(printf '%s' "$dup" | tr '\n' ' ')")
+            if [ "$n_types" -gt 0 ]; then
+              # 一部だけ欠けている時は計算で補わずに読めない扱いにする（既にある major を上書きしないため）
+              if [ "$n_names" = "$n_types" ]; then types=$(printf '%s\n' "$msgs" | sed -n 's/^ *update-type: *//p' | sort -u); fi
+            else
+              # security update の PR は update-type を書かないので、本文の版の行（グループは「Updates `X` from A to B」、
+              # 単独は「Bumps [X](…) from A to B.」）から計算する。先頭の数字（v は除く）が変われば major とみなす
+              updates=$named
+              upd_names=$(printf '%s\n' "$updates" | awk 'NF{print $1}' | sort -u)
+              dep_names=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | sort -u)
+              # 本文の行と metadata の依存名が 1 対 1 で一致する時だけ計算する
+              if [ -n "$upd_names" ] && [ "$upd_names" = "$dep_names" ]; then
+                # 先頭の数字が変われば major。0.x は minor の桁が変われば major（0.x の minor は破壊的変更の扱い）。数字でない版は読めない扱い
+                types=$(printf '%s\n' "$updates" | awk 'NF{split($2,a,"."); split($3,b,".");
+                  if (a[1] !~ /^[0-9]+$/ || b[1] !~ /^[0-9]+$/ || a[2] !~ /^[0-9]+/ || b[2] !~ /^[0-9]+/) {print "unknown"; next}
+                  if (a[1]+0 != b[1]+0 || (a[1]+0 == 0 && a[2]+0 != b[2]+0)) print "version-update:semver-major"; else print "version-update:semver-minor"}' | sort -u)
+                if printf '%s\n' "$types" | grep -qx unknown; then types=""; fi
+              fi
             fi
+            [ -n "$types" ] || reasons+=("update-type が読めない（依存 $n_names / 種類 ${n_types}）")
+            missing=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | sort -u | while IFS= read -r n; do
+              [ -n "$n" ] || continue
+              printf '%s\n' "$named" | awk -v n="$n" '$1==n{f=1} END{exit f?0:1}' || printf '%s\n' "$n"
+            done)
+            [ -n "$named" ] && [ -z "$missing" ] || reasons+=("旧版と新版を読めない依存がある: $(printf '%s' "${missing:-全部}" | tr '\n' ' ')")
+            if [ -n "$named" ] && printf '%s\n' "$named" | awk 'NF{split($2,a,"."); split($3,b,"."); if (a[1]+0 != b[1]+0 || (a[1]+0 == 0 && a[2]+0 != b[2]+0)) bad=1} END{exit bad?0:1}'; then
+              reasons+=("0.x の minor 以上の更新、または先頭の版が変わる更新を含む")
+            fi
+            while IFS= read -r t; do
+              [ -n "$t" ] || continue
+              case "$t" in
+                version-update:semver-patch|version-update:semver-minor) ;;
+                *) reasons+=("更新の種類: $t") ;;
+              esac
+            done <<< "$types"
+            kind="patch-minor"
+            [ "$n_types" -ne 0 ] || kind=security
           fi
-          [ -n "$types" ] || reasons+=("update-type が読めない（依存 $n_names / 種類 ${n_types}）")
-          missing=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | sort -u | while IFS= read -r n; do
-            [ -n "$n" ] || continue
-            printf '%s\n' "$named" | awk -v n="$n" '$1==n{f=1} END{exit f?0:1}' || printf '%s\n' "$n"
-          done)
-          [ -n "$named" ] && [ -z "$missing" ] || reasons+=("旧版と新版を読めない依存がある: $(printf '%s' "${missing:-全部}" | tr '\n' ' ')")
-          if [ -n "$named" ] && printf '%s\n' "$named" | awk 'NF{split($2,a,"."); split($3,b,"."); if (a[1]+0 != b[1]+0 || (a[1]+0 == 0 && a[2]+0 != b[2]+0)) bad=1} END{exit bad?0:1}'; then
-            reasons+=("0.x の minor 以上の更新、または先頭の版が変わる更新を含む")
-          fi
-          while IFS= read -r t; do
-            [ -n "$t" ] || continue
-            case "$t" in
-              version-update:semver-patch|version-update:semver-minor) ;;
-              *) reasons+=("更新の種類: $t") ;;
-            esac
-          done <<< "$types"
           # PyPI の名前は大文字小文字と - _ . を区別しない（PEP 503）ので正規化してから比べる
           deps=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | tr '[:upper:]' '[:lower:]' | sed -E 's/[-_.]+/-/g' | sort -u)
           # 照合は元の名前（小文字）と正規化した名前の両方で行う（socket.io のように記号で指定した一覧も効くように）
           raw_deps=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | tr '[:upper:]' '[:lower:]' | sort -u)
-          [ -n "$deps" ] || reasons+=("依存名が読めない")
+          [ "$base_image" = "true" ] || [ -n "$deps" ] || reasons+=("依存名が読めない")
           # リポ固有の一覧は無くてよい（404）。それ以外の読み取り失敗と壊れた正規表現は判断待ちにする
           extra=""
           if raw=$(gh api "repos/$REPO/contents/.github/dependabot-risk-deps.txt?ref=$DEFAULT_BRANCH" --jq '.content' 2>"$RUNNER_TEMP/risk.err"); then
@@ -195,13 +262,14 @@ jobs:
             printf '::error::判断待ち: %s\n' "${reasons[@]}"
             exit 1
           fi
+          echo "- 種類: $kind" >> "$GITHUB_STEP_SUMMARY"
           echo "eligible=true" >> "$GITHUB_OUTPUT"
           echo "- 自動マージの対象" >> "$GITHUB_STEP_SUMMARY"
 
   automerge:
     needs: policy
     if: needs.policy.outputs.dependabot == 'true' && needs.policy.outputs.eligible == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest   # 書き込みトークンを持つので、常駐の自前ランナーに載せない（v4 でも hosted 固定）
     timeout-minutes: 5
     permissions:
       contents: write        # auto-merge の予約・解除に要る
@@ -250,7 +318,7 @@ jobs:
   needs-decision:
     needs: policy
     if: ${{ !cancelled() && github.event.pull_request.user.login == 'dependabot[bot]' && (needs.policy.result == 'failure' || needs.policy.outputs.eligible != 'true') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest   # 書き込みトークンを持つので、常駐の自前ランナーに載せない（v4 でも hosted 固定）
     timeout-minutes: 5
     permissions:
       contents: write        # auto-merge の予約・解除に要る
