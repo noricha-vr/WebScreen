@@ -2,6 +2,12 @@
 
 Changes are recorded in the Keep a Changelog format.
 
+## 2026-10-28
+
+### Changed
+
+- Update Astro to 7.4.2, its Cloudflare adapter to 14.4.2, and Wrangler to 4.152.0. Astro now requires Node.js 22.23.4 or newer; CI and deployment builds use Node.js 22.23.4.
+
 ## 2026-10-07
 
 ### Fixed
