@@ -1,4 +1,5 @@
-# Dependabot の設定。週 1 回、patch と minor をまとめて 1 本の PR にする
+# Dependabot: バージョン更新は止め、セキュリティ更新だけを受ける（2026-11-06 CEO 決定）
+# open-pull-requests-limit: 0 は version updates だけを止める（security updates は別枠の上限 10 で動き続ける）
 version: 2
 updates:
   - package-ecosystem: "bun"
@@ -8,20 +9,12 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     groups:
-      minor-and-patch:
-        applies-to: version-updates
-        update-types: ["minor", "patch"]
       security:
         applies-to: security-updates
         update-types: ["minor", "patch"]
     labels: ["dependencies"]
-    cooldown:
-      default-days: 5
-      semver-major-days: 7
-      semver-minor-days: 3
-      semver-patch-days: 3
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -30,10 +23,5 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 2
-    groups:
-      actions:
-        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 0
     labels: ["dependencies"]
-    cooldown:
-      default-days: 5
