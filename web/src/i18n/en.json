@@ -31,6 +31,10 @@
     "quota": "500 MB of storage per user"
   },
   "convert": {
+    "settingsSummary": "Conversion settings: {seconds} sec per image",
+    "secondsPerFrameLabel": "Display time per image",
+    "secondsOption": "{seconds} sec",
+    "durationExample": "A 12-page PDF makes a {seconds}-second video.",
     "heading": "Convert content to video",
     "dropzoneTitle": "Drop your file here",
     "dropzoneOr": "or",

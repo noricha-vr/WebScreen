@@ -1,5 +1,6 @@
 import type { UploadKind } from '../contracts/api';
 import { encodeFramesToMp4 } from './encode';
+import { DEFAULT_SECONDS_PER_FRAME, type SecondsPerFrame } from './settings';
 import { imageFilesToFrames } from './image';
 import { imageUrlFrameSource } from './imageUrls';
 import { pdfToFrames } from './pdf';
@@ -10,14 +11,15 @@ export async function convertFilesToMp4(
   files: readonly File[],
   kind: Exclude<UploadKind, 'web'>,
   report?: ProgressReporter,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  secondsPerFrame: SecondsPerFrame = DEFAULT_SECONDS_PER_FRAME
 ): Promise<Blob> {
   if (files.length === 0) throw new Error('At least one file is required');
   const frames =
     kind === 'pdf'
       ? await pdfToFrames(files[0]!, report, signal)
       : await imageFilesToFrames(files, report, signal);
-  return encodeFramesToMp4(frames, report, signal);
+  return encodeFramesToMp4(frames, report, signal, secondsPerFrame);
 }
 
 /**
@@ -29,9 +31,10 @@ export async function convertFilesToMp4(
 export async function convertImageUrlsToMp4(
   urls: readonly string[],
   report?: ProgressReporter,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  secondsPerFrame: SecondsPerFrame = DEFAULT_SECONDS_PER_FRAME
 ): Promise<Blob> {
-  return encodeFramesToMp4(imageUrlFrameSource(urls, signal), report, signal);
+  return encodeFramesToMp4(imageUrlFrameSource(urls, signal), report, signal, secondsPerFrame);
 }
 
 export { ConversionError, type ConversionProgress, type ConversionStage, type VideoFrame } from './types';

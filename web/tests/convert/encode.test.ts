@@ -27,6 +27,15 @@ describe('VRChat 向け FFmpeg 引数', () => {
   });
 });
 
+test.each([[1, '1'], [2, '0.5']] as const)('1 枚 %s 秒はフレーム複製せず入力レート %s で生成する', (seconds, rate) => {
+  const args = buildFrameEncodeArgs('slides.mp4', seconds);
+  expect(args.slice(0, 4)).toEqual(['-framerate', rate, '-i', 'frame-%06d.png']);
+  expect(args[args.indexOf('-g') + 1]).toBe('1');
+  expect(args[args.indexOf('-bf') + 1]).toBe('0');
+  expect(args).not.toContain('-r');
+  expect(args.at(-1)).toBe('slides.mp4');
+});
+
 describe('エンコードの進捗', () => {
   test('FFmpeg の進み具合をフレーム枚数へ換算する', () => {
     expect([0, 0.5, 1].map((progress) => encodedFrameCount(progress, 100))).toEqual([0, 50, 100]);

@@ -13,6 +13,8 @@ import {
   type UploadKind,
 } from '../contracts/api';
 import { collectCaptures } from './capture-pages';
+import { mountConvertSettings } from './convert-settings';
+import type { SecondsPerFrame } from '../convert/settings';
 import {
   clientErrorHttpStatus,
   conversionClientStage,
@@ -72,7 +74,8 @@ type TrackConversionAnalytics = (
   event: EmittedConversionAnalyticsEvent,
   inputKind: AnalyticsInputKind,
   /** convert_error の分類（UploadErrorCode）。成功イベントでは付けない。 */
-  reason?: UploadErrorCode
+  reason?: UploadErrorCode,
+  secondsPerFrame?: SecondsPerFrame
 ) => void;
 
 export interface ConvertPanelOptions {
@@ -244,9 +247,10 @@ export function uploadErrorEstimatedImages(error: unknown): number | null {
 export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptions = {}): void {
   const navigate: Navigate = options.navigate ?? ((url) => window.location.assign(url));
   const trackAnalytics: TrackConversionAnalytics = options.trackAnalytics ?? (
-    (event, inputKind, reason) => trackConversionEvent(event, inputKind, reason)
+    (event, inputKind, reason, seconds) => trackConversionEvent(event, inputKind, reason, seconds)
   );
 
+  const getSecondsPerFrame = mountConvertSettings(panel);
   let state = INITIAL_UPLOAD_STATE;
   let generation = 0;
 
@@ -281,9 +285,10 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
   const trackConversion = (
     event: EmittedConversionAnalyticsEvent,
     inputKind: AnalyticsInputKind,
-    reason?: UploadErrorCode
+    reason?: UploadErrorCode,
+    secondsPerFrame?: SecondsPerFrame
   ): void => {
-    try { trackAnalytics(event, inputKind, reason); }
+    try { trackAnalytics(event, inputKind, reason, secondsPerFrame); }
     catch { /* 計測 observer の失敗で変換を止めない。 */ }
   };
 
@@ -298,11 +303,12 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
   const acceptConversion = (
     event: UploadEvent,
     inputKind: AnalyticsInputKind,
-    runGeneration: number
+    runGeneration: number,
+    secondsPerFrame: SecondsPerFrame
   ): boolean => {
     dispatch(event, runGeneration);
     if (state.phase !== 'converting' || state.kind !== inputKind) return false;
-    trackConversion('convert_start', inputKind);
+    trackConversion('convert_start', inputKind, undefined, secondsPerFrame);
     return true;
   };
 
@@ -335,6 +341,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     if (files.length === 0) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
     // 署名読み取り中に別の入力へ切り替わった場合、古い検証結果で状態を上書きしない。
+    const secondsPerFrame = getSecondsPerFrame();
     const { generation: current, signal } = startRun();
     let preflight;
     try {
@@ -363,7 +370,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       files: files.map((file) => ({ filename: file.name, sizeBytes: file.size })),
     };
     const next = reduceUpload(state, event);
-    const accepted = acceptConversion(event, preflight.kind, current);
+    const accepted = acceptConversion(event, preflight.kind, current, secondsPerFrame);
     // 選択の時点で弾かれた入力（大きすぎる・種類が混ざっている等）も報告する。
     // 変換が始まらない失敗は console にすら残らず、運用側から完全に見えないため。
     if (next.phase === 'error' && next.errorCode !== null) {
@@ -377,7 +384,8 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       (progress) => {
         dispatch({ type: 'stageProgress', ...progress }, current);
       },
-      signal
+      signal,
+      secondsPerFrame
     )
       .then((mp4) =>
         uploadMp4(
@@ -390,7 +398,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
           dispatch,
           current,
           signal,
-          () => trackConversion('convert_complete', kind)
+          () => trackConversion('convert_complete', kind, undefined, secondsPerFrame)
         )
       )
       .catch((error: unknown) => {
@@ -435,8 +443,9 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
     const url = input?.value.trim();
     if (!url) return;
     if (state.phase === 'converting' || state.phase === 'uploading') return;
+    const secondsPerFrame = getSecondsPerFrame();
     const { generation: current, signal } = startRun();
-    if (!acceptConversion({ type: 'selectUrl', url }, 'web', current)) return;
+    if (!acceptConversion({ type: 'selectUrl', url }, 'web', current, secondsPerFrame)) return;
 
     let pseudoRatio = 0;
     const pseudoTimer = window.setInterval(() => {
@@ -467,7 +476,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
       })
       .then((images) => convertImageUrlsToMp4(images, (progress) => {
         dispatch({ type: 'stageProgress', ...progress }, current);
-      }, signal))
+      }, signal, secondsPerFrame))
       .then((mp4) => uploadMp4(
         mp4,
         movieNameForUrl(url),
@@ -475,7 +484,7 @@ export function mountConvertPanel(panel: HTMLElement, options: ConvertPanelOptio
         dispatch,
         current,
         signal,
-        () => trackConversion('convert_complete', 'web')
+        () => trackConversion('convert_complete', 'web', undefined, secondsPerFrame)
       ))
       .catch((error: unknown) => {
         // 中止は失敗ではない。cancelRun が既に初期表示へ戻している。

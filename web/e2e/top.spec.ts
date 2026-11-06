@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -89,7 +89,7 @@ test.describe('ログイン済み', () => {
     expect(session).toBeUndefined();
   });
 
-  test('小さな画像2枚を MP4 に変換し、プレビューで動画 URL を自動コピーする', async ({ page, context }) => {
+  test('小さな画像2枚を MP4 に変換し、プレビューで動画 URL を自動コピーする', async ({ page, context }, testInfo) => {
     test.setTimeout(180_000);
     await signIn(page);
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -97,6 +97,8 @@ test.describe('ログイン済み', () => {
     await page.goto('/ja/');
 
     const panel = page.locator('[data-convert-panel]');
+    await panel.locator('summary').click();
+    await panel.getByText(ja.convert.secondsOption.replace('{seconds}', '2'), { exact: true }).click();
     const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
     const presignRequest = page.waitForRequest('**/api/uploads/presign/');
     await panel.locator('[data-file-input]').setInputFiles([
@@ -119,6 +121,7 @@ test.describe('ログイン済み', () => {
     expect(body).not.toBeNull();
     expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
 
+    writeFileSync(testInfo.outputPath('images-two-seconds.mp4'), body!);
     await expect(page).toHaveURL(new RegExp(`/${E2E_FIXTURES.readyShortId}/$`), {
       timeout: 120_000,
     });
@@ -170,7 +173,7 @@ test.describe('ログイン済み', () => {
     });
   }
 
-  test('URL からのウェブページ変換：capture の画像群を MP4 にして ftyp を確認する', async ({ page }) => {
+  test('URL からのウェブページ変換：capture の画像群を MP4 にして ftyp を確認する', async ({ page }, testInfo) => {
     test.setTimeout(180_000);
     await signIn(page);
     await mockUploadEndpoints(page);
@@ -192,6 +195,8 @@ test.describe('ログイン済み', () => {
     await page.goto('/ja/');
 
     const panel = page.locator('[data-convert-panel]');
+    await panel.locator('summary').click();
+    await panel.getByText(ja.convert.secondsOption.replace('{seconds}', '2'), { exact: true }).click();
     const uploadRequest = page.waitForRequest('https://upload.test/r2-upload');
     const presignRequest = page.waitForRequest('**/api/uploads/presign/');
     await panel.locator('[data-url-input]').fill('https://example.com/');
@@ -209,6 +214,7 @@ test.describe('ログイン済み', () => {
     const body = request.postDataBuffer();
     expect(body).not.toBeNull();
     expect(body!.subarray(4, 8).toString('ascii')).toBe('ftyp');
+    writeFileSync(testInfo.outputPath('url-two-seconds.mp4'), body!);
     await expect(page).toHaveURL(/\/Ab12Cd34Ef56\/$/, { timeout: 120_000 });
   });
 

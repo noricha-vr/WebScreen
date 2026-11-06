@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 
+import { convertFilesToMp4, convertImageUrlsToMp4 } from '../../src/lib/convert';
 import { encodeFramesToMp4, encodePhaseRatio } from '../../src/lib/convert/encode';
 import type { ConversionProgress, FrameSource, VideoFrame } from '../../src/lib/convert/types';
 
@@ -18,7 +19,7 @@ interface FfmpegRecorder {
 const realFfmpegModule = await import('@ffmpeg/ffmpeg');
 
 /** FFmpeg の代役。書き出し順を記録し、実行は常に成功させる。 */
-function installFfmpegFake(hooks: { onWriteFile?: () => void } = {}): FfmpegRecorder {
+function installFfmpegFake(hooks: { onWriteFile?: () => void; onExec?: (args: string[]) => void } = {}): FfmpegRecorder {
   const written: string[] = [];
   mock.module('@ffmpeg/ffmpeg', () => ({
     FFmpeg: class {
@@ -28,7 +29,7 @@ function installFfmpegFake(hooks: { onWriteFile?: () => void } = {}): FfmpegReco
         hooks.onWriteFile?.();
       };
       on = (): void => {};
-      exec = async (): Promise<number> => 0;
+      exec = async (args: string[]): Promise<number> => { hooks.onExec?.(args); return 0; };
       readFile = async (): Promise<Uint8Array> => new Uint8Array([0, 0, 0, 1]);
       terminate = (): void => {};
     },
@@ -63,6 +64,16 @@ afterEach(() => {
 });
 
 describe('encodeFramesToMp4 の供給元入力', () => {
+  test('2 秒の指定が実際の FFmpeg 実行へ届き、フレームは複製されない', async () => {
+    restores.push(installCoreAssetFakes());
+    let args: string[] = [];
+    const recorder = installFfmpegFake({ onExec: (value) => { args = value; } });
+    restores.push(recorder.restore);
+    await encodeFramesToMp4([frame(0), frame(1)], undefined, undefined, 2);
+    expect(args[args.indexOf('-framerate') + 1]).toBe('0.5');
+    expect(recorder.written()).toHaveLength(2);
+  });
+
   test('200 枚を流しても、同時に抱えるフレームは 1 枚に収まる', async () => {
     restores.push(installCoreAssetFakes());
     const total = 200;
@@ -166,3 +177,31 @@ describe('encodeFramesToMp4 の供給元入力', () => {
     expect(await encodeFramesToMp4([]).catch((e: unknown) => e)).toBeInstanceOf(Error);
   });
 });
+
+
+for (const route of ['files', 'urls'] as const) {
+  test(`${route} の入口が 2 秒の指定をエンコーダまで渡す`, async () => {
+    restores.push(installCoreAssetFakes());
+    const original = { document: globalThis.document, createImageBitmap: globalThis.createImageBitmap };
+    const canvas = {
+      width: 0, height: 0,
+      getContext: () => ({ fillStyle: '', fillRect: () => {}, drawImage: () => {} }),
+      toBlob: (callback: (blob: Blob) => void) => callback(new Blob(['png'])),
+    };
+    Object.assign(globalThis, {
+      document: { createElement: () => canvas },
+      createImageBitmap: async () => ({ width: 2, height: 2, close: () => {} }),
+    });
+    restores.push(() => { Object.assign(globalThis, original); });
+    let args: string[] = [];
+    const recorder = installFfmpegFake({ onExec: (value) => { args = value; } });
+    restores.push(recorder.restore);
+    const signal = new AbortController().signal;
+    const mp4 = route === 'files'
+      ? await convertFilesToMp4([new File(['png'], 'slide.png')], 'image', undefined, signal, 2)
+      : await convertImageUrlsToMp4(['https://image.test/slide.png'], undefined, signal, 2);
+    expect(mp4.type).toBe('video/mp4');
+    expect(args.slice(0, 2)).toEqual(['-framerate', '0.5']);
+    expect(recorder.written()).toHaveLength(1);
+  });
+}
