@@ -1,4 +1,5 @@
 import { isShortId } from '../contracts/r2key';
+import { DEFAULT_SECONDS_PER_FRAME, isSecondsPerFrame, type SecondsPerFrame } from '../convert/settings';
 
 /** GA4 へ送信できるイベント名。未実装 UI のイベントも契約としてここで予約する。 */
 export const ANALYTICS_EVENT_NAMES = [
@@ -58,6 +59,11 @@ export interface ConversionParameters {
   locale: AnalyticsLocale;
 }
 
+/** 開始時に確定した秒数を、開始・完了の両方へ送る。 */
+export interface ConversionTimingParameters extends ConversionParameters {
+  seconds_per_frame: SecondsPerFrame;
+}
+
 /** 失敗は分類（reason）だけを添える。URL・ファイル名・例外本文は送らない。 */
 export interface ConversionErrorParameters extends ConversionParameters {
   reason: AnalyticsErrorReason;
@@ -84,8 +90,8 @@ interface ResumeParameters {
 
 /** イベントごとに送信を許可するパラメータ。余分なキーを受ける汎用 Record は公開しない。 */
 export interface AnalyticsEventParameterMap {
-  convert_start: ConversionParameters;
-  convert_complete: ConversionParameters;
+  convert_start: ConversionTimingParameters;
+  convert_complete: ConversionTimingParameters;
   convert_error: ConversionErrorParameters;
   convert_url_copy: ConversionParameters;
   tool_nav_click: ToolNavigationParameters;
@@ -192,7 +198,8 @@ export function dispatchAnalyticsEvent(
 export function trackConversionEvent(
   event: ConversionAnalyticsEvent,
   inputKind: AnalyticsInputKind,
-  reason?: AnalyticsErrorReason
+  reason?: AnalyticsErrorReason,
+  secondsPerFrame: SecondsPerFrame = DEFAULT_SECONDS_PER_FRAME
 ): void {
   const browser = browserEnvironment('convert');
   if (!browser) return;
@@ -203,7 +210,10 @@ export function trackConversionEvent(
     locale: browser.locale,
   };
   const eventCall = (
-    event === 'convert_error' ? [event, { ...parameters, reason: reason ?? 'failed' }] : [event, parameters]
+    event === 'convert_error' ? [event, { ...parameters, reason: reason ?? 'failed' }]
+      : event === 'convert_start' || event === 'convert_complete'
+        ? [event, { ...parameters, seconds_per_frame: secondsPerFrame }]
+        : [event, parameters]
   ) as unknown as AnalyticsEventCall;
   dispatchAnalyticsEvent(browser.environment, ...eventCall);
 }
@@ -305,6 +315,12 @@ function allowedEventCall(eventCall: AnalyticsEventCall): AnalyticsEventCall | n
       if (!(ANALYTICS_ERROR_REASONS as readonly string[]).includes(reason)) return null;
       return keys === 'input_kind,locale,reason,source,tool'
         ? call({ tool, source, input_kind: inputKind, locale, reason })
+        : null;
+    }
+    if (event === 'convert_start' || event === 'convert_complete') {
+      const seconds = (parameters as ConversionTimingParameters).seconds_per_frame;
+      return isSecondsPerFrame(seconds) && keys === 'input_kind,locale,seconds_per_frame,source,tool'
+        ? call({ tool, source, input_kind: inputKind, locale, seconds_per_frame: seconds })
         : null;
     }
     return keys === 'input_kind,locale,source,tool'

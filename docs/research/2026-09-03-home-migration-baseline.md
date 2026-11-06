@@ -33,6 +33,12 @@
 | `source` | `home`, `screen_share_page`, `convert_page`, `header`, `resume` |
 | `input_kind` | `web`, `image`, `pdf` |
 | `locale` | `ja`, `en` |
+| `seconds_per_frame` | 数値 `1`, `2`（`convert_start` / `convert_complete` のみ必須。入力した瞬間の設定で両イベントを揃える） |
+
+表示秒数の追加（Issue #295）では、開始数・完了数を `seconds_per_frame` 別に比べ、完了率の変化を見る。
+ローカルの契約確認は `cd web && bun test tests/ui/analytics.test.ts tests/ui/convert-panel.test.ts`。
+本番では DebugView で URL・ファイル各経路の 1 秒 / 2 秒を確認し、反映 7 日後に再集計する。
+GA4 は補助計測であり、開始数・完了数には送信の取りこぼしがある。
 
 入力 URL、ファイル名、shortId、配信 ID・token・URL、ユーザー ID・名前、エラー本文・stack、共有内容の情報は送らない。プレビューページは引き続き Analytics タグ自体を出力しない。本番ホスト `web-screen.net` の完全一致以外（localhost、E2E、`*.workers.dev`）では送信しない。
 

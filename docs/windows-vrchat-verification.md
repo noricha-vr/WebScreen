@@ -116,3 +116,12 @@ make check
 ```
 
 実機へは接続しない。MP4 の不正構造、faststart 違反、エンコード条件、接続先・URL の検証、SSH / SCP 共通接続先、失敗時の後始末を検査する。
+
+### 2 秒表示（-framerate 0.5）の再生・シーク確認（2026-11-06、Issue #295）
+
+`-framerate 0.5 -g 1` で作った 30 枚（60 秒、全 I フレーム）の MP4 を、非公開（Invite）インスタンスの iwaSync v3.6.15 で再生した。
+「Frame N / 期待時刻 (N-1)×2 秒」を画面に描いた動画で、プレイヤーの時刻表示と一致した（12 秒 = Frame 7、16 秒 = Frame 9、46 秒 = Frame 24、58 秒 = Frame 30）。
+シークバーのクリックで 20 秒付近から 50 秒台へ飛び、飛び先でもフレームと時刻が一致した。終了時に 60 秒で停止した。
+再生は winsub で行った。`windows-player-control.py` は、ユーザー名がコンピュータ名と同じ Windows（`winsub\winsub`）で一時タスクの登録に失敗していたため、
+UserId に `WindowsIdentity.GetCurrent().Name`（`DOMAIN\user` 形式）を渡すよう直した。
+なお、検証用の動画は本番 CDN に置けないため（`paste-url` は `cdn.web-screen.net` の URL だけを受け付ける）、確認の間だけ URL の許可を広げた手元のコピーで貼り付けた。リポジトリのツールは変更していない。

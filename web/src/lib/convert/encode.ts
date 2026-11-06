@@ -1,5 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 
+import { DEFAULT_SECONDS_PER_FRAME, type SecondsPerFrame } from './settings';
 import { onAbort, raceAbort, WASM_LOAD_TIMEOUT_MS, withStageTimeout } from './timeouts';
 import type { ConversionProgress, FrameSource, ProgressReporter, VideoFrame } from './types';
 
@@ -7,7 +8,6 @@ const CORE_VERSION = '0.12.10';
 const CORE_BASE_URL = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
 const CORE_JS_URL = `${CORE_BASE_URL}/ffmpeg-core.js`;
 const CORE_WASM_URL = `${CORE_BASE_URL}/ffmpeg-core.wasm`;
-const FRAME_RATE = 1;
 
 /** エンコード段階の内部工程。時間の掛かる待ちが 3 つあるので部分帯域に分ける。 */
 export type EncodePhase = 'loading' | 'writing' | 'running';
@@ -41,10 +41,13 @@ export function frameFileName(index: number): string {
 }
 
 /** フレーム列を VRChat 互換 MP4 にする引数を生成する。 */
-export function buildFrameEncodeArgs(outputFile = 'output.mp4'): string[] {
+export function buildFrameEncodeArgs(
+  outputFile = 'output.mp4',
+  secondsPerFrame: SecondsPerFrame = DEFAULT_SECONDS_PER_FRAME
+): string[] {
   return [
     '-framerate',
-    String(FRAME_RATE),
+    String(1 / secondsPerFrame),
     '-i',
     'frame-%06d.png',
     '-c:v',
@@ -204,7 +207,8 @@ function toFrameSource(input: readonly VideoFrame[] | FrameSource): FrameSource 
 export async function encodeFramesToMp4(
   input: readonly VideoFrame[] | FrameSource,
   report?: ProgressReporter,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  secondsPerFrame: SecondsPerFrame = DEFAULT_SECONDS_PER_FRAME
 ): Promise<Blob> {
   const source = toFrameSource(input);
   const total = source.total;
@@ -228,7 +232,7 @@ export async function encodeFramesToMp4(
     // 連番が足りないと FFmpeg は途中までを繋いだ短い動画を黙って作る。数が合わなければ止める。
     if (written !== total) throw new Error(`Expected ${total} frames but received ${written}`);
     ffmpeg.on('progress', ({ progress }) => report?.(runningProgress(progress, total)));
-    const status = await raceAbort(ffmpeg.exec(buildFrameEncodeArgs()), signal);
+    const status = await raceAbort(ffmpeg.exec(buildFrameEncodeArgs('output.mp4', secondsPerFrame)), signal);
     if (status !== 0) throw new Error(`FFmpeg exited with ${status}`);
     return await readMp4(ffmpeg, 'output.mp4');
   } finally {

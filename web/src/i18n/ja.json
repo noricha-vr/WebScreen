@@ -31,6 +31,10 @@
     "quota": "1 ユーザーあたり合計 500 MB"
   },
   "convert": {
+    "settingsSummary": "変換の設定: 1 枚 {seconds} 秒",
+    "secondsPerFrameLabel": "1 枚あたりの表示時間",
+    "secondsOption": "{seconds} 秒",
+    "durationExample": "12 ページの PDF なら動画は {seconds} 秒です。",
     "heading": "コンテンツを動画に変換",
     "dropzoneTitle": "ここにファイルをドロップ",
     "dropzoneOr": "または",

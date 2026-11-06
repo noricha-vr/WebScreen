@@ -1,5 +1,6 @@
 ---
 import SpecList from './SpecList.astro';
+import { DEFAULT_SECONDS_PER_FRAME, SECONDS_PER_FRAME_OPTIONS } from '../lib/convert/settings';
 import { useTranslations, type Locale } from '../i18n';
 import { ACCEPT_ATTRIBUTE } from '../lib/ui/upload-flow';
 
@@ -9,6 +10,7 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+const [exampleBefore, exampleAfter] = t.convert.durationExample.split('{seconds}');
 ---
 
 <section
@@ -43,6 +45,27 @@ const t = useTranslations(lang);
   <h2 class="text-2xl font-bold tracking-tight text-slate-900">{t.convert.heading}</h2>
 
   <div data-when-phase="idle error" class="mt-6">
+    <details class="mb-6 border-b border-slate-200 pb-3">
+      <summary class="flex items-center gap-2 text-base font-semibold text-slate-700">
+        <i class="fa-solid fa-sliders text-brand-500" aria-hidden="true"></i>
+        <span data-settings-summary data-template={t.convert.settingsSummary}>
+          {t.convert.settingsSummary.replace('{seconds}', String(DEFAULT_SECONDS_PER_FRAME))}
+        </span>
+        <i class="fa-solid fa-chevron-down ml-auto text-slate-400 transition-transform" aria-hidden="true"></i>
+      </summary>
+      <div class="mt-3">
+        <p id="seconds-per-frame-label" class="text-base font-semibold text-slate-900">{t.convert.secondsPerFrameLabel}</p>
+        <div role="radiogroup" aria-labelledby="seconds-per-frame-label" class="flex gap-2">
+          {SECONDS_PER_FRAME_OPTIONS.map((seconds) => (
+            <label class="inline-flex cursor-pointer items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-base font-semibold text-slate-700 hover:border-brand-500 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-500 has-[:checked]:text-white has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-700">
+              <input type="radio" name="seconds-per-frame" data-seconds-per-frame value={seconds} checked={seconds === DEFAULT_SECONDS_PER_FRAME} class="sr-only" />
+              {t.convert.secondsOption.replace('{seconds}', String(seconds))}
+            </label>
+          ))}
+        </div>
+        <p class="mt-2 text-base text-slate-600">{exampleBefore}<span data-settings-example-seconds>{12 * DEFAULT_SECONDS_PER_FRAME}</span>{exampleAfter}</p>
+      </div>
+    </details>
     <label
       data-dropzone
       class="flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center hover:border-brand-500 hover:bg-brand-50 data-[dragover]:border-brand-500 data-[dragover]:bg-brand-50"
@@ -128,6 +151,12 @@ const t = useTranslations(lang);
     <SpecList lang={lang} heading={false} />
   </div>
 </section>
+
+<style>
+  details[open] > summary .fa-chevron-down {
+    transform: rotate(180deg);
+  }
+</style>
 
 <script>
   import { mountConvertPanel } from '../lib/ui/convert-panel';

@@ -1,4 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
+
+import * as conversion from '../../src/lib/convert';
 
 import { ConversionError, StageTimeoutError } from '../../src/lib/convert';
 import {
@@ -24,6 +26,11 @@ class FakeEventTarget {
   }
 }
 
+class FakeRadio extends FakeEventTarget {
+  checked = false;
+  constructor(readonly value: string) { super(); }
+}
+
 class FakeFileInput extends FakeEventTarget {
   files: File[] = [];
   value = '';
@@ -31,6 +38,7 @@ class FakeFileInput extends FakeEventTarget {
 
 class FakePanel {
   readonly dataset: DOMStringMap = {};
+  readonly settingsRadios = [new FakeRadio('1'), new FakeRadio('2')];
   readonly sourceName = { textContent: '' };
   readonly urlForm = new FakeEventTarget();
   readonly abortButton = new FakeEventTarget();
@@ -51,7 +59,8 @@ class FakePanel {
   }
 
   querySelectorAll<T extends Element>(selector: string): T[] {
-    return (selector === '[data-source-name]' ? [this.sourceName] : []) as T[];
+    return (selector === '[data-source-name]' ? [this.sourceName]
+      : selector === '[data-seconds-per-frame]' ? this.settingsRadios : []) as T[];
   }
 }
 
@@ -157,6 +166,38 @@ describe('mountConvertPanel', () => {
       input.dispatch('change');
       await flushPromises();
       expect(events).toEqual(['convert_start:web', 'convert_start:image']);
+    } finally {
+      browser.restore();
+    }
+  });
+
+  test('URL とファイルの start は入力時の秒数を記録する', async () => {
+    const browser = installBrowserFakes();
+    const events: unknown[][] = [];
+    const fileStarted = Promise.withResolvers<void>();
+    Object.assign(window, { localStorage: { getItem: () => '2' } });
+    try {
+      const input = new FakeFileInput();
+      const panel = new FakePanel(input, 'https://example.com/');
+      mountConvertPanel(panel as unknown as HTMLElement, {
+        trackAnalytics: (...args) => {
+          events.push(args);
+          if (args[1] === 'image') fileStarted.resolve();
+        },
+      });
+      panel.urlForm.dispatch('submit');
+      panel.abortButton.dispatch('click');
+      const slow = controlledPng();
+      input.files = [slow.file];
+      input.dispatch('change');
+      panel.settingsRadios[0]!.checked = true;
+      panel.settingsRadios[0]!.dispatch('change');
+      slow.release();
+      await fileStarted.promise;
+      expect(events).toEqual([
+        ['convert_start', 'web', undefined, 2],
+        ['convert_start', 'image', undefined, 2],
+      ]);
     } finally {
       browser.restore();
     }
@@ -379,3 +420,64 @@ describe('uploadErrorCode', () => {
     }
   );
 });
+
+
+for (const route of ['files', 'url'] as const) {
+  test(`${route} の入力時の秒数を変換関数と start / complete へ同じ値で渡す`, async () => {
+    const browser = installBrowserFakes();
+    const started = Promise.withResolvers<void>();
+    const mp4 = Promise.withResolvers<Blob>();
+    const done = Promise.withResolvers<void>();
+    let receivedSeconds: number | undefined;
+    const files = spyOn(conversion, 'convertFilesToMp4').mockImplementation((_files, _kind, _report, _signal, seconds) => {
+      receivedSeconds = seconds;
+      started.resolve();
+      return mp4.promise;
+    });
+    const urls = spyOn(conversion, 'convertImageUrlsToMp4').mockImplementation((_urls, _report, _signal, seconds) => {
+      receivedSeconds = seconds;
+      started.resolve();
+      return mp4.promise;
+    });
+    const events: unknown[][] = [];
+    Object.assign(window, { localStorage: { getItem: () => '2', setItem: () => {} } });
+    Object.assign(globalThis, { fetch: async (url: string) => {
+      if (url === '/api/capture/') return Response.json({ images: ['https://image.test/slide.png'], totalImages: 1 });
+      if (url === '/api/uploads/presign/') return Response.json({
+        shortId: 'Ab12Cd34Ef56', uploadUrl: 'https://upload.test/put', publicUrl: 'https://cdn.test/movie.mp4',
+      });
+      if (url === '/api/uploads/commit/') return Response.json({
+        shortId: 'Ab12Cd34Ef56', publicUrl: 'https://cdn.test/movie.mp4', sizeBytes: 3, expiresAt: null,
+      });
+      return new Response(null, { status: 200 });
+    } });
+    try {
+      const input = new FakeFileInput();
+      const panel = new FakePanel(input, 'https://example.com/');
+      mountConvertPanel(panel as unknown as HTMLElement, {
+        trackAnalytics: (...args) => events.push(args),
+        navigate: () => done.resolve(),
+      });
+      if (route === 'files') {
+        input.files = [new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], 'slide.png', { type: 'image/png' })];
+        input.dispatch('change');
+      } else panel.urlForm.dispatch('submit');
+      await started.promise;
+      expect(receivedSeconds).toBe(2);
+      panel.settingsRadios[0]!.checked = true;
+      panel.settingsRadios[0]!.dispatch('change');
+      mp4.resolve(new Blob(['mp4']));
+      await done.promise;
+      expect(events).toEqual([
+        ['convert_start', route === 'files' ? 'image' : 'web', undefined, 2],
+        ['convert_complete', route === 'files' ? 'image' : 'web', undefined, 2],
+      ]);
+      expect(files).toHaveBeenCalledTimes(route === 'files' ? 1 : 0);
+      expect(urls).toHaveBeenCalledTimes(route === 'url' ? 1 : 0);
+    } finally {
+      files.mockRestore();
+      urls.mockRestore();
+      browser.restore();
+    }
+  });
+}

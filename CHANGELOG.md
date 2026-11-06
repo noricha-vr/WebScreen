@@ -2,6 +2,12 @@
 
 Changes are recorded in the Keep a Changelog format.
 
+## 2026-11-06
+
+### Added
+
+- Choose 1 or 2 seconds per image or PDF page in the collapsible conversion settings. The choice is saved in the browser and also applies to web page conversions. (#295)
+
 ## 2026-10-07
 
 ### Fixed

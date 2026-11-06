@@ -7,12 +7,13 @@ import {
   dispatchAnalyticsEvent,
   localeForPath,
   pageContext,
+  trackConversionEvent,
   type AnalyticsEventName,
   type AnalyticsEventParameterMap,
   type AnalyticsGtag,
 } from '../../src/lib/ui/analytics';
 
-const PARAMETERS: AnalyticsEventParameterMap['convert_complete'] = {
+const PARAMETERS: AnalyticsEventParameterMap['convert_url_copy'] = {
   tool: 'convert',
   source: 'home',
   input_kind: 'image',
@@ -136,9 +137,35 @@ describe('GA4 製品イベント契約', () => {
     // URL や例外本文を reason に載せる呼び出しは、型を迂回しても通さない。
     unsafeDispatch(environment, 'convert_error', { ...PARAMETERS, reason: 'https://example.com/secret' });
     unsafeDispatch(environment, 'convert_error', PARAMETERS);
-    unsafeDispatch(environment, 'convert_complete', { ...PARAMETERS, reason: 'failed' });
+    unsafeDispatch(environment, 'convert_complete', { ...PARAMETERS, seconds_per_frame: 1, reason: 'failed' });
 
     expect(calls).toEqual([['event', 'convert_error', { ...PARAMETERS, reason: 'tooLarge' }]]);
+  });
+
+  test.each(['convert_start', 'convert_complete'] as const)('%s は秒数 1 / 2 だけを許可する', (event) => {
+    const calls: unknown[][] = [];
+    const environment = {
+      hostname: 'web-screen.net',
+      gtag: ((...args: unknown[]) => calls.push(args)) as AnalyticsGtag,
+    };
+    for (const seconds of [1, 2] as const) {
+      dispatchAnalyticsEvent(environment, event, { ...PARAMETERS, seconds_per_frame: seconds });
+    }
+    const unsafeDispatch = dispatchAnalyticsEvent as unknown as (
+      target: typeof environment, event: string, parameters: object
+    ) => void;
+    for (const seconds of [undefined, 0, 3, '2', NaN, 'https://example.com/private']) {
+      unsafeDispatch(environment, event, { ...PARAMETERS, seconds_per_frame: seconds });
+    }
+    expect(calls).toEqual([1, 2].map((seconds) => [
+      'event', event, { ...PARAMETERS, seconds_per_frame: seconds },
+    ]));
+    if (false) {
+      // @ts-expect-error 秒数は union 以外を受け付けない。
+      dispatchAnalyticsEvent(environment, event, { ...PARAMETERS, seconds_per_frame: 3 });
+      // @ts-expect-error 開始・完了は秒数が必須。
+      dispatchAnalyticsEvent(environment, event, PARAMETERS);
+    }
   });
 
   test('login_click は header からだけ送る', () => {
@@ -176,7 +203,7 @@ describe('GA4 製品イベント契約', () => {
       dispatchAnalyticsEvent(
         { hostname, gtag: ((...args: unknown[]) => calls.push(args)) as AnalyticsGtag },
         'convert_complete',
-        PARAMETERS
+        { ...PARAMETERS, seconds_per_frame: 1 }
       );
 
       expect(calls).toEqual([]);
@@ -191,9 +218,9 @@ describe('GA4 製品イベント契約', () => {
       parameters: AnalyticsEventParameterMap[AnalyticsEventName]
     ) => calls.push([command, event, parameters])) as unknown as AnalyticsGtag;
 
-    dispatchAnalyticsEvent({ hostname: 'web-screen.net', gtag }, 'convert_complete', PARAMETERS);
+    dispatchAnalyticsEvent({ hostname: 'web-screen.net', gtag }, 'convert_complete', { ...PARAMETERS, seconds_per_frame: 1 });
 
-    expect(calls).toEqual([['event', 'convert_complete', PARAMETERS]]);
+    expect(calls).toEqual([['event', 'convert_complete', { ...PARAMETERS, seconds_per_frame: 1 }]]);
   });
 
   test('型を迂回した余分なキーやイベント不一致の値も実行時に拒否する', () => {
@@ -236,7 +263,7 @@ describe('GA4 製品イベント契約', () => {
       ...eventCall: unknown[]
     ) => void;
 
-    unsafeDispatch(environment, 'convert_complete', PARAMETERS, { send_to: 'G-OTHER' });
+    unsafeDispatch(environment, 'convert_complete', { ...PARAMETERS, seconds_per_frame: 1 }, { send_to: 'G-OTHER' });
     unsafeDispatch(environment, 'convert_complete');
 
     expect(calls).toEqual([]);
@@ -249,11 +276,12 @@ describe('GA4 製品イベント契約', () => {
       gtag: ((...args: unknown[]) => calls.push(args)) as AnalyticsGtag,
     };
 
-    dispatchAnalyticsEvent(environment, 'convert_complete', PARAMETERS);
+    const timedParameters = { ...PARAMETERS, seconds_per_frame: 1 as const };
+    dispatchAnalyticsEvent(environment, 'convert_complete', timedParameters);
 
-    expect(calls[0][2]).toEqual(PARAMETERS);
+    expect(calls[0][2]).toEqual(timedParameters);
     // 呼び出し元のオブジェクトをそのまま渡すと、後から生えたキーが GA4 へ素通りする。
-    expect(calls[0][2]).not.toBe(PARAMETERS);
+    expect(calls[0][2]).not.toBe(timedParameters);
   });
 
   test('gtag不在・例外でも呼び出し元へ例外を返さない', () => {
@@ -276,4 +304,24 @@ describe('GA4 製品イベント契約', () => {
     expect(pageContext('/ja/preview/', 'convert')).toBeNull();
     expect(pageContext('/fr/', 'convert')).toBeNull();
   });
+});
+
+
+test('ブラウザの start / complete は指定秒数を送り、省略時は 1 秒を送る', () => {
+  const original = globalThis.window;
+  const calls: unknown[][] = [];
+  Object.assign(globalThis, { window: {
+    location: { hostname: 'web-screen.net', pathname: '/ja/' },
+    gtag: (...args: unknown[]) => calls.push(args),
+  } });
+  try {
+    trackConversionEvent('convert_start', 'image');
+    trackConversionEvent('convert_complete', 'image', undefined, 2);
+    trackConversionEvent('convert_error', 'image', 'failed', 2);
+    expect(calls).toEqual([
+      ['event', 'convert_start', { ...PARAMETERS, seconds_per_frame: 1 }],
+      ['event', 'convert_complete', { ...PARAMETERS, seconds_per_frame: 2 }],
+      ['event', 'convert_error', { ...PARAMETERS, reason: 'failed' }],
+    ]);
+  } finally { Object.assign(globalThis, { window: original }); }
 });
