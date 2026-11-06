@@ -122,7 +122,7 @@ exit 1
             source = Path(temp) / 'action.ps1'
             source.write_text(script, encoding='utf-8-sig')
             subprocess.run(scp_command() + [str(source), ssh_host() + ':' + remote_root.replace('\\', '/') + '/action.ps1'], check=True, capture_output=True, timeout=20)
-        start = f'''$root={root};$task={task};$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -WindowStyle Hidden -File "' + $root + '\\action.ps1"');$p=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited;Register-ScheduledTask -TaskName $task -Action $a -Principal $p | Out-Null;Start-ScheduledTask -TaskName $task;for($i=0;$i -lt 30;$i++){{if(Test-Path ($root+'\\result.json')){{Get-Content -Raw ($root+'\\result.json');exit 0}};Start-Sleep 1}};throw 'Interactive action timed out (locked or disconnected desktop?)' '''
+        start = f'''$root={root};$task={task};$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -WindowStyle Hidden -File "' + $root + '\\action.ps1"');$p=New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name)-LogonType Interactive -RunLevel Limited;Register-ScheduledTask -TaskName $task -Action $a -Principal $p | Out-Null;Start-ScheduledTask -TaskName $task;for($i=0;$i -lt 30;$i++){{if(Test-Path ($root+'\\result.json')){{Get-Content -Raw ($root+'\\result.json');exit 0}};Start-Sleep 1}};throw 'Interactive action timed out (locked or disconnected desktop?)' '''
         result = json.loads(powershell(start))
         if not result['ok']:
             raise RuntimeError(result['error'])
