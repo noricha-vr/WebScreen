@@ -4,7 +4,7 @@
 # - 人が承認した PR は、admin が今の head より後に decision-approved ラベルを付けると通る（head が変われば無効）
 # - サードパーティのアクションは使わない（Dependabot が更新したアクションが書き込み権限付きで動くのを避けるため）。gh と jq だけ
 # - pull_request_target は使わない（PR 側のコードに書き込み権限付きトークンを渡さないため）
-# 生成元: dependabot-autofix の high-risk.json（ALLOWED_FILES / RISK_DEPS は render_workflow.py が書く。手で直さない）
+# 生成元: dependabot-autofix の high-risk.json（ALLOWED_FILES / RISK_DEPS / TRUSTED_ACTIONS は render_workflow.py が書く。手で直さない）
 # リポ固有の高リスク依存は、既定ブランチの .github/dependabot-risk-deps.txt に 1 行 1 正規表現で足す（PR 側の版は読まない）
 # v4: 判定ジョブ（dependabot-policy。読み取り権限だけで、全 PR の全イベントで走るので実行回数の大半）のランナーだけを
 # リポ変数 DEPENDABOT_AUTOMERGE_RUNS_ON（runs-on の JSON。例 '["self-hosted","Linux","ARM64","m3-ultra-arm64"]'）で切り替える。
@@ -14,6 +14,9 @@
 # v5: Docker 専用ブランチで Dockerfile / Containerfile の FROM 行だけを変える更新は、メジャータグ・digest も通す。
 # 継続行・heredoc の中の FROM は patch だけでは見分けきれないが、Dependabot の署名済みコミット 1 本に限るので許容する
 # 版・update-type・変更ファイルの許可リストだけを緩め、署名・コミット数・高リスク依存の検査はそのまま残す。
+# v6: github-actions 専用ブランチで、workflow の同じ action の SHA と版コメントだけを上げる patch / minor を通す。
+# actions / github の action だけを許可し、第三者・メジャー・0.x の minor・自動マージ定義自身は審査役に回す。
+# ファイルの許可リストだけを置き換え、版・update-type・署名・コミット数・高リスク依存の検査はそのまま残す。
 name: dependabot-automerge
 
 on:
@@ -51,6 +54,7 @@ jobs:
           CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
           ALLOWED_FILES: '^(package\.json|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|requirements[^/]*\.(txt|in)|pyproject\.toml|uv\.lock|poetry\.lock|Pipfile(\.lock)?|go\.mod|go\.sum|pubspec\.(yaml|lock)|Gemfile(\.lock)?|composer\.(json|lock)|Cargo\.(toml|lock))$'
           RISK_DEPS: '(stripe|paypal|allauth|next-auth|better-auth|passport|firebase-admin|firebase-auth|google-auth|google-sign-in|sign-in-with-apple|flutter-secure-storage|appauth|local-auth|oauth|jwt|jsonwebtoken|authlib)|(^|[/-])(jose|auth)([/-]|$)|^@auth/'
+          TRUSTED_ACTIONS: '^(actions|github)/[^/]+$'
         run: |
           set -euo pipefail
           reasons=()
@@ -145,7 +149,95 @@ jobs:
               base_image=true
             fi
           fi
-          if [ "$base_image" = "false" ]; then
+          # action の名前は patch とコミットの metadata の集合が一致する時だけ信用する。
+          msgs=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[].commit.message')
+          actions_update=false
+          if printf '%s\n' "$HEAD_REF" | grep -Eq '^dependabot/github_actions/.+$'; then
+            [ "$n_files" -gt 0 ] || reasons+=("github-actions の変更ファイルがない")
+          fi
+          if printf '%s\n' "$HEAD_REF" | grep -Eq '^dependabot/github_actions/.+$' && [ "$n_files" -gt 0 ]; then
+            action_deps=$(printf '%s\n' "$msgs" | jq -Rsc '
+              split("\n") as $lines
+              | [range(0; $lines | length) | select($lines[.] | test("^ *- dependency-name: *"))] as $starts
+              | [range(0; $starts | length) | . as $i | $starts[$i] as $start
+                | ($starts[$i + 1] // ($lines | length)) as $end
+                | {name:($lines[$start] | capture("^ *- dependency-name: *(?<name>.*)$").name | gsub("[\"\u0027]"; "")),
+                   adjacent:($lines[$start + 1] // "" | test("^ +dependency-version:")),
+                   versions:[$lines[$start + 1:$end][] | capture("^ +dependency-version: *(?<version>.*)$").version
+                     | gsub("[\"\u0027]"; "") | sub("^v"; "")]}]')
+            if action_versions=$(gh api --paginate "repos/$REPO/pulls/$PR/files" | jq -ser --argjson n "$n_files" --argjson deps "$action_deps" '
+              def uses_line:
+                [capture("^(?<prefix>[[:blank:]]*(?:- )?)uses:[[:blank:]]+(?<action>[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*)@(?<sha>[A-Fa-f0-9]{40})[[:blank:]]+# v?(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$")]
+                | if length == 1 then .[0]
+                    | .version_text = .version | .version |= (split(".") | map(tonumber))
+                    | .name = (.action | split("/")[0:2] | join("/"))
+                    | if (.action | split("/")[2:] | all(.[]; . != ".github")) then . else null end
+                  else null end;
+              # 同じ位置の削除ブロック→同数の追加ブロックを、文脈行で区切って 1 組以上許可する。
+              def action_hunks:
+                reduce (split("\n")[]) as $line ({valid:true, hunks:[]};
+                  if ($line | startswith("@@ ")) then
+                    [$line | capture("^@@ -(?<a>[0-9]+)(?:,(?<b>[0-9]+))? \\+(?<c>[0-9]+)(?:,(?<d>[0-9]+))? @@(?: .*)?$")] as $headers
+                    | if ($headers | length) == 1 then
+                        .hunks += [($headers[0] | . + {lines:[]})]
+                      else .valid = false end
+                  elif (.hunks | length) > 0 and ($line | test("^[ +\\-]")) then
+                    .hunks[-1].lines += [$line]
+                  else .valid = false end);
+              def action_hunk:
+                . as $hunk
+                | (.lines | map(.[0:1]) | join("")) as $signs
+                | [.lines[] | select(startswith("-")) | .[1:] | uses_line] as $old
+                | [.lines[] | select(startswith("+")) | .[1:] | uses_line] as $new
+                | {valid:(($hunk.a | tonumber) == ($hunk.c | tonumber)
+                    and (($hunk.b // "1") | tonumber) == (($hunk.d // "1") | tonumber)
+                    and ($signs | test("^ *-+[+]+( +-+[+]+)* *$"))
+                    and ([$signs | scan("(-+)([+]+)")] | all(.[]; (.[0] | length) == (.[1] | length)))
+                    and ($old | length) > 0 and ($old | length) == ($new | length)
+                    and all($old[], $new[]; . != null)
+                    and all(range(0; $old | length); . as $i
+                      | $old[$i].prefix == $new[$i].prefix and $old[$i].action == $new[$i].action
+                        and ($old[$i].sha | ascii_downcase) != ($new[$i].sha | ascii_downcase)
+                        and $new[$i].version > $old[$i].version
+                        and $old[$i].version[0] == $new[$i].version[0]
+                        and ($old[$i].version[0] != 0 or $old[$i].version[1] == $new[$i].version[1])
+                        and ([$deps[] | select(.name == $new[$i].name) | .versions] == [[$new[$i].version_text]]))),
+                   names:[$old[].name],
+                   versions:[range(0; $old | length) | . as $i
+                     | "\($old[$i].name) \($old[$i].version_text) \($new[$i].version_text)"],
+                   deletions:($old | length), additions:($new | length)};
+              def action_update:
+                if .status == "modified" and (has("previous_filename") | not)
+                  # $ は末尾の改行の直前にも合うため、取り出したパスが元の全体と一致することも見る。
+                  and (.filename | . as $path
+                    | [capture("^(?<path>\\.github/workflows/(?!dependabot-automerge\\.ya?ml$)[^/]+\\.ya?ml)$").path] == [$path])
+                  and (.patch | type) == "string" then
+                  . as $file
+                  | (.patch | action_hunks) as $patch
+                  | [$patch.hunks[] | action_hunk] as $hunks
+                  | if $patch.valid and ($hunks | length) > 0 and all($hunks[]; .valid)
+                    and ([$hunks[].deletions] | add) == $file.deletions
+                    and ([$hunks[].additions] | add) == $file.additions then
+                    {valid:true, names:[$hunks[].names[]], versions:[$hunks[].versions[]]}
+                  else {valid:false} end
+                else {valid:false} end;
+              select(($deps | length) > 0 and all($deps[]; .adjacent and (.versions | length) == 1)
+                and ($deps | length) == ($deps | unique_by(.name) | length))
+              |
+              add | if length == $n then map(action_update) else [] end
+              | select(length == $n and all(.[]; .valid))
+              | select(([.[].names[]] | unique) == ($deps | map(.name) | unique))
+              | [.[].versions[]] | unique | .[]
+              '); then
+              action_names=$(printf '%s\n' "$action_versions" | awk '{print $1}' | sort -u)
+              trusted=true
+              while IFS= read -r action; do
+                printf '%s\n' "$action" | grep -Eqx -- "$TRUSTED_ACTIONS" || trusted=false
+              done <<< "$action_names"
+              [ "$trusted" = "false" ] || actions_update=true
+            fi
+          fi
+          if [ "$base_image" = "false" ] && [ "$actions_update" = "false" ]; then
             while IFS= read -r f; do
               [ -n "$f" ] || continue
               base=${f##*/}
@@ -154,7 +246,6 @@ jobs:
           fi
 
           # update-type と依存名は全コミットのメッセージから取る（グループ PR の一部に major が混ざるのを見落とさない）
-          msgs=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[].commit.message')
           types=""
           kind="base-image"
           if [ "$base_image" = "false" ]; then
@@ -175,6 +266,10 @@ jobs:
             if printf '%s\n' "$msgs" | grep -qE '^Updates the requirements on '; then reasons+=("requirements を広げる更新を含む（版を確かめられない）"); fi
             [ "$n_ver_lines" = "$n_named" ] || reasons+=("読めない版の行がある（行 ${n_ver_lines} / 読めた ${n_named}）")
             named=$(printf '%s\n' "$named" | sort -u)
+            if [ "$actions_update" = "true" ]; then
+              patch_named=$(printf '%s\n' "$action_versions" | sort -u)
+              [ "$named" = "$patch_named" ] || reasons+=("github-actions の本文と patch の旧版・新版が一致しない")
+            fi
             dup=$(printf '%s\n' "$named" | awk 'NF{c[$1]++} END{for (n in c) if (c[n] > 1) print n}')
             [ -z "$dup" ] || reasons+=("同じ依存に版の行が複数ある: $(printf '%s' "$dup" | tr '\n' ' ')")
             if [ "$n_types" -gt 0 ]; then
@@ -214,6 +309,7 @@ jobs:
             kind="patch-minor"
             [ "$n_types" -ne 0 ] || kind=security
           fi
+          [ "$actions_update" = "false" ] || kind=github-actions
           # PyPI の名前は大文字小文字と - _ . を区別しない（PEP 503）ので正規化してから比べる
           deps=$(printf '%s\n' "$msgs" | sed -n 's/^ *- dependency-name: *//p' | tr -d "\"'" | tr '[:upper:]' '[:lower:]' | sed -E 's/[-_.]+/-/g' | sort -u)
           # 照合は元の名前（小文字）と正規化した名前の両方で行う（socket.io のように記号で指定した一覧も効くように）
