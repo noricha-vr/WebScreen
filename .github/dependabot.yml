@@ -1,5 +1,5 @@
-# Dependabot: バージョン更新は止め、セキュリティ更新だけを受ける（2026-11-06 CEO 決定）
-# open-pull-requests-limit: 0 は version updates だけを止める（security updates は別枠の上限 10 で動き続ける）
+# Dependabot: バージョン更新は止め、セキュリティ更新だけを受ける。例外は github-actions の月 1 回
+# github-actions は SHA 固定で alert が出ないため。他は open-pull-requests-limit: 0（security updates は別枠）
 version: 2
 updates:
   - package-ecosystem: "bun"
@@ -19,9 +19,17 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "06:00"
       timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 2
     labels: ["dependencies"]
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(ci)"
